@@ -27,9 +27,8 @@ In the past, metrics could be retrieved from database instances and display in k
 For DBAs who could and would like to solve problems with programming. Pisanix supports many kinds of plugin mechanism, like Lua and Wasm. People will have the chance to 'reshape' the expected behavior of databases.
 
 # Getting Started
-- [Introduction](https://pisanix.io/docs)
-- [Installation](https://pisanix.io/docs/install)
-- [Quick Start](https://pisanix.io/docs/quick-start)
+- [Introduction](https://www.pisanix.io/docs/intro)
+- [Quick Start](https://www.pisanix.io/docs/quickstart)
 
 # Documentation
 Full documentation will be available on the [Pisanix website](https://pisanix.io/).
