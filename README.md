@@ -39,5 +39,9 @@ Full documentation will be available on the [Pisanix website](https://pisanix.io
 
  :link: [Slack channel](https://join.slack.com/t/databasemesh/shared_invite/zt-12hlythpe-C4rrS1WZ2ZkEd3zn84SqeQ). Best for: instant communications and online meetings, sharing your applications.
 
+
+ :link: [Tecent Meeting / Voov: 553-8242-5155](https://meeting.tencent.com/dm/6UXDMNsHBVQO). Best for: Bi-weekly meeting, started from Feb 16th 2022.
+
+
 - Wechat User Group: Broker wechat to add you into the user group.
  <img src="static/wechat-user-group-broker.jpeg" width="200" length="200"/>
