@@ -1,6 +1,6 @@
 # Introduction
 
-`Pisanix` [Pi-sanics] is a modern database governance framework for Kubernetes. Pisanix adds SQL-aware traffic control, audit, security and extension abilities to help manage various databases in the [Database Mesh](https://database-mesh.io)(***Coming Soon***) way.
+`Pisanix` [Pi-sanics] is a modern database governance framework for Kubernetes. Pisanix adds SQL-aware traffic control, audit, security and extension abilities to help manage various databases in the [Database Mesh](https://www.database-mesh.io) way.
 
 
  <img src="static/pisanix-arch.png" width="600" length="600"/>
