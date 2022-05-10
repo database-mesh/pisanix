@@ -16,7 +16,7 @@
 # Features
 ## Database traffic governance
 
-SQL application access databases with SQL, so Pisanix will hijack all SQL traffic. This is a great opportunity to do a lot of things around traffic, like loadbalancing and SQL firewall.
+Applications access databases with SQL, so Pisanix will hijack all SQL traffic. This is a great opportunity to do a lot of things around traffic, like loadbalancing and SQL firewall.
 
 ## Observability
 
