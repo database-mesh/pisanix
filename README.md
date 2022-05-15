@@ -2,9 +2,6 @@
 
 `Pisanix` [Pi-sanics] is a modern database governance framework for Kubernetes. Pisanix adds SQL-aware traffic control, audit, security and extension abilities to help manage various databases in the [Database Mesh](https://www.database-mesh.io) way.
 
-
- <img src="static/pisanix-arch.png" width="600" length="600"/>
-
 # Highlights
 
 `Pisanix` has the following goals:
@@ -12,6 +9,14 @@
 1. SQL-Aware Traffic Control: supports SQL traffic load balancing, access control, observability.
 2. Runtime Resource-oriented Programming: supports extensible resource control abilities.
 3. Database Reliability Engineering: make DBA's life easier with Kubernetes
+
+ <img src="static/pisanix-arch.png" width="600" length="600"/>
+
+Pisanix has 3 componenets:
+
+* ***Pisa-Controller***: A Golang control plane designed for sidecar injection and configuration transformation
+* ***Pisa-Proxy***: A high performance Rust data plane used as SQL traffic proxy, support various of traffic governance capabilities.
+* ***Pisa-Daemon***: A Golang optional data plane works on every node, provide programmable runtime management such as TrafficQoS.
 
 # Features
 ## Database traffic governance
