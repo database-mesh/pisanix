@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pisa-controller
+  labels:
+    app: pisa-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pisa-controller
+  template:
+    metadata:
+      labels:
+        app: pisa-controller
+    spec:
+      serviceAccount: pisa-controller-sa
+      containers:
+        - name: controller
+          image: ${PISA_CONTROLLER_IMAGE} 
+          args:
+            - -webhookTLSCertFile=/etc/webhook/certs/cert.pem
+            - -webhookTLSKeyFile=/etc/webhook/certs/key.pem
+          volumeMounts:
+            - name: webhook-certs
+              mountPath: /etc/webhook/certs
+              readOnly: true
+          env:
+            - name: PISA_PROXY_IMAGE
+              value: ${PISA_PROXY_IMAGE} 
+            - name: PISA_CONTROLLER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PISA_CONTROLLER_SERVICE
+              value: "pisa-controller"
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: pisa-controller-certs
