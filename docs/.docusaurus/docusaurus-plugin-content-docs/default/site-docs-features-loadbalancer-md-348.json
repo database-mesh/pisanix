@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/loadbalancer",
+  "id": "Features/loadbalancer",
+  "title": "负载均衡",
+  "description": "负载均衡模块为 Pisa-Proxy 代理后端节点时，新建链接时对后端节点选取策略的实现。",
+  "source": "@site/docs/Features/loadbalancer.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/loadbalancer",
+  "permalink": "/en/docs/Features/loadbalancer",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Quickstart",
+    "permalink": "/en/docs/quickstart"
+  },
+  "next": {
+    "title": "MySQL 协议",
+    "permalink": "/en/docs/Features/mysql-protocol"
+  }
+}

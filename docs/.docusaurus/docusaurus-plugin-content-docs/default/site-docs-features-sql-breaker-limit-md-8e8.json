@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/sql-breaker-limit",
+  "id": "Features/sql-breaker-limit",
+  "title": "中间件",
+  "description": "目前运行中间件的方式参考了 TOWER-RS ，可以很好的满足未来扩展的需求。",
+  "source": "@site/docs/Features/sql-breaker-limit.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/sql-breaker-limit",
+  "permalink": "/en/docs/Features/sql-breaker-limit",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "sidebar_position": 4
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "SQL解析",
+    "permalink": "/en/docs/Features/sql-parser"
+  },
+  "next": {
+    "title": "The kubernetes case",
+    "permalink": "/en/docs/UseCases/kubernetes"
+  }
+}

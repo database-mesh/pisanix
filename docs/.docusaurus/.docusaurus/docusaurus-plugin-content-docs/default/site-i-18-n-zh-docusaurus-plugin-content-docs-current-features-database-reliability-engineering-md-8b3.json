@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/database-reliability-engineering",
+  "id": "Features/database-reliability-engineering",
+  "title": "数据库可靠性工程",
+  "description": "",
+  "source": "@site/i18n/zh/docusaurus-plugin-content-docs/current/Features/database-reliability-engineering.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/database-reliability-engineering",
+  "permalink": "/docs/Features/database-reliability-engineering",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "面向运行时的资源管理",
+    "permalink": "/docs/Features/runtime-oriented-resource-mgmt"
+  },
+  "next": {
+    "title": "在 CICD 里使用",
+    "permalink": "/docs/UseCases/cicd"
+  }
+}

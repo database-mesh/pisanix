@@ -1,0 +1,26 @@
+{
+  "unversionedId": "quickstart",
+  "id": "quickstart",
+  "title": "Quickstart",
+  "description": "Try Pisanix in 5 minutes!",
+  "source": "@site/i18n/en/docusaurus-plugin-content-docs/current/quickstart.md",
+  "sourceDirName": ".",
+  "slug": "/quickstart",
+  "permalink": "/en/docs/quickstart",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_label": "Quickstart",
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Introduction",
+    "permalink": "/en/docs/intro"
+  },
+  "next": {
+    "title": "SQL Aware traffic governance",
+    "permalink": "/en/docs/Features/sql-aware-traffic-governance"
+  }
+}

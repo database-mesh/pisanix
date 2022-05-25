@@ -1,0 +1,67 @@
+{
+  "permalink": "/blog/mdx-blog-post",
+  "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/blog/2022-05-07-write-mysql-protocol-with-rust.mdx",
+  "source": "@site/blog/2022-05-07-write-mysql-protocol-with-rust.mdx",
+  "title": "Write MySQL client with Rust.",
+  "description": "Blog posts support Docusaurus Markdown features, such as MDX.",
+  "date": "2022-05-07T00:00:00.000Z",
+  "formattedDate": "2022年5月7日",
+  "tags": [
+    {
+      "label": "pisanix",
+      "permalink": "/blog/tags/pisanix"
+    },
+    {
+      "label": "pisa-proxy",
+      "permalink": "/blog/tags/pisa-proxy"
+    },
+    {
+      "label": "rust",
+      "permalink": "/blog/tags/rust"
+    },
+    {
+      "label": "mysql",
+      "permalink": "/blog/tags/mysql"
+    }
+  ],
+  "readingTime": 0.175,
+  "truncated": false,
+  "authors": [
+    {
+      "name": "Jiandong Wu",
+      "title": "Maintainer of Pisanix",
+      "url": "https://github.com/xuanyuan300",
+      "imageURL": "https://github.com/xuanyuan300.png",
+      "key": "Jiandong"
+    },
+    {
+      "name": "Bo Wang",
+      "title": "Maintainer of Pisanix",
+      "url": "https://github.com/wbtlb",
+      "imageURL": "https://github.com/wbtlb.png",
+      "key": "Bo"
+    }
+  ],
+  "frontMatter": {
+    "slug": "mdx-blog-post",
+    "title": "Write MySQL client with Rust.",
+    "authors": [
+      "Jiandong",
+      "Bo"
+    ],
+    "tags": [
+      "pisanix",
+      "pisa-proxy",
+      "rust",
+      "mysql"
+    ]
+  },
+  "prevItem": {
+    "title": "First Blog Post",
+    "permalink": "/blog/first-blog-post"
+  },
+  "nextItem": {
+    "title": "Welcome",
+    "permalink": "/blog/welcome"
+  }
+}

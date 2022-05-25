@@ -1,0 +1,97 @@
+{
+  "/en/blog-586": {
+    "component": "a6aa9e1f",
+    "sidebar": "814f3328",
+    "items": [
+      {
+        "content": "24f9a669"
+      }
+    ],
+    "metadata": "fba6c282",
+    "__routeContextModule": "449fbab7"
+  },
+  "/en/blog/archive-322": {
+    "component": "9e4087bc",
+    "archive": "f6cbeee1",
+    "__routeContextModule": "449fbab7"
+  },
+  "/en/blog/greetings-6bd": {
+    "component": "ccc49370",
+    "sidebar": "814f3328",
+    "content": "032d600d",
+    "__routeContextModule": "449fbab7"
+  },
+  "/en/blog/tags-e83": {
+    "component": "01a85c17",
+    "sidebar": "814f3328",
+    "tags": "9bdd22eb",
+    "__routeContextModule": "449fbab7"
+  },
+  "/en/blog/tags/greetings-4a9": {
+    "component": "6875c492",
+    "sidebar": "814f3328",
+    "items": [
+      {
+        "content": "24f9a669"
+      }
+    ],
+    "metadata": "9d6db1e9",
+    "listMetadata": "72116d6e",
+    "__routeContextModule": "449fbab7"
+  },
+  "/en/blog/tags/pisanix-7cb": {
+    "component": "6875c492",
+    "sidebar": "814f3328",
+    "items": [
+      {
+        "content": "24f9a669"
+      }
+    ],
+    "metadata": "ad35b2f3",
+    "listMetadata": "70b30d97",
+    "__routeContextModule": "449fbab7"
+  },
+  "/en/markdown-page-dd2": {
+    "component": "1f391b9e",
+    "content": "393be207",
+    "__routeContextModule": "d9b15e4c"
+  },
+  "/en/docs-233": {
+    "component": "1be78505",
+    "versionMetadata": "935f2afb",
+    "__routeContextModule": "b34a97d2"
+  },
+  "/en/docs/Features/database-reliability-engineering-6d4": {
+    "component": "17896441",
+    "content": "f8135595"
+  },
+  "/en/docs/Features/runtime-oriented-resource-mgmt-9c7": {
+    "component": "17896441",
+    "content": "15a0a69f"
+  },
+  "/en/docs/Features/sql-aware-traffic-governance-b02": {
+    "component": "17896441",
+    "content": "cefce59e"
+  },
+  "/en/docs/intro-7c8": {
+    "component": "17896441",
+    "content": "5b44acae"
+  },
+  "/en/docs/quickstart-2be": {
+    "component": "17896441",
+    "content": "66aed93e"
+  },
+  "/en/docs/UseCases/kubernetes-402": {
+    "component": "17896441",
+    "content": "db696427"
+  },
+  "/en/docs/UseCases/standalone-bb8": {
+    "component": "17896441",
+    "content": "1cc16307"
+  },
+  "/en/-c08": {
+    "component": "c4f5d8e4",
+    "config": "5e9f5e1a",
+    "__routeContextModule": "d9b15e4c"
+  }
+}

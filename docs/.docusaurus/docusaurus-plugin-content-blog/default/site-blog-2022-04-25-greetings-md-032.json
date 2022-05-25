@@ -1,0 +1,64 @@
+{
+  "permalink": "/en/blog/greetings",
+  "source": "@site/blog/2022-04-25-greetings.md",
+  "title": "Hello Pisanix World",
+  "description": "Hello Pisanix",
+  "date": "2022-04-25T00:00:00.000Z",
+  "formattedDate": "April 25, 2022",
+  "tags": [
+    {
+      "label": "pisanix",
+      "permalink": "/en/blog/tags/pisanix"
+    },
+    {
+      "label": "greetings",
+      "permalink": "/en/blog/tags/greetings"
+    }
+  ],
+  "readingTime": 0.01,
+  "truncated": false,
+  "authors": [
+    {
+      "name": "Maxwell Miao",
+      "title": "Founder of Pisanix",
+      "url": "https://github.com/mlycore",
+      "imageURL": "https://github.com/mlycore.png",
+      "key": "Maxwell"
+    },
+    {
+      "name": "Jiandong Wu",
+      "title": "Maintainer of Pisanix",
+      "url": "https://github.com/xuanyuan300",
+      "imageURL": "https://i.imgur.com/aQBGA3H_d.webp?maxwidth=760&fidelity=grand",
+      "key": "Jiandong"
+    },
+    {
+      "name": "Bo Wang",
+      "title": "Maintainer of Pisanix",
+      "url": "https://github.com/wbtlb",
+      "imageURL": "https://avatars.githubusercontent.com/u/12859337?s=400&u=a7a03e467206e9b248b75fd57f681da7ce2caa34&v=4",
+      "key": "Bo"
+    },
+    {
+      "name": "Zhuo Li",
+      "title": "Maintainer of Pisanix",
+      "url": "https://github.com/windghoul",
+      "imageURL": "https://raw.githubusercontent.com/windghoul/imagestorge/master/1-200403142639406.jpeg",
+      "key": "Zhuo"
+    }
+  ],
+  "frontMatter": {
+    "slug": "greetings",
+    "title": "Hello Pisanix World",
+    "authors": [
+      "Maxwell",
+      "Jiandong",
+      "Bo",
+      "Zhuo"
+    ],
+    "tags": [
+      "pisanix",
+      "greetings"
+    ]
+  }
+}

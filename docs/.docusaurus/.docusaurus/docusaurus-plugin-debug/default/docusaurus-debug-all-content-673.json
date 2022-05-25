@@ -1,0 +1,852 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "loadedVersions": [
+        {
+          "versionName": "current",
+          "versionLabel": "Next",
+          "versionPath": "/docs",
+          "tagsPath": "/docs/tags",
+          "versionBanner": null,
+          "versionBadge": false,
+          "versionClassName": "docs-version-current",
+          "isLast": true,
+          "routePriority": -1,
+          "sidebarFilePath": "/Users/liyao/mworks/jsprojects/website/sidebars.js",
+          "contentPath": "/Users/liyao/mworks/jsprojects/website/docs",
+          "contentPathLocalized": "/Users/liyao/mworks/jsprojects/website/i18n/zh/docusaurus-plugin-content-docs/current",
+          "docs": [
+            {
+              "unversionedId": "Features/database-reliability-engineering",
+              "id": "Features/database-reliability-engineering",
+              "title": "数据库可靠性工程",
+              "description": "",
+              "source": "@site/docs/Features/database-reliability-engineering.md",
+              "sourceDirName": "Features",
+              "slug": "/Features/database-reliability-engineering",
+              "permalink": "/docs/Features/database-reliability-engineering",
+              "tags": [],
+              "version": "current",
+              "sidebarPosition": 3,
+              "frontMatter": {
+                "sidebar_position": 3
+              },
+              "sidebar": "tutorialSidebar",
+              "previous": {
+                "title": "面向运行时的资源管理",
+                "permalink": "/docs/Features/runtime-oriented-resource-mgmt"
+              },
+              "next": {
+                "title": "作为 MockDB 使用",
+                "permalink": "/docs/UseCases/mockdb"
+              }
+            },
+            {
+              "unversionedId": "Features/runtime-oriented-resource-mgmt",
+              "id": "Features/runtime-oriented-resource-mgmt",
+              "title": "面向运行时的资源管理",
+              "description": "",
+              "source": "@site/docs/Features/runtime-oriented-resource-mgmt.md",
+              "sourceDirName": "Features",
+              "slug": "/Features/runtime-oriented-resource-mgmt",
+              "permalink": "/docs/Features/runtime-oriented-resource-mgmt",
+              "tags": [],
+              "version": "current",
+              "sidebarPosition": 2,
+              "frontMatter": {
+                "sidebar_position": 2
+              },
+              "sidebar": "tutorialSidebar",
+              "previous": {
+                "title": "SQL 感知的流量治理",
+                "permalink": "/docs/Features/sql-aware-traffic-governance"
+              },
+              "next": {
+                "title": "数据库可靠性工程",
+                "permalink": "/docs/Features/database-reliability-engineering"
+              }
+            },
+            {
+              "unversionedId": "Features/sql-aware-traffic-governance",
+              "id": "Features/sql-aware-traffic-governance",
+              "title": "SQL 感知的流量治理",
+              "description": "",
+              "source": "@site/docs/Features/sql-aware-traffic-governance.md",
+              "sourceDirName": "Features",
+              "slug": "/Features/sql-aware-traffic-governance",
+              "permalink": "/docs/Features/sql-aware-traffic-governance",
+              "tags": [],
+              "version": "current",
+              "sidebarPosition": 1,
+              "frontMatter": {
+                "sidebar_position": 1
+              },
+              "sidebar": "tutorialSidebar",
+              "previous": {
+                "title": "快速开始",
+                "permalink": "/docs/quickstart"
+              },
+              "next": {
+                "title": "面向运行时的资源管理",
+                "permalink": "/docs/Features/runtime-oriented-resource-mgmt"
+              }
+            },
+            {
+              "unversionedId": "intro",
+              "id": "intro",
+              "title": "简介",
+              "description": "Pisanix 是 SphereEx 面向 Database Mesh 推出的解决方案",
+              "source": "@site/docs/intro.md",
+              "sourceDirName": ".",
+              "slug": "/intro",
+              "permalink": "/docs/intro",
+              "tags": [],
+              "version": "current",
+              "sidebarPosition": 1,
+              "frontMatter": {
+                "sidebar_position": 1
+              },
+              "sidebar": "tutorialSidebar",
+              "next": {
+                "title": "快速开始",
+                "permalink": "/docs/quickstart"
+              }
+            },
+            {
+              "unversionedId": "quickstart",
+              "id": "quickstart",
+              "title": "快速开始",
+              "description": "5分钟内部署 Pisanix !",
+              "source": "@site/docs/quickstart.md",
+              "sourceDirName": ".",
+              "slug": "/quickstart",
+              "permalink": "/docs/quickstart",
+              "tags": [],
+              "version": "current",
+              "sidebarPosition": 2,
+              "frontMatter": {
+                "sidebar_label": "快速开始",
+                "sidebar_position": 2
+              },
+              "sidebar": "tutorialSidebar",
+              "previous": {
+                "title": "简介",
+                "permalink": "/docs/intro"
+              },
+              "next": {
+                "title": "SQL 感知的流量治理",
+                "permalink": "/docs/Features/sql-aware-traffic-governance"
+              }
+            },
+            {
+              "unversionedId": "UseCases/cicd",
+              "id": "UseCases/cicd",
+              "title": "在 CICD 中使用",
+              "description": "Docusaurus can manage multiple versions of your docs.",
+              "source": "@site/docs/UseCases/cicd.md",
+              "sourceDirName": "UseCases",
+              "slug": "/UseCases/cicd",
+              "permalink": "/docs/UseCases/cicd",
+              "tags": [],
+              "version": "current",
+              "sidebarPosition": 2,
+              "frontMatter": {
+                "sidebar_position": 2
+              },
+              "sidebar": "tutorialSidebar",
+              "previous": {
+                "title": "作为 MockDB 使用",
+                "permalink": "/docs/UseCases/mockdb"
+              }
+            },
+            {
+              "unversionedId": "UseCases/mockdb",
+              "id": "UseCases/mockdb",
+              "title": "作为 MockDB 使用",
+              "description": "",
+              "source": "@site/docs/UseCases/mockdb.md",
+              "sourceDirName": "UseCases",
+              "slug": "/UseCases/mockdb",
+              "permalink": "/docs/UseCases/mockdb",
+              "tags": [],
+              "version": "current",
+              "sidebarPosition": 1,
+              "frontMatter": {
+                "sidebar_position": 1
+              },
+              "sidebar": "tutorialSidebar",
+              "previous": {
+                "title": "数据库可靠性工程",
+                "permalink": "/docs/Features/database-reliability-engineering"
+              },
+              "next": {
+                "title": "在 CICD 中使用",
+                "permalink": "/docs/UseCases/cicd"
+              }
+            }
+          ],
+          "sidebars": {
+            "tutorialSidebar": [
+              {
+                "type": "doc",
+                "id": "intro"
+              },
+              {
+                "type": "doc",
+                "id": "quickstart",
+                "label": "快速开始"
+              },
+              {
+                "type": "category",
+                "label": "特性",
+                "collapsible": true,
+                "collapsed": true,
+                "items": [
+                  {
+                    "type": "doc",
+                    "id": "Features/sql-aware-traffic-governance"
+                  },
+                  {
+                    "type": "doc",
+                    "id": "Features/runtime-oriented-resource-mgmt"
+                  },
+                  {
+                    "type": "doc",
+                    "id": "Features/database-reliability-engineering"
+                  }
+                ]
+              },
+              {
+                "type": "category",
+                "label": "使用场景",
+                "collapsible": true,
+                "collapsed": true,
+                "items": [
+                  {
+                    "type": "doc",
+                    "id": "UseCases/mockdb"
+                  },
+                  {
+                    "type": "doc",
+                    "id": "UseCases/cicd"
+                  }
+                ]
+              }
+            ]
+          },
+          "mainDocId": "intro",
+          "categoryGeneratedIndices": []
+        }
+      ]
+    }
+  },
+  "docusaurus-plugin-content-blog": {
+    "default": {
+      "blogSidebarTitle": "Recent posts",
+      "blogPosts": [
+        {
+          "id": "long-blog-post",
+          "metadata": {
+            "permalink": "/blog/long-blog-post",
+            "source": "@site/blog/2022-05-17-observability.md",
+            "title": "Observability in Pisanix",
+            "description": "This is the summary of a very long blog post,",
+            "date": "2022-05-17T00:00:00.000Z",
+            "formattedDate": "2022年5月17日",
+            "tags": [
+              {
+                "label": "pisanix",
+                "permalink": "/blog/tags/pisanix"
+              },
+              {
+                "label": "pisa-controller",
+                "permalink": "/blog/tags/pisa-controller"
+              },
+              {
+                "label": "observability",
+                "permalink": "/blog/tags/observability"
+              }
+            ],
+            "readingTime": 2.05,
+            "truncated": true,
+            "authors": [
+              {
+                "name": "Maxwell Miao",
+                "title": "Chair of Pisanix",
+                "url": "https://github.com/mlycore",
+                "imageURL": "https://github.com/mlycore.png",
+                "key": "Maxwell"
+              }
+            ],
+            "frontMatter": {
+              "slug": "long-blog-post",
+              "title": "Observability in Pisanix",
+              "authors": "Maxwell",
+              "tags": [
+                "pisanix",
+                "pisa-controller",
+                "observability"
+              ]
+            },
+            "nextItem": {
+              "title": "SQL Traffic Qos based on eBPF",
+              "permalink": "/blog/first-blog-post"
+            }
+          },
+          "content": "This is the summary of a very long blog post,\n\nUse a `<!--` `truncate` `-->` comment to limit blog post size in the list view.\n\n<!--truncate-->\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet"
+        },
+        {
+          "id": "first-blog-post",
+          "metadata": {
+            "permalink": "/blog/first-blog-post",
+            "source": "@site/blog/2022-05-12-sql-traffic-qos.md",
+            "title": "SQL Traffic Qos based on eBPF",
+            "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet",
+            "date": "2022-05-12T00:00:00.000Z",
+            "formattedDate": "2022年5月12日",
+            "tags": [
+              {
+                "label": "pisanix",
+                "permalink": "/blog/tags/pisanix"
+              },
+              {
+                "label": "pisa-daemon",
+                "permalink": "/blog/tags/pisa-daemon"
+              },
+              {
+                "label": "ebpf",
+                "permalink": "/blog/tags/ebpf"
+              }
+            ],
+            "readingTime": 0.12,
+            "truncated": false,
+            "authors": [
+              {
+                "name": "Jiandong Wu",
+                "title": "Maintainer of Pisanix",
+                "url": "https://github.com/xuanyuan300",
+                "imageURL": "https://i.imgur.com/aQBGA3H_d.webp?maxwidth=760&fidelity=grand",
+                "key": "Jiandong"
+              }
+            ],
+            "frontMatter": {
+              "slug": "first-blog-post",
+              "title": "SQL Traffic Qos based on eBPF",
+              "authors": "Jiandong",
+              "tags": [
+                "pisanix",
+                "pisa-daemon",
+                "ebpf"
+              ]
+            },
+            "prevItem": {
+              "title": "Observability in Pisanix",
+              "permalink": "/blog/long-blog-post"
+            },
+            "nextItem": {
+              "title": "Write MySQL client with Rust.",
+              "permalink": "/blog/mdx-blog-post"
+            }
+          },
+          "content": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet"
+        },
+        {
+          "id": "mdx-blog-post",
+          "metadata": {
+            "permalink": "/blog/mdx-blog-post",
+            "source": "@site/blog/2022-05-07-write-mysql-client-with-rust.mdx",
+            "title": "Write MySQL client with Rust.",
+            "description": "Blog posts support Docusaurus Markdown features, such as MDX.",
+            "date": "2022-05-07T00:00:00.000Z",
+            "formattedDate": "2022年5月7日",
+            "tags": [
+              {
+                "label": "pisanix",
+                "permalink": "/blog/tags/pisanix"
+              },
+              {
+                "label": "pisa-proxy",
+                "permalink": "/blog/tags/pisa-proxy"
+              },
+              {
+                "label": "rust",
+                "permalink": "/blog/tags/rust"
+              },
+              {
+                "label": "mysql",
+                "permalink": "/blog/tags/mysql"
+              }
+            ],
+            "readingTime": 0.175,
+            "truncated": false,
+            "authors": [
+              {
+                "name": "Jiandong Wu",
+                "title": "Maintainer of Pisanix",
+                "url": "https://github.com/xuanyuan300",
+                "imageURL": "https://i.imgur.com/aQBGA3H_d.webp?maxwidth=760&fidelity=grand",
+                "key": "Jiandong"
+              },
+              {
+                "name": "Bo Wang",
+                "title": "Maintainer of Pisanix",
+                "url": "https://github.com/wbtlb",
+                "imageURL": "https://avatars.githubusercontent.com/u/12859337?s=400&u=a7a03e467206e9b248b75fd57f681da7ce2caa34&v=4",
+                "key": "Bo"
+              }
+            ],
+            "frontMatter": {
+              "slug": "mdx-blog-post",
+              "title": "Write MySQL client with Rust.",
+              "authors": [
+                "Jiandong",
+                "Bo"
+              ],
+              "tags": [
+                "pisanix",
+                "pisa-proxy",
+                "rust",
+                "mysql"
+              ]
+            },
+            "prevItem": {
+              "title": "SQL Traffic Qos based on eBPF",
+              "permalink": "/blog/first-blog-post"
+            },
+            "nextItem": {
+              "title": "Welcome",
+              "permalink": "/blog/welcome"
+            }
+          },
+          "content": "Blog posts support [Docusaurus Markdown features](https://docusaurus.io/docs/markdown-features), such as [MDX](https://mdxjs.com/).\n\n:::tip\n\nUse the power of React to create interactive blog posts.\n\n```js\n<button onClick={() => alert('button clicked!')}>Click me!</button>\n```\n\n<button onClick={() => alert('button clicked!')}>Click me!</button>\n\n:::"
+        },
+        {
+          "id": "welcome",
+          "metadata": {
+            "permalink": "/blog/welcome",
+            "source": "@site/blog/2022-05-01-pisanix/index.md",
+            "title": "Welcome",
+            "description": "Docusaurus blogging features are powered by the blog plugin.",
+            "date": "2022-05-01T00:00:00.000Z",
+            "formattedDate": "2022年5月1日",
+            "tags": [
+              {
+                "label": "welcome",
+                "permalink": "/blog/tags/welcome"
+              },
+              {
+                "label": "pisanix",
+                "permalink": "/blog/tags/pisanix"
+              },
+              {
+                "label": "database-mesh",
+                "permalink": "/blog/tags/database-mesh"
+              }
+            ],
+            "readingTime": 0.405,
+            "truncated": false,
+            "authors": [
+              {
+                "name": "Maxwell Miao",
+                "title": "Chair of Pisanix",
+                "url": "https://github.com/mlycore",
+                "imageURL": "https://github.com/mlycore.png",
+                "key": "Maxwell"
+              },
+              {
+                "name": "Jiandong Wu",
+                "title": "Maintainer of Pisanix",
+                "url": "https://github.com/xuanyuan300",
+                "imageURL": "https://i.imgur.com/aQBGA3H_d.webp?maxwidth=760&fidelity=grand",
+                "key": "Jiandong"
+              }
+            ],
+            "frontMatter": {
+              "slug": "welcome",
+              "title": "Welcome",
+              "authors": [
+                "Maxwell",
+                "Jiandong"
+              ],
+              "tags": [
+                "welcome",
+                "pisanix",
+                "database-mesh"
+              ]
+            },
+            "prevItem": {
+              "title": "Write MySQL client with Rust.",
+              "permalink": "/blog/mdx-blog-post"
+            },
+            "nextItem": {
+              "title": "Hello Database Mesh World",
+              "permalink": "/blog/greetings"
+            }
+          },
+          "content": "[Docusaurus blogging features](https://docusaurus.io/docs/blog) are powered by the [blog plugin](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-blog).\n\nSimply add Markdown files (or folders) to the `blog` directory.\n\nRegular blog authors can be added to `authors.yml`.\n\nThe blog post date can be extracted from filenames, such as:\n\n- `2019-05-30-welcome.md`\n- `2019-05-30-welcome/index.md`\n\nA blog post folder can be convenient to co-locate blog post images:\n\n![Docusaurus Plushie](./docusaurus-plushie-banner.jpeg)\n\nThe blog supports tags as well!\n\n**And if you don't want a blog**: just delete this directory, and use `blog: false` in your Docusaurus config."
+        },
+        {
+          "id": "greetings",
+          "metadata": {
+            "permalink": "/blog/greetings",
+            "source": "@site/blog/2022-04-25-greetings.md",
+            "title": "Hello Database Mesh World",
+            "description": "Hello Pisanix",
+            "date": "2022-04-25T00:00:00.000Z",
+            "formattedDate": "2022年4月25日",
+            "tags": [
+              {
+                "label": "pisanix",
+                "permalink": "/blog/tags/pisanix"
+              },
+              {
+                "label": "greetings",
+                "permalink": "/blog/tags/greetings"
+              }
+            ],
+            "readingTime": 0.01,
+            "truncated": false,
+            "authors": [
+              {
+                "name": "Maxwell Miao",
+                "title": "Chair of Pisanix",
+                "url": "https://github.com/mlycore",
+                "imageURL": "https://github.com/mlycore.png",
+                "key": "Maxwell"
+              },
+              {
+                "name": "Zhuo Li",
+                "title": "Maintainer of Pisanix",
+                "url": "https://github.com/windghoul",
+                "imageURL": "https://raw.githubusercontent.com/windghoul/imagestorge/master/1-200403142639406.jpeg",
+                "key": "Zhuo"
+              }
+            ],
+            "frontMatter": {
+              "slug": "greetings",
+              "title": "Hello Database Mesh World",
+              "authors": [
+                "Maxwell",
+                "Zhuo"
+              ],
+              "tags": [
+                "pisanix",
+                "greetings"
+              ]
+            },
+            "prevItem": {
+              "title": "Welcome",
+              "permalink": "/blog/welcome"
+            }
+          },
+          "content": "Hello Pisanix"
+        }
+      ],
+      "blogListPaginated": [
+        {
+          "items": [
+            "long-blog-post",
+            "first-blog-post",
+            "mdx-blog-post",
+            "welcome",
+            "greetings"
+          ],
+          "metadata": {
+            "permalink": "/blog",
+            "page": 1,
+            "postsPerPage": 10,
+            "totalPages": 1,
+            "totalCount": 5,
+            "blogDescription": "Blog",
+            "blogTitle": "Blog"
+          }
+        }
+      ],
+      "blogTags": {
+        "/blog/tags/pisanix": {
+          "name": "pisanix",
+          "items": [
+            "long-blog-post",
+            "first-blog-post",
+            "mdx-blog-post",
+            "welcome",
+            "greetings"
+          ],
+          "permalink": "/blog/tags/pisanix",
+          "pages": [
+            {
+              "items": [
+                "long-blog-post",
+                "first-blog-post",
+                "mdx-blog-post",
+                "welcome",
+                "greetings"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/pisanix",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 5,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/pisa-controller": {
+          "name": "pisa-controller",
+          "items": [
+            "long-blog-post"
+          ],
+          "permalink": "/blog/tags/pisa-controller",
+          "pages": [
+            {
+              "items": [
+                "long-blog-post"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/pisa-controller",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/observability": {
+          "name": "observability",
+          "items": [
+            "long-blog-post"
+          ],
+          "permalink": "/blog/tags/observability",
+          "pages": [
+            {
+              "items": [
+                "long-blog-post"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/observability",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/pisa-daemon": {
+          "name": "pisa-daemon",
+          "items": [
+            "first-blog-post"
+          ],
+          "permalink": "/blog/tags/pisa-daemon",
+          "pages": [
+            {
+              "items": [
+                "first-blog-post"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/pisa-daemon",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/ebpf": {
+          "name": "ebpf",
+          "items": [
+            "first-blog-post"
+          ],
+          "permalink": "/blog/tags/ebpf",
+          "pages": [
+            {
+              "items": [
+                "first-blog-post"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/ebpf",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/pisa-proxy": {
+          "name": "pisa-proxy",
+          "items": [
+            "mdx-blog-post"
+          ],
+          "permalink": "/blog/tags/pisa-proxy",
+          "pages": [
+            {
+              "items": [
+                "mdx-blog-post"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/pisa-proxy",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/rust": {
+          "name": "rust",
+          "items": [
+            "mdx-blog-post"
+          ],
+          "permalink": "/blog/tags/rust",
+          "pages": [
+            {
+              "items": [
+                "mdx-blog-post"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/rust",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/mysql": {
+          "name": "mysql",
+          "items": [
+            "mdx-blog-post"
+          ],
+          "permalink": "/blog/tags/mysql",
+          "pages": [
+            {
+              "items": [
+                "mdx-blog-post"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/mysql",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/welcome": {
+          "name": "welcome",
+          "items": [
+            "welcome"
+          ],
+          "permalink": "/blog/tags/welcome",
+          "pages": [
+            {
+              "items": [
+                "welcome"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/welcome",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/database-mesh": {
+          "name": "database-mesh",
+          "items": [
+            "welcome"
+          ],
+          "permalink": "/blog/tags/database-mesh",
+          "pages": [
+            {
+              "items": [
+                "welcome"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/database-mesh",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        },
+        "/blog/tags/greetings": {
+          "name": "greetings",
+          "items": [
+            "greetings"
+          ],
+          "permalink": "/blog/tags/greetings",
+          "pages": [
+            {
+              "items": [
+                "greetings"
+              ],
+              "metadata": {
+                "permalink": "/blog/tags/greetings",
+                "page": 1,
+                "postsPerPage": 10,
+                "totalPages": 1,
+                "totalCount": 1,
+                "blogDescription": "Blog",
+                "blogTitle": "Blog"
+              }
+            }
+          ]
+        }
+      },
+      "blogTagsListPath": "/blog/tags"
+    }
+  },
+  "docusaurus-plugin-content-pages": {
+    "default": [
+      {
+        "type": "jsx",
+        "permalink": "/",
+        "source": "@site/src/pages/index.js"
+      },
+      {
+        "type": "mdx",
+        "permalink": "/markdown-page",
+        "source": "@site/src/pages/markdown-page.md",
+        "title": "Markdown page example",
+        "description": "You don't need React to write simple standalone pages.",
+        "frontMatter": {
+          "title": "Markdown page example"
+        }
+      }
+    ]
+  },
+  "docusaurus-plugin-debug": {},
+  "docusaurus-theme-classic": {}
+}
