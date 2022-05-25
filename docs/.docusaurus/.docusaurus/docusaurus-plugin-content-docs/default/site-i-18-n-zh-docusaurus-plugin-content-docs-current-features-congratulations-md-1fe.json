@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/congratulations",
+  "id": "Features/congratulations",
+  "title": "SQL 感知的流量治理",
+  "description": "You have just learned the basics of Docusaurus and made some changes to the initial template.",
+  "source": "@site/i18n/zh/docusaurus-plugin-content-docs/current/Features/congratulations.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/congratulations",
+  "permalink": "/docs/Features/congratulations",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 6,
+  "frontMatter": {
+    "sidebar_position": 6
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Deploy your site",
+    "permalink": "/docs/Features/deploy-your-site"
+  },
+  "next": {
+    "title": "使用场景",
+    "permalink": "/docs/usecases"
+  }
+}

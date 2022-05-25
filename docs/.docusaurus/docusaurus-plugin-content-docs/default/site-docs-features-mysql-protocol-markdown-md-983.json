@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/mysql-protocol-markdown",
+  "id": "Features/mysql-protocol-markdown",
+  "title": "MySQL Protocol",
+  "description": "此库主要为 Pisa-Proxy MySQL 代理的核心组件。该模块大量使用了由 Rust 实现的 Tokio 异步运行时框架。其中对网络数据包的读写、协议的编码等操作都通过 Tokio 提供的工具集实现。",
+  "source": "@site/docs/Features/mysql-protocol-markdown.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/mysql-protocol-markdown",
+  "permalink": "/en/docs/Features/mysql-protocol-markdown",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 6,
+  "frontMatter": {
+    "sidebar_position": 6
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "插件",
+    "permalink": "/en/docs/Features/sql-breaker-limit"
+  },
+  "next": {
+    "title": "The kubernetes case",
+    "permalink": "/en/docs/UseCases/kubernetes"
+  }
+}

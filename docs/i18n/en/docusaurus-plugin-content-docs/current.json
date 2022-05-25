@@ -1,0 +1,22 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.tutorialSidebar.category.Features": {
+    "message": "Features",
+    "description": "The label for category Features in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.UseCases": {
+    "message": "Use Cases",
+    "description": "The label for category UseCases in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.特性": {
+    "message": "Features",
+    "description": "The label for category 特性 in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.使用场景": {
+    "message": "Use Cases",
+    "description": "The label for category 使用场景 in sidebar tutorialSidebar"
+  }
+}

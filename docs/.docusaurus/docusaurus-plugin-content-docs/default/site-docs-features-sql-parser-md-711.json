@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/sql-parser",
+  "id": "Features/sql-parser",
+  "title": "SQL解析",
+  "description": "PISANIX 除了理解 SQL 协议外, 能读懂 SQL 语句也是一个很重要的功能，读写分离，分片等功能也都依赖 SQL 解析，在 PISANIX 中占着举足轻重的作用。",
+  "source": "@site/docs/Features/sql-parser.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/sql-parser",
+  "permalink": "/en/docs/Features/sql-parser",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "MySQL 协议",
+    "permalink": "/en/docs/Features/mysql-protocol"
+  },
+  "next": {
+    "title": "中间件",
+    "permalink": "/en/docs/Features/sql-breaker-limit"
+  }
+}

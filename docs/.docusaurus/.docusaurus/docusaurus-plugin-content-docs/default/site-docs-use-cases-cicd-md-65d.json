@@ -1,0 +1,21 @@
+{
+  "unversionedId": "UseCases/cicd",
+  "id": "UseCases/cicd",
+  "title": "在 A 场景中使用",
+  "description": "",
+  "source": "@site/docs/UseCases/cicd.md",
+  "sourceDirName": "UseCases",
+  "slug": "/UseCases/cicd",
+  "permalink": "/docs/UseCases/cicd",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "作为场景 B 使用",
+    "permalink": "/docs/UseCases/mockdb"
+  }
+}

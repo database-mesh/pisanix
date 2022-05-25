@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Basics/congratulations",
+  "id": "Basics/congratulations",
+  "title": "Congratulations!",
+  "description": "You have just learned the basics of Docusaurus and made some changes to the initial template.",
+  "source": "@site/docs/Basics/congratulations.md",
+  "sourceDirName": "Basics",
+  "slug": "/Basics/congratulations",
+  "permalink": "/docs/Basics/congratulations",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 6,
+  "frontMatter": {
+    "sidebar_position": 6
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Deploy your site",
+    "permalink": "/docs/Basics/deploy-your-site"
+  },
+  "next": {
+    "title": "Translate your site",
+    "permalink": "/docs/UseCases/mockdb"
+  }
+}

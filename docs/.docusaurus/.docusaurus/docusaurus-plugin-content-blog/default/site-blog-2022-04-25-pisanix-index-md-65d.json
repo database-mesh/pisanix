@@ -1,0 +1,62 @@
+{
+  "permalink": "/blog/welcome",
+  "editUrl": "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/blog/2022-04-25-pisanix/index.md",
+  "source": "@site/blog/2022-04-25-pisanix/index.md",
+  "title": "Welcome",
+  "description": "Docusaurus blogging features are powered by the blog plugin.",
+  "date": "2022-04-25T00:00:00.000Z",
+  "formattedDate": "2022年4月25日",
+  "tags": [
+    {
+      "label": "welcome",
+      "permalink": "/blog/tags/welcome"
+    },
+    {
+      "label": "pisanix",
+      "permalink": "/blog/tags/pisanix"
+    },
+    {
+      "label": "database-mesh",
+      "permalink": "/blog/tags/database-mesh"
+    }
+  ],
+  "readingTime": 0.405,
+  "truncated": false,
+  "authors": [
+    {
+      "name": "Maxwell Miao",
+      "title": "Chair of Pisanix",
+      "url": "https://github.com/mlycore",
+      "imageURL": "https://github.com/mlycore.png",
+      "key": "Maxwell"
+    },
+    {
+      "name": "Jiandong Wu",
+      "title": "Maintainer of Pisanix",
+      "url": "https://github.com/xuanyuan300",
+      "imageURL": "https://github.com/xuanyuan300.png",
+      "key": "Jiandong"
+    }
+  ],
+  "frontMatter": {
+    "slug": "welcome",
+    "title": "Welcome",
+    "authors": [
+      "Maxwell",
+      "Jiandong"
+    ],
+    "tags": [
+      "welcome",
+      "pisanix",
+      "database-mesh"
+    ]
+  },
+  "prevItem": {
+    "title": "Hello Database Mesh World",
+    "permalink": "/blog/greetings"
+  },
+  "nextItem": {
+    "title": "Long Blog Post",
+    "permalink": "/blog/long-blog-post"
+  }
+}

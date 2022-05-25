@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/markdown-features",
+  "id": "Features/markdown-features",
+  "title": "Markdown Features",
+  "description": "Docusaurus supports Markdown and a few additional features.",
+  "source": "@site/i18n/zh/docusaurus-plugin-content-docs/current/Features/markdown-features.mdx",
+  "sourceDirName": "Features",
+  "slug": "/Features/markdown-features",
+  "permalink": "/docs/Features/markdown-features",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "sidebar_position": 4
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "面向运行时的资源管理",
+    "permalink": "/docs/Features/runtime-oriented-resource-mgmt"
+  },
+  "next": {
+    "title": "SQL 感知的流量治理",
+    "permalink": "/docs/Features/sql-aware-traffic-governance"
+  }
+}

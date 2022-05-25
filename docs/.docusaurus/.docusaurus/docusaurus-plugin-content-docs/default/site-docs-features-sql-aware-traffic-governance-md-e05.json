@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/sql-aware-traffic-governance",
+  "id": "Features/sql-aware-traffic-governance",
+  "title": "SQL 感知的流量治理",
+  "description": "",
+  "source": "@site/docs/Features/sql-aware-traffic-governance.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/sql-aware-traffic-governance",
+  "permalink": "/docs/Features/sql-aware-traffic-governance",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "快速开始",
+    "permalink": "/docs/quickstart"
+  },
+  "next": {
+    "title": "面向运行时的资源管理",
+    "permalink": "/docs/Features/runtime-oriented-resource-mgmt"
+  }
+}

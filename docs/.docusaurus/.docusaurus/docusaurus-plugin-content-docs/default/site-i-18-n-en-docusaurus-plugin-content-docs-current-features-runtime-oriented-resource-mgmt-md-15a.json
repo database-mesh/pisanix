@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/runtime-oriented-resource-mgmt",
+  "id": "Features/runtime-oriented-resource-mgmt",
+  "title": "Runtime Resource Management",
+  "description": "",
+  "source": "@site/i18n/en/docusaurus-plugin-content-docs/current/Features/runtime-oriented-resource-mgmt.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/runtime-oriented-resource-mgmt",
+  "permalink": "/en/docs/Features/runtime-oriented-resource-mgmt",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "SQL Aware traffic governance",
+    "permalink": "/en/docs/Features/sql-aware-traffic-governance"
+  },
+  "next": {
+    "title": "Database Reliability",
+    "permalink": "/en/docs/Features/database-reliability-engineering"
+  }
+}

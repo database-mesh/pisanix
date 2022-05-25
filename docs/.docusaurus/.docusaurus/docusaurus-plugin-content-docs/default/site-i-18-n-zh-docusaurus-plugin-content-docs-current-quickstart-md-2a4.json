@@ -1,0 +1,26 @@
+{
+  "unversionedId": "quickstart",
+  "id": "quickstart",
+  "title": "快速开始",
+  "description": "Pisanix 是 SphereEx 团队面向 Database Mesh 推出的开源解决方案!",
+  "source": "@site/i18n/zh/docusaurus-plugin-content-docs/current/quickstart.md",
+  "sourceDirName": ".",
+  "slug": "/quickstart",
+  "permalink": "/docs/quickstart",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_label": "快速开始",
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Pisanix 简介",
+    "permalink": "/docs/intro"
+  },
+  "next": {
+    "title": "SQL 感知的流量治理",
+    "permalink": "/docs/Features/sql-aware-traffic-governance"
+  }
+}

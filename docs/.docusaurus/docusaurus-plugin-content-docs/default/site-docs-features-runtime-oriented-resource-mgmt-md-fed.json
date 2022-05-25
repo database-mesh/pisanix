@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/runtime-oriented-resource-mgmt",
+  "id": "Features/runtime-oriented-resource-mgmt",
+  "title": "面向运行时的资源管理",
+  "description": "",
+  "source": "@site/docs/Features/runtime-oriented-resource-mgmt.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/runtime-oriented-resource-mgmt",
+  "permalink": "/docs/Features/runtime-oriented-resource-mgmt",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "SQL 感知的流量治理",
+    "permalink": "/docs/Features/sql-aware-traffic-governance"
+  },
+  "next": {
+    "title": "数据库可靠性工程",
+    "permalink": "/docs/Features/database-reliability-engineering"
+  }
+}

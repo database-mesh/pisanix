@@ -1,0 +1,67 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/en/docs",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/en/docs",
+          "mainDocId": "intro",
+          "docs": [
+            {
+              "id": "Features/loadbalancer",
+              "path": "/en/docs/Features/loadbalancer",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "Features/mysql-protocol",
+              "path": "/en/docs/Features/mysql-protocol",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "Features/sql-breaker-limit",
+              "path": "/en/docs/Features/sql-breaker-limit",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "Features/sql-parser",
+              "path": "/en/docs/Features/sql-parser",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "intro",
+              "path": "/en/docs/intro",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "quickstart",
+              "path": "/en/docs/quickstart",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "UseCases/kubernetes",
+              "path": "/en/docs/UseCases/kubernetes",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "UseCases/standalone",
+              "path": "/en/docs/UseCases/standalone",
+              "sidebar": "tutorialSidebar"
+            }
+          ],
+          "sidebars": {
+            "tutorialSidebar": {
+              "link": {
+                "path": "/en/docs/intro",
+                "label": "intro"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

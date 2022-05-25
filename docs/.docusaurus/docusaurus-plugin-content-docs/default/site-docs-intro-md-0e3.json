@@ -1,0 +1,21 @@
+{
+  "unversionedId": "intro",
+  "id": "intro",
+  "title": "简介",
+  "description": "Pisanix Pi-sanics] 是一款面向 Kubernetes 的数据库治理框架。Pisanix 通过 SQL 感知的流量治理、审计、安全和扩展性等能力实现 [Database Mesh 风格的数据库治理体验。",
+  "source": "@site/docs/intro.md",
+  "sourceDirName": ".",
+  "slug": "/intro",
+  "permalink": "/docs/intro",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "next": {
+    "title": "快速开始",
+    "permalink": "/docs/quickstart"
+  }
+}

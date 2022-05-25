@@ -1,0 +1,25 @@
+{
+  "unversionedId": "UseCases/kubernetes",
+  "id": "UseCases/kubernetes",
+  "title": "The kubernetes case",
+  "description": "",
+  "source": "@site/i18n/en/docusaurus-plugin-content-docs/current/UseCases/kubernetes.md",
+  "sourceDirName": "UseCases",
+  "slug": "/UseCases/kubernetes",
+  "permalink": "/en/docs/UseCases/kubernetes",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "中间件",
+    "permalink": "/en/docs/Features/sql-breaker-limit"
+  },
+  "next": {
+    "title": "The standalone case",
+    "permalink": "/en/docs/UseCases/standalone"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "/en/blog-d0a": {
+    "component": "a6aa9e1f",
+    "sidebar": "814f3328",
+    "items": [
+      {
+        "content": "24f9a669"
+      }
+    ],
+    "metadata": "fba6c282",
+    "__routeContextModule": "9b79bddb"
+  },
+  "/en/blog/archive-9c5": {
+    "component": "9e4087bc",
+    "archive": "f6cbeee1",
+    "__routeContextModule": "9b79bddb"
+  },
+  "/en/blog/greetings-0b0": {
+    "component": "ccc49370",
+    "sidebar": "814f3328",
+    "content": "032d600d",
+    "__routeContextModule": "9b79bddb"
+  },
+  "/en/blog/tags-6f2": {
+    "component": "01a85c17",
+    "sidebar": "814f3328",
+    "tags": "9bdd22eb",
+    "__routeContextModule": "9b79bddb"
+  },
+  "/en/blog/tags/greetings-d80": {
+    "component": "6875c492",
+    "sidebar": "814f3328",
+    "items": [
+      {
+        "content": "24f9a669"
+      }
+    ],
+    "metadata": "9d6db1e9",
+    "listMetadata": "72116d6e",
+    "__routeContextModule": "9b79bddb"
+  },
+  "/en/blog/tags/pisanix-f85": {
+    "component": "6875c492",
+    "sidebar": "814f3328",
+    "items": [
+      {
+        "content": "24f9a669"
+      }
+    ],
+    "metadata": "ad35b2f3",
+    "listMetadata": "70b30d97",
+    "__routeContextModule": "9b79bddb"
+  },
+  "/en/docs-f42": {
+    "component": "1be78505",
+    "versionMetadata": "935f2afb",
+    "__routeContextModule": "31099589"
+  },
+  "/en/docs/Features/loadbalancer-ba4": {
+    "component": "17896441",
+    "content": "3487a98d"
+  },
+  "/en/docs/Features/mysql-protocol-c85": {
+    "component": "17896441",
+    "content": "bd373ed9"
+  },
+  "/en/docs/Features/sql-breaker-limit-771": {
+    "component": "17896441",
+    "content": "8e8fd6cd"
+  },
+  "/en/docs/Features/sql-parser-28a": {
+    "component": "17896441",
+    "content": "71133807"
+  },
+  "/en/docs/intro-7c8": {
+    "component": "17896441",
+    "content": "5b44acae"
+  },
+  "/en/docs/quickstart-2be": {
+    "component": "17896441",
+    "content": "66aed93e"
+  },
+  "/en/docs/UseCases/kubernetes-402": {
+    "component": "17896441",
+    "content": "db696427"
+  },
+  "/en/docs/UseCases/standalone-bb8": {
+    "component": "17896441",
+    "content": "1cc16307"
+  },
+  "/en/-ceb": {
+    "component": "c4f5d8e4",
+    "config": "5e9f5e1a",
+    "__routeContextModule": "f99c3932"
+  }
+}

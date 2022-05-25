@@ -1,0 +1,14 @@
+{
+  "pisanix": {
+    "allTagsPath": "/blog/tags",
+    "name": "pisanix",
+    "count": 1,
+    "permalink": "/blog/tags/pisanix"
+  },
+  "greetings": {
+    "allTagsPath": "/blog/tags",
+    "name": "greetings",
+    "count": 1,
+    "permalink": "/blog/tags/greetings"
+  }
+}

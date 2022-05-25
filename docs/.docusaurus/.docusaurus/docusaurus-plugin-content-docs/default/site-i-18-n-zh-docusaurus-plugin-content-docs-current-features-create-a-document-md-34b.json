@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/create-a-document",
+  "id": "Features/create-a-document",
+  "title": "数据库可靠性工程",
+  "description": "Documents are groups of pages connected through:",
+  "source": "@site/i18n/zh/docusaurus-plugin-content-docs/current/Features/create-a-document.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/create-a-document",
+  "permalink": "/docs/Features/create-a-document",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Create a Page",
+    "permalink": "/docs/Features/create-a-page"
+  },
+  "next": {
+    "title": "面向运行时的资源管理",
+    "permalink": "/docs/Features/runtime-oriented-resource-mgmt"
+  }
+}

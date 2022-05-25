@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/deploy-your-site",
+  "id": "Features/deploy-your-site",
+  "title": "Deploy your site",
+  "description": "Docusaurus is a static-site-generator (also called Jamstack).",
+  "source": "@site/i18n/zh/docusaurus-plugin-content-docs/current/Features/deploy-your-site.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/deploy-your-site",
+  "permalink": "/docs/Features/deploy-your-site",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 5,
+  "frontMatter": {
+    "sidebar_position": 5
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Markdown Features",
+    "permalink": "/docs/Features/markdown-features"
+  },
+  "next": {
+    "title": "SQL 感知的流量治理",
+    "permalink": "/docs/Features/sql-aware-traffic-governance"
+  }
+}

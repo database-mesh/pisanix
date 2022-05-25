@@ -1,0 +1,25 @@
+{
+  "unversionedId": "Features/database-reliability-engineering",
+  "id": "Features/database-reliability-engineering",
+  "title": "Database Reliability",
+  "description": "",
+  "source": "@site/i18n/en/docusaurus-plugin-content-docs/current/Features/database-reliability-engineering.md",
+  "sourceDirName": "Features",
+  "slug": "/Features/database-reliability-engineering",
+  "permalink": "/en/docs/Features/database-reliability-engineering",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Runtime Resource Management",
+    "permalink": "/en/docs/Features/runtime-oriented-resource-mgmt"
+  },
+  "next": {
+    "title": "The kubernetes case",
+    "permalink": "/en/docs/UseCases/kubernetes"
+  }
+}

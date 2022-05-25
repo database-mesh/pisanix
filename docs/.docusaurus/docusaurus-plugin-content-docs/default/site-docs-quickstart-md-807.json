@@ -1,0 +1,26 @@
+{
+  "unversionedId": "quickstart",
+  "id": "quickstart",
+  "title": "快速开始",
+  "description": "安装教程",
+  "source": "@site/docs/quickstart.md",
+  "sourceDirName": ".",
+  "slug": "/quickstart",
+  "permalink": "/docs/quickstart",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_label": "快速开始",
+    "sidebar_position": 2
+  },
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "简介",
+    "permalink": "/docs/intro"
+  },
+  "next": {
+    "title": "负载均衡",
+    "permalink": "/docs/Features/loadbalancer"
+  }
+}
