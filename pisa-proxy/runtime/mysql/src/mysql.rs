@@ -45,7 +45,7 @@ impl proxy::factory::Proxy for MySQLProxy {
             backend_nodes: self.mysql_nodes.clone(),
         };
 
-        let l = proxy.build_listener().unwrap();
+        let listener = proxy.build_listener().unwrap();
 
         let pool = Pool::new(self.proxy_config.pool_size as usize);
 
@@ -62,7 +62,7 @@ impl proxy::factory::Proxy for MySQLProxy {
         };
 
         loop {
-            let socket = proxy.accept(&l).await.map_err(ErrorKind::Io)?;
+            let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
             let pool = pool.clone();
             let lb = Arc::clone(&lb);
             let pcfg = self.proxy_config.clone();
@@ -70,15 +70,15 @@ impl proxy::factory::Proxy for MySQLProxy {
             let plugin = plugin.clone();
 
             //TODO: add multiple thread limit with Semaphore
-            let mut m = MySqlServer::new(socket, pool, lb, pcfg, ast_cache, plugin).await;
+            let mut mysql_server = MySqlServer::new(socket, pool, lb, pcfg, ast_cache, plugin).await;
 
-            if let Err(err) = m.handshake().await {
+            if let Err(err) = mysql_server.handshake().await {
                 error!("{:?}", err);
                 continue;
             }
 
             tokio::spawn(async move {
-                if let Err(err) = m.run().await {
+                if let Err(err) = mysql_server.run().await {
                     error!("{:?}", err);
                 }
             });

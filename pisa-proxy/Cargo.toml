@@ -6,7 +6,6 @@ members = [
     "app/api",
     "app/config",
     "app/metrics",
-    "app/pprof",
     "app/server",
     "cmd/pisa",
     "error",
@@ -21,7 +20,6 @@ members = [
     "runtime/common",
     "runtime/mysql",
     "runtime/shardingproxy",
-    "tls", 
     "version"
 ]
 
