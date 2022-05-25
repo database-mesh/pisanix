@@ -42,11 +42,17 @@ pub struct PisaConfig {
     pub sharding_proxy_nodes: Vec<MySQLNode>,
 }
 
-const DEFAULT_CONFIG_PATH: &str = "etc/config.toml";
-const DEFAULT_PISA_CONTROLLER_SERVICE: &str = "pisa-controller";
-const DEFAULT_PISA_CONTROLLER_NAMESPACE: &str = "pisa-system";
-const DEFAULT_NAMESPACE: &str = "default";
-const DEFAULT_NAME: &str = "default";
+const PISA_CONTROLLER_DEFAULT_SERVICE: &str = "pisa-controller";
+const PISA_CONTROLLER_DEFAULT_NAMESPACE: &str = "pisa-system";
+
+const PISA_PROXY_DEFAULT_DEPLOYED_NAME: &str = "default";
+const PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE: &str = "default";
+const PISA_PROXY_DEFAULT_CONFIG_PATH: &str = "etc/config.toml";
+
+const PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG: &str = "LOCAL_CONFIG";
+const PISA_PROXY_CONFIG_ENV_PORT: &str = "PORT";
+const PISA_PROXY_CONFIG_ENV_LOG_LEVEL: &str = "LOG_LEVEL";
+
 impl PisaConfig {
     pub fn get_proxies(&self) -> &Vec<ProxyConfig> {
         &self.proxies
@@ -61,37 +67,20 @@ impl PisaConfig {
     }
 
     pub fn load_http() -> Result<Config, Box<dyn std::error::Error>> {
-        let ns = match env::var("NAMESPACE") {
-            Ok(ns) => ns,
-            Err(_) => DEFAULT_NAMESPACE.to_string(),
-        };
+        let deployed_ns = env::var("PISA_DEPLOYED_NAMESPACE").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
+        let deployed_name = env::var("PISA_DEPLOYED_NAME").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAME.to_string()); 
+        let pisa_svc =  env::var("PISA_CONTROLLER_SERVICE").unwrap_or(PISA_CONTROLLER_DEFAULT_SERVICE.to_string());
+        let pisa_ns = env::var("PISA_CONTROLLER_NAMESPACE").unwrap_or(  PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
+        let pisa_host = env::var("PISA_CONTROLLER_HOST").unwrap_or(format!("{}.{}:8080", pisa_svc, pisa_ns).to_string());
 
-        let name = match env::var("NAME") {
-            Ok(ns) => ns,
-            Err(_) => DEFAULT_NAME.to_string(),
-        };
-
-        let pisa_svc = match env::var("PISA_CONTROLLER_SERVICE") {
-            Ok(pisa_svc) => pisa_svc,
-            Err(_) => DEFAULT_PISA_CONTROLLER_SERVICE.to_string(),
-        };
-
-        let pisa_ns = match env::var("PISA_CONTROLLER_NAMESPACE") {
-            Ok(pisa_ns) => pisa_ns,
-            Err(_) => DEFAULT_PISA_CONTROLLER_NAMESPACE.to_string(),
-        };
-
-        let pisa_host = match env::var("PISA_CONTROLLER_HOST") {
-            Ok(pisa_host) => pisa_host,
-            Err(_) => format!("{}.{}:8080", pisa_svc, pisa_ns),
-        };
-        println!(
-            "http://{}/apis/proxy.pisanix.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-            pisa_host, ns, name
+        info!(
+            "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+            pisa_host, deployed_ns, deployed_name
         );
+
         let resp = reqwest::blocking::get(format!(
-            "http://{}/apis/proxy.pisanix.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-            pisa_host, ns, name
+            "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+            pisa_host, deployed_ns, deployed_name
         ))?
         .json::<Config>()?;
         Ok(resp)
@@ -106,18 +95,13 @@ impl PisaConfig {
             .get_matches();
         let config: Config;
 
-        let local = match env::var(ENV_LOCAL_CONFIG) {
+        let local = match env::var(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG) {
             Ok(local) => local,
             Err(_) => "false".to_string(),
         };
 
         if local.eq("true") {
-            // if env::var(ENV_LOCAL_CONFIG).unwrap().eq("true") {
-
-            // }
-
-            // if env::var(ENV_LOCAL_CONFIG).unwrap().eq("true") {
-            let mut config_path = DEFAULT_CONFIG_PATH;
+            let mut config_path = PISA_PROXY_DEFAULT_CONFIG_PATH;
 
             if let Some(path) = matches.value_of("config") {
                 config_path = path;
@@ -146,15 +130,11 @@ impl PisaConfig {
             sharding_proxy_nodes: vec![],
         };
 
-        if let Some(port) = matches.value_of("port") {
-            pisa_config.admin.port = port.to_owned();
-        }
-
-        if let Some(env_port) = env::var(ENV_PORT).ok() {
+        if let Some(env_port) = env::var(PISA_PROXY_CONFIG_ENV_PORT).ok() {
             pisa_config.admin.port = env_port;
         }
 
-        if let Some(log_level) = env::var(ENV_LOG_LEVEL).ok() {
+        if let Some(log_level) = env::var(PISA_PROXY_CONFIG_ENV_LOG_LEVEL).ok() {
             pisa_config.admin.log_level = log_level;
         }
 
@@ -176,7 +156,3 @@ impl PisaConfig {
     }
 }
 
-pub const ENV_LOCAL_CONFIG: &str = "LOCAL_CONFIG";
-pub const ENV_PISA_CONTROLLER_SERVICE: &str = "PISA_CONTROLLER_SERVICE";
-pub const ENV_PORT: &str = "PORT";
-pub const ENV_LOG_LEVEL: &str = "LOG_LEVEL";
