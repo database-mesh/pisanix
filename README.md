@@ -39,12 +39,13 @@ For DBAs who could and would like to solve problems with programming. Pisanix su
 Full documentation will be available on the [Pisanix website](https://pisanix.io/).
 
 # Community & Support
- :link: [GitHub Issues](https://github.com/database-mesh/pisanix/issues). Best for: larger systemic questions/bug reports or anything development related.
-
- :link: [Slack channel](https://join.slack.com/t/databasemesh/shared_invite/zt-177m5biwz-VKe3eXPSjarlrgYDPdQuhw). Best for: instant communications and online meetings, sharing your applications.
-
- :link: [Tecent Meeting / Voov: 553-8242-5155](https://meeting.tencent.com/dm/6UXDMNsHBVQO). Best for: Bi-weekly meeting, started from Feb 16th 2022.
-
+| | |
+|:-|:-|
+| Mailing List| https://groups.google.com/g/database-mesh |
+| Dev Meetings (Starting Feb 27th, 2022), Bi-weekly Wednesday 9:00AM PST|https://meet.google.com/yhv-zrby-pyt |
+| Dev Meetings APAC Friendly (Starting April 27th, 2022), Bi-weekly APAC Wednesday 9:00PM GMT+8|https://meeting.tencent.com/dm/6UXDMNsHBVQO |
+| Slack |https://databasemesh.slack.com/  |
+| Meetings Notes |https://bit.ly/39Fqt3x |
 
 - Wechat User Group: Broker wechat to add you into the user group.
  <img src="static/wechat-user-group-broker.jpeg" width="200" length="200"/>

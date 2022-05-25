@@ -97,11 +97,11 @@ export default {
           "items": [
             {
               "label": "Twitter",
-              "href": "https://twitter.com/pisanix"
+              "href": "https://twitter.com/maxwell9215"
             },
             {
               "label": "Slack",
-              "href": "https://twitter.com/docusaurus"
+              "href": "https://databasemesh.slack.com/"
             }
           ]
         },
