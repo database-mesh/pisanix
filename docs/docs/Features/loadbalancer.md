@@ -17,7 +17,7 @@ sidebar_position: 1
 
 ## 已支持负载均衡策略
 - [x] Random
-- [x] Roundbin
+- [x] RoundRobin
 
 ## 配置示例
 1. 若需要在代理中启用负载均衡，则需要配置 `simple_loadbalancer` 块.
