@@ -36,12 +36,12 @@ For DBAs who could and would like to solve problems with programming. Pisanix su
 - [Quick Start](https://www.pisanix.io/docs/quickstart)
 
 # Documentation
-Full documentation will be available on the [Pisanix website](https://pisanix.io/).
+Full documentation will be available on the [Pisanix website](https://www.pisanix.io).
 
 # Community & Support
  :link: [GitHub Issues](https://github.com/database-mesh/pisanix/issues). Best for: larger systemic questions/bug reports or anything development related.
 
- :link: [Slack channel](https://join.slack.com/t/databasemesh/shared_invite/zt-177m5biwz-VKe3eXPSjarlrgYDPdQuhw). Best for: instant communications and online meetings, sharing your applications.
+ :link: [Slack channel](https://databasemesh.slack.com/). Best for: instant communications and online meetings, sharing your applications.
 
  :link: [Tecent Meeting / Voov: 553-8242-5155](https://meeting.tencent.com/dm/6UXDMNsHBVQO). Best for: Bi-weekly meeting, started from Feb 16th 2022.
 

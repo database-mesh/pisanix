@@ -25,7 +25,7 @@ Cargo.lock
 *.out
 
 # Build artifact binary, built with `make build` 
-bin/*
+**/bin/*
 
 # Dependencies
 **/vendor
