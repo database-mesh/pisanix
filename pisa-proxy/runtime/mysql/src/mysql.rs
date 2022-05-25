@@ -70,7 +70,8 @@ impl proxy::factory::Proxy for MySQLProxy {
             let plugin = plugin.clone();
 
             //TODO: add multiple thread limit with Semaphore
-            let mut mysql_server = MySqlServer::new(socket, pool, lb, pcfg, ast_cache, plugin).await;
+            let mut mysql_server =
+                MySqlServer::new(socket, pool, lb, pcfg, ast_cache, plugin).await;
 
             if let Err(err) = mysql_server.handshake().await {
                 error!("{:?}", err);
