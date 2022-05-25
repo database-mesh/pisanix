@@ -3,7 +3,7 @@ sidebar_position: 2
 ---
 # MySQL 协议 
 
-此库主要为 Pisa-Proxy MySQL 代理的核心组件。该模块大量使用了由 Rust 实现的 Tokio 异步运行时框架。其中对网络数据包的读写、协议的编码等操作都通过 Tokio 提供的工具集实现。
+此库主要为 Pisa-Proxy MySQL 代理的核心组件, 本库为 [MySQL 协议](https://dev.mysql.com/doc/internals/en/client-server-protocol.html) 的实现。该库大量使用了由 Rust 实现的 [Tokio](https://github.com/tokio-rs/tokio) 异步运行时框架。其中对网络数据包的读写、协议的编码等操作都通过 Tokio 提供的工具集实现。
 
 
 ## 介绍
@@ -51,8 +51,3 @@ sidebar_position: 2
 - [x] mysql_native_password
 - [ ] sha256_password
 - [ ] caching_sha2_password 
-
-## 3. 参考链接
-[MySQL Protocol](https://dev.mysql.com/doc/internals/en/client-server-protocol.html)
-
-[Tokio](https://github.com/tokio-rs/tokio)
