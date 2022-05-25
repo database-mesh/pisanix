@@ -113,7 +113,7 @@ mod test {
             //"EXECUTE stmt2",
             //"BEGIN WORK",
             //"set AUTOCOMMIT=1",
-            "SELECT w, SUM(w) OVER (ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) FROM t;"
+            "SELECT w, SUM(w) OVER (ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) FROM t;",
         ];
 
         let p = Parser::new();

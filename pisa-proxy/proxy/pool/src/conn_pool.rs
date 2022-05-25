@@ -21,13 +21,13 @@ use async_trait::async_trait;
 use crossbeam_queue::ArrayQueue;
 use tracing::debug;
 
-/// In order to be managed by the connection pool, Both the `ConnLike` and `ConnAttr` trait 
+/// In order to be managed by the connection pool, Both the `ConnLike` and `ConnAttr` trait
 /// needs to be implemented.
 #[async_trait]
 pub trait ConnLike: Sized + Send + Sync + std::fmt::Debug + 'static {
     type Error: Send + std::fmt::Debug + 'static;
 
-    // Method for create connection 
+    // Method for create connection
     async fn build_conn(&self) -> Result<Self, Self::Error>;
 }
 

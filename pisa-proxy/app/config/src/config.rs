@@ -67,11 +67,16 @@ impl PisaConfig {
     }
 
     pub fn load_http() -> Result<Config, Box<dyn std::error::Error>> {
-        let deployed_ns = env::var("PISA_DEPLOYED_NAMESPACE").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
-        let deployed_name = env::var("PISA_DEPLOYED_NAME").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAME.to_string()); 
-        let pisa_svc =  env::var("PISA_CONTROLLER_SERVICE").unwrap_or(PISA_CONTROLLER_DEFAULT_SERVICE.to_string());
-        let pisa_ns = env::var("PISA_CONTROLLER_NAMESPACE").unwrap_or(  PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
-        let pisa_host = env::var("PISA_CONTROLLER_HOST").unwrap_or(format!("{}.{}:8080", pisa_svc, pisa_ns).to_string());
+        let deployed_ns = env::var("PISA_DEPLOYED_NAMESPACE")
+            .unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
+        let deployed_name =
+            env::var("PISA_DEPLOYED_NAME").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAME.to_string());
+        let pisa_svc = env::var("PISA_CONTROLLER_SERVICE")
+            .unwrap_or(PISA_CONTROLLER_DEFAULT_SERVICE.to_string());
+        let pisa_ns = env::var("PISA_CONTROLLER_NAMESPACE")
+            .unwrap_or(PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
+        let pisa_host = env::var("PISA_CONTROLLER_HOST")
+            .unwrap_or(format!("{}.{}:8080", pisa_svc, pisa_ns).to_string());
 
         info!(
             "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
@@ -155,4 +160,3 @@ impl PisaConfig {
         pisa_config
     }
 }
-

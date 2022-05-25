@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fs::File;
-use std::io::{self, BufRead};
-use std::path::Path;
-use std::env;
+use std::{
+    env,
+    fs::File,
+    io::{self, BufRead},
+    path::Path,
+};
+
 use mysql_parser::parser::Parser;
 
-fn main() -> io::Result<()>{
+fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let lines = read_lines(&args[1])?;
     let p = Parser::new();
@@ -29,7 +32,7 @@ fn main() -> io::Result<()>{
             match res {
                 Ok(_data) => {
                     //println!("ok::{:?}", line);
-                },
+                }
                 Err(e) => {
                     println!("err::{:?}::{:?}", line, e);
                 }
@@ -41,7 +44,8 @@ fn main() -> io::Result<()>{
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where P: AsRef<Path>
+where
+    P: AsRef<Path>,
 {
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())

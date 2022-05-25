@@ -25,7 +25,6 @@ use tokio_util::codec::{Decoder, Encoder, Framed};
 use super::{codec::ClientCodec, stream::LocalStream};
 use crate::{charset::DEFAULT_COLLATION_ID, err::ProtocolError, mysql_const::*, util::*};
 
-
 /// Handshake state
 #[derive(Debug, Clone)]
 pub enum HandshakeState {
@@ -365,7 +364,6 @@ impl ClientAuth {
         }
     }
 }
-
 
 /// To make the handshake decode status clearer.
 #[derive(Debug)]

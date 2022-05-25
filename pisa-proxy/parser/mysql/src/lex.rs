@@ -14,6 +14,7 @@
 
 use lrlex::{lrlex_mod, DefaultLexeme, LRNonStreamingLexer};
 use lrpar::{LexError, Lexeme, Span};
+
 use super::charsets::CHARSETS;
 
 lrlex_mod!("token_map");
@@ -270,7 +271,7 @@ impl<'a> Scanner<'a> {
                         lexemes.push(Ok(DefaultLexeme::new(T_AND_AND, old_pos, 2)));
                     } else {
                         lexemes.push(Ok(DefaultLexeme::new(T_AND_OP, old_pos, 1)));
-                        continue
+                        continue;
                     }
                 }
 
@@ -301,7 +302,6 @@ impl<'a> Scanner<'a> {
                     lexemes.push(Ok(DefaultLexeme::new(T_NEG, old_pos, 1)));
                 }
 
-
                 ch if ch.is_ascii_digit() => {
                     let old_pos = self.pos;
                     let tok = self.scan_start_number();
@@ -322,11 +322,11 @@ impl<'a> Scanner<'a> {
                     lexemes.push(Ok(self.scan_ident()));
                 }
 
-                'a' | 'c' ..= 'w'| 'y' | 'z'| 'A' | 'C' ..= 'W' | 'Y' | 'Z' => {
+                'a' | 'c'..='w' | 'y' | 'z' | 'A' | 'C'..='W' | 'Y' | 'Z' => {
                     lexemes.push(Ok(self.scan_ident()));
-                },
+                }
 
-                _ => lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos))))
+                _ => lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos)))),
             }
 
             self.next();
@@ -617,7 +617,7 @@ impl<'a> Scanner<'a> {
             // Check `UNDERSCORE_CHARSET` token
             if CHARSETS.get(&*ident_str).is_some() {
                 self.pos -= 1;
-                return DefaultLexeme::new(T_UNDERSCORE_CHARSET, old_pos, ident_str.len())
+                return DefaultLexeme::new(T_UNDERSCORE_CHARSET, old_pos, ident_str.len());
             }
         }
 
@@ -663,7 +663,7 @@ impl<'a> Scanner<'a> {
                     self.pos -= 1;
                     return true;
                 }
-                break
+                break;
             }
 
             if ch == end_char {
