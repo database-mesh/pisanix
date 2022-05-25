@@ -5,9 +5,9 @@ sidebar_position: 2
 
 # 快速开始
 
-## 一、安装教程
+## 安装教程
 
-### 1.1 Pisa-Controller admission webhooks 证书配置
+### Pisa-Controller admission webhooks 证书配置
 
 Pisa-Controller admission webhooks 和 kube-apiserver 通信需要使用 https 协议,我们需要对我们的 https 服务进行证书配置。
 
@@ -25,7 +25,7 @@ Pisa-Controller admission webhooks 和 kube-apiserver 通信需要使用 https �
 ```
 
 
-### 1.2 配置 MutatingWebhookConfiguration
+### 配置 MutatingWebhookConfiguration
 
 使用 kubectl 中的 ca 证书替换 mutatingwebhook.yaml 中的 caBundle 字段,如果您在1.1中修改过 namespace ，请将 mutatingwebhook.yaml.tpl 文件中的 namespace: default 字段改成您的namespace,MutatingWebhookConfiguration 自身没有 namespace 限制
 
@@ -40,7 +40,7 @@ kubectl apply  -f ./deploy/mutatingwebhook.yaml
 ```
 
 
-### 1.3 应用 Pisa-Proxy 配置 CRD
+### 应用 Pisa-Proxy 配置 CRD
 
 Pisa-Proxy 通过 http 和控制面进行交互以获取启动配置文件。配置文件以 CRD 形式保存在 Kubernetes 集群中。
 
@@ -52,13 +52,13 @@ Pisa-Proxy 通过 http 和控制面进行交互以获取启动配置文件。配
 kubectl apply -f networking.pisanix.io_proxyconfigs.yaml
 ```
 
-### 1.4 安装 Pisa-Controller 
+### 安装 Pisa-Controller 
 
 在上文中我们已经完成了在 kuebrnetes 集群中对于 Pisa-Controller admission webhooks 的相关定义配置，还有 Pisa-Proxy 配置 CRD 的应用，本章节将介绍如何部署 Pisa-Controller  服务 
 
 **此阶段所有资源对象都有 namespace 限制，如需更改 namespace ，请在 kubectl 命令后跟上 -n ${your namespace}**
 
-#### 1.4.1 部署 rbac
+#### 部署 rbac
 
 Pisa-Controller 需要对pod 进行注入，所以需要申请对于pod资源的相关权限。Pisa-Controller 同时需要对 networking.pisanix.io 这个CRD进行操作，用来下发 Pisa-Proxy 的配置文件。
 
@@ -72,7 +72,7 @@ Yaml 中将部署下列资源
 kubectl apply -f rbac.yaml
 ```
 
-#### 1.4.2 部署 Service
+#### 部署 Service
 
 Service 是 Pisa-Controller admission webhooks  对外暴露服务的方式，Pisa-Controller 将暴露三个端口:80,6443,8080
 
@@ -88,7 +88,7 @@ Yaml 中将部署下列资源
 kubectl apply -f service.yaml
 ```
 
-#### 1.4.3 部署 Pisa-Controller
+#### 部署 Pisa-Controller
 
 Pisa-Controller 使用 Deployment 形式进行部署，并且以 Service 方式进行暴露。
 
@@ -100,7 +100,7 @@ Yaml 中将部署下列资源
 kubectl apply -f deployment.yaml
 ```
 
-### 1.5 使用范例
+### 使用范例
 
 Pisa-Controller admission webhooks 通过条件限定进行 Sidecar 注入
 
@@ -121,7 +121,7 @@ pisanix.io/inject: enabled
 
 
 
-### 1.6 部署例子
+### 部署例子
 
 下列资源对象将创建如下对象
 
@@ -135,12 +135,12 @@ kubectl apply -f sample.yaml
 
 期望结果为 Pod 中包含 Pisa-Proxy Sidecar 镜像
 
-## 二、配置教程
+## 配置教程
 
 Pisa-Proxy 支持从配置文件和 remote API 获取配置。Pisa-Proxy 默认从 remote API 获取配置，若需要从本地文件加载配置需要导出 ```LOCAL_CONFIG=true``` 环境变量，并通过 ```-c，--config``` 参数指定配置文件路径。若不指定，默认从 ```./etc/config.toml``` 文件中进行加载。pisa-proxy 支持通过命令行参数和环境变量进行服务启动配置。配置详解如下：
 
 
-### 2.1 命令行参数
+### 命令行参数
 ```
 ./pisa-proxy -h
 Pisa-Proxy 
@@ -155,7 +155,7 @@ OPTIONS:
     -p, --port <port>             Http port                 # 指定 api 端口号
 ```
 
-### 2.2 环境变量
+### 环境变量
 
 环境变量包括如下：
 1. PORT: api 启动端口号
@@ -163,7 +163,7 @@ OPTIONS:
 3. LOGLEVEL: 日志级别
 4. LOCAL_CONFIG: 指定 Pisa-Proxy 从本地加载配置
 
-### 2.3 配置文件
+### 配置文件
 
 ```
 # api 配置块，对应命令行参数和环境变量
@@ -214,8 +214,8 @@ addr = "127.0.0.1:3307"
 weight = 1
 ```
 
-### 2.4 配置示例
-##### 2.4.1 配置多个代理
+### 配置示例
+#### 配置多个代理
 ```
 [admin]
 port = "8081"
@@ -257,7 +257,7 @@ addr = "127.0.0.1:3307"
 weight = 1
 ```
 
-#### 2.4.2 配置后端数据库负载均衡
+#### 配置后端数据库负载均衡
 ```
 [proxy]
 [[proxy.configs]]

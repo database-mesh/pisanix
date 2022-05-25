@@ -6,7 +6,7 @@ sidebar_position: 1
 
 `Pisanix` [Pi-sanics] 是一款面向 Kubernetes 的数据库治理框架。Pisanix 通过 SQL 感知的流量治理、审计、安全和扩展性等能力实现 [Database Mesh](https://www.database-mesh.io) 风格的数据库治理体验。
 
-## 一、概述
+## 概述
 
 Pisanix 关注如下几个问题:
 
@@ -27,35 +27,39 @@ Pisanix 的架构图如下：
 * ***Pisa-Daemon***: 用 Go 实现的数据面，部署在集群中每个节点上，通过宿主机内核的各种能力提供可编程资源管理，如 TrafficQoS 等。
 
 
-## 二、 特性
+## 特性
 
-### 2.1  数据库流量治理 
+### 数据库流量治理 
 
 应用通过 SQL 访问数据库，Pisanix 可以劫持所有的 SQL 流量。借助这个能力，Pisanix 可以实现多种流量治理能力，如负载均衡、SQL 防火墙等。
 
-### 2.2 可观测性 
+### 可观测性 
 
 数据库的监控指标通常从相关实例处获取，借助 Pisanix 可以透视多种数据库访问指标。
 
-### 2.3 可编程 
+### 可编程 
 
 Pisanix 支持多种插件机制，如 Lua 和 Wasm，工程师们有机会重新定义数据库各种行为。
 
 
-## 三、快速开始 
+## 快速开始 
 
 - [简介](https://www.pisanix.io/docs)
 - [快速开始](https://www.pisanix.io/docs/quickstart)
 
-## 四、文档 
+## 文档 
 
 所有文档可以在 [Pisanix 站点查看](https://www.pisanix.io/).
 
-## 五、社区和支持 
+## 社区和支持 
 
- :link: [GitHub Issues](https://github.com/database-mesh/pisanix/issues). 适用于 Bug 上报、特性讨论等开发相关内容。
+|:-|:-|
+| 邮件列表| https://groups.google.com/g/database-mesh |
+| 社区会议(开始于 2022-02-27), 周三 9:00AM PST|https://meet.google.com/yhv-zrby-pyt |
+| 中文社区会议 (开始于 2022-04-27), 周三 9:00PM GMT+8|https://meeting.tencent.com/dm/6UXDMNsHBVQO |
+| Slack |https://databasemesh.slack.com/  |
+| 会议记录 |https://bit.ly/39Fqt3x |
 
- :link: [Slack channel](https://join.slack.com/t/databasemesh/shared_invite/zt-12hlythpe-C4rrS1WZ2ZkEd3zn84SqeQ). 适用于：即时交流、线上会议、使用场景交流等。
 
 - 微信交流群: 添加小助手微信邀请进群 
 
