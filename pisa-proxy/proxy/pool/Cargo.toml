@@ -1,0 +1,12 @@
+
+[package]
+name = "conn_pool"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+crossbeam-queue = "0.3.5"
+tokio-stream = { version = "0.1" }
+futures = "0.3.21"
+tracing = "0.1.13"

@@ -1,0 +1,14 @@
+edition = "2021"
+
+condense_wildcard_suffixes = true
+group_imports = "StdExternalCrate"
+imports_granularity = "Crate"
+license_template_path = "etc/license.template"
+newline_style = "Unix"
+reorder_imports = true
+report_fixme = "Unnumbered"
+trailing_comma = "Vertical"
+use_field_init_shorthand = true
+use_small_heuristics = "Max"
+merge_derives = false
+comment_width = 120

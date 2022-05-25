@@ -1,0 +1,35 @@
+
+[package]
+name = "mysql_protocol"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.17.0", features = ["full", "tracing"] }
+tokio-util = { version = "0.7.0", features = ["full"] }
+tokio-stream = { version = "0.1" }
+tracing = "0.1.13"
+tracing-futures = { version = "0.2.3" }
+tracing-subscriber = "0.3.9"
+bytes = "1"
+byteorder = "1.4.3"
+chrono = "0.4"
+rand = "0.8"
+lazy_static = "1.4.0"
+iota = "0.2"
+futures = "0.3.5"
+rust-crypto = "0.2.36"
+sha1 = "0.10.1"
+rsa = "0.6.0"
+openssl-sys = "0.9"
+openssl = "0.10"
+tokio-native-tls = "0.3.0"
+rustls-pemfile = "1.0.0"
+pin-project = "1.0.10"
+thiserror = "1.0"
+num-traits = "0.2"
+num-derive = "0.3"
+async-trait = "0.1"
+conn_pool = { path = "../../proxy/pool" }
