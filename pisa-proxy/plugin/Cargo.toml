@@ -1,0 +1,15 @@
+
+[package]
+name = "plugin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_with = {version = "1.13.0"}
+regex = "1"
+tokio = { version = "1.18.2", features = ["sync"] }
+thiserror = "1.0.31"
+parking_lot = "0.12.0"

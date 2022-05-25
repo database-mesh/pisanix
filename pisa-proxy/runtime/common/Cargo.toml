@@ -1,0 +1,9 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.0.0", features = ["full", "tracing"] }
+pisa_error = {path = "../../error", package = "error"}
+mysql_parser = {path = "../../parser/mysql"}

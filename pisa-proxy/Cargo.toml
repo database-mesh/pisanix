@@ -1,0 +1,36 @@
+[workspace]
+# Cargo should not unify feature flags across dev-dependencies and build
+# dependencies. This will be the default behavior in Rust 2021.
+resolver = "2"
+members = [
+    "app/api",
+    "app/config",
+    "app/metrics",
+    "app/server",
+    "cmd/pisa",
+    "error",
+    "http",
+    "parser",
+    "parser/mysql",
+    "plugin",
+    "protocol/mysql",
+    "proxy",
+    "proxy/endpoint",
+    "proxy/loadbalancer",
+    "runtime/common",
+    "runtime/mysql",
+    "runtime/shardingproxy",
+    "version"
+]
+
+default-members = ["cmd/pisa"]
+
+[profile.release]
+debug = 1
+lto = "on"
+opt-level = 3
+
+# use forked lrpar
+[patch.crates-io]
+lrpar = { git = "ssh://git@github.com/database-mesh/lrpar.git", rev = "12c5175" }
+
