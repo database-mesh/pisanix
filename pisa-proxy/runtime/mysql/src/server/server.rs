@@ -121,7 +121,6 @@ impl MySqlServer {
 
             // TODO: take the metrics as a function wrapper
             let earlier = SystemTime::now();
-            let now = SystemTime::now();
 
             if let Err(err) = self.handle_command(&mut buf).await {
                 error!("exec command err: {:?}", err);
@@ -132,6 +131,7 @@ impl MySqlServer {
                 self.limit_rule_idx = None;
             }
 
+            let now = SystemTime::now();
             let duration = now.duration_since(earlier).unwrap();
             set_sql_processed_duration(&["pisa", "sql", "mysql"], duration.as_secs_f64());
         }
