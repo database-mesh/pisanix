@@ -14,6 +14,7 @@
 
 use lrlex::{lrlex_mod, DefaultLexeme, LRNonStreamingLexer};
 use lrpar::{LexError, Lexeme, Span};
+
 use super::charsets::CHARSETS;
 
 lrlex_mod!("token_map");
@@ -270,7 +271,7 @@ impl<'a> Scanner<'a> {
                         lexemes.push(Ok(DefaultLexeme::new(T_AND_AND, old_pos, 2)));
                     } else {
                         lexemes.push(Ok(DefaultLexeme::new(T_AND_OP, old_pos, 1)));
-                        continue
+                        continue;
                     }
                 }
 
@@ -300,7 +301,6 @@ impl<'a> Scanner<'a> {
                 '~' => {
                     lexemes.push(Ok(DefaultLexeme::new(T_NEG, old_pos, 1)));
                 }
-
 
                 ch if ch.is_ascii_digit() => {
                     let old_pos = self.pos;
@@ -512,13 +512,13 @@ impl<'a> Scanner<'a> {
             self.scan_until(false, |scanner| !scanner.peek().is_numeric());
             if self.is_eof() {
                 self.pos -= 1;
-                return T_NUM
+                return T_NUM;
             }
 
             let curr_ch = self.peek();
             if is_ident_char(curr_ch) {
                 self.pos = old_pos;
-                return self.scan_ident().tok_id()
+                return self.scan_ident().tok_id();
             }
 
             self.pos -= 1;
@@ -567,7 +567,7 @@ impl<'a> Scanner<'a> {
                 if self.is_eof() {
                     // Comments is unclosed
                     lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos))));
-                    return lexemes
+                    return lexemes;
                 }
 
                 self.scan_until(false, |scanner| {
@@ -629,7 +629,7 @@ impl<'a> Scanner<'a> {
             // check `UNDERSCORE_CHARSET` token
             if CHARSETS.get(&*ident_str).is_some() {
                 self.pos -= 1;
-                return DefaultLexeme::new(T_UNDERSCORE_CHARSET, old_pos, ident_str.len())
+                return DefaultLexeme::new(T_UNDERSCORE_CHARSET, old_pos, ident_str.len());
             }
         }
 
@@ -675,7 +675,7 @@ impl<'a> Scanner<'a> {
                     self.pos -= 1;
                     return true;
                 }
-                break
+                break;
             }
 
             if ch == end_char {
