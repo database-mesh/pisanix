@@ -20,6 +20,8 @@ lazy_static! {
     /// Charsets supported of mysql, used to check whether token is `UNDERSCORE_CHARSET`
     pub static ref CHARSETS: HashMap<&'static str, ()> = {
         let mut m = HashMap::new();
+        m.insert("_ASCII", ());
+        m.insert("_UCS2", ());
         m.insert("_UTF8", ());
         m.insert("_UTF8MB4", ());
         m.insert("_UTF16", ());
@@ -28,6 +30,7 @@ lazy_static! {
         m.insert("_BINARY", ());
         m.insert("_LATIN1", ());
         m.insert("_LATIN2", ());
+        m.insert("_GB2312", ());
         m.insert("_GB18030", ());
         m
     };

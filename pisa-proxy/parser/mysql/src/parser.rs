@@ -18,10 +18,9 @@ use cfgrammar::yacc::YaccGrammar;
 use lrpar::lrpar_mod;
 use lrtable::StateTable;
 
-// use thiserror::Error as ThisError;
 use crate::{ast::*, lex::Scanner};
 
-/// define `ParseError` struct
+/// `ParseError` struct
 #[derive(Debug, Clone)]
 pub struct ParseError {
     details: String,
@@ -45,13 +44,13 @@ impl Error for ParseError {
     }
 }
 
-// load `grmmary.y.rs`, real parsing logic
+// Load `grmmary.y.rs`, real parsing logic
 lrpar_mod!("grammar.y");
 
 pub struct Parser {
-    // load `grammar`
+    // Load `grammar`
     pub grm: YaccGrammar<u32>,
-    // load `stabtetable` action
+    // Load `stabtetable` action
     pub stable: StateTable<u32>,
 }
 
@@ -63,7 +62,7 @@ impl Default for Parser {
 
 impl Parser {
     pub fn new() -> Self {
-        // generate `grmmar` and `statetable`, this is a hack method for native `grmtools parse`
+        // Generate `grammar` and `statetable`, this is a hack method for native `grmtools parse`
         let (grm, stable) = ::lrpar::ctbuilder::_reconstitute::<u32>(
             grammar_y::__GRM_DATA,
             grammar_y::__STABLE_DATA,
@@ -72,7 +71,7 @@ impl Parser {
         Parser { grm, stable }
     }
 
-    // parse input
+    // Parse input
     pub fn parse<'input>(
         &'input self,
         input: &'input str,

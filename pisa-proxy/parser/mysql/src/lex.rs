@@ -77,7 +77,7 @@ impl<'a> Scanner<'a> {
             .sum::<usize>();
     }
 
-    /// Execute `scan_lex_token`, return `lexemes`
+    // Execute `scan_lex_token`, return `lexemes`
     pub fn lex(input: &'a str) -> LRNonStreamingLexer<DefaultLexeme<u32>, u32> {
         let chars = input.as_bytes().iter().map(|b| *b as char).collect::<Vec<char>>();
         let mut scanner = Scanner {
@@ -92,7 +92,7 @@ impl<'a> Scanner<'a> {
         LRNonStreamingLexer::new(input, lexemes, vec![])
     }
 
-    /// Call from lrpar_mod!
+    // Call from lrpar_mod!
     pub fn scan_lex_token(&mut self) -> Vec<Result<DefaultLexeme<u32>, LexError>> {
         let mut lexemes = Vec::with_capacity(200);
 
@@ -291,7 +291,7 @@ impl<'a> Scanner<'a> {
                 '|' => {
                     self.next();
                     if self.peek() == '|' {
-                        lexemes.push(Ok(DefaultLexeme::new(T_OR_OR, old_pos, 2)));
+                        lexemes.push(Ok(DefaultLexeme::new(T_OR, old_pos, 2)));
                     } else {
                         lexemes.push(Ok(DefaultLexeme::new(T_OR_OP, old_pos, 1)));
                         continue;
@@ -318,15 +318,9 @@ impl<'a> Scanner<'a> {
                     lexemes.push(Ok(DefaultLexeme::new(tok, old_pos, self.pos - old_pos + 1)));
                 }
 
-                '_' => {
+                _ => {
                     lexemes.push(Ok(self.scan_ident()));
                 }
-
-                'a' | 'c'..='w' | 'y' | 'z' | 'A' | 'C'..='W' | 'Y' | 'Z' => {
-                    lexemes.push(Ok(self.scan_ident()));
-                }
-
-                _ => lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos)))),
             }
 
             self.next();
@@ -514,13 +508,21 @@ impl<'a> Scanner<'a> {
                 self.pos = old_pos;
                 self.scan_ident().tok_id()
             }
-        } else if (ch != '.' && ch != 'e' && ch != 'E') || self.is_eof() {
+        } else {
+            self.scan_until(false, |scanner| !scanner.peek().is_numeric());
+            if self.is_eof() {
+                self.pos -= 1;
+                return T_NUM;
+            }
+
+            let curr_ch = self.peek();
+            if is_ident_char(curr_ch) {
+                self.pos = old_pos;
+                return self.scan_ident().tok_id();
+            }
+
             self.pos -= 1;
             T_NUM
-        } else {
-            self.pos = old_pos;
-            self.is_ident_dot = true;
-            self.scan_ident().tok_id()
         }
     }
 
@@ -548,6 +550,8 @@ impl<'a> Scanner<'a> {
         self.next();
 
         if self.is_eof() {
+            // Comments is unclosed
+            lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos))));
             return lexemes;
         }
 
@@ -559,11 +563,18 @@ impl<'a> Scanner<'a> {
             }
 
             _ => {
-                self.scan_until(true, |scanner| {
-                    scanner.chars[scanner.pos - 2] == '*' && scanner.chars[scanner.pos - 1] == '/'
+                self.next();
+                if self.is_eof() {
+                    // Comments is unclosed
+                    lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos))));
+                    return lexemes;
+                }
+
+                self.scan_until(false, |scanner| {
+                    scanner.chars[scanner.pos - 1] == '*' && scanner.chars[scanner.pos - 0] == '/'
                 });
 
-                self.scan_lex_token()
+                lexemes
             }
         }
     }
@@ -613,8 +624,9 @@ impl<'a> Scanner<'a> {
         self.is_ident_dot = self.peek() == '.';
 
         let ident_str = self.text[old_pos..self.pos].to_uppercase();
+
         if ident_str.starts_with("_") {
-            // Check `UNDERSCORE_CHARSET` token
+            // check `UNDERSCORE_CHARSET` token
             if CHARSETS.get(&*ident_str).is_some() {
                 self.pos -= 1;
                 return DefaultLexeme::new(T_UNDERSCORE_CHARSET, old_pos, ident_str.len());
@@ -688,7 +700,6 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        //self.is_eof()
         false
     }
 
@@ -745,6 +756,15 @@ impl<'a> Scanner<'a> {
             }
             self.next();
         }
+    }
+}
+
+fn is_ident_char(ch: char) -> bool {
+    match ch {
+        ch if ch.is_alphanumeric() => true,
+        ch if (ch as u32) >= 0x80 && (ch as u32) <= 0xFFFF => true,
+        '_' | '$' | '\t' => true,
+        _ => false,
     }
 }
 
