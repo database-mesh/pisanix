@@ -181,8 +181,7 @@ const TOKENS_MAP: &[(&str, &str)] = &[
     ("DAY_MINUTE", "DAY_MINUTE"),
     ("DAY_SECOND", "DAY_SECOND"),
     ("DEALLOCATE", "DEALLOCATE"),
-    ("DEC", "DECIMAL"),
-    ("DECIMAL", "DECIMAL_"),
+    ("DECIMAL", "DECIMAL"),
     ("DECLARE", "DECLARE"),
     ("DEFAULT", "DEFAULT"),
     ("DEFAULT_AUTH", "DEFAULT_AUTH"),
@@ -705,7 +704,6 @@ const TOKENS_MAP: &[(&str, &str)] = &[
     ("STORED", "STORED"),
     ("STRAIGHT_JOIN", "STRAIGHT_JOIN"),
     ("STREAM", "STREAM"),
-    ("STRING", "STRING"),
     ("SUBCLASS_ORIGIN", "SUBCLASS_ORIGIN"),
     ("SUBJECT", "SUBJECT"),
     ("SUBPARTITION", "SUBPARTITION"),
@@ -824,7 +822,7 @@ const TOKENS_MAP: &[(&str, &str)] = &[
     ("JSON_OBJECTAGG", "JSON_OBJECTAGG"),
     ("JSON_ARRAYAGG", "JSON_ARRAYAGG"),
     ("MAX", "MAX"),
-    ("MID", "SUBSTRING"),
+    ("MID", "MID"),
     ("MIN", "MIN"),
     ("NOW", "NOW"),
     ("POSITION", "POSITION"),
@@ -835,8 +833,7 @@ const TOKENS_MAP: &[(&str, &str)] = &[
     ("STDDEV_SAMP", "STDDEV_SAMP"),
     ("ST_COLLECT", "ST_COLLECT"),
     ("SUBDATE", "SUBDATE"),
-    ("SUBSTR", "SUBSTRING"),
-    ("SUBSTRING", "SUBSTRING_"),
+    ("SUBSTRING", "SUBSTRING"),
     ("SUM", "SUM"),
     ("SYSDATE", "SYSDATE"),
     ("SYSTEM_USER", "USER"),
@@ -893,6 +890,7 @@ const TOKENS_MAP: &[(&str, &str)] = &[
 fn main() -> Result<(), Box<dyn Error>> {
     let cp = CTParserBuilder::<DefaultLexeme<u32>, u32>::new()
         .yacckind(YaccKind::Grmtools)
+        .error_on_conflicts(true)
         .grammar_in_src_dir("grammar.y")?
         .build()?;
 

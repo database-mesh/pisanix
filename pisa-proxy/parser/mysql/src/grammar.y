@@ -14,6 +14,8 @@
 
 // Thanks to https://github.com/mysql/mysql-server/blob/8.0/sql/sql_yacc.yy
 
+// KNOWN: INTERVAL function has a shift/reduce conflict
+%expect 1
 %token EQ
 %token OR
 %token OR_OR
@@ -45,15 +47,14 @@
 %left '|'
 %left '&'
 %left 'SHIFT_LEFT' 'SHIFT_RIGHT'
-%left '-' '+'
+%left '-' '+' 
 %left '*' '/' '%' 'DIV' 'MOD'
 %left '^'
-
 %left 'NEG_PREC' '~'
 %right 'NOT' 'NOT2'
 %right 'BINARY' 'COLLATE'
 %nonassoc 'LOWER_THEN_INTERVAL'
-%left 'INTERVAL'
+%nonassoc 'INTERVAL'
 %left 'SUBQUERY_AS_EXPR'
 %left '(' ')'
 %right 'MEMBER'
@@ -77,15 +78,15 @@ Start -> Vec<SqlStmt>:
   ;
 
 multi_sql_stmt -> Vec<SqlStmt>:
-    sql_stmt
-    {
-      vec![$1]
+    sql_stmt 
+    { 
+      vec![$1] 
     }
-  | multi_sql_stmt ';' sql_stmt
+  | multi_sql_stmt ';' sql_stmt 
     {
       $1.push($3);
       $1
-    }
+    } 
   ;
 
 sql_stmt -> SqlStmt:
@@ -325,7 +326,7 @@ query_expression_body -> SelectStmt:
 
 query_expression_parens -> SelectStmt:
     '(' query_expression_parens ')'
-    {
+    { 
       match $2 {
         SelectStmt::Query(mut q) => {
           q.is_embd = true;
@@ -336,7 +337,7 @@ query_expression_parens -> SelectStmt:
       }
     }
   | '(' query_expression ')'
-    {
+    { 
       match $2 {
         SelectStmt::Query(mut q) => {
           q.is_parens = true;
@@ -363,7 +364,7 @@ query_expression_parens -> SelectStmt:
 query_primary -> SelectStmt:
     query_specification
     {
-	    $1
+	    $1	
     }
   | table_value_constructor
     {
@@ -376,14 +377,14 @@ query_primary -> SelectStmt:
   ;
 
 query_specification -> SelectStmt:
-    "SELECT"
+    "SELECT" 
     select_options
-    select_items
-    into_clause
-    opt_from_clause
-    opt_where_clause
-    opt_group_clause
-    opt_having_clause
+    select_items 
+    into_clause 
+    opt_from_clause 
+    opt_where_clause 
+    opt_group_clause 
+    opt_having_clause 
     opt_window_clause
     {
       SelectStmt::Query(Box::new(Query {
@@ -407,12 +408,12 @@ query_specification -> SelectStmt:
       }))
     }
   | "SELECT"
-    select_options
-    select_items
-    opt_from_clause
-    opt_where_clause
-    opt_group_clause
-    opt_having_clause
+    select_options 
+    select_items 
+    opt_from_clause 
+    opt_where_clause 
+    opt_group_clause 
+    opt_having_clause 
     opt_window_clause
     {
       SelectStmt::Query(Box::new(Query {
@@ -439,7 +440,7 @@ query_specification -> SelectStmt:
 
 opt_from_clause -> Option<FromClause>:
     /* empty. */ %prec 'EMPTY_FROM_CLAUSE'
-    {
+    { 
       None
     }
   | 'FROM' from_tables
@@ -558,7 +559,7 @@ locking_clause -> LockClause:
       }
     }
   | "FOR" 'SHARE' 'OF' table_alias_ref_list opt_locked_row_action
-    {
+    { 
       LockClause {
         lock_strength: LockStrength::Share,
         tables: $4,
@@ -576,8 +577,8 @@ locking_clause -> LockClause:
   ;
 
 opt_locked_row_action -> Option<LockedRowAction>:
-    /* Empty */
-    {
+    /* Empty */ 
+    { 
       None
     }
   | locked_row_action
@@ -587,12 +588,12 @@ opt_locked_row_action -> Option<LockedRowAction>:
   ;
 
 locked_row_action -> LockedRowAction:
-    "SKIP" "LOCKED"
-    {
+    "SKIP" "LOCKED" 
+    { 
       LockedRowAction::SkipLocked
     }
-  | "NOWAIT"
-    {
+  | "NOWAIT" 
+    { 
       LockedRowAction::NoWait
     }
   ;
@@ -618,8 +619,8 @@ select_items -> Items:
   ;
 
 select_item -> Item:
-    table_wild
-    {
+    table_wild 
+    { 
       Item::TableWild($1)
     }
   | expr select_alias
@@ -633,24 +634,24 @@ select_item -> Item:
   ;
 
 select_alias -> Option<String>:
-    /* empty */
-    {
+    /* empty */ 
+    { 
       None
     }
-  | 'AS' ident
-    {
+  | 'AS' ident 
+    { 
       Some($2.0)
     }
   | 'AS' 'TEXT_STRING'
-    {
+    { 
       Some(String::from($lexer.span_str($2.as_ref().unwrap().span())))
     }
-  | ident
+  | ident 
     {
-      Some($1.0)
+      Some($1.0) 
     }
-  | 'TEXT_STRING'
-    {
+  | 'TEXT_STRING' 
+    { 
       Some(String::from($lexer.span_str($1.as_ref().unwrap().span())))
     }
   ;
@@ -667,7 +668,16 @@ optional_braces -> Option<String>:
   ;
 
 expr -> Expr:
-    expr or expr %prec 'OR_OR'
+    expr 'OR' expr %prec 'OR_OR'
+    {
+      Expr::BinaryOperationExpr {
+        span: $span,
+        left: Box::new($1),
+        right: Box::new($3),
+        operator: Op::OR
+      }
+    }
+  | expr OR_OR expr %prec 'OR_OR'
     {
       Expr::BinaryOperationExpr {
         span: $span,
@@ -852,7 +862,7 @@ predicate -> Expr:
         span: $span,
         is_not: true,
         expr: Box::new($1),
-        exprs: vec![$5]
+        exprs: vec![$5] 
       }
     }
   | bit_expr not 'IN' '(' expr ',' expr_list ')'
@@ -1109,7 +1119,7 @@ or -> Op:
   ;
 
 and -> Span:
-    'AND'
+    'AND' 
     {
       $span
     }
@@ -1178,7 +1188,7 @@ simple_expr -> Expr:
     }
   | literal_or_null
     {
-      Expr::LiteralExpr($1)
+      Expr::LiteralExpr($1)  
     }
   | param_marker
     {
@@ -1241,16 +1251,16 @@ simple_expr -> Expr:
     {
       Expr::SubQueryExpr(Box::new($1))
     }
-  | '(' expr ')'  %prec 'LOWER_THEN_INTERVAL'
-    {
+  | '(' expr ')'  //%prec 'LOWER_THEN_INTERVAL'
+    { 
       Expr::RowExpr(vec![$2])
     }
-  | '(' expr_list ',' expr ')'
+  | '(' expr_list ',' expr ')' 
     {
       $2.push($4);
       Expr::RowExpr($2)
     }
-  | 'ROW' '(' expr_list ',' expr ')'
+  | 'ROW' '(' expr_list ',' expr ')' 
     {
       $3.push($5);
       Expr::RowExpr($3)
@@ -1360,11 +1370,11 @@ func_call_keyword -> Span:
     {
       $span
     }
-  | 'INTERVAL_FUNC' '(' expr ',' expr ')'
+  | 'INTERVAL' '(' expr ',' expr ')'  
     {
       $span
     }
-  | 'INTERVAL_FUNC' '(' expr ',' expr ',' expr_list ')'
+  | 'INTERVAL' '(' expr ',' expr ',' expr_list ')' 
     {
       $span
     }
@@ -1460,6 +1470,7 @@ func_call_keyword -> Span:
     {
       $span
     }
+
   ;
 
 func_call_nonkeyword -> Span:
@@ -1519,11 +1530,12 @@ func_call_nonkeyword -> Span:
     {
       $span
     }
-  | 'SUBSTRING' '(' expr FROM expr 'FOR' expr ')'
+  | 'SUBSTRING' '(' expr FROM expr ')'
     {
       $span
     }
-  | 'SUBSTRING' '(' expr FROM expr ')'
+
+  | 'SUBSTRING' '(' expr 'FROM' expr 'FOR' expr ')'
     {
       $span
     }
@@ -1652,7 +1664,7 @@ func_call_conflict -> Span:
     {
       $span
     }
-  | geometry_func
+  | geometry_func 
     {
       $span
     }
@@ -1702,7 +1714,7 @@ func_call_generic -> Span:
 
 fulltext_options -> String:
     opt_natural_language_mode opt_query_expansion
-    {
+    { 
       let mut s = String::new();
       if let Some(mode) = $1 {
         s.push_str(mode.as_str());
@@ -1755,12 +1767,12 @@ udf_expr -> Expr:
     ;
 
 set_func_specification -> Vec<Expr>:
-      sum_expr
-      {
+      sum_expr            
+      { 
         vec![Expr::Ori(String::from($lexer.span_str($1)))]
       }
-    | grouping_operation
-      {
+    | grouping_operation  
+      { 
         vec![Expr::Ori(String::from($lexer.span_str($span)))]
       }
     ;
@@ -1872,7 +1884,7 @@ sum_expr -> Span:
     }
   ;
 
-window_func_call -> Span:
+window_func_call -> Span: 
     'ROW_NUMBER' '(' ')' windowing_clause
     {
       $span
@@ -2177,8 +2189,8 @@ grouping_operation -> Vec<Expr>:
   ;
 
 variable -> String:
-    '@' variable_aux
-    {
+    '@' variable_aux 
+    {  
       let mut s = String::with_capacity(1+$2.len());
       s.push('@');
       s.push_str(&$2);
@@ -2223,7 +2235,7 @@ opt_gconcat_separator -> Option<String>:
       None
     }
   | 'SEPARATOR' text_binary_string
-    {
+    { 
       Some($2)
     }
   ;
@@ -2400,7 +2412,7 @@ when_list -> Vec<WhenExpr>:
           span: $span,
           when: Box::new($2),
           then: Box::new($4)
-      }]
+      }] 
     }
   | when_list 'WHEN' expr 'THEN' expr
     {
@@ -2417,8 +2429,8 @@ when_list -> Vec<WhenExpr>:
   ;
 
 table_reference -> TableRef:
-    table_factor
-    {
+    table_factor 
+    { 
       TableRef::TableFactor(Box::new($1))
     }
   | joined_table
@@ -2432,11 +2444,11 @@ table_reference -> TableRef:
   ;
 
 esc_table_reference -> TableRef:
-    table_factor
+    table_factor 
     {
       TableRef::TableFactor(Box::new($1))
     }
-  | joined_table
+  | joined_table 
     {
       TableRef::JoinedTable(Box::new($1))
     }
@@ -2512,7 +2524,7 @@ joined_table -> JoinedTable:
   ;
 
 natural_join_type -> String:
-    'NATURAL' opt_inner 'JOIN'      {
+    'NATURAL' opt_inner 'JOIN'      { 
       let mut join_type = String::with_capacity(20);
       join_type.push_str("NATURAL ");
       if let Some(inner) = $2 {
@@ -2521,8 +2533,8 @@ natural_join_type -> String:
       join_type.push_str(" JOIN");
       join_type
     }
-  | 'NATURAL' 'RIGHT' opt_outer 'JOIN'
-    {
+  | 'NATURAL' 'RIGHT' opt_outer 'JOIN' 
+    { 
       let mut join_type = String::with_capacity(30);
       join_type.push_str("NATURAL RIGHT ");
       if let Some(outer) = $3 {
@@ -2532,7 +2544,7 @@ natural_join_type -> String:
       join_type
     }
   | 'NATURAL' 'LEFT' opt_outer 'JOIN'
-    {
+    { 
       let mut join_type = String::with_capacity(30);
       join_type.push_str("NATURAL LEFT ");
       if let Some(outer) = $3 {
@@ -2551,7 +2563,7 @@ inner_join_type -> &'input str:
   ;
 
 outer_join_type -> String:
-    'LEFT' opt_outer 'JOIN'
+    'LEFT' opt_outer 'JOIN'         
     {
       let mut s = String::with_capacity(15);
       s.push_str("LEFT ");
@@ -2561,8 +2573,8 @@ outer_join_type -> String:
       s.push_str(" JOIN");
       s
     }
-  | 'RIGHT' opt_outer 'JOIN'
-    {
+  | 'RIGHT' opt_outer 'JOIN'         
+    { 
       let mut s = String::with_capacity(16);
       s.push_str("RIGHT ");
       if let Some(outer) = $2 {
@@ -2596,47 +2608,47 @@ use_partition -> Vec<String>:
   ;
 
 table_factor -> TableFactor:
-    single_table
-    {
+    single_table  	
+    { 
       TableFactor::SingleTable($1)
     }
   | single_table_parens
-    {
-      $1
+    { 
+      $1 
     }
-  | derived_table
-    {
-      $1.is_parens = false;
+  | derived_table 
+    { 
+      $1.is_parens = false; 
       TableFactor::DerivedTable($1)
     }
   | '(' derived_table ')'
-    {
+    { 
       $2.is_parens = true;
       TableFactor::DerivedTable($2)
     }
   | joined_table_parens
-    {
-      $1
+    { 
+      $1 
     }
   | table_reference_list_parens
-    {
-      $1
+    { 
+      $1 
     }
-  | table_func
-    {
-      TableFactor::TableFunc($1)
+  | table_func 
+    { 
+      TableFactor::TableFunc($1) 
     }
   ;
 
 table_reference_list_parens -> TableFactor:
-    '(' table_reference_list_parens ')'
-    {
-	    $2
+    '(' table_reference_list_parens ')' 
+    { 
+	    $2 
     }
   | '(' table_reference_list ',' table_reference ')'
     {
       $2.push($4);
-      TableFactor::TableRefsParens($2)
+      TableFactor::TableRefsParens($2)	
     }
   ;
 
@@ -2783,8 +2795,8 @@ opt_on_empty_or_error_json_table -> String:
   ;
 
 on_empty -> String:
-    json_on_response 'ON' 'EMPTY'
-    {
+    json_on_response 'ON' 'EMPTY' 
+    { 
       //let mut s = String::with_capacity($1.len()+2+7);
       //s.push_str($1.as_str());
       //s.push_str(" ON EMPTY");
@@ -2794,8 +2806,8 @@ on_empty -> String:
   ;
 
 on_error -> String:
-    json_on_response 'ON' 'ERROR'
-    {
+    json_on_response 'ON' 'ERROR' 
+    { 
       //let mut s = String::with_capacity($1.len()+2+7);
       //s.push_str($1.as_str());
       //s.push_str(" ON ERROR");
@@ -2969,8 +2981,8 @@ opt_where_clause -> Option<WhereClause>:
   ;
 
 where_clause -> WhereClause:
-    'WHERE' expr
-    {
+    'WHERE' expr  
+    {  
       WhereClause {
         span: $span,
         expr: Box::new($2)
@@ -3058,7 +3070,7 @@ simple_ident_list -> Vec<Value>:
       $1.push(Value::Ident{
         span: $span,
         value: $3.0,
-        quoted: $3.1,
+        quoted: $3.1, 
       });
       $1
     }
@@ -3262,7 +3274,7 @@ ulonglong_num -> String:
 
 real_ulonglong_num -> String:
     'NUM'           { String::from($lexer.span_str($1.as_ref().unwrap().span())) }
-  | 'HEX_NUM'       { String::from($lexer.span_str($1.as_ref().unwrap().span())) }
+  | 'HEX_NUM'       { String::from($lexer.span_str($1.as_ref().unwrap().span())) } 
   | 'ULONGLONG_NUM' { String::from($lexer.span_str($1.as_ref().unwrap().span())) }
   | 'LONG_NUM'      { String::from($lexer.span_str($1.as_ref().unwrap().span())) }
   | dec_num_error { $1 }
@@ -3279,7 +3291,7 @@ dec_num -> String:
 	    String::from($lexer.span_str($1.as_ref().unwrap().span()))
     }
   | 'FLOAT_NUM'
-    {
+    { 
 	    String::from($lexer.span_str($1.as_ref().unwrap().span()))
     }
   ;
@@ -3320,12 +3332,12 @@ into_clause -> IntoClause:
     {
 	    $2
     }
-  ;
+  ; 
 
 into_destination -> IntoClause:
     'OUTFILE' 'TEXT_STRING' opt_load_data_charset opt_field_term opt_line_term
     {
-      IntoClause::OutFile(OutFile {
+      IntoClause::OutFile(OutFile { 
         span: $span,
         name:  String::from($lexer.span_str($2.as_ref().unwrap().span())),
         character_set: $3,
@@ -3340,8 +3352,8 @@ into_destination -> IntoClause:
        name: String::from($lexer.span_str($2.as_ref().unwrap().span())),
       })
     }
-  | select_var_list
-    {
+  | select_var_list 
+    { 
 	    IntoClause::Vars($1)
     }
   ;
@@ -3353,12 +3365,12 @@ union_option -> Option<UnionOpt>:
   ;
 
 row_subquery -> SelectStmt:
-    subquery { $1 }
+    subquery { $1 } 
   ;
 
 table_subquery -> SelectStmt:
-    subquery
-    {
+    subquery 
+    { 
       $1
     }
   ;
@@ -3409,8 +3421,8 @@ opt_equal -> Option<&'input str>:
   ;
 
 row_value -> Vec<Expr>:
-  '(' opt_values ')'
-  {
+  '(' opt_values ')' 
+  { 
     $2
   }
   ;
@@ -3420,8 +3432,8 @@ opt_values -> Vec<Expr>:
     {
       vec![]
     }
-  | values
-    {
+  | values 
+    { 
       $1
     }
   ;
@@ -3439,8 +3451,8 @@ values -> Vec<Expr>:
   ;
 
 expr_or_default -> Expr:
-    expr
-    {
+    expr 
+    { 
       $1
     }
   | 'DEFAULT'
@@ -3450,8 +3462,8 @@ expr_or_default -> Expr:
   ;
 
 row_value_explicit -> Vec<Expr>:
-    'ROW' '(' opt_values ')'
-    {
+    'ROW' '(' opt_values ')' 
+    { 
       $3
     }
   ;
@@ -3507,13 +3519,13 @@ table_ident_opt_wild -> String:
   ;
 
 opt_wild -> Option<&'input str>:
-    /* empty */ { None }
+    /* empty */ { None } 
   | '.' '*'     { Some(".*") }
   ;
 
 
 IDENT_sys -> (String, bool):
-  'IDENT'
+  'IDENT' 
   {
     (String::from($lexer.span_str($1.as_ref().unwrap().span())), false)
   }
@@ -3710,6 +3722,7 @@ non_reserved_keyword -> &'input str:
   | 'INSERT_METHOD'                                    { "INSERT_METHOD" }
   | 'INSTALL'                                          { "INSTALL" }
   | 'INSTANCE'                                         { "INSTANCE" }
+  //| 'INTERVAL'     %prec LOWER_THEN_INTERVAL           { "INTERVAL" }
   | 'INVISIBLE'                                        { "INVISIBLE" }
   | 'INVOKER'                                          { "INVOKER" }
   | 'IO'                                               { "IO" }
@@ -3844,6 +3857,7 @@ non_reserved_keyword -> &'input str:
   | 'QUERY'                                            { "QUERY" }
   | 'QUICK'                                            { "QUICK" }
   | 'RANDOM'                                           { "RANDOM" }
+  | 'RANK'                                             { "RANK" }
   | 'READ_ONLY'                                        { "READ_ONLY" }
   | 'REBUILD'                                          { "REBUILD" }
   | 'RECOVER'                                          { "RECOVER" }
@@ -3965,7 +3979,6 @@ non_reserved_keyword -> &'input str:
   | 'STOP'                                             { "STOP" }
   | 'STORAGE'                                          { "STORAGE" }
   | 'STREAM'                                           { "STREAM" }
-  | 'STRING'                                           { "STRING" }
   | 'ST_COLLECT'                                       { "ST_COLLECT" }
   | 'SUBCLASS_ORIGIN'                                  { "SUBCLASS_ORIGIN" }
   | 'SUBDATE'                                          { "SUBDATE" }
@@ -4064,7 +4077,7 @@ simple_ident -> Value:
    }
  ;
 
-simple_ident_nospvar -> Value:
+simple_ident_nospvar -> Value: 
     ident
     {
       Value::Ident {
@@ -4103,19 +4116,19 @@ simple_ident_q -> Value:
 ident_or_text -> String:
     ident           { $1.0 }
   | 'TEXT_STRING'
-    {
+    {   
       String::from($lexer.span_str($1.as_ref().unwrap().span()))
     }
   ;
 
 literal -> Value:
-    text_literal  %prec 'LOWER_THEN_TEXT_STRING'
-    {
+    text_literal  %prec 'LOWER_THEN_TEXT_STRING' 
+    { 
       $1
     }
-  | NUM_literal
-    {
-      $1
+  | NUM_literal  
+    { 
+      $1 
     }
   | 'FALSE'
     {
@@ -4157,12 +4170,12 @@ literal -> Value:
 
 
 literal_or_null -> Value:
-    literal
-    {
+    literal 
+    { 
       $1
     }
   | 'NULL'
-    {
+    { 
       Value::Null
     }
   ;
@@ -4192,16 +4205,16 @@ NUM_literal -> Value:
   ;
 
 int64_literal -> String:
-    'NUM'
-    {
+    'NUM'           
+    { 
       String::from($lexer.span_str($1.as_ref().unwrap().span()))
     }
-  | 'LONG_NUM'
-    {
+  | 'LONG_NUM'      
+    { 
       String::from($lexer.span_str($1.as_ref().unwrap().span()))
     }
-  | 'ULONGLONG_NUM'
-    {
+  | 'ULONGLONG_NUM' 
+    { 
       String::from($lexer.span_str($1.as_ref().unwrap().span()))
     }
   ;
@@ -4214,8 +4227,8 @@ opt_interval -> Option<String>:
 
 type_datetime_precision -> Option<String>:
     /* empty */                { None }
-  | '(' 'NUM' ')'
-    {
+  | '(' 'NUM' ')'              
+    { 
       Some(String::from($lexer.span_str($2.as_ref().unwrap().span())).to_string())
     }
   ;
@@ -4230,12 +4243,12 @@ func_datetime_precision -> Option<String>:
         ;
 
 charset_name -> String:
-    ident_or_text
+    ident_or_text 
     {
       $1
     }
-  | 'BINARY'
-    {
+  | 'BINARY' 
+    { 
       String::from("BINARY")
     }
   ;
@@ -4265,7 +4278,7 @@ text_literal -> Value:
   | text_literal 'TEXT_STRING'
     {
       let t = match $1 {
-        Value::Text { span: _, value } => value,
+        Value::Text { span: _, value } => value, 
         _ => unreachable!()
       };
 
@@ -4322,28 +4335,28 @@ ws_num_codepoints -> String:
   ;
 
 opt_var_ident_type -> Option<String>:
-    /* empty */
-    {
+    /* empty */     
+    { 
       None
     }
-  | 'GLOBAL' '.'
-    {
+  | 'GLOBAL' '.'  
+    { 
       Some(String::from("GLOBAL."))
     }
-  | 'LOCAL' '.'
-    {
-      Some(String::from("LOCAL."))
+  | 'LOCAL' '.'   
+    { 
+      Some(String::from("LOCAL.")) 
     }
-  | 'SESSION' '.'
-    {
+  | 'SESSION' '.' 
+    { 
       Some(String::from("SESSION."))
     }
   ;
 
 opt_component -> Option<String>:
     /* empty */    { None }
-  | '.' ident
-    {
+  | '.' ident      
+    { 
       let mut s = String::with_capacity(1+$2.0.len());
       s.push('.');
       s.push_str(&$2.0);
@@ -4364,8 +4377,8 @@ character_set -> String:
 
 opt_load_data_charset -> Option<CharsetName>:
     /* Empty */ { None }
-  | character_set charset_name
-    {
+  | character_set charset_name 
+    { 
       Some(CharsetName{
         span: $span,
         set_type: $1,
@@ -4392,19 +4405,19 @@ field_opt_list -> Vec<String>:
   ;
 
 field_option -> &'input str:
-    'SIGNED'   { "SIGNED"   }
+    'SIGNED'   { "SIGNED"   } 
   | 'UNSIGNED' { "UNSIGNED" }
   | 'ZEROFILL' { "ZEROFILL" }
   ;
 
 // add handle for sign
 signed_literal -> Value:
-    literal
-    {
-      $1
+    literal   
+    { 
+      $1 
     }
-  | '+' NUM_literal
-    {
+  | '+' NUM_literal 
+    { 
       $2
     }
   | '-' NUM_literal
@@ -4419,20 +4432,20 @@ key_or_index -> &'input str:
   ;
 
 field_length -> String:
-      '(' 'LONG_NUM' ')'
-      {
+      '(' 'LONG_NUM' ')'      
+      { 
         String::from($lexer.span_str($2.as_ref().unwrap().span()))
       }
-    | '(' 'ULONGLONG_NUM' ')'
-      {
+    | '(' 'ULONGLONG_NUM' ')' 
+      { 
         String::from($lexer.span_str($2.as_ref().unwrap().span()))
       }
-    | '(' 'DECIMAL_NUM' ')'
-      {
+    | '(' 'DECIMAL_NUM' ')'   
+      { 
         String::from($lexer.span_str($2.as_ref().unwrap().span()))
       }
-    | '(' 'NUM' ')'
-      {
+    | '(' 'NUM' ')' 
+      { 
         String::from($lexer.span_str($2.as_ref().unwrap().span()))
       }
     ;
@@ -4445,7 +4458,7 @@ opt_field_length -> Option<String>:
 opt_field_term -> Option<FieldTermColumn>:
     /* empty */             { None }
   | fields_columns field_term_list
-    {
+    { 
       Some(FieldTermColumn {
         span: $span,
         column_type: String::from($1),
@@ -4465,7 +4478,7 @@ field_term_list -> Vec<FieldTerm>:
       $1.push($2);
       $1
     }
-  | field_term
+  | field_term 
     {
       vec![$1]
     }
@@ -4547,8 +4560,8 @@ collation_name -> String:
     {
       $1
     }
-  | 'BINARY'
-    {
+  | 'BINARY' 
+    { 
       String::from("BINARY")
     }
   ;
@@ -4585,7 +4598,7 @@ opt_charset_with_opt_binary -> CharsetOrBinary:
       CharsetOrBinary::Charset {
         set_type: $1,
         name: $2,
-        bin_mod: $3.is_some(),
+        bin_mod: $3.is_some(), 
       }
     }
   | 'BINARY'
@@ -4606,16 +4619,16 @@ opt_charset_with_opt_binary -> CharsetOrBinary:
 
 opt_bin_mod -> Option<String>:
     /* empty */ { None }
-  | 'BINARY'
+  | 'BINARY' 
     {
       Some(String::from("BINARY"))
     }
   ;
-
+  
 nchar -> String:
     'NCHAR' { String::from("NCHAR") }
-  | 'NATIONAL' char
-    {
+  | 'NATIONAL' char 
+    { 
       let mut s = String::with_capacity($2.len()+1+8);
       s.push_str("NATIONAL");
       s.push(' ');
@@ -4625,7 +4638,7 @@ nchar -> String:
   ;
 
 varchar -> String:
-    char 'VARYING'
+    char 'VARYING' 
     {
       let mut s = String::with_capacity($1.len()+1+7);
       s.push_str(&$1);
@@ -4644,23 +4657,23 @@ nvarchar -> String:
     {
       String::from("NATIONAL VARCHAR")
     }
-  | 'NVARCHAR'
-    {
+  | 'NVARCHAR' 
+    { 
       String::from("NVARCHAR")
     }
-  | 'NCHAR' 'VARCHAR'
+  | 'NCHAR' 'VARCHAR' 
     {
       String::from("NCHAR VARCHAR")
     }
-  | 'NATIONAL' char 'VARYING'
-    {
+  | 'NATIONAL' char 'VARYING' 
+    { 
       let mut s = String::with_capacity(30);
       s.push_str("NATIONAL ");
       s.push_str($2);
       s.push_str(" VARYING");
       s
     }
-  | 'NCHAR' 'VARYING'
+  | 'NCHAR' 'VARYING' 
     {
       String::from("NCHAR VARYING")
     }
@@ -4693,7 +4706,7 @@ real_type -> String:
       String::from("REAL")
     }
   | 'DOUBLE' opt_precision_ident
-    {
+    { 
           let mut s = String::new();
           s.push_str("DOUBLE ");
           if let Some(ident) = $2 {
@@ -4778,7 +4791,7 @@ type -> FieldType:
         opts: $3
       })
     }
-  | 'BIT'
+  | 'BIT' 
     {
       FieldType::FieldBitType(FieldBitType {
         span: $span,
@@ -4900,7 +4913,7 @@ type -> FieldType:
       FieldType::FieldTimeType(FieldTimeType {
         span: $span,
         name: String::from("TIMESTAMP"),
-        precision: $2
+        precision: $2 
       })
     }
   | 'DATETIME' type_datetime_precision
@@ -4908,7 +4921,7 @@ type -> FieldType:
       FieldType::FieldTimeType(FieldTimeType {
         span: $span,
         name: String::from("TIMESTAMP"),
-        precision: $2
+        precision: $2 
       })
     }
   | 'TINYBLOB'
@@ -4931,7 +4944,7 @@ type -> FieldType:
         opt: CharsetOrBinary::None,
       })
     }
-  | spatial_type
+  | spatial_type 
     {
       FieldType::FieldSpatialType(String::from($1))
     }
@@ -5097,15 +5110,15 @@ string_list -> Vec<String>:
 // insert statement
 // ================
 insert_stmt -> Box<InsertStmt>:
-    'INSERT'
-    insert_lock_option
-    opt_ignore
-    opt_into
-    table_ident
-    opt_use_partition
-    insert_from_constructor
-    opt_values_reference
-    opt_insert_update_list
+    'INSERT'                    
+    insert_lock_option          
+    opt_ignore                  
+    opt_into                   
+    table_ident                 
+    opt_use_partition           
+    insert_from_constructor     
+    opt_values_reference        
+    opt_insert_update_list      
     {
       Box::new(InsertStmt {
         span: $span,
@@ -5122,16 +5135,16 @@ insert_stmt -> Box<InsertStmt>:
         updates: vec![],
       })
     }
-  | 'INSERT'
-    insert_lock_option
-    opt_ignore
-    opt_into
-    table_ident
-    opt_use_partition
-    'SET'
-    update_list
-    opt_values_reference
-    opt_insert_update_list
+  | 'INSERT'                   
+    insert_lock_option           
+    opt_ignore                   
+    opt_into                     
+    table_ident                  
+    opt_use_partition            
+    'SET'                     
+    update_list                  
+    opt_values_reference         
+    opt_insert_update_list       
     {
       Box::new(InsertStmt {
         span: $span,
@@ -5148,14 +5161,14 @@ insert_stmt -> Box<InsertStmt>:
         query_expr: None,
       })
     }
-  | 'INSERT'
-    insert_lock_option
-    opt_ignore
-    opt_into
-    table_ident
-    opt_use_partition
-    insert_query_expression
-    opt_insert_update_list
+  | 'INSERT'                  
+    insert_lock_option        
+    opt_ignore                
+    opt_into                  
+    table_ident               
+    opt_use_partition         
+    insert_query_expression   
+    opt_insert_update_list    
     {
       Box::new(InsertStmt {
         span: $span,
@@ -5191,7 +5204,7 @@ opt_into -> bool:
     /* empty */ { false }
   | INTO        { true  }
   ;
-
+  
 update_list -> Vec<UpdateElem>:
     update_list ',' update_elem
     {
@@ -5357,7 +5370,7 @@ query_expression_or_parens -> SelectStmt:
       $1
     }
   | query_expression locking_clause_list
-    {
+    {                    
       match $1 {
         SelectStmt::Query(mut q) => {
           q.lock_clauses = $2;
@@ -5445,7 +5458,7 @@ delete_stmt -> Box<DeleteStmt>:
     opt_quick
     opt_low_priority
     opt_ignore
-    table_alias_ref_list
+    table_alias_ref_list   
     'FROM'
     table_reference_list
     opt_where_clause
@@ -5640,7 +5653,7 @@ option_value_no_option_type -> SetOpts:
       SetOpts::SetSystemVar(SetSystemVar {
         opt_var: $3,
         var: $4,
-        value: $6,
+        value: $6, 
       })
     }
   | character_set old_or_new_charset_name_or_default
@@ -5765,7 +5778,7 @@ set_expr_or_default -> ExprOrDefault:
     }
   | DEFAULT
     {
-      ExprOrDefault::Default
+      ExprOrDefault::Default  
     }
   | ON
     {
@@ -5808,8 +5821,8 @@ old_or_new_charset_name -> NewCharset:
     {
       NewCharset::CharsetName($1)
     }
-  | BINARY
-    {
+  | BINARY 
+    { 
       NewCharset::Binary
     }
   ;
@@ -5839,8 +5852,8 @@ option_value -> OptValue:
         set_var: $2,
       })
     }
-  | option_value_no_option_type
-    {
+  | option_value_no_option_type 
+    { 
       OptValue::SetOpts($1)
     }
   ;
