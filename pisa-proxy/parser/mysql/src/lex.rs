@@ -22,16 +22,16 @@ use token_map::*;
 
 keyword_size!();
 
-/// scan input, return lexemes
+/// Scan input, return lexemes
 #[derive(Clone)]
 pub struct Scanner<'a> {
     text: &'a str,
     length: usize,
     chars: Vec<char>,
     pos: usize,
-    // the comments is executable
+    // The comments is executable
     is_comment_executable: bool,
-    // ident contains '.'
+    // Ident contains '.'
     is_ident_dot: bool,
 }
 
@@ -76,7 +76,7 @@ impl<'a> Scanner<'a> {
             .sum::<usize>();
     }
 
-    // execute `scan_lex_token`, return `lexemes`
+    // Execute `scan_lex_token`, return `lexemes`
     pub fn lex(input: &'a str) -> LRNonStreamingLexer<DefaultLexeme<u32>, u32> {
         let chars = input.as_bytes().iter().map(|b| *b as char).collect::<Vec<char>>();
         let mut scanner = Scanner {
@@ -91,7 +91,7 @@ impl<'a> Scanner<'a> {
         LRNonStreamingLexer::new(input, lexemes, vec![])
     }
 
-    // call from lrpar_mod!
+    // Call from lrpar_mod!
     pub fn scan_lex_token(&mut self) -> Vec<Result<DefaultLexeme<u32>, LexError>> {
         let mut lexemes = Vec::with_capacity(200);
 
@@ -342,7 +342,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_start_at(&mut self) -> Option<u32> {
-        // eat '@' char
+        // Eat '@' char
         self.next();
 
         let is_user_var_char = |ch: char| -> bool {
@@ -351,7 +351,7 @@ impl<'a> Scanner<'a> {
 
         let mut ch = self.peek();
         if ch == '@' {
-            // eat second '@'
+            // Eat second '@'
             self.next();
             let var_key = self.chars[self.pos..].iter().collect::<String>();
             match var_key.to_lowercase() {
@@ -388,7 +388,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_bin(&mut self) -> u32 {
-        // eat 'b' or 'B'
+        // Eat 'b' or 'B'
         self.next();
 
         match self.peek() {
@@ -407,7 +407,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_hex(&mut self) -> u32 {
-        // eat 'x' or 'X'
+        // Eat 'x' or 'X'
         self.next();
 
         match self.peek() {
@@ -642,7 +642,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_backquote_str(&mut self) {
-        // eat `
+        // Eat `
         self.next();
 
         while !self.is_eof() {
@@ -700,7 +700,6 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        //self.is_eof()
         false
     }
 
@@ -709,7 +708,7 @@ impl<'a> Scanner<'a> {
         self.skip_whitespace();
 
         let old_pos = self.pos;
-        //eat '-'
+        //Eat '-'
         self.next();
 
         if self.peek() == '-' {
@@ -746,7 +745,7 @@ impl<'a> Scanner<'a> {
     where
         F: FnMut(&mut Scanner) -> bool,
     {
-        // eat the starting character
+        // Eat the starting character
         if is_eat_first {
             self.next();
         }

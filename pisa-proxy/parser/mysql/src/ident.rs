@@ -14,7 +14,7 @@
 
 macro_rules! keyword_size {
     () => {
-        // sort by alphabetical order, use command `LC_COLLATE=C sort`
+        // Sort by alphabetical order, use command `LC_COLLATE=C sort`
         const KEYWORD: &[&str] = &[
             "ACCOUNT",
             "ACTION",

@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 
 lazy_static! {
-    /// charsets supported of mysql, used to check whether token is `UNDERSCORE_CHARSET`
+    /// Charsets supported of mysql, used to check whether token is `UNDERSCORE_CHARSET`
     pub static ref CHARSETS: HashMap<&'static str, ()> = {
         let mut m = HashMap::new();
         m.insert("_ASCII", ());
