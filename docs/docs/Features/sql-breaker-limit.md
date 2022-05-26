@@ -4,24 +4,24 @@ sidebar_position: 4
 
 # 中间件
 
-目前运行中间件的方式参考了[ TOWER-RS ](https://github.com/tower-rs/tower.git)，可以很好的满足未来扩展的需求。
+目前运行中间件的方式参考了[ Tower-rs ](https://github.com/tower-rs/tower.git)，可以很好的满足未来扩展的需求。
 
 其中有两个概念:
 > Layer:  是对 `Service` 的包装，每个 `Service` 可以有多个不同的中间件。
 
-> Service: 指 `PISANIX` 内部允许执行中间件的服务或者是某个功能函数，可以运行一些自定义的逻辑，如 `METRICS` 收集。
+> Service: 指 `Pisanix` 内部允许执行中间件的服务或者是某个功能函数，可以运行一些自定义的逻辑，如 `Metrics` 收集。
 
 实现[伪代码](https://play.rust-lang.org/?version=stable&mode=debug&edition=2018&gist=0db8ca6f72096c7a74682085a66e3270)。
 
 ## 实现
-目前实现了两个默认插件 `SQL断路器` 和 `SQL限流`。
+目前实现了两个默认插件 `SQL 断路器` 和 `SQL 限流`。
 
 ### SQL断路器
 禁止运行匹配正则的语句。
 
 #### 示例配置
 ``` toml
-[[proxy.configs.plugin.audit]]
+[[proxy.configs.plugin.circuit_breaker]]
 regex = "\\w+"
 ```
 
