@@ -122,7 +122,7 @@ mod test {
     }
 
     #[test]
-    fn test_audit() {
+    fn test_circuit_breaker() {
         let config = vec![config::CircuitBreaker { regex: String::from(r"[A-Za-z]+") }];
 
         let mut wrap_svc = ServiceBuilder::new()

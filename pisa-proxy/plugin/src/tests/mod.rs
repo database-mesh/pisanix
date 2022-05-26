@@ -19,7 +19,7 @@ use crate::{
     config,
     err::PluginError,
     layer::{service_fn, Service, ServiceBuilder},
-    limit::LimitLayer,
+    concurrency_control::ConcurrencyControlLayer,
 };
 
 fn test_service(input: &str) -> Result<String, Error> {
@@ -27,24 +27,24 @@ fn test_service(input: &str) -> Result<String, Error> {
 }
 
 #[test]
-fn test_chain_limit_audit() {
-    let limit_config = vec![config::Limit {
+fn test_chain_concurrency_control_and_circuit_break() {
+    let concurrency_control_config = vec![config::ConcurrencyControl {
         regex: String::from(r"[A-Za-z]+$"),
-        limit: 0,
+        max_concurrency: 0,
         duration: Duration::new(5, 0),
     }];
 
-    let audit_config = vec![config::Audit { regex: String::from(r"[A-Za-z]+") }];
+    let circuit_break_config = vec![config::CircuitBreaker { regex: String::from(r"[A-Za-z]+") }];
 
     let mut wrap_svc = ServiceBuilder::new()
-        .with_layer(LimitLayer::new(limit_config))
-        .with_layer(CircuitBreakerLayer::new(audit_config))
+        .with_layer(ConcurrencyControlLayer::new(concurrency_control_config))
+        .with_layer(CircuitBreakerLayer::new(circuit_break_config))
         .build(service_fn(test_service));
 
     let res = wrap_svc.handle("abc");
     println!("{:?}", res);
     if let Err(e) = res {
         let e = e.downcast::<PluginError>().unwrap();
-        assert_eq!(*e, PluginError::LimitPluginReject)
+        assert_eq!(*e, PluginError::ConcurrencyControlPluginReject)
     }
 }

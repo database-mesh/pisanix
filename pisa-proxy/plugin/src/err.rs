@@ -18,8 +18,8 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum PluginError {
-    #[error("limit plugin rejected")]
-    LimitPluginReject,
+    #[error("concurrency control plugin rejected")]
+    ConcurrencyControlPluginReject,
     #[error("audit plugin rejected")]
     CircuitBreakerPluginReject,
 

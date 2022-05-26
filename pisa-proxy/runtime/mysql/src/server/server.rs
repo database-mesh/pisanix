@@ -48,6 +48,7 @@ pub struct MySqlServer {
     ast_cache: ParserAstCache,
     plugin: Option<PluginPhase>,
     is_quit: bool,
+    //FIXME()
     // `limit_rule_idx` is index of limit rules
     // `limit_rule_idx` is required to add permits when the limit plugin is enabled
     limit_rule_idx: Option<usize>,
@@ -127,7 +128,7 @@ impl MySqlServer {
             };
 
             if let Some(idx) = &self.limit_rule_idx {
-                self.plugin.as_mut().unwrap().limit.add_permits(*idx);
+                self.plugin.as_mut().unwrap().concurrency_control.add_permits(*idx);
                 self.limit_rule_idx = None;
             }
 
@@ -422,9 +423,9 @@ impl MySqlServer {
         if let Some(plugin) = self.plugin.as_mut() {
             let input = unsafe { String::from(str::from_utf8_unchecked(payload)) };
 
-            plugin.audit.handle(input.clone())?;
+            plugin.circuit_breaker.handle(input.clone())?;
 
-            let res = plugin.limit.handle(input);
+            let res = plugin.concurrency_control.handle(input);
 
             match res {
                 Ok(data) => {

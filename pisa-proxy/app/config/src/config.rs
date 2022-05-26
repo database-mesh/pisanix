@@ -18,7 +18,7 @@ use std::{env, fs::File, io::prelude::*};
 use api::config::Admin;
 use clap::{Arg, Command};
 use proxy::proxy::{MySQLNode, MySQLNodes, ProxiesConfig, ProxyConfig};
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use tracing::{info, trace};
 
 #[derive(Debug, Deserialize)]
@@ -34,7 +34,7 @@ pub enum Node {
     ShardingProxy(Vec<MySQLNode>),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PisaConfig {
     pub admin: Admin,
     pub proxies: Vec<ProxyConfig>,
@@ -156,6 +156,8 @@ impl PisaConfig {
                 pisa_config.mysql_nodes = mysql_nodes;
             }
         }
+
+        trace!("{}", serde_json::to_string(&pisa_config).unwrap());
 
         pisa_config
     }
