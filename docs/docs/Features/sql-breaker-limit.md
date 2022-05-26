@@ -21,7 +21,7 @@ sidebar_position: 4
 
 #### 示例配置
 ``` toml
-[[proxy.configs.plugin.audit]]
+[[proxy.configs.plugin.circuit_breaker]]
 regex = "\\w+"
 ```
 
