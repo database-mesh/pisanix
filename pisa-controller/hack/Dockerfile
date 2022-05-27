@@ -16,6 +16,6 @@ FROM --platform=amd64 alpine:3.15.3
 
 WORKDIR /go
 COPY pisa-controller/build/certs /etc/webhook/certs
-COPY pisa-controller/bin/pisa-controller /go/pisa-controller
+COPY pisa-controller/bin/controller /go/pisa-controller
 
 ENTRYPOINT ["/go/pisa-controller"]
