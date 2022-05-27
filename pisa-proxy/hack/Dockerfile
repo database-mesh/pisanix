@@ -14,6 +14,6 @@
 
 FROM pisanixio/alpine-glibc
 COPY manifest /pisanix/
-COPY pisa-proxy/parget/release/pisa-proxy /pisanix/
+COPY pisa-proxy/target/release/pisa-proxy /pisanix/
 WORKDIR /pisanix
 ENTRYPOINT ["./pisa-proxy"]
