@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ printf "%s-sa" (include "common.names.fullname" .) }}
+  namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-cr" (include "common.names.fullname" .) }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - "*"
+  - apiGroups:
+      - core.database-mesh.io
+    resources:
+      - "*"
+    verbs:
+      - "*"
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ printf "%s-crb" (include "common.names.fullname" .) }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ printf "%s-sa" (include "common.names.fullname" .) }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ printf "%s-cr" (include "common.names.fullname" .) }}
