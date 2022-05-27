@@ -84,19 +84,19 @@
     "Features/mysql-protocol": {
       "id": "Features/mysql-protocol",
       "title": "MySQL 协议",
-      "description": "此库主要为 Pisa-Proxy MySQL 代理的核心组件。该模块大量使用了由 Rust 实现的 Tokio 异步运行时框架。其中对网络数据包的读写、协议的编码等操作都通过 Tokio 提供的工具集实现。",
+      "description": "此库主要为 Pisa-Proxy MySQL 代理的核心组件, 本库为 MySQL 协议 的实现。该库大量使用了由 Rust 实现的 Tokio 异步运行时框架。其中对网络数据包的读写、协议的编码等操作都通过 Tokio 提供的工具集实现。",
       "sidebar": "tutorialSidebar"
     },
     "Features/sql-breaker-limit": {
       "id": "Features/sql-breaker-limit",
       "title": "中间件",
-      "description": "目前运行中间件的方式参考了 TOWER-RS ，可以很好的满足未来扩展的需求。",
+      "description": "目前运行中间件的方式参考了 Tower-rs ，可以很好的满足未来扩展的需求。",
       "sidebar": "tutorialSidebar"
     },
     "Features/sql-parser": {
       "id": "Features/sql-parser",
       "title": "SQL解析",
-      "description": "PISANIX 除了理解 SQL 协议外, 能读懂 SQL 语句也是一个很重要的功能，读写分离，分片等功能也都依赖 SQL 解析，在 PISANIX 中占着举足轻重的作用。",
+      "description": "Pisanix 除了理解 SQL 协议外, 能读懂 SQL 语句也是一个很重要的功能，读写分离，分片等功能也都依赖 SQL 解析，在 Pisanix 中占着举足轻重的作用。",
       "sidebar": "tutorialSidebar"
     },
     "intro": {
