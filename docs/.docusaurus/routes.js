@@ -5,37 +5,37 @@ import ComponentCreator from '@docusaurus/ComponentCreator';
 export default [
   {
     path: '/en/blog',
-    component: ComponentCreator('/en/blog','d0a'),
+    component: ComponentCreator('/en/blog','aad'),
     exact: true
   },
   {
     path: '/en/blog/archive',
-    component: ComponentCreator('/en/blog/archive','9c5'),
+    component: ComponentCreator('/en/blog/archive','679'),
     exact: true
   },
   {
     path: '/en/blog/greetings',
-    component: ComponentCreator('/en/blog/greetings','0b0'),
+    component: ComponentCreator('/en/blog/greetings','2ae'),
     exact: true
   },
   {
     path: '/en/blog/tags',
-    component: ComponentCreator('/en/blog/tags','6f2'),
+    component: ComponentCreator('/en/blog/tags','cc2'),
     exact: true
   },
   {
     path: '/en/blog/tags/greetings',
-    component: ComponentCreator('/en/blog/tags/greetings','d80'),
+    component: ComponentCreator('/en/blog/tags/greetings','e15'),
     exact: true
   },
   {
     path: '/en/blog/tags/pisanix',
-    component: ComponentCreator('/en/blog/tags/pisanix','f85'),
+    component: ComponentCreator('/en/blog/tags/pisanix','d76'),
     exact: true
   },
   {
     path: '/en/docs',
-    component: ComponentCreator('/en/docs','f42'),
+    component: ComponentCreator('/en/docs','3e0'),
     routes: [
       {
         path: '/en/docs/Features/loadbalancer',
@@ -89,7 +89,7 @@ export default [
   },
   {
     path: '/en/',
-    component: ComponentCreator('/en/','ceb'),
+    component: ComponentCreator('/en/','713'),
     exact: true
   },
   {

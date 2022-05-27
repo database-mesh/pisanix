@@ -2,7 +2,7 @@
   "unversionedId": "Features/sql-breaker-limit",
   "id": "Features/sql-breaker-limit",
   "title": "中间件",
-  "description": "目前运行中间件的方式参考了 TOWER-RS ，可以很好的满足未来扩展的需求。",
+  "description": "目前运行中间件的方式参考了 Tower-rs ，可以很好的满足未来扩展的需求。",
   "source": "@site/docs/Features/sql-breaker-limit.md",
   "sourceDirName": "Features",
   "slug": "/Features/sql-breaker-limit",

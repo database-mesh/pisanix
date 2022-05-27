@@ -26,13 +26,13 @@ export default {
       "classic",
       {
         "docs": {
-          "sidebarPath": "/Users/liyao/mworks/database-mesh-community/pisanix/docs/sidebars.js"
+          "sidebarPath": "/root/workspaces/rust/pro/pisanix/docs/sidebars.js"
         },
         "blog": {
           "showReadingTime": true
         },
         "theme": {
-          "customCss": "/Users/liyao/mworks/database-mesh-community/pisanix/docs/src/css/custom.css"
+          "customCss": "/root/workspaces/rust/pro/pisanix/docs/src/css/custom.css"
         }
       }
     ]

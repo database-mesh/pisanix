@@ -31,7 +31,7 @@ Pisanix 除了理解 SQL 协议外, 能读懂 SQL 语句也是一个很重要的
 
 ### AST 说明
 Pisanix 中的 SQL 解析不会为所有表达式都生成 AST，只会为 Pisanix 感兴趣的部分生成 AST。
-详细信息请参考[ GITHUB ]('git@github.com:database-mesh/pisanix.git')。
+详细信息请参考[ GITHUB ](https://github.com/database-mesh/pisanix)。
 
 ### 测试
 由于 SQL 语句的复杂多样性，很难有有一个完整的测试集能覆盖所有可能的 SQL 语句。
