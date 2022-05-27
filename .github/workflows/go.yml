@@ -29,5 +29,5 @@ jobs:
           image: pisanixio/controller
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
-          build_file: pisa-controller/build/Dockerfile 
+          build_file: pisa-controller/hack/Dockerfile 
         

@@ -27,5 +27,5 @@ jobs:
           image: pisanixio/proxy
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
-          build_file: pisa-proxy/build/Dockerfile
+          build_file: pisa-proxy/hack/Dockerfile
           tag_with_latest: true
