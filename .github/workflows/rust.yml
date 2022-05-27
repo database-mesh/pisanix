@@ -20,7 +20,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --all-features 
+          args: --release --all-features --manifest-path pisa-proxy/Cargo.toml
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
