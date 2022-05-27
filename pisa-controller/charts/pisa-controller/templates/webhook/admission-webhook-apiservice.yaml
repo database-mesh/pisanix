@@ -1,0 +1,13 @@
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.admission.database-mesh.io
+spec:
+  insecureSkipTLSVerify: true
+  group: admission.database-mesh.io
+  groupPriorityMinimum: 1000
+  versionPriority: 5
+  service:
+    name: {{ template "common.names.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+  version: v1alpha1

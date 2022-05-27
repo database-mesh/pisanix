@@ -1,0 +1,25 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: controller-webhook.database-mesh.io
+webhooks:
+  - name: controller-webhook.database-mesh.io
+    clientConfig:
+      service:
+        name: kubernetes
+        namespace: default
+        path: "/apis/admission.database-mesh.io/v1alpha1/mutate"
+    rules:
+      - apiGroups: [ "" ]
+        apiVersions: [ "v1" ]
+        operations: [ "CREATE" ]
+        resources: [ "pods" ]
+        scope: "Namespaced"
+    objectSelector:
+      matchLabels:
+        pisanix.io/inject: enabled
+    namespaceSelector:
+      matchLabels:
+        pisanix.io/inject: enabled
+    admissionReviewVersions: [ "v1" ]
+    sideEffects: None

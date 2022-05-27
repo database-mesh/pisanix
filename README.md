@@ -52,6 +52,5 @@ Full documentation will be available on the [Pisanix website](https://pisanix.io
 - Wechat User Group: Broker wechat to add you into the user group.
  <img src="static/wechat-user-group-broker.jpeg" width="200" length="200"/>
 
-
 ## License
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdatabase-mesh%2Fpisanix.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdatabase-mesh%2Fpisanix?ref=badge_large)
