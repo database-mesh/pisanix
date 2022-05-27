@@ -38,7 +38,7 @@ yarn.lock
 node_modules
 
 # Docusaurus config
-.docusaurus/
+docs/.docusaurus/*
 
 ### IDE settings file gitignore
 .vscode/
