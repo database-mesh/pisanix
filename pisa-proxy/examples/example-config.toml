@@ -29,14 +29,14 @@ balancer_type = "random"
 # 选择挂载后端节点
 nodes = ["ds001"]
 
-[[proxy.configs.plugin.limit]]
+[[proxy.configs.plugin.concurrency_control]]
 regex = "aaa"
-limit = 5
+max_concurrency = 5
 duration = "333"
 
-[[proxy.configs.plugin.limit]]
+[[proxy.configs.plugin.concurrency_control]]
 regex = "bbb"
-limit = 5
+max_concurrency = 5
 duration = "444"
 
 [[proxy.configs.plugin.circuit_breaker]]
