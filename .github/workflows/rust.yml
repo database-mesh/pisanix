@@ -29,3 +29,4 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           build_file: pisa-proxy/hack/Dockerfile
           tag_with_latest: true
+
