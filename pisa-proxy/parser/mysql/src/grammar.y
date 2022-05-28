@@ -5517,7 +5517,7 @@ opt_quick -> bool:
   ;
 
 prepare -> Box<Prepare>:
-  'PREPARE' ident FROM prepare_src
+  'PREPARE' ident FROM ident_or_text
   {
     Box::new(Prepare {
       span: $span,
@@ -5525,24 +5525,6 @@ prepare -> Box<Prepare>:
       preparable_stmt: $4,
     })
   }
-;
-
-prepare_src -> Value:
-  'TEXT_STRING'
-  {
-     Value::Text {
-	    span: $span,
-	    value: String::from($lexer.span_str($1.as_ref().unwrap().span())),
-	  }
-  }
-  | '@' ident_or_text
-    {
-       Value::SelectVarIdent {
-         span: $span,
-         value: $2,
-         is_at: true,
-       }
-    }
 ;
 
 execute -> Box<ExecuteStmt>:

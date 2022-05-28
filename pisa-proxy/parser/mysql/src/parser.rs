@@ -104,11 +104,9 @@ mod test {
             //"select * from t where id = ?",
             //"update test set id = ?",
             //"update test set a = 1, b = ?",
-            //// TODO FIX ME.
-            //// "delete from test where a = 1",
+            //"delete from test where a = 1",
             //"PREPARE stmt1 FROM 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
-            //// TODO FIX ME.
-            //// "PREPARE stmt2 FROM @s",
+            "PREPARE stmt2 FROM @s",
             //"EXECUTE stmt2",
             //"BEGIN WORK",
             //"set AUTOCOMMIT=1",

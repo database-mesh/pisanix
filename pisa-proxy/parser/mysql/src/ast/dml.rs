@@ -2979,7 +2979,7 @@ impl Visitor for DeleteStmt {
 pub struct Prepare {
     pub span: Span,
     pub stmt_name: String,
-    pub preparable_stmt: Value,
+    pub preparable_stmt: String,
 }
 
 impl Prepare {
@@ -2988,18 +2988,14 @@ impl Prepare {
             "PREPARE".to_string(),
             self.stmt_name.to_string(),
             "FROM".to_string(),
-            self.preparable_stmt.format(),
+            self.preparable_stmt.to_string(),
         ]
         .join(" ")
     }
 }
 
 impl Visitor for Prepare {
-    fn visit<T: Transformer>(&mut self, tf: &mut T) -> Self {
-        let mut node = Node::Value(self.preparable_stmt.clone());
-        tf.trans(&mut node);
-        self.preparable_stmt = node.into_value().unwrap().visit(tf);
-
+    fn visit<T: Transformer>(&mut self, _tf: &mut T) -> Self {
         self.clone()
     }
 }
