@@ -369,19 +369,16 @@ impl<'a> Scanner<'a> {
             '\'' | '"' => {
                 self.scan_str();
                 lexemes.push(Ok(DefaultLexeme::new(T_TEXT_STRING, old_pos, self.pos - old_pos + 1)));
-                //Some(T_TEXT_STRING)
             }
             '`' => {
                 self.scan_backquote_str();
                 lexemes.push(Ok(DefaultLexeme::new(T_IDENT_QUOTED, old_pos, self.pos - old_pos + 1)));
-                //Some(T_IDENT_QUOTED)
             }
 
             ch if is_user_var_char(ch) => {
                 self.scan_until(false, |scanner| !is_user_var_char(scanner.peek()));
                 lexemes.push(Ok(DefaultLexeme::new(T_IDENT, old_pos, self.pos - old_pos)));
                 self.pos -= 1;
-                //Some(T_IDENT)
             }
 
             _ => lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos))))
