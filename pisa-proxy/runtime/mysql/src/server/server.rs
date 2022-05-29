@@ -48,10 +48,9 @@ pub struct MySqlServer {
     ast_cache: ParserAstCache,
     plugin: Option<PluginPhase>,
     is_quit: bool,
-    //FIXME()
-    // `limit_rule_idx` is index of limit rules
-    // `limit_rule_idx` is required to add permits when the limit plugin is enabled
-    limit_rule_idx: Option<usize>,
+    // `concurrency_control_rule_idx` is index of concurrency_control rules
+    // `concurrency_control_rule_idx` is required to add permits when the concurrency_control layer service is enabled
+    concurrency_control_rule_idx: Option<usize>,
 }
 
 impl MySqlServer {
@@ -76,7 +75,7 @@ impl MySqlServer {
             ast_cache,
             plugin,
             is_quit: false,
-            limit_rule_idx: None,
+            concurrency_control_rule_idx: None,
         }
     }
 
@@ -127,9 +126,9 @@ impl MySqlServer {
                 error!("exec command err: {:?}", err);
             };
 
-            if let Some(idx) = &self.limit_rule_idx {
+            if let Some(idx) = &self.concurrency_control_rule_idx {
                 self.plugin.as_mut().unwrap().concurrency_control.add_permits(*idx);
-                self.limit_rule_idx = None;
+                self.concurrency_control_rule_idx = None;
             }
 
             let now = SystemTime::now();
@@ -429,7 +428,7 @@ impl MySqlServer {
 
             match res {
                 Ok(data) => {
-                    self.limit_rule_idx = data.0;
+                    self.concurrency_control_rule_idx = data.0;
                     return Ok(());
                 }
 

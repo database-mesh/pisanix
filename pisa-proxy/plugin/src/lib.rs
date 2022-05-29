@@ -14,10 +14,10 @@
 
 pub mod build_phase;
 pub mod circuit_breaker;
+pub mod concurrency_control;
 pub mod config;
 pub mod err;
 pub mod layer;
-pub mod concurrency_control;
 
 #[cfg(test)]
 mod tests;

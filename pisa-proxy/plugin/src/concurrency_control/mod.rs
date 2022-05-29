@@ -92,7 +92,7 @@ impl<S> Layer<S> for ConcurrencyControlLayer {
             cc.instances = Some(Arc::new(Mutex::new(instances)))
         }
 
-        cc 
+        cc
     }
 }
 
@@ -203,7 +203,8 @@ mod test {
 
         let svc = service_fn(test_service);
 
-        let wrap_svc = ServiceBuilder::new().with_layer(ConcurrencyControlLayer::new(config)).build(svc);
+        let wrap_svc =
+            ServiceBuilder::new().with_layer(ConcurrencyControlLayer::new(config)).build(svc);
 
         let mut tasks = vec![];
         for _ in 0..5 {
