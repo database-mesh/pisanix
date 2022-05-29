@@ -59,7 +59,6 @@ impl HttpServer for RocketServer {
             .attach(m.get_routes())
             .mount("/", routes![healthz, version])
             .mount("/metrics", m.get_routes())
-            .mount("/pprof", m.get_routes())
             .launch()
             .await
             .map_err(|e| Error::new(ErrorKind::Rocket(Box::new(e))));
