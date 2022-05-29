@@ -381,6 +381,7 @@ impl<'a> Scanner<'a> {
                 self.pos -= 1;
             }
 
+            // Invalid variable
             _ => lexemes.push(Err(LexError::new(Span::new(self.pos, self.pos))))
         }
 
