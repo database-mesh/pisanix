@@ -203,14 +203,9 @@ impl<'a> Scanner<'a> {
                     lexemes.push(Ok(DefaultLexeme::new(T_PARAM_MARKER, old_pos, 1)));
                 }
 
-                '@' => match self.scan_start_at() {
-                    Some(tok) => {
-                        lexemes.push(Ok(DefaultLexeme::new(tok, old_pos, self.pos - old_pos + 1)));
-                    }
-
-                    None => {
-                        lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos - old_pos))));
-                    }
+                '@' => {
+                    let at_lexemes = self.scan_start_at();
+                    lexemes.extend(at_lexemes);
                 },
 
                 '#' => return self.scan_start_sharp(),
@@ -341,7 +336,8 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn scan_start_at(&mut self) -> Option<u32> {
+    fn scan_start_at(&mut self) -> Vec<Result<DefaultLexeme<u32>, LexError>> {
+        let mut lexemes = vec![Ok(DefaultLexeme::new(T_AT, self.pos, 1))];
         // Eat '@' char
         self.next();
 
@@ -351,6 +347,7 @@ impl<'a> Scanner<'a> {
 
         let mut ch = self.peek();
         if ch == '@' {
+            lexemes.push(Ok(DefaultLexeme::new(T_AT, self.pos, 1)));
             // Eat second '@'
             self.next();
             let var_key = self.chars[self.pos..].iter().collect::<String>();
@@ -367,24 +364,30 @@ impl<'a> Scanner<'a> {
             ch = self.peek();
         }
 
+        let old_pos = self.pos;
         match ch {
             '\'' | '"' => {
                 self.scan_str();
-                Some(T_TEXT_STRING)
+                lexemes.push(Ok(DefaultLexeme::new(T_TEXT_STRING, old_pos, self.pos - old_pos + 1)));
+                //Some(T_TEXT_STRING)
             }
             '`' => {
                 self.scan_backquote_str();
-                Some(T_IDENT_QUOTED)
+                lexemes.push(Ok(DefaultLexeme::new(T_IDENT_QUOTED, old_pos, self.pos - old_pos + 1)));
+                //Some(T_IDENT_QUOTED)
             }
 
             ch if is_user_var_char(ch) => {
                 self.scan_until(false, |scanner| !is_user_var_char(scanner.peek()));
+                lexemes.push(Ok(DefaultLexeme::new(T_IDENT, old_pos, self.pos - old_pos)));
                 self.pos -= 1;
-                Some(T_IDENT)
+                //Some(T_IDENT)
             }
 
-            _ => None,
+            _ => lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos))))
         }
+
+        lexemes
     }
 
     fn scan_bin(&mut self) -> u32 {
@@ -1024,7 +1027,8 @@ mod test {
             //("SELECT 1 FROM t WHERE ~reverse(a & 0x111111);", 13),
             //("SELECT 'тест' AS test\tkoi8r\tkoi8r_general_ci\tutf8mb4_0900_ai_ci;", 11),
             //("SELECT _yea | x'cafebabe' FROM at;", 11),
-            ("SELECT w, SUM(w) OVER (ROWS BETWEEN CURRENT ROW AND 3 FOLLOWING) FROM t;", 11),
+            //("SELECT w, SUM(w) OVER (ROWS BETWEEN CURRENT ROW AND 3 FOLLOWING) FROM t;", 11),
+            ("prepare stmt2 from @s", 5),
         ];
 
         //println!("T_TEXT_STRING {:?} {:?}", );
