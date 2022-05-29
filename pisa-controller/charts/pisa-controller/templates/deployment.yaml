@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "common.names.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ template "common.names.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "common.names.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "common.names.fullname" . }}
+    spec:
+      serviceAccountName: {{ printf "%s-sa" (include "common.names.fullname" .) }}
+      containers:
+        - name: controller
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - -webhookTLSCertFile=/etc/webhook/certs/tls.crt
+            - -webhookTLSKeyFile=/etc/webhook/certs/tls.key
+            - -webhookPort={{ .Values.service.webhookPort }}
+            - -basicPort={{ .Values.service.basicPort }}
+            - -proxyConfigsPort={{ .Values.service.proxyConfigsPort }}
+          env:
+            - name: PISA_PROXY_IMAGE
+              value: {{ printf "%s:%s" .Values.proxyImage.repository .Values.proxyImage.tag | quote}}
+            - name: PISA_CONTROLLER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PISA_CONTROLLER_SERVICE
+              value: {{ include "common.names.fullname" . | quote }}
+          ports:
+            - name: webhook
+              containerPort: {{ .Values.service.webhookPort }}
+            - name: basic
+              containerPort: {{ .Values.service.basicPort }}
+            - name: proxy-configs
+              containerPort: {{ .Values.service.proxyConfigsPort }}
+          resources:
+          {{- toYaml .Values.resources | nindent 12}}
+      imagePullSecrets:
+      {{- toYaml .Values.imagePullSecrets | nindent 8}}

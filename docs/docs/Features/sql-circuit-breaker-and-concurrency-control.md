@@ -28,13 +28,13 @@ regex = "\\w+"
 > 可以有多个规则
 
 ### SQL限流
-限流规则表示在duration秒内并发运行匹配正则的sql语句只能有 `limit` 条，
+限流规则表示在 duration 秒内并发运行匹配正则的sql语句只能有 `max_concurrency` 条，
 
 #### 示例配置
 ``` toml
-[[proxy.configs.plugin.limit]]
+[[proxy.configs.plugin.concurrency_control]]
 regex = "\\w+"    
-limit = 1
+max_concurrency = 1
 duration = "100"
 ```
 
@@ -42,7 +42,7 @@ duration = "100"
 
 #### 说明
 
-1. 限流规则表示在 `duration` 秒内并发运行匹配正则的 sql 语句只能有 `limit` 条，从第一次匹配到开始计时，如果超过 `duration` 时间，则限流失效，重新开始下一次匹配。
+1. 限流规则表示在 `duration` 秒内并发运行匹配正则的 sql 语句只能有 `max_concurrency` 条，从第一次匹配到开始计时，如果超过 `duration` 时间，则限流失效，重新开始下一次匹配。
 2. 目前由于不能动态生效限流规则，因此规则的生效时间是从第一次匹配到的时间开始，持续 `duration` 时间，超过后继续下次循环，没有失效情况，在未来支持动态生效后，规则失效有两种情况：
     -  `duration` 的时间将从获取到开启动作的时间开始，持续 `duration` 时间，规则失效。
 

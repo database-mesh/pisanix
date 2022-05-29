@@ -14,24 +14,24 @@
 
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Plugin {
-    pub limit: Option<Vec<Limit>>,
+    pub concurrency_control: Option<Vec<ConcurrencyControl>>,
     pub circuit_breaker: Option<Vec<CircuitBreaker>>,
 }
 
 #[serde_with::serde_as]
-#[derive(Debug, Deserialize, Clone)]
-pub struct Limit {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConcurrencyControl {
     pub regex: String,
-    pub limit: u32,
+    pub max_concurrency: u32,
     #[serde_as(as = "serde_with::DurationSeconds<String>")]
     pub duration: Duration,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CircuitBreaker {
     pub regex: String,
 }

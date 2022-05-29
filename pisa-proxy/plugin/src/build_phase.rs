@@ -13,40 +13,40 @@
 // limitations under the License.
 
 use crate::{
-    circuit_breaker::{CircuitBreaker, CircuitBreakerLayer},
+    circuit_breaker::{self, CircuitBreaker, CircuitBreakerLayer},
+    concurrency_control::{self, ConcurrencyControl, ConcurrencyControlLayer},
     config,
     err::PluginError,
     layer::*,
-    limit::{Limit, LimitLayer},
 };
 
-/// limit service, some logic may be added in the future, eg: metrics...
-fn limit_phase(_input: String) -> Result<(), PluginError> {
+/// concurrency control service, some logic may be added in the future, eg: metrics...
+fn concurrency_control_phase(_input: String) -> Result<(), PluginError> {
     Ok(())
 }
 
-/// audit service, some logic may be added in the future, eg: metrics...
-fn audit_phase(_input: String) -> Result<(), PluginError> {
+/// circuit breaker service, some logic may be added in the future, eg: metrics...
+fn circuit_breaker_phase(_input: String) -> Result<(), PluginError> {
     Ok(())
 }
 
 #[derive(Clone)]
 pub struct PluginPhase {
-    pub limit: Limit<ServiceFn<fn(String) -> Result<(), PluginError>>>,
-    pub audit: CircuitBreaker<ServiceFn<fn(String) -> Result<(), PluginError>>>,
+    pub concurrency_control: ConcurrencyControl<ServiceFn<fn(String) -> Result<(), PluginError>>>,
+    pub circuit_breaker: CircuitBreaker<ServiceFn<fn(String) -> Result<(), PluginError>>>,
 }
 
 impl PluginPhase {
     pub fn new(config: config::Plugin) -> PluginPhase {
-        let limit = ServiceBuilder::new()
-            .with_layer(LimitLayer::with_opt(config.limit))
+        let concurrency_control = ServiceBuilder::new()
+            .with_layer(ConcurrencyControlLayer::with_opt(config.concurrency_control))
             // issue https://users.rust-lang.org/t/puzzling-expected-fn-pointer-found-fn-item/46423/4
-            .build(service_fn(limit_phase as fn(String) -> Result<(), PluginError>));
+            .build(service_fn(concurrency_control_phase as fn(String) -> Result<(), PluginError>));
 
-        let audit = ServiceBuilder::new()
+        let circuit_breaker = ServiceBuilder::new()
             .with_layer(CircuitBreakerLayer::with_opt(config.circuit_breaker))
-            .build(service_fn(audit_phase as fn(String) -> Result<(), PluginError>));
+            .build(service_fn(circuit_breaker_phase as fn(String) -> Result<(), PluginError>));
 
-        PluginPhase { limit, audit }
+        PluginPhase { concurrency_control, circuit_breaker }
     }
 }

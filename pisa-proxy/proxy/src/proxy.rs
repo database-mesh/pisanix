@@ -17,7 +17,7 @@ use std::{collections::HashMap, sync::Arc};
 use endpoint::endpoint::Endpoint;
 use loadbalancer::balancer::{Balancer, BalancerStrategy, LoadBalancer};
 use pisa_error::error::Error;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::Mutex,
@@ -30,7 +30,7 @@ pub struct ProxiesConfig {
     pub configs: Option<Vec<ProxyConfig>>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxyConfig {
     #[serde(default = "default_auto_proxy_name")]
     pub name: String,
@@ -55,14 +55,14 @@ pub struct ProxyConfig {
     pub plugin: Option<plugin::config::Plugin>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxyConfigMasterSlave {
     master: Option<Vec<String>>,
     slave: Option<Vec<String>>,
     balance_type: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxyConfigSharding {
     table: Option<String>,
     sharding_key: Option<String>,
@@ -72,7 +72,7 @@ pub struct ProxyConfigSharding {
     defaults: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxyConfigShardingMasterSlave {
     master: Option<Vec<String>>,
     slave: Option<Vec<String>>,
@@ -83,19 +83,19 @@ pub struct ProxyConfigShardingMasterSlave {
     balance_type: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxySimpleLoadBalancer {
     #[serde(default = "default_auto_balancer_type")]
     pub balancer_type: String,
     pub nodes: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MySQLNodes {
     pub nodes: Option<Vec<MySQLNode>>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MySQLNode {
     pub name: String,
     pub db: String,

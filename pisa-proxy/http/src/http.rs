@@ -49,15 +49,16 @@ impl HttpServer for RocketServer {
         let httpport: i32 = p.parse().unwrap();
 
         let hostaddr = "0.0.0.0";
-        let figment =
-            rocket::Config::figment().merge(("port", httpport)).merge(("address", hostaddr));
+        let figment = rocket::Config::figment()
+            .merge(("port", httpport))
+            .merge(("address", hostaddr))
+            .merge(("cli_colors", false))
+            .merge(("shutdown.ctrlc", false));
+
         return rocket::Rocket::custom(figment)
-            // Aggregate Rocket metrics and SQL metrics
             .attach(m.get_routes())
             .mount("/", routes![healthz, version])
-            // This is SQL metrics
             .mount("/metrics", m.get_routes())
-            .mount("/pprof", m.get_routes())
             .launch()
             .await
             .map_err(|e| Error::new(ErrorKind::Rocket(Box::new(e))));

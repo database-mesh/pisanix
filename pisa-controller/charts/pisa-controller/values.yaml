@@ -1,0 +1,28 @@
+# Default values for pisa-controller.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: pisanixio/controller
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "v0.1.2"
+
+proxyImage:
+  repository: pisanixio/proxy
+  tag: "v0.1.1"
+
+imagePullSecrets: [ ]
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+service:
+  basicPort: 80
+  webhookPort: 6443
+  proxyConfigsPort: 8080
+

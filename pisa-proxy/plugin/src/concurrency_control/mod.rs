@@ -28,22 +28,22 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct LimitLayer {
-    config: Option<Vec<config::Limit>>,
+pub struct ConcurrencyControlLayer {
+    config: Option<Vec<config::ConcurrencyControl>>,
 }
 
 #[derive(Clone)]
-pub struct LimitConfig {
+pub struct ConcurrencyControlConfig {
     pub regex: String,
-    pub limit: usize,
+    pub max_concurrency: usize,
     pub duration: Duration,
 }
 
 /// `Limit` instance
 #[derive(Debug, Clone)]
-pub struct LimitInstance {
+pub struct ConcurrencyControlInstance {
     regex: Regex,
-    limit_size: usize,
+    max_concurrency: usize,
     semaphore: Arc<Semaphore>,
     // If the first match, the timing starts to take effect,
     // and duration `duration`
@@ -51,23 +51,23 @@ pub struct LimitInstance {
     start_at: Option<Instant>,
 }
 
-impl LimitLayer {
-    pub fn new(config: Vec<config::Limit>) -> LimitLayer {
-        LimitLayer { config: Some(config) }
+impl ConcurrencyControlLayer {
+    pub fn new(config: Vec<config::ConcurrencyControl>) -> ConcurrencyControlLayer {
+        ConcurrencyControlLayer { config: Some(config) }
     }
 
-    pub fn with_opt(config: Option<Vec<config::Limit>>) -> LimitLayer {
-        LimitLayer { config }
+    pub fn with_opt(config: Option<Vec<config::ConcurrencyControl>>) -> ConcurrencyControlLayer {
+        ConcurrencyControlLayer { config }
     }
 
-    fn create_instances(&self) -> Option<Vec<LimitInstance>> {
+    fn create_instances(&self) -> Option<Vec<ConcurrencyControlInstance>> {
         if let Some(config) = &self.config {
             let mut instances = Vec::with_capacity(config.len());
             for c in config {
                 let regex = Regex::new(&c.regex).unwrap();
-                let semaphore = Arc::new(Semaphore::new(c.limit as usize));
-                instances.push(LimitInstance {
-                    limit_size: c.limit as usize,
+                let semaphore = Arc::new(Semaphore::new(c.max_concurrency as usize));
+                instances.push(ConcurrencyControlInstance {
+                    max_concurrency: c.max_concurrency as usize,
                     regex,
                     semaphore,
                     duration: c.duration,
@@ -81,28 +81,28 @@ impl LimitLayer {
     }
 }
 
-impl<S> Layer<S> for LimitLayer {
-    type Service = Limit<S>;
+impl<S> Layer<S> for ConcurrencyControlLayer {
+    type Service = ConcurrencyControl<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
         let instances = self.create_instances();
-        let mut limit = Limit { inner, instances: None };
+        let mut cc = ConcurrencyControl { inner, instances: None };
 
         if let Some(instances) = instances {
-            limit.instances = Some(Arc::new(Mutex::new(instances)))
+            cc.instances = Some(Arc::new(Mutex::new(instances)))
         }
 
-        limit
+        cc
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Limit<S> {
+pub struct ConcurrencyControl<S> {
     inner: S,
-    instances: Option<Arc<Mutex<Vec<LimitInstance>>>>,
+    instances: Option<Arc<Mutex<Vec<ConcurrencyControlInstance>>>>,
 }
 
-impl<S> Limit<S> {
+impl<S> ConcurrencyControl<S> {
     // If accquire success return true, otherwise return fasle
     // If the semaphore is acquired at the same time, the duration will be invalid
     fn is_allow(&mut self, input: &str) -> (Option<usize>, bool) {
@@ -128,7 +128,7 @@ impl<S> Limit<S> {
                     if c.start_at.unwrap().elapsed() > c.duration {
                         // enter next loop, reinit `Semaphore` and `start_at`
                         c.start_at = None;
-                        c.semaphore = Arc::new(Semaphore::new(c.limit_size));
+                        c.semaphore = Arc::new(Semaphore::new(c.max_concurrency));
                         return (None, true);
                     } else {
                         let permit = c.clone().semaphore.try_acquire_owned();
@@ -151,7 +151,7 @@ impl<S> Limit<S> {
     }
 }
 
-impl<S, Input> Service<Input> for Limit<S>
+impl<S, Input> Service<Input> for ConcurrencyControl<S>
 where
     S: Service<Input>,
     Input: AsRef<str>,
@@ -170,7 +170,7 @@ where
             }
         }
 
-        Err(Box::new(PluginError::LimitPluginReject))
+        Err(Box::new(PluginError::ConcurrencyControlPluginReject))
     }
 }
 
@@ -181,7 +181,7 @@ mod test {
         time::Duration,
     };
 
-    use super::LimitLayer;
+    use super::ConcurrencyControlLayer;
     use crate::{
         config,
         err::PluginError,
@@ -194,16 +194,17 @@ mod test {
     }
 
     #[test]
-    fn test_limit() {
-        let config = vec![config::Limit {
+    fn test_concurrency_control() {
+        let config = vec![config::ConcurrencyControl {
             regex: String::from(r"[A-Za-z]+$"),
-            limit: 3,
+            max_concurrency: 3,
             duration: Duration::new(50, 0),
         }];
 
         let svc = service_fn(test_service);
 
-        let wrap_svc = ServiceBuilder::new().with_layer(LimitLayer::new(config)).build(svc);
+        let wrap_svc =
+            ServiceBuilder::new().with_layer(ConcurrencyControlLayer::new(config)).build(svc);
 
         let mut tasks = vec![];
         for _ in 0..5 {
@@ -221,7 +222,7 @@ mod test {
                 Ok(_) => count += 1,
                 Err(e) => {
                     let e = e.downcast::<PluginError>().unwrap();
-                    assert_eq!(*e, PluginError::LimitPluginReject);
+                    assert_eq!(*e, PluginError::ConcurrencyControlPluginReject);
                 }
             }
         }
