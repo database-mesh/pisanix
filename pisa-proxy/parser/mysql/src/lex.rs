@@ -381,7 +381,7 @@ impl<'a> Scanner<'a> {
                 self.pos -= 1;
             }
 
-            _ => lexemes.push(Err(LexError::new(Span::new(old_pos, self.pos))))
+            _ => lexemes.push(Err(LexError::new(Span::new(self.pos, self.pos))))
         }
 
         lexemes
