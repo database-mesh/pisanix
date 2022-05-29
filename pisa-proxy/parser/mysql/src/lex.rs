@@ -337,6 +337,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_start_at(&mut self) -> Vec<Result<DefaultLexeme<u32>, LexError>> {
+        //Push first '@' lexeme
         let mut lexemes = vec![Ok(DefaultLexeme::new(T_AT, self.pos, 1))];
         // Eat '@' char
         self.next();
@@ -347,6 +348,7 @@ impl<'a> Scanner<'a> {
 
         let mut ch = self.peek();
         if ch == '@' {
+            //Push second '@' lexeme
             lexemes.push(Ok(DefaultLexeme::new(T_AT, self.pos, 1)));
             // Eat second '@'
             self.next();
@@ -368,15 +370,18 @@ impl<'a> Scanner<'a> {
         match ch {
             '\'' | '"' => {
                 self.scan_str();
+                //Push token `T_TEXT_STRING`
                 lexemes.push(Ok(DefaultLexeme::new(T_TEXT_STRING, old_pos, self.pos - old_pos + 1)));
             }
             '`' => {
                 self.scan_backquote_str();
+                //Push token `T_IDENT_QUOTED`
                 lexemes.push(Ok(DefaultLexeme::new(T_IDENT_QUOTED, old_pos, self.pos - old_pos + 1)));
             }
 
             ch if is_user_var_char(ch) => {
                 self.scan_until(false, |scanner| !is_user_var_char(scanner.peek()));
+                //Push token `T_IDENT_QUOTED`
                 lexemes.push(Ok(DefaultLexeme::new(T_IDENT, old_pos, self.pos - old_pos)));
                 self.pos -= 1;
             }
