@@ -1135,7 +1135,6 @@ dependencies = [
  "error",
  "metrics",
  "once_cell",
- "pprof",
  "rocket",
  "rocket_prometheus",
  "serde",
