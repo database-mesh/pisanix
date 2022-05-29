@@ -16,10 +16,10 @@ use std::{io::Error, time::Duration};
 
 use crate::{
     circuit_breaker::CircuitBreakerLayer,
+    concurrency_control::ConcurrencyControlLayer,
     config,
     err::PluginError,
     layer::{service_fn, Service, ServiceBuilder},
-    concurrency_control::ConcurrencyControlLayer,
 };
 
 fn test_service(input: &str) -> Result<String, Error> {

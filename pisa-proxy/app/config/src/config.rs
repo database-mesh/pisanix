@@ -18,7 +18,7 @@ use std::{env, fs::File, io::prelude::*};
 use api::config::Admin;
 use clap::{Arg, Command};
 use proxy::proxy::{MySQLNode, MySQLNodes, ProxiesConfig, ProxyConfig};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tracing::{info, trace};
 
 #[derive(Debug, Deserialize)]

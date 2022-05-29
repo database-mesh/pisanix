@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use crate::{
-    circuit_breaker::{CircuitBreaker, CircuitBreakerLayer, self},
+    circuit_breaker::{self, CircuitBreaker, CircuitBreakerLayer},
+    concurrency_control::{self, ConcurrencyControl, ConcurrencyControlLayer},
     config,
     err::PluginError,
     layer::*,
-    concurrency_control::{ConcurrencyControl, ConcurrencyControlLayer, self},
 };
 
 /// concurrency control service, some logic may be added in the future, eg: metrics...
@@ -38,12 +38,12 @@ pub struct PluginPhase {
 
 impl PluginPhase {
     pub fn new(config: config::Plugin) -> PluginPhase {
-        let concurrency_control= ServiceBuilder::new()
+        let concurrency_control = ServiceBuilder::new()
             .with_layer(ConcurrencyControlLayer::with_opt(config.concurrency_control))
             // issue https://users.rust-lang.org/t/puzzling-expected-fn-pointer-found-fn-item/46423/4
             .build(service_fn(concurrency_control_phase as fn(String) -> Result<(), PluginError>));
 
-        let circuit_breaker= ServiceBuilder::new()
+        let circuit_breaker = ServiceBuilder::new()
             .with_layer(CircuitBreakerLayer::with_opt(config.circuit_breaker))
             .build(service_fn(circuit_breaker_phase as fn(String) -> Result<(), PluginError>));
 

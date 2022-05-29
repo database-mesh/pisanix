@@ -17,7 +17,7 @@ use std::{collections::HashMap, sync::Arc};
 use endpoint::endpoint::Endpoint;
 use loadbalancer::balancer::{Balancer, BalancerStrategy, LoadBalancer};
 use pisa_error::error::Error;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::Mutex,

@@ -48,7 +48,6 @@ pub struct MySqlServer {
     ast_cache: ParserAstCache,
     plugin: Option<PluginPhase>,
     is_quit: bool,
-    //FIXME()
     // `limit_rule_idx` is index of limit rules
     // `limit_rule_idx` is required to add permits when the limit plugin is enabled
     limit_rule_idx: Option<usize>,
