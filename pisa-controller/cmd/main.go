@@ -27,44 +27,46 @@ import (
 )
 
 var (
-	g errgroup.Group
+	eg errgroup.Group
+)
+
+const (
+	DEFAULT_READ_TIMEOUT  = 5 * time.Second
+	DEFAULT_WRITE_TIMEOUT = 10 * time.Second
 )
 
 func main() {
 	flag.Parse()
 
-	serverWebhook := &http.Server{
-		Addr:         fmt.Sprintf(":%s", app.Webhook.Port),
-		Handler:      app.WebhookHandlers(),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	serverConfig := &http.Server{
-		Addr:         fmt.Sprintf(":%s", app.ProxyConfigs.Port),
-		Handler:      app.ProxyConfigsHandlers(),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-	serverBasic := &http.Server{
-		Addr:         fmt.Sprintf(":%s", app.Basic.Port),
-		Handler:      app.BasicHandlers(),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	g.Go(func() error {
-		return serverWebhook.ListenAndServeTLS(app.Webhook.TLSCertFile, app.Webhook.TLSKeyFile)
+	eg.Go(func() error {
+		return newHttpServer(
+			app.Webhook.Port,
+			app.WebhookHandlers(),
+		).ListenAndServeTLS(app.Webhook.TLSCertFile, app.Webhook.TLSKeyFile)
 	})
-	g.Go(func() error {
-		return serverConfig.ListenAndServe()
+	eg.Go(func() error {
+		return newHttpServer(
+			app.ProxyConfigs.Port,
+			app.ProxyConfigsHandlers(),
+		).ListenAndServe()
 	})
-	g.Go(func() error {
-		return serverBasic.ListenAndServe()
+	eg.Go(func() error {
+		return newHttpServer(
+			app.Basic.Port,
+			app.BasicHandlers(),
+		).ListenAndServe()
 	})
 
-	if err := g.Wait(); err != nil {
+	if err := eg.Wait(); err != nil {
 		log.Fatal(err)
 	}
+}
 
+func newHttpServer(port string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:         fmt.Sprintf(":%s", port),
+		Handler:      handler,
+		ReadTimeout:  DEFAULT_READ_TIMEOUT,
+		WriteTimeout: DEFAULT_WRITE_TIMEOUT,
+	}
 }
