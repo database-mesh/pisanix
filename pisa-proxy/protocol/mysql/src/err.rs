@@ -51,7 +51,7 @@ pub enum ProtocolError {
     PubKey(#[from] rsa::pkcs8::spki::Error),
 
     #[error("prepare stmt return error: {0:?}")]
-    PrepareReturn(Vec<u8>),
+    PrepareError(Vec<u8>),
 
     #[error("read error packet: {0:?}")]
     PacketError(Vec<u8>),

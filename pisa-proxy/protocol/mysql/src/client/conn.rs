@@ -117,13 +117,20 @@ impl ClientConn {
 
         loop {
             match stmt_codec.next().await {
-                Some(Ok(data)) => {
-                    if data.is_none() {
-                        break;
+                Some(Ok(None)) => {
+                    break
+                }
+
+                Some(Ok(Some(data))) => {
+                    // If data.len() > 0, means that `Prepare` return error.
+                    if data.len() > 0 {
+                        self.framed = Some(Box::new(ClientCodec::Stmt(stmt_codec)));
+                        return Err(ProtocolError::PrepareError(data.to_vec()))
                     }
                 }
 
                 Some(Err(e)) => {
+                    self.framed = Some(Box::new(ClientCodec::Stmt(stmt_codec)));
                     return Err(e);
                 }
 
@@ -132,7 +139,6 @@ impl ClientConn {
         }
 
         let stmt = stmt_codec.codec().clone();
-
         self.framed = Some(Box::new(ClientCodec::Stmt(stmt_codec)));
 
         Ok(stmt)
@@ -168,6 +174,7 @@ impl ClientConn {
                     common_codec.codec_mut().auth_info.as_mut().unwrap().db = val.to_string();
                     Ok((data.0, true))
                 } else {
+                    println!("res {:?}", &data.0[..]);
                     Ok((data.0, false))
                 }
             }

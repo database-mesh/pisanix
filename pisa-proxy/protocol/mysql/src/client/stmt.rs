@@ -202,6 +202,7 @@ impl Decoder for Stmt {
 
         self.seq = src[3];
         match self.next_state {
+            // Return Ok(Some(data)) only when prepare return error, otherwise return Ok(Some(None)).
             DecodeStmtState::PrepareFirst => Ok(Some(self.decode_prepare_return(length, src))),
 
             DecodeStmtState::PrepareParams => {
