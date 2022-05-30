@@ -174,7 +174,6 @@ impl ClientConn {
                     common_codec.codec_mut().auth_info.as_mut().unwrap().db = val.to_string();
                     Ok((data.0, true))
                 } else {
-                    println!("res {:?}", &data.0[..]);
                     Ok((data.0, false))
                 }
             }
