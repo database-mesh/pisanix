@@ -227,7 +227,13 @@ impl MySqlServer {
 
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
 
-        let stmt = client_conn.send_prepare(payload).await?;
+        let try_stmt = client_conn.send_prepare(payload).await;
+        if let Err(ProtocolError::PrepareError(mut data)) = try_stmt {
+            self.client.pkt.make_packet_header(data.len() - 4, &mut data);
+            return self.client.pkt.write_buf(&data).await.map_err(ProtocolError::Io);
+        }
+
+        let stmt = try_stmt.unwrap();
         self.trans_fsm.put_conn(client_conn);
 
         let mut data = BytesMut::from(&vec![0; 4][..]);
