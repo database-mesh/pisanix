@@ -30,17 +30,16 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
-func GetConfig(client dynamic.Interface) gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		namespace := ctx.Param("namespace")
-		appname := ctx.Param("appname")
-		proxyConfig, err := getConfig(client, namespace, appname)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, err)
-			return
-		}
-		ctx.JSON(http.StatusOK, proxyConfig)
+func GetConfig(ctx *gin.Context) {
+	namespace := ctx.Param("namespace")
+	appname := ctx.Param("appname")
+	client, _ := kubernetes.GetInClusterClient()
+	proxyConfig, err := getConfig(client.Client, namespace, appname)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, err)
+		return
 	}
+	ctx.JSON(http.StatusOK, proxyConfig)
 }
 
 func getConfig(client dynamic.Interface, namespace, appname string) (interface{}, error) {

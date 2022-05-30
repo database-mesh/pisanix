@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
+
 	cmdcore "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/core"
 	cmdproxy "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
 	cmdwebhook "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
@@ -40,6 +42,12 @@ const (
 	DefaultWriteTimeout = 10 * time.Second
 )
 
+func init() {
+	_, err := kubernetes.GetInClusterClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 func main() {
 	flag.Parse()
 
