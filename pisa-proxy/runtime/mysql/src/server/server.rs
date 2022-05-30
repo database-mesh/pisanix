@@ -43,7 +43,7 @@ use crate::transaction_fsm::*;
 pub struct MySqlServer {
     pub client: Connection,
     pub buf: BytesMut,
-    mysql_parser: Parser,
+    mysql_parser: Arc<Parser>,
     trans_fsm: TransFsm,
     ast_cache: ParserAstCache,
     plugin: Option<PluginPhase>,
@@ -59,6 +59,7 @@ impl MySqlServer {
         pool: Pool<ClientConn>,
         lb: Arc<Mutex<Box<dyn LoadBalancer + Send + Sync>>>,
         proxy_config: ProxyConfig,
+        parser: Arc<Parser>,
         ast_cache: ParserAstCache,
         plugin: Option<PluginPhase>,
     ) -> MySqlServer {
@@ -70,7 +71,7 @@ impl MySqlServer {
                 proxy_config.db,
             ),
             buf: BytesMut::with_capacity(8192),
-            mysql_parser: Parser::new(),
+            mysql_parser: parser,
             trans_fsm: TransFsm::new_trans_fsm(lb, pool),
             ast_cache,
             plugin,
@@ -172,6 +173,7 @@ impl MySqlServer {
 
         let res = client_conn.send_use_db(sql).await?;
         self.trans_fsm.put_conn(client_conn);
+        println!("res {:?}", res);
 
         if res.1 {
             if is_send_ok {
@@ -401,20 +403,13 @@ impl MySqlServer {
         let sql = str::from_utf8(payload).unwrap();
         match self.ast_cache.get(sql.to_string()) {
             Some(stmt) => Ok(stmt.to_vec()),
-            None => match self.generate_ast(sql) {
-                Err(err) => Err(err),
+            None => match self.mysql_parser.parse(sql) {
+                Err(err) => Err(err[0].clone()),
                 Ok(stmt) => {
                     self.ast_cache.set(sql.to_string(), stmt.clone());
                     Ok(stmt)
                 }
             },
-        }
-    }
-
-    fn generate_ast(&mut self, sql: &str) -> Result<Vec<SqlStmt>, ParseError> {
-        match self.mysql_parser.parse(sql) {
-            Err(err) => Err(err[0].clone()),
-            Ok(stmt) => Ok(stmt),
         }
     }
 
