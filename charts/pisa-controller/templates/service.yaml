@@ -9,7 +9,7 @@ spec:
       targetPort: "proxy-configs"
       name: proxy-configs
     - port: 80
-      targetPort: "basic"
+      targetPort: "core"
       name: basic
     - port: 443
       targetPort: "webhook"
