@@ -16,12 +16,14 @@ use std::sync::Arc;
 
 use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
+use mysql_parser::parser::Parser;
 use pisa_error::error::{Error, ErrorKind};
 use plugin::build_phase::PluginPhase;
 use proxy::{
     listener::listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
+use tokio::sync::Mutex;
 use tracing::error;
 
 use crate::myserver::MySqlServer;
@@ -61,17 +63,20 @@ impl proxy::factory::Proxy for MySQLProxy {
             plugin = Some(PluginPhase::new(config.clone()))
         };
 
+        let parser = Arc::new(Parser::new());
+
         loop {
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
             let pool = pool.clone();
             let lb = Arc::clone(&lb);
             let pcfg = self.proxy_config.clone();
+            let parser = parser.clone();
             let ast_cache = ast_cache.clone();
             let plugin = plugin.clone();
 
             //TODO: add multiple thread limit with Semaphore
             let mut mysql_server =
-                MySqlServer::new(socket, pool, lb, pcfg, ast_cache, plugin).await;
+                MySqlServer::new(socket, pool, lb, pcfg, parser, ast_cache, plugin).await;
 
             if let Err(err) = mysql_server.handshake().await {
                 error!("{:?}", err);
