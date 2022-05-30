@@ -34,7 +34,7 @@ type ProxyConfigsConfig struct {
 func init() {
 	flag.StringVar(&ProxyConfigs.Port, "proxyConfigsPort", "8080", "ProxyConfigsServer port.")
 }
-func ProxyConfigsHandlers() http.Handler {
+func ProxyConfigsHandler() http.Handler {
 	client, _ := initClient()
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())

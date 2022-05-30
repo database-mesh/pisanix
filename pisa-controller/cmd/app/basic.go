@@ -30,7 +30,8 @@ type BasicConfig struct {
 func init() {
 	flag.StringVar(&Basic.Port, "basicPort", "80", "BasicServer port.")
 }
-func BasicHandlers() http.Handler {
+
+func BasicHandler() http.Handler {
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
 
@@ -38,5 +39,4 @@ func BasicHandlers() http.Handler {
 		ctx.Status(http.StatusOK)
 	})
 	return r
-
 }
