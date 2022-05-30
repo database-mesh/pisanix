@@ -15,6 +15,7 @@
 package kubernetes
 
 import (
+	"k8s.io/client-go/dynamic"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,7 +76,7 @@ type SimpleLoadBalancer struct {
 }
 
 // CircuitBreak works with regular expressions.
-// SQL statements that conform to regular expressions will be truncated.
+// SQL statements that conform to regular expressions will be denied.
 type CircuitBreak struct {
 	Regex string `json:"regex"`
 }
@@ -107,4 +108,9 @@ type MySQL struct {
 	Password string `json:"password"`
 	DB       string `json:"db"`
 	Weight   int    `json:"weight"`
+}
+
+// KClient client for kubernetes
+type KClient struct {
+	Client dynamic.Interface
 }

@@ -17,18 +17,28 @@ package kubernetes
 import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+	"sync"
 )
 
-func NewInClusterClient() (dynamic.Interface, error) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
+var client *KClient
+var once sync.Once
+var Err error
 
-	clientset, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
+func GetInClusterClient() (*KClient, error) {
+	once.Do(func() {
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			Err = err
+			return
+		}
+		clientset, err := dynamic.NewForConfig(config)
+		if err != nil {
+			Err = err
+			return
+		}
+		client.Client = clientset
+		Err = nil
+	})
 
-	return clientset, nil
+	return client, nil
 }

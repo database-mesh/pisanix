@@ -15,10 +15,7 @@
 package proxy
 
 import (
-	log "github.com/sirupsen/logrus"
 	"net/http"
-
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,16 +25,10 @@ type Config struct {
 }
 
 func Handler() http.Handler {
-	client, err := kubernetes.NewInClusterClient()
-	if err != nil {
-		log.Errorf("Init kubernetes client error: %v", err)
-	}
-
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
 	g := r.Group("/apis/configs.database-mesh.io/v1alpha1")
 
-	g.GET("/namespaces/:namespace/proxyconfigs/:appname", GetConfig(client))
-
+	g.GET("/namespaces/:namespace/proxyconfigs/:appname", GetConfig)
 	return r
 }

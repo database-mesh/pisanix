@@ -61,7 +61,7 @@ spec:
               circuitBreaks:
                 items:
                   description: CircuitBreak works with regular expressions. SQL statements
-                    that conform to regular expressions will be truncated.
+                    that conform to regular expressions will be denied.
                   properties:
                     regex:
                       type: string
