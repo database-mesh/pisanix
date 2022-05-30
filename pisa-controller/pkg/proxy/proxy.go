@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	log "github.com/sirupsen/logrus"
 	"net/http"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
@@ -29,7 +30,7 @@ type Config struct {
 func Handler() http.Handler {
 	client, err := kubernetes.NewInClusterClient()
 	if err != nil {
-		// TODO: add error handling
+		log.Errorf("Init kubernetes client error: %v", err)
 	}
 
 	r := gin.New()

@@ -42,8 +42,8 @@ type Proxy struct {
 }
 
 type Plugin struct {
-	CircuitBreaks       []kubernetes.CircuitBreak       `json:"circuit_breaks,omitempty"`
-	ConcurrencyControls []kubernetes.ConcurrencyControl `json:"concurrency_controls,omitempty"`
+	CircuitBreaks       []kubernetes.CircuitBreak `json:"circuit_breaks,omitempty"`
+	ConcurrencyControls []ConcurrencyControl      `json:"concurrency_controls,omitempty"`
 }
 
 type SimpleLoadBalancer struct {
@@ -51,6 +51,10 @@ type SimpleLoadBalancer struct {
 	Nodes        []string `json:"nodes"`
 }
 
+// ConcurrencyControl The conversion used for json key is defined here
+// for kubernetes/types.go  MaxConcurrency key is maxConcurrency.
+// We need to convert it to max_concurrency to fit the pisa-proxy's configuration format
+// FIXME: A better way to convert
 type ConcurrencyControl struct {
 	Regex          string        `json:"regex"`
 	Duration       time.Duration `json:"duration"`
