@@ -24,7 +24,7 @@ spec:
             - -webhookTLSCertFile=/etc/webhook/certs/tls.crt
             - -webhookTLSKeyFile=/etc/webhook/certs/tls.key
             - -webhookPort={{ .Values.service.webhookPort }}
-            - -basicPort={{ .Values.service.basicPort }}
+            - -corePort={{ .Values.service.basicPort }}
             - -proxyConfigsPort={{ .Values.service.proxyConfigsPort }}
           env:
             - name: PISA_PROXY_IMAGE
@@ -38,7 +38,7 @@ spec:
           ports:
             - name: webhook
               containerPort: {{ .Values.service.webhookPort }}
-            - name: basic
+            - name: core
               containerPort: {{ .Values.service.basicPort }}
             - name: proxy-configs
               containerPort: {{ .Values.service.proxyConfigsPort }}
