@@ -173,7 +173,6 @@ impl MySqlServer {
 
         let res = client_conn.send_use_db(sql).await?;
         self.trans_fsm.put_conn(client_conn);
-        println!("res {:?}", res);
 
         if res.1 {
             if is_send_ok {

@@ -23,7 +23,6 @@ use proxy::{
     listener::listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
-use tokio::sync::Mutex;
 use tracing::error;
 
 use crate::myserver::MySqlServer;
