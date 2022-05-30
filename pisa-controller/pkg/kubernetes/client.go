@@ -12,31 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package core
+package kubernetes
 
 import (
-	"flag"
-	"net/http"
-
-	"github.com/gin-gonic/gin"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 )
 
-var Config CoreConfig
+func NewInClusterClient() (dynamic.Interface, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
 
-type CoreConfig struct {
-	Port string
-}
+	clientset, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
 
-func init() {
-	flag.StringVar(&Config.Port, "corePort", "80", "CoreServer port.")
-}
-
-func Handler() http.Handler {
-	r := gin.New()
-	r.Use(gin.Recovery(), gin.Logger())
-
-	r.GET("/healthz", func(ctx *gin.Context) {
-		ctx.Status(http.StatusOK)
-	})
-	return r
+	return clientset, nil
 }

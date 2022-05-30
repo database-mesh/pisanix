@@ -20,9 +20,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/database-mesh/pisanix/pisa-controller/cmd/core"
-	"github.com/database-mesh/pisanix/pisa-controller/cmd/proxy"
-	"github.com/database-mesh/pisanix/pisa-controller/cmd/webhook"
+	cmdcore "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/core"
+	cmdproxy "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
+	cmdwebhook "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/core"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -33,8 +36,8 @@ var (
 )
 
 const (
-	DEFAULT_READ_TIMEOUT  = 5 * time.Second
-	DEFAULT_WRITE_TIMEOUT = 10 * time.Second
+	DefaultReadTimeout  = 5 * time.Second
+	DefaultWriteTimeout = 10 * time.Second
 )
 
 func main() {
@@ -42,19 +45,19 @@ func main() {
 
 	eg.Go(func() error {
 		return newHttpServer(
-			webhook.Config.Port,
+			cmdwebhook.Config.Port,
 			webhook.Handler(),
-		).ListenAndServeTLS(webhook.Config.TLSCertFile, webhook.Config.TLSKeyFile)
+		).ListenAndServeTLS(cmdwebhook.Config.TLSCertFile, cmdwebhook.Config.TLSKeyFile)
 	})
 	eg.Go(func() error {
 		return newHttpServer(
-			proxy.Config.Port,
+			cmdproxy.Config.Port,
 			proxy.Handler(),
 		).ListenAndServe()
 	})
 	eg.Go(func() error {
 		return newHttpServer(
-			core.Config.Port,
+			cmdcore.Config.Port,
 			core.Handler(),
 		).ListenAndServe()
 	})
@@ -68,7 +71,7 @@ func newHttpServer(port string, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%s", port),
 		Handler:      handler,
-		ReadTimeout:  DEFAULT_READ_TIMEOUT,
-		WriteTimeout: DEFAULT_WRITE_TIMEOUT,
+		ReadTimeout:  DefaultReadTimeout,
+		WriteTimeout: DefaultWriteTimeout,
 	}
 }

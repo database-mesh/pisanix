@@ -11,23 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package kubernetes
+
+package core
 
 import (
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
+	"flag"
+
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/core"
 )
 
-func NewInClusterClient() (dynamic.Interface, error) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
+var Config core.Config
 
-	clientset, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	return clientset, nil
+func init() {
+	flag.StringVar(&Config.Port, "corePort", "80", "CoreServer port.")
 }

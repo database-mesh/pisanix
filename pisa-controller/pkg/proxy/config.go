@@ -11,12 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package config
+package proxy
 
 import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
@@ -71,7 +73,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	if err != nil {
 		return nil, err
 	}
-	vdbSpec := &VirtualDatabaseSpec{}
+	vdbSpec := &kubernetes.VirtualDatabaseSpec{}
 	vdbs, _ := json.Marshal(vdb.Object["spec"])
 	if err != nil {
 		log.Errorf("%v", err)
@@ -93,10 +95,11 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		if err != nil {
 			return nil, err
 		}
-		tsSpec := &TrafficStrategySpec{}
+		tsSpec := &kubernetes.TrafficStrategySpec{}
 		tsj, _ := json.Marshal(ts.Object["spec"])
 		_ = json.Unmarshal(tsj, tsSpec)
-		proxyself := ProxySelf{}
+		//TODO
+		proxyself := Proxy{}
 		if service.DatabaseService.DatabaseMySQL != nil {
 			proxyself.BackendType = "mysql"
 			proxyself.DB = service.DatabaseService.DatabaseMySQL.DB
@@ -113,10 +116,9 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			}
 			if len(tsSpec.ConcurrencyControls) != 0 {
 				for _, control := range tsSpec.ConcurrencyControls {
-					//
-					proxyself.Plugins.ConcurrencyControls = append(proxyself.Plugins.ConcurrencyControls, *(*ConcurrencyControlSelf)(&control))
+					//TODO: add comments
+					proxyself.Plugins.ConcurrencyControls = append(proxyself.Plugins.ConcurrencyControls, *(*kubernetes.ConcurrencyControl)(&control))
 				}
-
 			}
 		}
 		dbes, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(tsSpec.Selector.MatchLabels)})
@@ -125,7 +127,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			return nil, err
 		}
 		for _, dbe := range dbes.Items {
-			dbeSpec := &DatabaseEndpointSpec{}
+			dbeSpec := &kubernetes.DatabaseEndpointSpec{}
 			dbej, _ := json.Marshal(dbe.Object["spec"])
 			_ = json.Unmarshal(dbej, dbeSpec)
 			if dbeSpec.Database.MySQL != nil {
@@ -140,5 +142,4 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		proxyconfig.Proxies = append(proxyconfig.Proxies, proxyself)
 	}
 	return proxyconfig, nil
-
 }

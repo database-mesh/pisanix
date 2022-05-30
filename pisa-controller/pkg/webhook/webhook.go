@@ -12,39 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package proxy
+package webhook
 
 import (
-	"flag"
 	"net/http"
-
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/config"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
 	"github.com/gin-gonic/gin"
 )
 
-var Config ProxyConfig
-
-type ProxyConfig struct {
-	Port string
-}
-
-func init() {
-	flag.StringVar(&Config.Port, "proxyConfigsPort", "8080", "ProxyConfigsServer port.")
+type Config struct {
+	TLSCertFile string
+	TLSKeyFile  string
+	Port        string
 }
 
 func Handler() http.Handler {
-	client, err := kubernetes.NewInClusterClient()
-	if err != nil {
-		// TODO: add error handling
-	}
-
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
-	g := r.Group("/apis/configs.database-mesh.io/v1alpha1")
+	g := r.Group("/apis/admission.database-mesh.io/v1alpha1")
 
-	g.GET("/namespaces/:namespace/proxyconfigs/:appname", config.GetConfig(client))
+	// NOTE: there is not API path in this request
+	// TODO: test trailing slash
+	g.GET("/", ApiCheck)
+	g.POST("/mutate", InjectSidecar)
 
 	return r
 }

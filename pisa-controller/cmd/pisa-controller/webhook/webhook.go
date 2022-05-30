@@ -16,35 +16,14 @@ package webhook
 
 import (
 	"flag"
-	"net/http"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
-
-	"github.com/gin-gonic/gin"
 )
 
-var Config WebhookConfig
-
-type WebhookConfig struct {
-	TLSCertFile string
-	TLSKeyFile  string
-	Port        string
-}
+var Config webhook.Config
 
 func init() {
 	flag.StringVar(&Config.Port, "webhookPort", "6443", "WebhookServer port.")
 	flag.StringVar(&Config.TLSCertFile, "webhookTLSCertFile", "/etc/webhook/certs/tls.crt", "File containing the x509 certificate to --webhookTLSCertFile.")
 	flag.StringVar(&Config.TLSKeyFile, "webhookTLSKeyFile", "/etc/webhook/certs/tls.key", "File containing the x509 private key to --webhookTLSKeyFile.")
-}
-
-func Handler() http.Handler {
-	r := gin.New()
-	r.Use(gin.Recovery(), gin.Logger())
-	g := r.Group("/apis/admission.database-mesh.io/v1alpha1")
-
-	// NOTE: there is not API path in this request
-	g.GET("", webhook.ApiCheck)
-	g.POST("/mutate", webhook.InjectSidecar)
-
-	return r
 }

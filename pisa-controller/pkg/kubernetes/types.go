@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package kubernetes
 
 import (
 	"time"
@@ -31,22 +31,18 @@ type Service struct {
 	Name            string `json:"name"`
 	TrafficStrategy string `json:"trafficStrategy"`
 }
+
 type DatabaseService struct {
 	DatabaseMySQL *DatabaseMySQL `json:"databaseMySQL"`
 }
+
 type DatabaseMySQL struct {
-	// +optional
-	Host string `json:"host,omitempty"`
-	// +optional
-	Port string `json:"port,omitempty"`
-	// +optional
+	Host     string `json:"host,omitempty"`
+	Port     string `json:"port,omitempty"`
 	Username string `json:"username,omitempty"`
-	// +optional
 	Password string `json:"password,omitempty"`
-	// +optional
-	DB string `json:"db,omitempty"`
-	// +optional
-	PoolSize int `json:"poolSize,omitempty"`
+	DB       string `json:"db,omitempty"`
+	PoolSize int    `json:"poolSize,omitempty"`
 }
 
 // VirtualDatabaseStatus defines the observed state of VirtualDatabase
@@ -57,13 +53,10 @@ type VirtualDatabaseStatus struct {
 // TrafficStrategySpec defines the desired state of TrafficStrategy
 type TrafficStrategySpec struct {
 	Selector *metav1.LabelSelector `json:"selector"`
-	// +optional
 	// 均衡器（默认值）文档标注
 	LoadBalance *LoadBalance `json:"loadBalance,omitempty"`
-	// +optional
 	// 断路器
 	CircuitBreaks []CircuitBreak `json:"circuitBreaks,omitempty"`
-	// +optional
 	// 限流器
 	ConcurrencyControls []ConcurrencyControl `json:"ConcurrencyControls,omitempty"`
 }
@@ -90,6 +83,7 @@ type ConcurrencyControl struct {
 type DatabaseEndpointSpec struct {
 	Database Database `json:"database"`
 }
+
 type Database struct {
 	MySQL *MySQL `json:"MySQL"`
 }
@@ -102,41 +96,4 @@ type MySQL struct {
 	Password string `json:"password"`
 	DB       string `json:"db"`
 	Weight   int    `json:"weight"`
-}
-
-type PisaProxyConfig struct {
-	Admin struct {
-		Port     string `json:"port"`
-		LogLevel string `json:"log_level"`
-	} `json:"admin"`
-	Proxies    []ProxySelf `json:"proxies"`
-	MysqlNodes []MySQL     `json:"mysql_nodes"`
-}
-
-type ProxySelf struct {
-	BackendType        string          `json:"backend_type"`
-	DB                 string          `json:"db"`
-	ListenAddr         string          `json:"listen_addr"`
-	Name               string          `json:"name"`
-	Password           string          `json:"password"`
-	PoolSize           int             `json:"pool_size"`
-	Username           string          `json:"username"`
-	SimpleLoadBalancer SimpleProxySelf `json:"simple_loadbalancer"`
-	Plugins            PluginSelf      `json:"plugins"`
-}
-
-type PluginSelf struct {
-	CircuitBreaks       []CircuitBreak           `json:"circuit_breaks,omitempty"`
-	ConcurrencyControls []ConcurrencyControlSelf `json:"concurrency_controls,omitempty"`
-}
-
-type SimpleProxySelf struct {
-	BalancerType string   `json:"balancer_type"`
-	Nodes        []string `json:"nodes"`
-}
-
-type ConcurrencyControlSelf struct {
-	Regex          string        `json:"regex"`
-	Duration       time.Duration `json:"duration"`
-	MaxConcurrency int           `json:"max_concurrency"`
 }
