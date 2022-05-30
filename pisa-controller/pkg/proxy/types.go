@@ -42,8 +42,8 @@ type Proxy struct {
 }
 
 type Plugin struct {
-	CircuitBreaks       []kubernetes.CircuitBreak       `json:"circuit_breaks,omitempty"`
-	ConcurrencyControls []kubernetes.ConcurrencyControl `json:"concurrency_controls,omitempty"`
+	CircuitBreaks       []kubernetes.CircuitBreak `json:"circuit_breaks,omitempty"`
+	ConcurrencyControls []ConcurrencyControl      `json:"concurrency_controls,omitempty"`
 }
 
 type SimpleLoadBalancer struct {

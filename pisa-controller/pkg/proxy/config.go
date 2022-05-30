@@ -117,8 +117,9 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			}
 			if len(tsSpec.ConcurrencyControls) != 0 {
 				for _, control := range tsSpec.ConcurrencyControls {
-					//TODO: add comments
-					proxyself.Plugins.ConcurrencyControls = append(proxyself.Plugins.ConcurrencyControls, *(*kubernetes.ConcurrencyControl)(&control))
+					// TODO: Convert CRD to configuration file json format.Need a better implementation
+					// ref: https://stackoverflow.com/questions/24613271/golang-is-conversion-between-different-struct-types-possible
+					proxyself.Plugins.ConcurrencyControls = append(proxyself.Plugins.ConcurrencyControls, *(*ConcurrencyControl)(&control))
 				}
 			}
 		}
