@@ -7,14 +7,14 @@ metadata:
     "database-mesh.io/metrics-port": "8888"
 spec:
   services:
-    - name: my_mysql
+    - name: "my_mysql"
       databaseMySQL:
-        host: localhost #默认是localhost
-        port: "3306" #用户可以自己填，非空转为生成
-        username: root #用户可以自己填，非空转为生成
-        password: "12345678" #用户可以自己填，非空转为生成
-        db: foo #用户可以自己填，或非空需要特殊处理
-        poolSize: 3 #走默认值，先放在这里 int
+        host: "localhost"
+        port: "3306"
+        username: "root"
+        password: "root"
+        db: "foo"
+        poolSize: 3
       trafficStrategy: "trafficstrategy-sample"
 
 ---
@@ -24,12 +24,12 @@ metadata:
   name: trafficstrategy-sample
   namespace: injecttest
 spec:
-  selector: #必选 kubernetes labels 格式
+  selector:
     matchLabels:
       source: rds
-  loadBalance: #可选
+  loadBalance:
     simpleLoadBalancer:
-      kind: random
+      kind: "random"
   circuitBreaks:
     - regex: "/[1-9][0-9]*/"
     - regex: "/[1-2][0-9]*/"
@@ -45,7 +45,7 @@ spec:
 apiVersion: core.database-mesh.io/v1alpha1
 kind: DatabaseEndpoint
 metadata:
-  name: databaseendpoint1
+  name: databaseendpoint-sample1
   namespace: injecttest
   labels:
     source: rds
@@ -55,13 +55,13 @@ spec:
       host: "127.0.0.1"
       port: "3306"
       username: "root"
-      password: "12345678"
+      password: "root"
       db: "foo"
 ---
 apiVersion: core.database-mesh.io/v1alpha1
 kind: DatabaseEndpoint
 metadata:
-  name: databaseendpoint2
+  name: databaseendpoint-sample2
   namespace: injecttest
   labels:
     source: rds
@@ -71,5 +71,5 @@ spec:
       host: "127.0.0.2"
       port: "3306"
       username: "root"
-      password: "12345678"
+      password: "root"
       db: "foo"

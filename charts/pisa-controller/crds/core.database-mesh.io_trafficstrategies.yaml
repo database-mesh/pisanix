@@ -36,8 +36,10 @@ spec:
             description: TrafficStrategySpec defines the desired state of TrafficStrategy
             properties:
               ConcurrencyControls:
-                description: Concurrency control is used for limit the max number of concurrent execution SQLs
                 items:
+                  description: ConcurrencyControl works according to regular expressions.
+                    SQL statements that meet the regular conditions will be blown
+                    after the maximum concurrency limit is exceeded.
                   properties:
                     duration:
                       description: A Duration represents the elapsed time between
@@ -57,8 +59,9 @@ spec:
                   type: object
                 type: array
               circuitBreaks:
-                description: A circuit breaker is used for denying forbidden SQL
                 items:
+                  description: CircuitBreak works with regular expressions. SQL statements
+                    that conform to regular expressions will be truncated.
                   properties:
                     regex:
                       type: string
@@ -67,9 +70,12 @@ spec:
                   type: object
                 type: array
               loadBalance:
-                description: A load balancer is used for 
+                description: 'LoadBalance The choice of load balancing strategy, currently
+                  supported: SimpleLoadBalancer'
                 properties:
                   simpleLoadBalancer:
+                    description: 'SimpleLoadBalancer support load balancing type:
+                      1. random 2. roundrobin'
                     properties:
                       kind:
                         type: string
