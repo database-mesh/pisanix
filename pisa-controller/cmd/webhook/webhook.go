@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package app
+package webhook
 
 import (
 	"flag"
@@ -23,7 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var Webhook WebhookConfig
+var Config WebhookConfig
 
 type WebhookConfig struct {
 	TLSCertFile string
@@ -32,16 +32,17 @@ type WebhookConfig struct {
 }
 
 func init() {
-	flag.StringVar(&Webhook.Port, "webhookPort", "6443", "WebhookServer port.")
-	flag.StringVar(&Webhook.TLSCertFile, "webhookTLSCertFile", "/etc/webhook/certs/tls.crt", "File containing the x509 Certificate to --webhookTLSCertFile.")
-	flag.StringVar(&Webhook.TLSKeyFile, "webhookTLSKeyFile", "/etc/webhook/certs/tls.key", "File containing the x509 private key to --webhookTLSKeyFile.")
+	flag.StringVar(&Config.Port, "webhookPort", "6443", "WebhookServer port.")
+	flag.StringVar(&Config.TLSCertFile, "webhookTLSCertFile", "/etc/webhook/certs/tls.crt", "File containing the x509 certificate to --webhookTLSCertFile.")
+	flag.StringVar(&Config.TLSKeyFile, "webhookTLSKeyFile", "/etc/webhook/certs/tls.key", "File containing the x509 private key to --webhookTLSKeyFile.")
 }
 
-func WebhookHandlers() http.Handler {
-
+func Handler() http.Handler {
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
 	g := r.Group("/apis/admission.database-mesh.io/v1alpha1")
+
+	// NOTE: there is not API path in this request
 	g.GET("", webhook.ApiCheck)
 	g.POST("/mutate", webhook.InjectSidecar)
 

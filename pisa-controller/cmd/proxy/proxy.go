@@ -12,48 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package app
+package proxy
 
 import (
 	"flag"
 	"net/http"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/config"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
 	"github.com/gin-gonic/gin"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
 )
 
-var ProxyConfigs ProxyConfigsConfig
+var Config ProxyConfig
 
-type ProxyConfigsConfig struct {
+type ProxyConfig struct {
 	Port string
 }
 
 func init() {
-	flag.StringVar(&ProxyConfigs.Port, "proxyConfigsPort", "8080", "ProxyConfigsServer port.")
+	flag.StringVar(&Config.Port, "proxyConfigsPort", "8080", "ProxyConfigsServer port.")
 }
-func ProxyConfigsHandler() http.Handler {
-	client, _ := initClient()
+
+func Handler() http.Handler {
+	client, err := kubernetes.NewInClusterClient()
+	if err != nil {
+		// TODO: add error handling
+	}
+
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
 	g := r.Group("/apis/configs.database-mesh.io/v1alpha1")
+
 	g.GET("/namespaces/:namespace/proxyconfigs/:appname", config.GetConfig(client))
+
 	return r
-}
-
-func initClient() (dynamic.Interface, error) {
-	// creates the in-cluster config
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
-	// creates the clientset
-	clientset, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	return clientset, nil
 }

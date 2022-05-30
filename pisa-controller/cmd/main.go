@@ -20,7 +20,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/database-mesh/pisanix/pisa-controller/cmd/app"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/core"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/proxy"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/webhook"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -40,20 +42,20 @@ func main() {
 
 	eg.Go(func() error {
 		return newHttpServer(
-			app.Webhook.Port,
-			app.WebhookHandlers(),
-		).ListenAndServeTLS(app.Webhook.TLSCertFile, app.Webhook.TLSKeyFile)
+			webhook.Config.Port,
+			webhook.Handler(),
+		).ListenAndServeTLS(webhook.Config.TLSCertFile, webhook.Config.TLSKeyFile)
 	})
 	eg.Go(func() error {
 		return newHttpServer(
-			app.ProxyConfigs.Port,
-			app.ProxyConfigsHandlers(),
+			proxy.Config.Port,
+			proxy.Handler(),
 		).ListenAndServe()
 	})
 	eg.Go(func() error {
 		return newHttpServer(
-			app.Basic.Port,
-			app.BasicHandlers(),
+			core.Config.Port,
+			core.Handler(),
 		).ListenAndServe()
 	})
 

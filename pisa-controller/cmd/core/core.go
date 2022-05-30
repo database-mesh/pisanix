@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package app
+package core
 
 import (
 	"flag"
@@ -21,17 +21,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var Basic BasicConfig
+var Config CoreConfig
 
-type BasicConfig struct {
+type CoreConfig struct {
 	Port string
 }
 
 func init() {
-	flag.StringVar(&Basic.Port, "basicPort", "80", "BasicServer port.")
+	flag.StringVar(&Config.Port, "corePort", "80", "CoreServer port.")
 }
 
-func BasicHandler() http.Handler {
+func Handler() http.Handler {
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
 
