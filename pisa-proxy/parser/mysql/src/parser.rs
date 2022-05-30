@@ -109,6 +109,7 @@ mod test {
             //"PREPARE stmt1 FROM 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
             //// TODO FIX ME.
             //// "PREPARE stmt2 FROM @s",
+            //"DEALLOCATE PREPARE stmt2",
             //"EXECUTE stmt2",
             //"BEGIN WORK",
             //"set AUTOCOMMIT=1",

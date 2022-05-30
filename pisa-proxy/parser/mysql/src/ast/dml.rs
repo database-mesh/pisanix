@@ -3016,3 +3016,26 @@ pub struct BeginStmt {
     pub span: Span,
     pub work: bool,
 }
+
+#[derive(Debug, Clone)]
+pub struct Deallocate {
+    pub span: Span,
+    pub deallocate_or_drop: String,
+    pub stmt_name: String,
+}
+
+impl Deallocate {
+    pub fn format(&self) -> String {
+        vec![
+            self.deallocate_or_drop.to_string().to_uppercase(),
+            "PREPARE".to_string(),
+            self.stmt_name.to_string(),
+        ].join(" ")
+    }
+}
+
+impl Visitor for Deallocate {
+    fn visit<T: Transformer>(&mut self, _tf: &mut T) -> Self {
+        self.clone()
+    }
+}
