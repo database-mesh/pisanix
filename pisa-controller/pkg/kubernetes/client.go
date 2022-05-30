@@ -36,6 +36,7 @@ func GetInClusterClient() (*KClient, error) {
 			initErr = err
 			return
 		}
+		client = &KClient{}
 		client.Client = clientset
 	})
 
