@@ -22,23 +22,22 @@ import (
 
 var client *KClient
 var once sync.Once
-var Err error
+var initErr error
 
 func GetInClusterClient() (*KClient, error) {
 	once.Do(func() {
 		config, err := rest.InClusterConfig()
 		if err != nil {
-			Err = err
+			initErr = err
 			return
 		}
 		clientset, err := dynamic.NewForConfig(config)
 		if err != nil {
-			Err = err
+			initErr = err
 			return
 		}
 		client.Client = clientset
-		Err = nil
 	})
 
-	return client, nil
+	return client, initErr
 }
