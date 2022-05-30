@@ -12,38 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package app
+package webhook
 
 import (
-	"flag"
 	"net/http"
-
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 
 	"github.com/gin-gonic/gin"
 )
 
-var Webhook WebhookConfig
-
-type WebhookConfig struct {
+type Config struct {
 	TLSCertFile string
 	TLSKeyFile  string
 	Port        string
 }
 
-func init() {
-	flag.StringVar(&Webhook.Port, "webhookPort", "6443", "WebhookServer port.")
-	flag.StringVar(&Webhook.TLSCertFile, "webhookTLSCertFile", "/etc/webhook/certs/tls.crt", "File containing the x509 Certificate to --webhookTLSCertFile.")
-	flag.StringVar(&Webhook.TLSKeyFile, "webhookTLSKeyFile", "/etc/webhook/certs/tls.key", "File containing the x509 private key to --webhookTLSKeyFile.")
-}
-
-func WebhookHandlers() http.Handler {
-
+func Handler() http.Handler {
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
 	g := r.Group("/apis/admission.database-mesh.io/v1alpha1")
-	g.GET("", webhook.ApiCheck)
-	g.POST("/mutate", webhook.InjectSidecar)
+
+	// NOTE: there is not API path in this request
+	// TODO: test trailing slash
+	g.GET("/", ApiCheck)
+	g.POST("/mutate", InjectSidecar)
 
 	return r
 }

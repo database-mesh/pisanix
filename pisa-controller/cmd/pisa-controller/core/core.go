@@ -12,31 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package app
+package core
 
 import (
 	"flag"
-	"net/http"
 
-	"github.com/gin-gonic/gin"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/core"
 )
 
-var Basic BasicConfig
-
-type BasicConfig struct {
-	Port string
-}
+var Config core.Config
 
 func init() {
-	flag.StringVar(&Basic.Port, "basicPort", "80", "BasicServer port.")
-}
-func BasicHandlers() http.Handler {
-	r := gin.New()
-	r.Use(gin.Recovery(), gin.Logger())
-
-	r.GET("/healthz", func(ctx *gin.Context) {
-		ctx.Status(http.StatusOK)
-	})
-	return r
-
+	flag.StringVar(&Config.Port, "corePort", "80", "CoreServer port.")
 }

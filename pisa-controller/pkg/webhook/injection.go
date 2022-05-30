@@ -128,8 +128,3 @@ func hasContainer(containers []corev1.Container, containerName string) bool {
 	}
 	return false
 }
-
-func ApiCheck(ctx *gin.Context) {
-	rawData, _ := ctx.GetRawData()
-	ctx.JSON(http.StatusOK, rawData)
-}
