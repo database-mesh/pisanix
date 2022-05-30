@@ -99,6 +99,7 @@ sql_stmt -> SqlStmt:
   | execute       { SqlStmt::ExecuteStmt($1) }
   | begin_stmt	  { SqlStmt::BeginStmt($1) }
   | set           { SqlStmt::Set($1) }
+  | deallocate    { SqlStmt::Deallocate($1) }
   ;
 
 end_of_input -> SqlStmt:
@@ -5582,6 +5583,22 @@ execute_var_ident -> Value:
          is_at: true,
        }
     }
+    ;
+
+deallocate -> Box<Deallocate>:
+    deallocate_or_drop 'PREPARE' ident
+    {
+       Box::new(Deallocate {
+         span: $span,
+         deallocate_or_drop: String::from($1),
+         stmt_name: $3.0,
+       })
+    }
+    ;
+
+deallocate_or_drop -> &'input str:
+    'DEALLOCATE'  { "DEALLOCATE" }
+    | 'DROP'  { "DROP" }
     ;
 
 begin_stmt -> Box<BeginStmt>:
