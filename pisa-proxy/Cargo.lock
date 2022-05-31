@@ -1348,7 +1348,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33a33a362ce288760ec6a508b94caaec573ae7d3bbbd91b87aa0bad4456839db"
 
 [[package]]
-name = "loadbalancer"
+name = "loadbalance"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -2226,7 +2226,7 @@ dependencies = [
  "async-trait",
  "endpoint",
  "error",
- "loadbalancer",
+ "loadbalance",
  "plugin",
  "serde",
  "serde_derive",
@@ -2582,7 +2582,7 @@ dependencies = [
  "error",
  "futures",
  "iota",
- "loadbalancer",
+ "loadbalance",
  "metrics",
  "mysql_parser",
  "mysql_protocol",
@@ -2837,7 +2837,6 @@ dependencies = [
  "futures",
  "getopts",
  "lazy_static",
- "loadbalancer",
  "mysql_protocol",
  "num_cpus 0.2.13",
  "plugin",

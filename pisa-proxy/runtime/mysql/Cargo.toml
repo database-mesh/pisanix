@@ -23,7 +23,7 @@ proxy = {path = "../../proxy"}
 conn_pool = { path = "../../proxy/pool" }
 mysql_protocol = {path = "../../protocol/mysql", package = "mysql_protocol"}
 pisa_error = {path = "../../error", package = "error"}
-loadbalancer = {path = "../../proxy/loadbalancer"}
+loadbalance = {path = "../../proxy/loadbalance"}
 endpoint = {path = "../../proxy/endpoint"}
 pisa_metrics = {path =  "../../app/metrics", package = "metrics"}
 mysql_parser = {path = "../../parser/mysql"}

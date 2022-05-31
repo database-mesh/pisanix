@@ -14,7 +14,7 @@
 
 use endpoint::endpoint::Endpoint;
 
-use crate::balancer::LoadBalancer;
+use crate::balance::LoadBalance;
 
 #[derive(Default)]
 pub struct RoundRobinWeightd {
@@ -26,7 +26,7 @@ pub struct RoundRobinWeightd {
     pub cw: i64,
 }
 
-impl LoadBalancer for RoundRobinWeightd {
+impl LoadBalance for RoundRobinWeightd {
     fn add(&mut self, endpoint: Endpoint) {
         if self.item_exists(&endpoint) {
             return;

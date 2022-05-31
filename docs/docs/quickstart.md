@@ -176,11 +176,11 @@ log_level = "INFO"
 # pisa-proxy 代理配置块
 [proxy]
 # config a proxy
-[[proxy.configs]]
+[[proxy.config]]
 # proxy 代理地址
 listen_addr = "0.0.0.0:9088"
 # proxy 认证用户名
-username = "root"
+user = "root"
 # proxy 认证密码
 password = "12345678"
 # proxy schema
@@ -191,15 +191,15 @@ backend_type = "mysql"
 pool_size = 3
 
 # 后端负载均衡配置
-[proxy.configs.simple_loadbalancer]
+[proxy.config.simple_loadbalance]
 # 负载均衡算法：[random/roundrobin], 默认值: random 算法
-balancer_type = "random"
+balance_type = "random"
 # 选择挂载后端节点
 nodes = ["ds001"]
 
 # 后端数据源配置
 [mysql]
-[[mysql.nodes]]
+[[mysql.node]]
 # 数据源 name
 name = "ds001"
 # database name
@@ -222,33 +222,33 @@ port = "8081"
 log_level = "INFO"
 
 [proxy]
-[[proxy.configs]]
+[[proxy.config]]
 listen_addr = "0.0.0.0:9088"
-username = "root"
+user = "root"
 password = "12345678"
 db = "test"
 backend_type = "mysql"
 pool_size = 3
 
-[proxy.configs.simple_loadbalancer]
-balancer_type = "random"
+[proxy.config.simple_loadbalance]
+balance_type = "random"
 nodes = ["ds001"]
 
 [proxy]
-[[proxy.configs]]
+[[proxy.config]]
 listen_addr = "0.0.0.0:9089"
-username = "root"
+user = "root"
 password = "root"
 db = "test"
 backend_type = "mysql"
 pool_size = 3
 
-[proxy.configs.simple_loadbalancer]
-balancer_type = "random"
+[proxy.config.simple_loadbalance]
+balance_type = "random"
 nodes = ["ds001"]
 
 [mysql]
-[[mysql.nodes]]
+[[mysql.node]]
 name = "ds001"
 db = "test"
 user = "root"
@@ -260,20 +260,20 @@ weight = 1
 #### 配置后端数据库负载均衡
 ```
 [proxy]
-[[proxy.configs]]
+[[proxy.config]]
 listen_addr = "0.0.0.0:9089"
-username = "root"
+user = "root"
 password = "root"
 db = "test"
 backend_type = "mysql"
 pool_size = 3
 
-[proxy.configs.simple_loadbalancer]
-balancer_type = "random"
+[proxy.config.simple_loadbalance]
+balance_type = "random"
 nodes = ["ds001", "ds002"]
 
 [mysql]
-[[mysql.nodes]]
+[[mysql.node]]
 name = "ds001"
 db = "test"
 user = "root"
@@ -281,7 +281,7 @@ password = "root"
 addr = "127.0.0.1:3307"
 weight = 1
 
-[[mysql.nodes]]
+[[mysql.node]]
 name = "ds002"
 db = "test"
 user = "root"

@@ -21,7 +21,7 @@ sidebar_position: 4
 
 #### 示例配置
 ``` toml
-[[proxy.configs.plugin.circuit_breaker]]
+[[proxy.config.plugin.circuit_break]]
 regex = "\\w+"
 ```
 
@@ -32,7 +32,7 @@ regex = "\\w+"
 
 #### 示例配置
 ``` toml
-[[proxy.configs.plugin.concurrency_control]]
+[[proxy.config.plugin.concurrency_control]]
 regex = "\\w+"    
 max_concurrency = 1
 duration = "100"

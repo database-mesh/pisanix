@@ -15,7 +15,7 @@
 use std::{io::Error, time::Duration};
 
 use crate::{
-    circuit_breaker::CircuitBreakerLayer,
+    circuit_break::CircuitBreakLayer,
     concurrency_control::ConcurrencyControlLayer,
     config,
     err::PluginError,
@@ -34,11 +34,11 @@ fn test_chain_concurrency_control_and_circuit_break() {
         duration: Duration::new(5, 0),
     }];
 
-    let circuit_break_config = vec![config::CircuitBreaker { regex: String::from(r"[A-Za-z]+") }];
+    let circuit_break_config = vec![config::CircuitBreak { regex: String::from(r"[A-Za-z]+") }];
 
     let mut wrap_svc = ServiceBuilder::new()
         .with_layer(ConcurrencyControlLayer::new(concurrency_control_config))
-        .with_layer(CircuitBreakerLayer::new(circuit_break_config))
+        .with_layer(CircuitBreakLayer::new(circuit_break_config))
         .build(service_fn(test_service));
 
     let res = wrap_svc.handle("abc");

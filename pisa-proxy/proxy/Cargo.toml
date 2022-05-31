@@ -16,5 +16,5 @@ tracing = "0.1.13"
 tracing-futures = { version = "0.2.3" }
 tracing-subscriber = "0.2.2"
 plugin = { path = "../plugin"}
-loadbalancer = {path = "./loadbalancer"}
+loadbalance = {path = "./loadbalance"}
 endpoint = {path = "./endpoint"}

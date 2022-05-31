@@ -13,7 +13,7 @@
 // limitations under the License.
 
 pub mod build_phase;
-pub mod circuit_breaker;
+pub mod circuit_break;
 pub mod concurrency_control;
 pub mod config;
 pub mod err;

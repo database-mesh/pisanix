@@ -21,7 +21,7 @@ use proxy::proxy::{MySQLNode, MySQLNodes, ProxiesConfig, ProxyConfig};
 use serde::{Deserialize, Serialize};
 use tracing::{info, trace};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
     pub admin: Admin,
     pub mysql: Option<MySQLNodes>,
@@ -144,7 +144,7 @@ impl PisaConfig {
         }
 
         if let Some(config) = config.proxy {
-            if let Some(app_config) = config.configs {
+            if let Some(app_config) = config.config {
                 for app in app_config {
                     pisa_config.proxies.push(app);
                 }
@@ -152,7 +152,7 @@ impl PisaConfig {
         }
 
         if let Some(mysql) = config.mysql {
-            if let Some(mysql_nodes) = mysql.nodes {
+            if let Some(mysql_nodes) = mysql.node {
                 pisa_config.mysql_nodes = mysql_nodes;
             }
         }
