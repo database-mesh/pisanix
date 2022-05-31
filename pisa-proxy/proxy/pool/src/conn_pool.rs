@@ -73,7 +73,7 @@ where
 
 #[derive(Clone)]
 pub struct Pool<T: ConnLike + ConnAttr> {
-    pub factory: Option<T>,
+    factory: Option<T>,
     pool: Arc<PoolInner<T>>,
 }
 
