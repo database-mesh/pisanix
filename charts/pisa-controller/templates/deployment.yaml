@@ -45,4 +45,4 @@ spec:
           resources:
           {{- toYaml .Values.resources | nindent 12}}
       imagePullSecrets:
-      {{- toYaml .Values.imagePullSecrets | nindent 8}}
+      {{- toYaml .Values.image.imagePullSecrets | nindent 8}}
