@@ -34,7 +34,7 @@ pub trait LoadBalance {
 }
 
 impl Balance {
-    pub fn build_balance (
+    pub fn build_balance(
         &mut self,
         bs: String,
     ) -> Result<Box<dyn LoadBalance + Send + Sync>, Error> {
