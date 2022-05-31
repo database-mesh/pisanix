@@ -287,16 +287,7 @@ impl TransFsm {
 
             None => {
                 match self.pool.get_conn_with_opts(addr).await {
-                    Ok(mut client_conn) => {
-                        // Get a new connection, maybe current db is None.
-                        if let None = client_conn.get_db() {
-                            if let Some(db) = &self.db {
-                                client_conn.send_use_db(db).await.map_err(ErrorKind::Protocol)?;
-                            }
-                        }
-                
-                        Ok(client_conn)
-                    }
+                    Ok(client_conn) => Ok(client_conn),
                     Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
                 }
             }
