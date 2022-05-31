@@ -1413,7 +1413,7 @@ dependencies = [
 [[package]]
 name = "lrpar"
 version = "0.12.0"
-source = "git+ssh://git@github.com/database-mesh/lrpar.git?rev=12c5175#12c5175f28a9a42e49af56613e017ace0ad7e5e8"
+source = "git+https://github.com/database-mesh/lrpar.git?rev=12c5175#12c5175f28a9a42e49af56613e017ace0ad7e5e8"
 dependencies = [
  "bincode",
  "cactus",
