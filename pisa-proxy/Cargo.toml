@@ -32,5 +32,5 @@ opt-level = 3
 
 # use forked lrpar
 [patch.crates-io]
-lrpar = { git = "ssh://git@github.com/database-mesh/lrpar.git", rev = "12c5175" }
+lrpar = { git = "https://github.com/database-mesh/lrpar.git", rev = "12c5175" }
 
