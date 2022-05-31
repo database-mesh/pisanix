@@ -12,7 +12,7 @@ log_level = "INFO"
 # proxy 代理地址
 listen_addr = "0.0.0.0:9088"
 # proxy 认证用户名
-username = "root"
+user = "root"
 # proxy 认证密码
 password = "12345678"
 # proxy schema
