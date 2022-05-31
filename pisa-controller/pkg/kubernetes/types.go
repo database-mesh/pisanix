@@ -62,16 +62,16 @@ type TrafficStrategySpec struct {
 	Selector            *metav1.LabelSelector `json:"selector"`
 	LoadBalance         *LoadBalance          `json:"loadBalance,omitempty"`
 	CircuitBreaks       []CircuitBreak        `json:"circuitBreaks,omitempty"`
-	ConcurrencyControls []ConcurrencyControl  `json:"ConcurrencyControls,omitempty"`
+	ConcurrencyControls []ConcurrencyControl  `json:"concurrencyControls,omitempty"`
 }
 
-// LoadBalance The choice of load balancing strategy, currently supported: SimpleLoadBalancer
+// LoadBalance The choice of load balancing strategy, currently supported: SimpleLoadBalance
 type LoadBalance struct {
-	SimpleLoadBalancer *SimpleLoadBalancer `json:"simpleLoadBalancer"`
+	SimpleLoadBalance *SimpleLoadBalance `json:"simpleLoadBalance"`
 }
 
-// SimpleLoadBalancer support load balancing type: 1. random 2. roundrobin
-type SimpleLoadBalancer struct {
+// SimpleLoadBalance support load balancing type: 1. random 2. roundrobin
+type SimpleLoadBalance struct {
 	Kind string `json:"kind"`
 }
 
@@ -101,13 +101,11 @@ type Database struct {
 
 // MySQL Configuration Definition
 type MySQL struct {
-	Name     string `json:"name,omitempty"`
 	Host     string `json:"host"`
 	Port     string `json:"port"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
-	Weight   int    `json:"weight"`
 }
 
 // KClient client for kubernetes

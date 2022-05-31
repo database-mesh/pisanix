@@ -98,27 +98,26 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		tsSpec := &kubernetes.TrafficStrategySpec{}
 		tsj, _ := json.Marshal(ts.Object["spec"])
 		_ = json.Unmarshal(tsj, tsSpec)
-		//TODO
-		proxyself := Proxy{}
+		proxy := Proxy{}
 		if service.DatabaseService.DatabaseMySQL != nil {
-			proxyself.BackendType = "mysql"
-			proxyself.DB = service.DatabaseService.DatabaseMySQL.DB
-			proxyself.Name = service.Name
-			proxyself.Username = service.DatabaseService.DatabaseMySQL.Username
-			proxyself.Password = service.DatabaseService.DatabaseMySQL.Password
-			proxyself.PoolSize = service.DatabaseService.DatabaseMySQL.PoolSize
-			proxyself.ListenAddr = fmt.Sprintf("%s:%s", service.DatabaseService.DatabaseMySQL.Host, service.DatabaseService.DatabaseMySQL.Port)
-			if tsSpec.LoadBalance.SimpleLoadBalancer != nil {
-				proxyself.SimpleLoadBalancer.BalancerType = tsSpec.LoadBalance.SimpleLoadBalancer.Kind
+			proxy.BackendType = "mysql"
+			proxy.DB = service.DatabaseService.DatabaseMySQL.DB
+			proxy.Name = service.Name
+			proxy.Username = service.DatabaseService.DatabaseMySQL.Username
+			proxy.Password = service.DatabaseService.DatabaseMySQL.Password
+			proxy.PoolSize = service.DatabaseService.DatabaseMySQL.PoolSize
+			proxy.ListenAddr = fmt.Sprintf("%s:%s", service.DatabaseService.DatabaseMySQL.Host, service.DatabaseService.DatabaseMySQL.Port)
+			if tsSpec.LoadBalance.SimpleLoadBalance != nil {
+				proxy.SimpleLoadBalance.BalancerType = tsSpec.LoadBalance.SimpleLoadBalance.Kind
 			}
 			if len(tsSpec.CircuitBreaks) != 0 {
-				proxyself.Plugins.CircuitBreaks = tsSpec.CircuitBreaks
+				proxy.Plugin.CircuitBreaks = tsSpec.CircuitBreaks
 			}
 			if len(tsSpec.ConcurrencyControls) != 0 {
 				for _, control := range tsSpec.ConcurrencyControls {
 					// TODO: Convert CRD to configuration file json format.Need a better implementation
 					// ref: https://stackoverflow.com/questions/24613271/golang-is-conversion-between-different-struct-types-possible
-					proxyself.Plugins.ConcurrencyControls = append(proxyself.Plugins.ConcurrencyControls, *(*ConcurrencyControl)(&control))
+					proxy.Plugin.ConcurrencyControls = append(proxy.Plugin.ConcurrencyControls, *(*ConcurrencyControl)(&control))
 				}
 			}
 		}
@@ -132,15 +131,20 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			dbej, _ := json.Marshal(dbe.Object["spec"])
 			_ = json.Unmarshal(dbej, dbeSpec)
 			if dbeSpec.Database.MySQL != nil {
-				dbeSpec.Database.MySQL.Name = dbe.GetName()
-				dbeSpec.Database.MySQL.Weight = 1
-				proxyconfig.MysqlNodes = append(proxyconfig.MysqlNodes, *dbeSpec.Database.MySQL)
+				proxyconfig.Mysql.Nodes = append(proxyconfig.Mysql.Nodes, Node{
+					Name:     dbe.GetName(),
+					Db:       dbeSpec.Database.MySQL.DB,
+					User:     dbeSpec.Database.MySQL.Username,
+					Password: dbeSpec.Database.MySQL.Password,
+					Addr:     fmt.Sprintf("%s:%s", dbeSpec.Database.MySQL.Host, dbeSpec.Database.MySQL.Port),
+					Weight:   1,
+				})
 			}
-			if tsSpec.LoadBalance.SimpleLoadBalancer != nil {
-				proxyself.SimpleLoadBalancer.Nodes = append(proxyself.SimpleLoadBalancer.Nodes, dbe.GetName())
+			if tsSpec.LoadBalance.SimpleLoadBalance != nil {
+				proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, dbe.GetName())
 			}
 		}
-		proxyconfig.Proxies = append(proxyconfig.Proxies, proxyself)
+		proxyconfig.Proxy.Configs = append(proxyconfig.Proxy.Configs, proxy)
 	}
 	return proxyconfig, nil
 }

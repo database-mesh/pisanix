@@ -25,30 +25,34 @@ type PisaProxyConfig struct {
 		Port     string `json:"port"`
 		LogLevel string `json:"log_level"`
 	} `json:"admin"`
-	Proxies    []Proxy            `json:"proxies"`
-	MysqlNodes []kubernetes.MySQL `json:"mysql_nodes"`
+	Mysql struct {
+		Nodes []Node `json:"node"`
+	} `json:"mysql"`
+	Proxy struct {
+		Configs []Proxy `json:"config"`
+	} `json:"proxy"`
 }
 
 type Proxy struct {
-	BackendType        string             `json:"backend_type"`
-	DB                 string             `json:"db"`
-	ListenAddr         string             `json:"listen_addr"`
-	Name               string             `json:"name"`
-	Password           string             `json:"password"`
-	PoolSize           int                `json:"pool_size"`
-	Username           string             `json:"username"`
-	SimpleLoadBalancer SimpleLoadBalancer `json:"simple_loadbalancer"`
-	Plugins            Plugin             `json:"plugins"`
+	BackendType       string            `json:"backend_type"`
+	DB                string            `json:"db"`
+	ListenAddr        string            `json:"listen_addr"`
+	Name              string            `json:"name"`
+	Password          string            `json:"password"`
+	PoolSize          int               `json:"pool_size,omitempty"`
+	Username          string            `json:"username"`
+	SimpleLoadBalance SimpleLoadBalance `json:"simple_loadbalance"`
+	Plugin            Plugin            `json:"plugin"`
 }
 
 type Plugin struct {
-	CircuitBreaks       []kubernetes.CircuitBreak `json:"circuit_breaks,omitempty"`
-	ConcurrencyControls []ConcurrencyControl      `json:"concurrency_controls,omitempty"`
+	CircuitBreaks       []kubernetes.CircuitBreak `json:"circuit_break,omitempty"`
+	ConcurrencyControls []ConcurrencyControl      `json:"concurrency_control,omitempty"`
 }
 
-type SimpleLoadBalancer struct {
-	BalancerType string   `json:"balancer_type"`
-	Nodes        []string `json:"nodes"`
+type SimpleLoadBalance struct {
+	BalancerType string   `json:"balance_type"`
+	Nodes        []string `json:"node"`
 }
 
 // ConcurrencyControl The conversion used for json key is defined here
@@ -59,4 +63,14 @@ type ConcurrencyControl struct {
 	Regex          string        `json:"regex"`
 	Duration       time.Duration `json:"duration"`
 	MaxConcurrency int           `json:"max_concurrency"`
+}
+
+// Node describe mysql node
+type Node struct {
+	Name     string `json:"name"`
+	Db       string `json:"db"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	Addr     string `json:"addr"`
+	Weight   int    `json:"weight"`
 }
