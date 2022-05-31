@@ -22,7 +22,7 @@ use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::{Error, ErrorKind};
 use tokio::sync::Mutex;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TransState {
     TransDummyState,
     TransUseState,
