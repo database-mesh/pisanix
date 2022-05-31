@@ -17,14 +17,14 @@ use std::io::{Error, ErrorKind};
 use endpoint::endpoint::Endpoint;
 
 use crate::{random_weighted::RandomWeighted, roundrobin_weighted::RoundRobinWeightd};
-pub struct Balancer;
+pub struct Balance;
 
-pub enum BalancerStrategy {
+pub enum BalanceStrategy {
     Random,
     RoundRobin,
 }
 
-pub trait LoadBalancer {
+pub trait LoadBalance {
     fn next(&mut self) -> Option<&Endpoint>;
     fn add(&mut self, endpoint: Endpoint);
     fn item_exists(&self, endpoint: &Endpoint) -> bool;
@@ -33,11 +33,11 @@ pub trait LoadBalancer {
     fn remove_all(&mut self);
 }
 
-impl Balancer {
-    pub fn build_balancer(
+impl Balance {
+    pub fn build_balance (
         &mut self,
         bs: String,
-    ) -> Result<Box<dyn LoadBalancer + Send + Sync>, Error> {
+    ) -> Result<Box<dyn LoadBalance + Send + Sync>, Error> {
         match bs.as_str() {
             "random" => Ok(Box::new(RandomWeighted::default())),
             "roundrobin" => Ok(Box::new(RoundRobinWeightd::default())),

@@ -54,7 +54,7 @@ impl proxy::factory::Proxy for MySQLProxy {
         // TODO: using a loadbalancer factory for different load balance strategy.
         // Currently simple_loadbalancer purely provide a list of nodes without any strategy.
         let lb = proxy
-            .build_loadbalancer(self.proxy_config.simple_loadbalancer.clone().unwrap().nodes)
+            .build_loadbalance(self.proxy_config.simple_loadbalance.clone().unwrap().nodes)
             .unwrap();
 
         let mut plugin: Option<PluginPhase> = None;

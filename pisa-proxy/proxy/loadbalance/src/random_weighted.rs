@@ -16,7 +16,7 @@ use chrono::prelude::*;
 use endpoint::endpoint::Endpoint;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use crate::balancer::LoadBalancer;
+use crate::balance::LoadBalance;
 
 pub struct RandomWeighted {
     pub items: Vec<Endpoint>,
@@ -36,7 +36,7 @@ impl Default for RandomWeighted {
     }
 }
 
-impl LoadBalancer for RandomWeighted {
+impl LoadBalance for RandomWeighted {
     // next: get next endpoint
     fn next(&mut self) -> Option<&Endpoint> {
         if self.n == 0 {

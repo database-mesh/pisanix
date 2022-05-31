@@ -19,7 +19,7 @@ use bytes::{Buf, BufMut, BytesMut};
 use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
 use futures::StreamExt;
-use loadbalancer::balancer::LoadBalancer;
+use loadbalance::balance::LoadBalance;
 use mysql_parser::{
     ast::{BeginStmt, SqlStmt},
     parser::{ParseError, Parser},
@@ -31,7 +31,6 @@ use mysql_protocol::{
     server::{conn::Connection, err::MySQLError},
     util::*,
 };
-use pisa_error::error::{Error, ErrorKind};
 use pisa_metrics::metrics::*;
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
@@ -57,7 +56,7 @@ impl MySqlServer {
     pub async fn new(
         client: TcpStream,
         pool: Pool<ClientConn>,
-        lb: Arc<Mutex<Box<dyn LoadBalancer + Send + Sync>>>,
+        lb: Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>,
         proxy_config: ProxyConfig,
         parser: Arc<Parser>,
         ast_cache: ParserAstCache,
@@ -66,7 +65,7 @@ impl MySqlServer {
         MySqlServer {
             client: Connection::new(
                 client,
-                proxy_config.username,
+                proxy_config.user,
                 proxy_config.password,
                 proxy_config.db,
             ),
@@ -420,7 +419,7 @@ impl MySqlServer {
         if let Some(plugin) = self.plugin.as_mut() {
             let input = unsafe { String::from(str::from_utf8_unchecked(payload)) };
 
-            plugin.circuit_breaker.handle(input.clone())?;
+            plugin.circuit_break.handle(input.clone())?;
 
             let res = plugin.concurrency_control.handle(input);
 

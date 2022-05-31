@@ -21,7 +21,7 @@ pub enum PluginError {
     #[error("concurrency control plugin rejected")]
     ConcurrencyControlPluginReject,
     #[error("audit plugin rejected")]
-    CircuitBreakerPluginReject,
+    CircuitBreakPluginReject,
 
     #[error("unknown error")]
     Unknown,

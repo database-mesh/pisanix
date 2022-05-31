@@ -21,35 +21,35 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct CircuitBreakerLayer {
-    config: Option<Vec<config::CircuitBreaker>>,
+pub struct CircuitBreakLayer {
+    config: Option<Vec<config::CircuitBreak>>,
 }
 
 #[derive(Clone)]
-pub struct CircuitBreakerConfig {
+pub struct CircuitBreakConfig {
     pub regex: String,
 }
 
 #[derive(Clone)]
-pub struct CircuitBreakerInstance {
+pub struct CircuitBreakInstance {
     regex: Regex,
 }
 
-impl CircuitBreakerLayer {
-    pub fn new(config: Vec<config::CircuitBreaker>) -> CircuitBreakerLayer {
-        CircuitBreakerLayer { config: Some(config) }
+impl CircuitBreakLayer {
+    pub fn new(config: Vec<config::CircuitBreak>) -> CircuitBreakLayer {
+        CircuitBreakLayer { config: Some(config) }
     }
 
-    pub fn with_opt(config: Option<Vec<config::CircuitBreaker>>) -> CircuitBreakerLayer {
-        CircuitBreakerLayer { config }
+    pub fn with_opt(config: Option<Vec<config::CircuitBreak>>) -> CircuitBreakLayer {
+        CircuitBreakLayer { config }
     }
 
-    fn create_instances(&self) -> Option<Vec<CircuitBreakerInstance>> {
+    fn create_instances(&self) -> Option<Vec<CircuitBreakInstance>> {
         if let Some(config) = &self.config {
             let mut instances = Vec::with_capacity(config.len());
             for c in config {
                 let regex = Regex::new(&c.regex).unwrap();
-                instances.push(CircuitBreakerInstance { regex })
+                instances.push(CircuitBreakInstance { regex })
             }
             return Some(instances);
         }
@@ -58,22 +58,22 @@ impl CircuitBreakerLayer {
     }
 }
 
-impl<S> Layer<S> for CircuitBreakerLayer {
-    type Service = CircuitBreaker<S>;
+impl<S> Layer<S> for CircuitBreakLayer {
+    type Service = CircuitBreak<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
         let instances = self.create_instances();
-        CircuitBreaker { inner, instances }
+        CircuitBreak { inner, instances }
     }
 }
 
 #[derive(Clone)]
-pub struct CircuitBreaker<S> {
+pub struct CircuitBreak<S> {
     inner: S,
-    instances: Option<Vec<CircuitBreakerInstance>>,
+    instances: Option<Vec<CircuitBreakInstance>>,
 }
 
-impl<S> CircuitBreaker<S> {
+impl<S> CircuitBreak<S> {
     // if allow return true, otherwise return false
     fn is_allow(&self, input: &str) -> bool {
         if let Some(instances) = &self.instances {
@@ -88,7 +88,7 @@ impl<S> CircuitBreaker<S> {
     }
 }
 
-impl<S, Input> Service<Input> for CircuitBreaker<S>
+impl<S, Input> Service<Input> for CircuitBreak<S>
 where
     S: Service<Input>,
     Input: AsRef<str>,
@@ -103,7 +103,7 @@ where
             return self.inner.handle(input).map_err(Into::into);
         }
 
-        Err(Box::new(PluginError::CircuitBreakerPluginReject))
+        Err(Box::new(PluginError::CircuitBreakPluginReject))
     }
 }
 
@@ -111,7 +111,7 @@ where
 mod test {
     use std::io::Error;
 
-    use super::CircuitBreakerLayer;
+    use super::CircuitBreakLayer;
     use crate::{
         config,
         layer::{service_fn, Service, ServiceBuilder},
@@ -122,11 +122,11 @@ mod test {
     }
 
     #[test]
-    fn test_circuit_breaker() {
-        let config = vec![config::CircuitBreaker { regex: String::from(r"[A-Za-z]+") }];
+    fn test_circuit_break() {
+        let config = vec![config::CircuitBreak { regex: String::from(r"[A-Za-z]+") }];
 
         let mut wrap_svc = ServiceBuilder::new()
-            .with_layer(CircuitBreakerLayer::new(config))
+            .with_layer(CircuitBreakLayer::new(config))
             .build(service_fn(test_service));
 
         let res = wrap_svc.handle("abc");

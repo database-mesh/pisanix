@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::{
-    circuit_breaker::{self, CircuitBreaker, CircuitBreakerLayer},
+    circuit_break::{self, CircuitBreak, CircuitBreakLayer},
     concurrency_control::{self, ConcurrencyControl, ConcurrencyControlLayer},
     config,
     err::PluginError,
@@ -25,15 +25,15 @@ fn concurrency_control_phase(_input: String) -> Result<(), PluginError> {
     Ok(())
 }
 
-/// circuit breaker service, some logic may be added in the future, eg: metrics...
-fn circuit_breaker_phase(_input: String) -> Result<(), PluginError> {
+/// circuit break service, some logic may be added in the future, eg: metrics...
+fn circuit_break_phase(_input: String) -> Result<(), PluginError> {
     Ok(())
 }
 
 #[derive(Clone)]
 pub struct PluginPhase {
     pub concurrency_control: ConcurrencyControl<ServiceFn<fn(String) -> Result<(), PluginError>>>,
-    pub circuit_breaker: CircuitBreaker<ServiceFn<fn(String) -> Result<(), PluginError>>>,
+    pub circuit_break: CircuitBreak<ServiceFn<fn(String) -> Result<(), PluginError>>>,
 }
 
 impl PluginPhase {
@@ -43,10 +43,10 @@ impl PluginPhase {
             // issue https://users.rust-lang.org/t/puzzling-expected-fn-pointer-found-fn-item/46423/4
             .build(service_fn(concurrency_control_phase as fn(String) -> Result<(), PluginError>));
 
-        let circuit_breaker = ServiceBuilder::new()
-            .with_layer(CircuitBreakerLayer::with_opt(config.circuit_breaker))
-            .build(service_fn(circuit_breaker_phase as fn(String) -> Result<(), PluginError>));
+        let circuit_break = ServiceBuilder::new()
+            .with_layer(CircuitBreakLayer::with_opt(config.circuit_break))
+            .build(service_fn(circuit_break_phase as fn(String) -> Result<(), PluginError>));
 
-        PluginPhase { concurrency_control, circuit_breaker }
+        PluginPhase { concurrency_control, circuit_break }
     }
 }

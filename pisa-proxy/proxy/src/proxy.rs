@@ -15,8 +15,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use endpoint::endpoint::Endpoint;
-use loadbalancer::balancer::{Balancer, BalancerStrategy, LoadBalancer};
-use pisa_error::error::Error;
+use loadbalance::balance::{Balance, LoadBalance};
 use serde::{Deserialize, Serialize};
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -25,9 +24,9 @@ use tokio::{
 
 use crate::listener::listener::Listener;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ProxiesConfig {
-    pub configs: Option<Vec<ProxyConfig>>,
+    pub config: Option<Vec<ProxyConfig>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -36,8 +35,8 @@ pub struct ProxyConfig {
     pub name: String,
     #[serde(default = "default_auto_proxy_listen_addr")]
     pub listen_addr: String,
-    #[serde(default = "default_auto_proxy_username")]
-    pub username: String,
+    #[serde(default = "default_auto_proxy_user")]
+    pub user: String,
     #[serde(default = "default_auto_proxy_password")]
     pub password: String,
     #[serde(default = "default_auto_proxy_db")]
@@ -51,7 +50,7 @@ pub struct ProxyConfig {
     pub master_slave: Option<ProxyConfigMasterSlave>,
     pub sharding: Option<ProxyConfigSharding>,
     pub sharding_master_slave: Option<ProxyConfigShardingMasterSlave>,
-    pub simple_loadbalancer: Option<ProxySimpleLoadBalancer>,
+    pub simple_loadbalance: Option<ProxySimpleLoadBalance>,
     pub plugin: Option<plugin::config::Plugin>,
 }
 
@@ -84,15 +83,15 @@ pub struct ProxyConfigShardingMasterSlave {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ProxySimpleLoadBalancer {
-    #[serde(default = "default_auto_balancer_type")]
-    pub balancer_type: String,
+pub struct ProxySimpleLoadBalance {
+    #[serde(default = "default_auto_balance_type")]
+    pub balance_type: String,
     pub nodes: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MySQLNodes {
-    pub nodes: Option<Vec<MySQLNode>>,
+    pub node: Option<Vec<MySQLNode>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -113,7 +112,7 @@ fn default_auto_proxy_listen_addr() -> String {
     "".into()
 }
 
-fn default_auto_proxy_username() -> String {
+fn default_auto_proxy_user() -> String {
     "".into()
 }
 
@@ -130,14 +129,14 @@ fn default_auto_pool_size() -> u8 {
 }
 
 fn default_auto_strategy() -> String {
-    "simple_balancer".into()
+    "simple_balance".into()
 }
 
 fn default_auto_proxy_db() -> String {
     "".into()
 }
 
-fn default_auto_balancer_type() -> String {
+fn default_auto_balance_type() -> String {
     "random".into()
 }
 
@@ -156,18 +155,18 @@ impl Proxy {
         self.listener.accept(listener).await
     }
 
-    pub fn build_loadbalancer(
+    pub fn build_loadbalance(
         &mut self,
         nodes: Vec<String>,
-    ) -> Result<Arc<Mutex<Box<dyn LoadBalancer + Send + Sync>>>, std::io::Error> {
-        let mut balancer = Balancer {};
+    ) -> Result<Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>, std::io::Error> {
+        let mut balance = Balance {};
 
-        let lb = match &self.app.simple_loadbalancer {
+        let lb = match &self.app.simple_loadbalance {
             Some(lb) => lb,
             None => return Err(std::io::Error::new(std::io::ErrorKind::Other, "config error")),
         };
 
-        let mut b = balancer.build_balancer(lb.balancer_type.clone()).unwrap();
+        let mut b = balance.build_balance(lb.balance_type.clone()).unwrap();
         for node in self.backend_nodes.clone() {
             match nodes.iter().find(|&x| x == node.name.as_str()) {
                 Some(_) => {

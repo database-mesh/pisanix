@@ -30,7 +30,6 @@ api = {path = "../api"}
 plugin = {path = "../../plugin"}
 mysql_protocol = {path = "../../protocol/mysql"}
 version = { path = "../../version", package = "version" }
-loadbalancer = {path = "../../proxy/loadbalancer"}
 endpoint = {path = "../../proxy/endpoint"}
 proxy = {path = "../../proxy"}
 runtime_mysql = {path = "../../runtime/mysql"}

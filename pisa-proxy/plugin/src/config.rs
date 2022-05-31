@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Plugin {
     pub concurrency_control: Option<Vec<ConcurrencyControl>>,
-    pub circuit_breaker: Option<Vec<CircuitBreaker>>,
+    pub circuit_break: Option<Vec<CircuitBreak>>,
 }
 
 #[serde_with::serde_as]
@@ -32,6 +32,6 @@ pub struct ConcurrencyControl {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CircuitBreaker {
+pub struct CircuitBreak {
     pub regex: String,
 }

@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(decl_macro)]
-
-use std::sync::{Arc, Mutex};
-
-use config::config::PisaConfig;
 use ver::version::get_version;
 
 #[get("/version")]
