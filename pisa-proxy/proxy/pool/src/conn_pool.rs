@@ -37,6 +37,8 @@ pub trait ConnAttr {
     fn get_port(&self) -> u16;
     fn get_user(&self) -> String;
     fn get_endpoint(&self) -> String;
+    // Get current db on conn
+    fn get_db(&self) -> Option<String>;
 }
 
 #[derive(Debug)]
@@ -71,7 +73,7 @@ where
 
 #[derive(Clone)]
 pub struct Pool<T: ConnLike + ConnAttr> {
-    factory: Option<T>,
+    pub factory: Option<T>,
     pool: Arc<PoolInner<T>>,
 }
 
@@ -90,7 +92,7 @@ where
     }
 
     // Get connection by endpoint attribute
-    pub async fn get_conn_with_opts(&self, endpoint: String) -> Result<PoolConn<T>, T::Error> {
+    pub async fn get_conn_with_opts(&self, endpoint: &str) -> Result<PoolConn<T>, T::Error> {
         let pool_length = self.pool.inner.len();
         let mut conn: Option<T> = None;
 

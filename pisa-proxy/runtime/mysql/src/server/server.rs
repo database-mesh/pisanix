@@ -171,6 +171,7 @@ impl MySqlServer {
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
+        self.trans_fsm.set_db(sql.to_string());
         let res = client_conn.send_use_db(sql).await?;
         self.trans_fsm.put_conn(client_conn);
 

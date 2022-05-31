@@ -245,6 +245,18 @@ impl ConnAttr for ClientConn {
     fn get_endpoint(&self) -> String {
         self.endpoint.clone()
     }
+
+    fn get_db(&self) -> Option<String> {
+        if let Some(auth_info) = &self.auth_info {
+            if auth_info.db == "" {
+                None
+            } else {
+                Some(auth_info.db.clone())
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]

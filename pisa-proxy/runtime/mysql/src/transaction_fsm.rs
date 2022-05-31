@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use conn_pool::{Pool, PoolConn};
+use conn_pool::{Pool, PoolConn, ConnAttr};
 use endpoint::endpoint::Endpoint;
 use loadbalancer::balancer::LoadBalancer;
 use mysql_protocol::client::conn::ClientConn;
@@ -52,7 +52,7 @@ pub trait ConnDriver {
     async fn get_driver_conn(
         &self,
         loadbalancer: Arc<Mutex<Box<dyn LoadBalancer + Send + Sync>>>,
-        pool: Pool<ClientConn>,
+        pool: &mut Pool<ClientConn>,
     ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error>;
 }
 
@@ -64,7 +64,7 @@ impl ConnDriver for Driver {
     async fn get_driver_conn(
         &self,
         loadbalancer: Arc<Mutex<Box<dyn LoadBalancer + Send + Sync>>>,
-        mut pool: Pool<ClientConn>,
+        pool: &mut Pool<ClientConn>,
     ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error> {
         let mut lb = loadbalancer.clone().lock_owned().await;
         let endpoint = lb.next().unwrap();
@@ -77,7 +77,7 @@ impl ConnDriver for Driver {
 
         pool.set_factory(factory);
 
-        match pool.get_conn_with_opts(endpoint.addr.clone()).await {
+        match pool.get_conn_with_opts(endpoint.addr.as_ref()).await {
             Ok(client_conn) => Ok((client_conn, Some(endpoint.clone()))),
             Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
         }
@@ -85,10 +85,10 @@ impl ConnDriver for Driver {
 }
 
 pub struct TransEvent {
-    pub name: TransEventName,
-    pub src_state: TransState,
-    pub dst_state: TransState,
-    pub driver: Option<Box<dyn ConnDriver + Send + Sync>>,
+    name: TransEventName,
+    src_state: TransState,
+    dst_state: TransState,
+    driver: Option<Box<dyn ConnDriver + Send + Sync>>,
 }
 
 fn init_trans_events() -> Vec<TransEvent> {
@@ -230,6 +230,7 @@ pub struct TransFsm {
     pub pool: Pool<ClientConn>,
     pub client_conn: Option<PoolConn<ClientConn>>,
     pub endpoint: Option<Endpoint>,
+    pub db: Option<String>,
 }
 
 impl TransFsm {
@@ -245,6 +246,7 @@ impl TransFsm {
             pool,
             client_conn: None,
             endpoint: None,
+            db: None,
         }
     }
 
@@ -257,7 +259,7 @@ impl TransFsm {
                             .driver
                             .as_ref()
                             .unwrap()
-                            .get_driver_conn(self.lb.clone(), self.pool.clone())
+                            .get_driver_conn(self.lb.clone(), &mut self.pool)
                             .await?;
                         self.client_conn = Some(client_conn);
                         self.endpoint = endpoint;
@@ -272,15 +274,32 @@ impl TransFsm {
         Ok(())
     }
 
+    // Set current db.
+    pub fn set_db(&mut self, db: String) {
+        self.db = Some(db)
+    }
+
     pub async fn get_conn(&mut self) -> Result<PoolConn<ClientConn>, Error> {
         let conn = self.client_conn.take();
-        let addr = self.endpoint.as_ref().unwrap().addr.clone();
+        let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
         match conn {
-            Some(client_conn) => return Ok(client_conn),
-            None => match self.pool.get_conn_with_opts(addr).await {
-                Ok(client_conn) => Ok(client_conn),
-                Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
-            },
+            Some(client_conn) => Ok(client_conn),
+
+            None => {
+                match self.pool.get_conn_with_opts(addr).await {
+                    Ok(mut client_conn) => {
+                        // Get a new connection, maybe current db is None.
+                        if let None = client_conn.get_db() {
+                            if let Some(db) = &self.db {
+                                client_conn.send_use_db(db).await.map_err(ErrorKind::Protocol)?;
+                            }
+                        }
+                
+                        Ok(client_conn)
+                    }
+                    Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
+                }
+            }
         }
     }
 
