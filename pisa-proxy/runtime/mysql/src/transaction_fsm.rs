@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use conn_pool::{Pool, PoolConn, ConnAttr};
+use conn_pool::{ConnAttr, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
 use loadbalancer::balancer::LoadBalancer;
 use mysql_protocol::client::conn::ClientConn;
@@ -285,12 +285,10 @@ impl TransFsm {
         match conn {
             Some(client_conn) => Ok(client_conn),
 
-            None => {
-                match self.pool.get_conn_with_opts(addr).await {
-                    Ok(client_conn) => Ok(client_conn),
-                    Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
-                }
-            }
+            None => match self.pool.get_conn_with_opts(addr).await {
+                Ok(client_conn) => Ok(client_conn),
+                Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
+            },
         }
     }
 

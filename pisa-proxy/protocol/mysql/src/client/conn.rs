@@ -117,15 +117,13 @@ impl ClientConn {
 
         loop {
             match stmt_codec.next().await {
-                Some(Ok(None)) => {
-                    break
-                }
+                Some(Ok(None)) => break,
 
                 Some(Ok(Some(data))) => {
                     // If data.len() > 0, means that `Prepare` return error.
                     if data.len() > 0 {
                         self.framed = Some(Box::new(ClientCodec::Stmt(stmt_codec)));
-                        return Err(ProtocolError::PrepareError(data.to_vec()))
+                        return Err(ProtocolError::PrepareError(data.to_vec()));
                     }
                 }
 

@@ -96,7 +96,7 @@ impl Stmt {
 
     fn decode_prepare_return(&mut self, length: usize, src: &mut BytesMut) -> Option<BytesMut> {
         if length + 4 > src.len() {
-            return None
+            return None;
         }
 
         let mut data = src.split_to(4 + length);
@@ -134,7 +134,7 @@ impl Stmt {
             }
 
             if src.len() < 4 {
-                return None
+                return None;
             }
 
             if !src.is_empty() && src[4] == EOF_HEADER {
@@ -165,7 +165,7 @@ impl Stmt {
 
     fn decode_prepare_params(&mut self, length: usize, src: &mut BytesMut) -> bool {
         if length + 4 > src.len() {
-            return false
+            return false;
         }
 
         let data = src.split_to(4 + length);
@@ -183,7 +183,7 @@ impl Stmt {
 
     fn decode_prepare_cols(&mut self, length: usize, src: &mut BytesMut) -> bool {
         if length + 4 > src.len() {
-            return false
+            return false;
         }
         let data = src.split_to(4 + length);
         if data[4] == EOF_HEADER {
@@ -208,7 +208,7 @@ impl Decoder for Stmt {
         }
 
         let length = get_length(&*src) as usize;
-        
+
         self.seq = src[3];
         match self.next_state {
             // Return Ok(Some(data)) only when prepare return error, otherwise return Ok(Some(None)).

@@ -275,23 +275,18 @@ impl MySqlServer {
         let sql = str::from_utf8(payload).unwrap();
         let stream = client_conn.send_query(payload).await?;
 
-        let res = 
-            match self.get_ast(payload) {
-                Err(err) => {
-                    error!("err: {:?}", err);
-                    self.handle_query_resultset(stream).await
-                }
+        let res = match self.get_ast(payload) {
+            Err(err) => {
+                error!("err: {:?}", err);
+                self.handle_query_resultset(stream).await
+            }
 
-                Ok(stmt) => match &stmt[0].clone() {
-                    //TODO: split sql stmt for sql audit
-                    SqlStmt::BeginStmt(stmt) => {
-                        self.handle_begin_stmt(stream, &stmt, sql).await
-                    }
-                    _ => {
-                        self.handle_query_resultset(stream).await
-                    }
-                }
-            };
+            Ok(stmt) => match &stmt[0].clone() {
+                //TODO: split sql stmt for sql audit
+                SqlStmt::BeginStmt(stmt) => self.handle_begin_stmt(stream, &stmt, sql).await,
+                _ => self.handle_query_resultset(stream).await,
+            },
+        };
 
         self.trans_fsm.put_conn(client_conn);
         res

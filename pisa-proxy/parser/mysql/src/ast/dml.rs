@@ -3030,7 +3030,8 @@ impl Deallocate {
             self.deallocate_or_drop.to_string().to_uppercase(),
             "PREPARE".to_string(),
             self.stmt_name.to_string(),
-        ].join(" ")
+        ]
+        .join(" ")
     }
 }
 
