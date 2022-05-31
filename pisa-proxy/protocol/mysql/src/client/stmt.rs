@@ -95,7 +95,11 @@ impl Stmt {
     }
 
     fn decode_prepare_return(&mut self, length: usize, src: &mut BytesMut) -> Option<BytesMut> {
-        let mut data = src.split_to(4 + length);
+        if length + 4 > src.len() {
+            return None;
+        }
+
+        let mut data = src.split_to(length + 4);
 
         if data[4] == ERR_HEADER {
             return Some(data);
@@ -120,7 +124,6 @@ impl Stmt {
 
         //warning_count (2) -- number of warnings
         let _ = data.split_to(2);
-
         if !src.is_empty() {
             self.next_state = DecodeStmtState::PrepareParams;
             for _ in 0..self.params_count {
@@ -130,9 +133,13 @@ impl Stmt {
                 }
             }
 
+            if src.len() < 4 {
+                return None;
+            }
+
             if !src.is_empty() && src[4] == EOF_HEADER {
                 let length = get_length(&*src) as usize;
-                let _ = src.split_to(4 + length);
+                let _ = src.split_to(length + 4);
             }
         }
 
@@ -147,7 +154,7 @@ impl Stmt {
 
             if !src.is_empty() && src[4] == EOF_HEADER {
                 let length = get_length(&*src) as usize;
-                let _ = src.split_to(4 + length);
+                let _ = src.split_to(length + 4);
             }
         } else if self.params_count > 0 {
             self.next_state = DecodeStmtState::PrepareParams
@@ -157,8 +164,11 @@ impl Stmt {
     }
 
     fn decode_prepare_params(&mut self, length: usize, src: &mut BytesMut) -> bool {
-        let data = src.split_to(4 + length);
+        if length + 4 > src.len() {
+            return false;
+        }
 
+        let data = src.split_to(length + 4);
         if data[4] == EOF_HEADER || self.params_idx == self.params_count {
             if self.cols_count > 0 {
                 self.next_state = DecodeStmtState::PrepareCols
@@ -172,8 +182,10 @@ impl Stmt {
     }
 
     fn decode_prepare_cols(&mut self, length: usize, src: &mut BytesMut) -> bool {
-        let data = src.split_to(4 + length);
-
+        if length + 4 > src.len() {
+            return false;
+        }
+        let data = src.split_to(length + 4);
         if data[4] == EOF_HEADER {
             self.next_state = DecodeStmtState::PrepareComplete
         } else {
@@ -196,9 +208,6 @@ impl Decoder for Stmt {
         }
 
         let length = get_length(&*src) as usize;
-        if 4 + length > src.len() {
-            return Ok(None);
-        }
 
         self.seq = src[3];
         match self.next_state {
