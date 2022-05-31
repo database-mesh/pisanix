@@ -69,7 +69,6 @@ impl ConnDriver for Driver {
         let mut lb = loadbalance.clone().lock_owned().await;
         let endpoint = lb.next().unwrap();
 
-        println!("{:?}", endpoint);
         let factory = ClientConn::with_opts(
             endpoint.user.clone(),
             endpoint.password.clone(),
