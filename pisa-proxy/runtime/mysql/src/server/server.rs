@@ -271,6 +271,9 @@ impl MySqlServer {
     }
 
     pub async fn handle_query(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+        if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent).await {
+            error!("err:{:?}", err);
+        }
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
         let sql = str::from_utf8(payload).unwrap();
         let stream = client_conn.send_query(payload).await?;
