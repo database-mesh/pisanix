@@ -171,6 +171,7 @@ impl MySqlServer {
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
+        self.trans_fsm.set_db(sql.to_string());
         let res = client_conn.send_use_db(sql).await?;
         self.trans_fsm.put_conn(client_conn);
 
@@ -230,6 +231,7 @@ impl MySqlServer {
         let try_stmt = client_conn.send_prepare(payload).await;
         if let Err(ProtocolError::PrepareError(mut data)) = try_stmt {
             self.client.pkt.make_packet_header(data.len() - 4, &mut data);
+            self.trans_fsm.put_conn(client_conn);
             return self.client.pkt.write_buf(&data).await.map_err(ProtocolError::Io);
         }
 
@@ -273,25 +275,26 @@ impl MySqlServer {
         let sql = str::from_utf8(payload).unwrap();
         let stream = client_conn.send_query(payload).await?;
 
-        match self.get_ast(payload) {
-            Err(err) => {
-                error!("err: {:?}", err);
-                self.handle_query_resultset(stream).await?;
-                self.trans_fsm.put_conn(client_conn);
-                Ok(())
-            }
-            Ok(stmt) => match &stmt[0].clone() {
-                //TODO: split sql stmt for sql audit
-                SqlStmt::BeginStmt(stmt) => {
-                    return self.handle_begin_stmt(stream, &stmt, sql).await
+        let res = 
+            match self.get_ast(payload) {
+                Err(err) => {
+                    error!("err: {:?}", err);
+                    self.handle_query_resultset(stream).await
                 }
-                _ => {
-                    self.handle_query_resultset(stream).await?;
-                    self.trans_fsm.put_conn(client_conn);
-                    Ok(())
+
+                Ok(stmt) => match &stmt[0].clone() {
+                    //TODO: split sql stmt for sql audit
+                    SqlStmt::BeginStmt(stmt) => {
+                        self.handle_begin_stmt(stream, &stmt, sql).await
+                    }
+                    _ => {
+                        self.handle_query_resultset(stream).await
+                    }
                 }
-            },
-        }
+            };
+
+        self.trans_fsm.put_conn(client_conn);
+        res
     }
 
     pub async fn handle_query_resultset<'b>(
