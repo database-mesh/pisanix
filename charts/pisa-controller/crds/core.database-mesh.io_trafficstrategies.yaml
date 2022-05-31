@@ -35,7 +35,18 @@ spec:
           spec:
             description: TrafficStrategySpec defines the desired state of TrafficStrategy
             properties:
-              ConcurrencyControls:
+              circuitBreaks:
+                items:
+                  description: CircuitBreak works with regular expressions. SQL statements
+                    that conform to regular expressions will be denied.
+                  properties:
+                    regex:
+                      type: string
+                  required:
+                  - regex
+                  type: object
+                type: array
+              concurrencyControls:
                 items:
                   description: ConcurrencyControl works according to regular expressions.
                     SQL statements that meet the regular conditions will be blown
@@ -58,24 +69,13 @@ spec:
                   - regex
                   type: object
                 type: array
-              circuitBreaks:
-                items:
-                  description: CircuitBreak works with regular expressions. SQL statements
-                    that conform to regular expressions will be denied.
-                  properties:
-                    regex:
-                      type: string
-                  required:
-                  - regex
-                  type: object
-                type: array
               loadBalance:
                 description: 'LoadBalance The choice of load balancing strategy, currently
-                  supported: SimpleLoadBalancer'
+                  supported: SimpleLoadBalance'
                 properties:
-                  simpleLoadBalancer:
-                    description: 'SimpleLoadBalancer support load balancing type:
-                      1. random 2. roundrobin'
+                  simpleLoadBalance:
+                    description: 'SimpleLoadBalance support load balancing type: 1.
+                      random 2. roundrobin'
                     properties:
                       kind:
                         type: string
@@ -83,7 +83,7 @@ spec:
                     - kind
                     type: object
                 required:
-                - simpleLoadBalancer
+                - simpleLoadBalance
                 type: object
               selector:
                 description: A label selector is a label query over a set of resources.

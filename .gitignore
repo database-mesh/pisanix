@@ -44,3 +44,4 @@ docs/.docusaurus/*
 .vscode/
 .idea
 .DS_Store
+.nocalhost/
