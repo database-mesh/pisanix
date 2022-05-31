@@ -206,7 +206,7 @@ impl<'a> Scanner<'a> {
                 '@' => {
                     let at_lexemes = self.scan_start_at();
                     lexemes.extend(at_lexemes);
-                },
+                }
 
                 '#' => return self.scan_start_sharp(),
 
@@ -371,12 +371,20 @@ impl<'a> Scanner<'a> {
             '\'' | '"' => {
                 self.scan_str();
                 //Push token `T_TEXT_STRING`
-                lexemes.push(Ok(DefaultLexeme::new(T_TEXT_STRING, old_pos, self.pos - old_pos + 1)));
+                lexemes.push(Ok(DefaultLexeme::new(
+                    T_TEXT_STRING,
+                    old_pos,
+                    self.pos - old_pos + 1,
+                )));
             }
             '`' => {
                 self.scan_backquote_str();
                 //Push token `T_IDENT_QUOTED`
-                lexemes.push(Ok(DefaultLexeme::new(T_IDENT_QUOTED, old_pos, self.pos - old_pos + 1)));
+                lexemes.push(Ok(DefaultLexeme::new(
+                    T_IDENT_QUOTED,
+                    old_pos,
+                    self.pos - old_pos + 1,
+                )));
             }
 
             ch if is_user_var_char(ch) => {
@@ -387,7 +395,7 @@ impl<'a> Scanner<'a> {
             }
 
             // Invalid variable
-            _ => lexemes.push(Err(LexError::new(Span::new(self.pos, self.pos))))
+            _ => lexemes.push(Err(LexError::new(Span::new(self.pos, self.pos)))),
         }
 
         lexemes
