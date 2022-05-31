@@ -99,7 +99,7 @@ impl Stmt {
             return None;
         }
 
-        let mut data = src.split_to(4 + length);
+        let mut data = src.split_to(length + 4);
 
         if data[4] == ERR_HEADER {
             return Some(data);
@@ -139,7 +139,7 @@ impl Stmt {
 
             if !src.is_empty() && src[4] == EOF_HEADER {
                 let length = get_length(&*src) as usize;
-                let _ = src.split_to(4 + length);
+                let _ = src.split_to(length + 4);
             }
         }
 
@@ -154,7 +154,7 @@ impl Stmt {
 
             if !src.is_empty() && src[4] == EOF_HEADER {
                 let length = get_length(&*src) as usize;
-                let _ = src.split_to(4 + length);
+                let _ = src.split_to(length + 4);
             }
         } else if self.params_count > 0 {
             self.next_state = DecodeStmtState::PrepareParams
@@ -168,7 +168,7 @@ impl Stmt {
             return false;
         }
 
-        let data = src.split_to(4 + length);
+        let data = src.split_to(length + 4);
         if data[4] == EOF_HEADER || self.params_idx == self.params_count {
             if self.cols_count > 0 {
                 self.next_state = DecodeStmtState::PrepareCols
@@ -185,7 +185,7 @@ impl Stmt {
         if length + 4 > src.len() {
             return false;
         }
-        let data = src.split_to(4 + length);
+        let data = src.split_to(length + 4);
         if data[4] == EOF_HEADER {
             self.next_state = DecodeStmtState::PrepareComplete
         } else {
