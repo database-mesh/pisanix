@@ -31,7 +31,7 @@ spec:
       labels:
         app: {{ template "common.names.fullname" . }}
     spec:
-      serviceAccountName: {{ printf "%s-sa" (include "common.names.fullname" .) }}
+      serviceAccountName: {{ template "common.names.fullname" . }}
       containers:
         - name: controller
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
