@@ -100,7 +100,9 @@ pub struct MySQLNode {
     pub db: String,
     pub user: String,
     pub password: String,
+    #[serde(default = "default_mysql_node_host")]
     pub host: String,
+    #[serde(default = "default_mysql_node_port")]
     pub port: u32,
     pub weight: i64,
 }
@@ -110,7 +112,7 @@ fn default_auto_proxy_name() -> String {
 }
 
 fn default_auto_proxy_listen_addr() -> String {
-    "".into()
+    "0.0.0.0:3306".into()
 }
 
 fn default_auto_proxy_user() -> String {
@@ -139,6 +141,14 @@ fn default_auto_proxy_db() -> String {
 
 fn default_auto_balance_type() -> String {
     "random".into()
+}
+
+fn default_mysql_node_host() -> String {
+   "127.0.0.1".into() 
+}
+
+fn default_mysql_node_port() -> u32 {
+    3306
 }
 
 pub struct Proxy {
