@@ -14,16 +14,25 @@
 ## limitations under the License.
 ##
 
-apiVersion: apiregistration.k8s.io/v1
-kind: APIService
-metadata:
-  name: v1alpha1.admission.database-mesh.io
-spec:
-  insecureSkipTLSVerify: true
-  group: admission.database-mesh.io
-  groupPriorityMinimum: 1000
-  versionPriority: 5
-  service:
-    name: {{ template "common.names.fullname" . }}
-    namespace: {{ .Release.Namespace }}
-  version: v1alpha1
+header:
+  license:
+    spdx-id: Apache-2.0
+    copyright-owner: SphereEx
+
+  paths-ignore:
+    - '.github/ISSUE_TEMPLATE/**'
+    - '.github/pull_request_template.md'
+    - '**/.gitignore'
+    - 'docs/**'
+    - '**/*.md'
+    - '**/.helmignore'
+    - 'LICENSE'
+    - '**/*.toml'
+    - '**/Makefile'
+    - 'pisa-controller/go.mod'
+    - 'pisa-controller/go.sum'
+    - 'pisa-proxy/rust-toolchain'
+    - 'pisa-proxy/Cargo.lock'
+    - '**/*.template'
+
+  comment: on-failure
