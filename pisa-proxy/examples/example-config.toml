@@ -32,12 +32,12 @@ nodes = ["ds001"]
 [[proxy.config.plugin.concurrency_control]]
 regex = "aaa"
 max_concurrency = 5
-duration = "333"
+duration = 333
 
 [[proxy.config.plugin.concurrency_control]]
 regex = "bbb"
 max_concurrency = 5
-duration = "444"
+duration = 333
 
 [[proxy.config.plugin.circuit_break]]
 regex = "111"
@@ -59,6 +59,6 @@ password = "12345678"
 # 数据库地址
 host = "127.0.0.1"
 # 数据库端口
-port = 3306
+port = 3308
 # 负载均衡节点权重
 weight = 1

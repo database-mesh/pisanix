@@ -21,6 +21,7 @@ use loadbalance::balance::LoadBalance;
 use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::{Error, ErrorKind};
 use tokio::sync::Mutex;
+use conn_pool::ConnAttr;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TransState {
@@ -251,16 +252,22 @@ impl TransFsm {
     }
 
     pub async fn trigger(&mut self, state_name: TransEventName) -> Result<(), Error> {
+
         for event in &self.events {
             if event.name == state_name && event.src_state == self.current_state {
                 match event.src_state {
                     TransState::TransDummyState => {
-                        let (client_conn, endpoint) = event
+                        let (mut client_conn, endpoint) = event
                             .driver
                             .as_ref()
                             .unwrap()
                             .get_driver_conn(self.lb.clone(), &mut self.pool)
                             .await?;
+                        if let None = client_conn.get_db() {
+                            if let Some(db) = &self.db {
+                                client_conn.send_use_db(db).await.map_err(ErrorKind::Protocol)?;
+                            }
+                        }
                         self.client_conn = Some(client_conn);
                         self.endpoint = endpoint;
                     }
@@ -284,7 +291,6 @@ impl TransFsm {
         let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
         match conn {
             Some(client_conn) => Ok(client_conn),
-
             None => match self.pool.get_conn_with_opts(addr).await {
                 Ok(client_conn) => Ok(client_conn),
                 Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
