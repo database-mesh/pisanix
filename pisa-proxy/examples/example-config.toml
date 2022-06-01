@@ -16,7 +16,7 @@ user = "root"
 # proxy 认证密码
 password = "12345678"
 # proxy schema
-db = "test"
+db = "kubestar_test"
 # 配置后端数据源类型
 backend_type = "mysql"
 # proxy 与后端数据库建连连接池大小，值范围：1 ~ 255, 默认值：64
@@ -51,12 +51,14 @@ regex = "222"
 # 数据源 name
 name = "ds001"
 # database name
-db = "foo"
+db = "kubestar_test"
 # 数据库 user
 user = "root"
 # 数据库 password
-password = "12345678"
+password = "root"
 # 数据库地址
-addr = "127.0.0.1:3306"
+host = "127.0.0.1"
+# 数据库端口
+port = 3307
 # 负载均衡节点权重
 weight = 1

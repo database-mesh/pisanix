@@ -39,8 +39,8 @@ type Proxy struct {
 	ListenAddr        string            `json:"listen_addr"`
 	Name              string            `json:"name"`
 	Password          string            `json:"password"`
-	PoolSize          int               `json:"pool_size,omitempty"`
-	Username          string            `json:"username"`
+	PoolSize          uint32            `json:"pool_size,omitempty"`
+	User              string            `json:"user"`
 	SimpleLoadBalance SimpleLoadBalance `json:"simple_loadbalance"`
 	Plugin            Plugin            `json:"plugin"`
 }
@@ -71,6 +71,7 @@ type Node struct {
 	Db       string `json:"db"`
 	User     string `json:"user"`
 	Password string `json:"password"`
-	Addr     string `json:"addr"`
+	Host     string `json:"host"`
+	Port     uint32 `json:"port`
 	Weight   int    `json:"weight"`
 }
