@@ -72,6 +72,6 @@ type Node struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Host     string `json:"host"`
-	Port     uint32 `json:"port`
+	Port     uint32 `json:"port"`
 	Weight   int    `json:"weight"`
 }
