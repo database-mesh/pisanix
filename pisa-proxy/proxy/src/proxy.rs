@@ -144,7 +144,7 @@ fn default_auto_balance_type() -> String {
 }
 
 fn default_mysql_node_host() -> String {
-   "127.0.0.1".into() 
+    "127.0.0.1".into()
 }
 
 fn default_mysql_node_port() -> u32 {

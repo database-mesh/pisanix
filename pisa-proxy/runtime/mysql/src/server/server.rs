@@ -181,10 +181,12 @@ impl MySqlServer {
                 Ok(())
             }
         } else {
+            // supports CLIENT_PROTOCOL_41 default
+            // skip sql_state_marker and sql_state packet
             let err_info = self.client.pkt.make_err_packet(MySQLError::new(
                 1049,
                 "42000".as_bytes().to_vec(),
-                String::from_utf8_lossy(&res.0[4..]).to_string(),
+                String::from_utf8_lossy(&res.0[13..]).to_string(),
             ));
             self.client.pkt.write_buf(&err_info).await.map_err(ProtocolError::Io)
         }
