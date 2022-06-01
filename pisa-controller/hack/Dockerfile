@@ -15,27 +15,29 @@
 FROM golang:1.17 as builder
 
 WORKDIR /workspace
-
+ARG GIT_BRANCH
+ARG GIT_COMMIT
+ARG GIT_TAG
 # Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
+COPY pisa-controller/go.mod go.mod
+COPY pisa-controller/go.sum go.sum
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
 # Copy the go source
-COPY cmd cmd/
+COPY pisa-controller/cmd cmd/
 
-COPY pkg pkg/
-
+COPY pisa-controller/pkg pkg/
+RUN mkdir -p certs && cd certs && openssl req -new -SHA256 -newkey rsa:2048 -nodes -keyout tls.key -out tls.csr -subj "/C=CN/ST=beijing/L=beijing/O=/OU=/" && openssl x509 -req -sha256 -days 365 -in tls.csr -signkey tls.key -out tls.crt
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build  -ldflags "-w -s" -gcflags "-N -l" -a -o controller cmd/pisa-controller/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-w -s -X main.branch=${GIT_BRANCH} -X main.gitcommit=${GIT_COMMIT} -X main.version=${GIT_TAG}" -gcflags "-N -l" -a -o controller cmd/pisa-controller/main.go
 
 
 FROM --platform=linux/amd64 alpine:3.15.4
 WORKDIR /
 COPY --from=builder /workspace/controller .
 USER root
-COPY build/certs /etc/webhook/certs
+COPY --from=builder /workspace/certs /etc/webhook/certs
 
 ENTRYPOINT ["/controller"]

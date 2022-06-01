@@ -17,10 +17,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 	"net/http"
 	"time"
-
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
 	cmdcore "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/core"
 	cmdproxy "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
@@ -34,7 +33,10 @@ import (
 )
 
 var (
-	eg errgroup.Group
+	eg        errgroup.Group
+	version   string
+	gitcommit string
+	branch    string
 )
 
 const (
@@ -47,10 +49,11 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	setVersion()
+	log.Infof("version: %s,gitcommit: %s,branch: %s", version, gitcommit, branch)
 }
 func main() {
 	flag.Parse()
-
 	eg.Go(func() error {
 		return newHttpServer(
 			cmdwebhook.Config.Port,
@@ -81,5 +84,13 @@ func newHttpServer(port string, handler http.Handler) *http.Server {
 		Handler:      handler,
 		ReadTimeout:  DefaultReadTimeout,
 		WriteTimeout: DefaultWriteTimeout,
+	}
+}
+func setVersion() {
+	if version == "" {
+		version = branch + "-" + gitcommit
+	}
+	if branch == "" {
+		branch = version
 	}
 }

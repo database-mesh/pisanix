@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 FROM rust:1.60.0-slim-buster as builder
+ARG GIT_BRANCH
+ARG GIT_COMMIT
+ARG GIT_TAG
 COPY pisa-proxy/hack/config ~/.cargo/config
 RUN apt-get update && apt-get  -y  install gcc openssl libssl-dev pkg-config
 WORKDIR /workspace
