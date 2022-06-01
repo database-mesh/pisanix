@@ -285,7 +285,7 @@ impl MySqlServer {
 
             Ok(stmt) => match &stmt[0].clone() {
                 //TODO: split sql stmt for sql audit
-                SqlStmt::BeginStmt(stmt) => self.handle_begin_stmt(stream, &stmt, sql).await,
+                SqlStmt::BeginStmt(stmt) => self.handle_begin_stmt(stream, stmt, sql).await,
                 _ => self.handle_query_resultset(stream).await,
             },
         };
