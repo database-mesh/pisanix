@@ -20,7 +20,7 @@ jobs:
           build_file: pisa-controller/hack/Dockerfile 
           tag_with_labest: true
 
-   pisa-proxy:
+  pisa-proxy:
     runs-on: ubuntu-latest 
     steps:
       - uses: actions/checkout@v2
