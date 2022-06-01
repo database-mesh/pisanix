@@ -21,7 +21,6 @@ COPY pisa-controller/go.mod go.mod
 COPY pisa-controller/go.sum go.sum
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
-ENV GOPROXY=https://proxy.golang.com.cn
 RUN go mod download
 
 # Copy the go source
