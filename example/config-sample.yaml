@@ -10,8 +10,8 @@ spec:
     - name: "my_mysql"
       databaseMySQL:
         host: "localhost"
-        port: "3306"
-        username: "root"
+        port: 3306
+        user: "root"
         password: "root"
         db: "foo"
         poolSize: 3
@@ -53,8 +53,8 @@ spec:
   database:
     MySQL:
       host: "127.0.0.1"
-      port: "3306"
-      username: "root"
+      port: 3306
+      user: "root"
       password: "root"
       db: "foo"
 ---
@@ -69,7 +69,7 @@ spec:
   database:
     MySQL:
       host: "127.0.0.2"
-      port: "3306"
-      username: "root"
+      port: 3306
+      user: "root"
       password: "root"
       db: "foo"

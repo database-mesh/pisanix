@@ -91,6 +91,9 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 
 	_ = json.Unmarshal(vdbm, vdbmetedata)
 	proxyconfig.Admin.Port = vdbmetedata.Annotations["database-mesh.io/metrics-port"]
+	if proxyconfig.Admin.Port == "" {
+		proxyconfig.Admin.Port = "8888"
+	}
 	for _, service := range vdbSpec.Services {
 		ts, err := client.Resource(trafficstrategies).Namespace(namespace).Get(ctx, service.TrafficStrategy, metav1.GetOptions{})
 		if err != nil {
