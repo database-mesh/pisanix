@@ -5,6 +5,9 @@ on:
     branches:
       - master
       - release-*
+  push:
+    tags:
+      - "release-*"
 
 jobs:
   pisa-controller:
@@ -12,6 +15,12 @@ jobs:
     steps:
       - name: "checkout codes"
         uses: actions/checkout@v2
+      - name: "setup go faster"
+        uses: WillAbides/setup-go-faster@v1.7.0
+        with:
+          go-version: '1.18.1'
+      - name: "unit test"
+        run: "cd pisa-controller && go test ./..."
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
@@ -26,6 +35,13 @@ jobs:
     steps:
       - name: "checkout codes"
         uses: actions/checkout@v2
+      - name: "prepare rs toolchain" 
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test 
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
