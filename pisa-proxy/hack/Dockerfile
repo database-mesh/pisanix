@@ -13,7 +13,7 @@
 # limitations under the License.
 FROM rust:1.60.0-slim-buster as builder
 COPY pisa-proxy/hack/config ~/.cargo/config
-RUN apt-get update && apt-get  -y  install gcc  libssl-dev openssl
+RUN apt-get update && apt-get  -y  install gcc openssl libssl-dev pkg-config
 WORKDIR /workspace
 COPY pisa-proxy /workspace
 RUN cargo build --release
