@@ -32,12 +32,12 @@ nodes = ["ds001"]
 [[proxy.config.plugin.concurrency_control]]
 regex = "aaa"
 max_concurrency = 5
-duration = "333"
+duration = 333
 
 [[proxy.config.plugin.concurrency_control]]
 regex = "bbb"
 max_concurrency = 5
-duration = "444"
+duration = 333
 
 [[proxy.config.plugin.circuit_break]]
 regex = "111"

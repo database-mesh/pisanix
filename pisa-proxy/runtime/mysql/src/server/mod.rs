@@ -94,10 +94,8 @@ impl MySqlServer {
             error!("err: {:?}", err);
         };
 
-        let db = self.client.db.clone();
-        if !db.is_empty() {
-            self.handle_init_db(db.as_bytes(), false).await?
-        }
+        // set db to trans_fsm
+        self.trans_fsm.set_db(self.client.db.clone());
 
         let mut buf = BytesMut::with_capacity(4096);
 

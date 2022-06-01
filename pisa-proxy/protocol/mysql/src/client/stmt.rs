@@ -203,7 +203,7 @@ impl Decoder for Stmt {
     type Error = ProtocolError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if src.is_empty() || src.len() < 3 {
+        if src.is_empty() || src.len() <= 3 {
             return Ok(None);
         }
 
