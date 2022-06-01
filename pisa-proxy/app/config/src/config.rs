@@ -75,8 +75,8 @@ impl PisaConfig {
             .unwrap_or(PISA_CONTROLLER_DEFAULT_SERVICE.to_string());
         let pisa_ns = env::var("PISA_CONTROLLER_NAMESPACE")
             .unwrap_or(PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
-        let pisa_host = env::var("PISA_CONTROLLER_HOST")
-            .unwrap_or(format!("{}.{}:8080", pisa_svc, pisa_ns));
+        let pisa_host =
+            env::var("PISA_CONTROLLER_HOST").unwrap_or(format!("{}.{}:8080", pisa_svc, pisa_ns));
 
         info!(
             "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",

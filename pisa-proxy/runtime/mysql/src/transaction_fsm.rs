@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use conn_pool::{Pool, PoolConn};
+use conn_pool::{ConnAttr, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::LoadBalance;
 use mysql_protocol::client::conn::ClientConn;
