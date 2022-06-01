@@ -52,7 +52,7 @@ type Plugin struct {
 
 type SimpleLoadBalance struct {
 	BalancerType string   `json:"balance_type"`
-	Nodes        []string `json:"node"`
+	Nodes        []string `json:"nodes"`
 }
 
 // ConcurrencyControl The conversion used for json key is defined here
