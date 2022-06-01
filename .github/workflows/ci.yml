@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  pull_request:
+    branches:
+      - master
+      - release-*
+
+jobs:
+  pisa-controller:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "checkout codes"
+        uses: actions/checkout@v2
+      - name: "Kaniko build"
+        uses: mlycore/action-kaniko@master
+        with:
+          image: pisanixio/controller
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          build_file: pisa-controller/hack/Dockerfile 
+          tag_with_labest: true
+
+  pisa-proxy:
+    runs-on: ubuntu-latest 
+    steps:
+      - name: "checkout codes"
+        uses: actions/checkout@v2
+      - name: "Kaniko build"
+        uses: mlycore/action-kaniko@master
+        with:
+          image: pisanixio/proxy
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          build_file: pisa-proxy/hack/Dockerfile
+          tag_with_latest: true 

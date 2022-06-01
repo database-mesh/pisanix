@@ -585,7 +585,7 @@ impl<'a> Scanner<'a> {
                 }
 
                 self.scan_until(false, |scanner| {
-                    scanner.chars[scanner.pos - 1] == '*' && scanner.chars[scanner.pos - 0] == '/'
+                    scanner.chars[scanner.pos - 1] == '*' && scanner.chars[scanner.pos] == '/'
                 });
 
                 lexemes
@@ -639,7 +639,7 @@ impl<'a> Scanner<'a> {
 
         let ident_str = self.text[old_pos..self.pos].to_uppercase();
 
-        if ident_str.starts_with("_") {
+        if ident_str.starts_with('_') {
             // check `UNDERSCORE_CHARSET` token
             if CHARSETS.get(&*ident_str).is_some() {
                 self.pos -= 1;

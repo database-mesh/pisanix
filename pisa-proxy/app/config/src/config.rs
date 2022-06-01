@@ -76,7 +76,7 @@ impl PisaConfig {
         let pisa_ns = env::var("PISA_CONTROLLER_NAMESPACE")
             .unwrap_or(PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
         let pisa_host = env::var("PISA_CONTROLLER_HOST")
-            .unwrap_or(format!("{}.{}:8080", pisa_svc, pisa_ns).to_string());
+            .unwrap_or(format!("{}.{}:8080", pisa_svc, pisa_ns));
 
         info!(
             "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
@@ -135,11 +135,11 @@ impl PisaConfig {
             sharding_proxy_nodes: vec![],
         };
 
-        if let Some(env_port) = env::var(PISA_PROXY_CONFIG_ENV_PORT).ok() {
+        if let Ok(env_port) = env::var(PISA_PROXY_CONFIG_ENV_PORT) {
             pisa_config.admin.port = env_port;
         }
 
-        if let Some(log_level) = env::var(PISA_PROXY_CONFIG_ENV_LOG_LEVEL).ok() {
+        if let Ok(log_level) = env::var(PISA_PROXY_CONFIG_ENV_LOG_LEVEL) {
             pisa_config.admin.log_level = log_level;
         }
 

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(decl_macro)]
-
 use config::config::PisaConfig;
 use pisa_error::error::*;
 use pisa_metrics::metrics::PisaMetrics;
@@ -34,7 +32,7 @@ pub fn new_rocket_server(pisa_config: PisaConfig) -> RocketServer {
 }
 
 impl RocketServer {
-    fn new(pisa_config: PisaConfig) -> RocketServer {
+    pub fn new(pisa_config: PisaConfig) -> RocketServer {
         RocketServer { pisa_config }
     }
 }

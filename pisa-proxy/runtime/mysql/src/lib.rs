@@ -13,9 +13,5 @@
 // limitations under the License.
 
 pub mod mysql;
-
 pub mod server;
-
 pub mod transaction_fsm;
-
-pub use server::server as myserver;
