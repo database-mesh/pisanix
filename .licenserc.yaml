@@ -17,7 +17,7 @@
 header:
   license:
     spdx-id: Apache-2.0
-    copyright-owner: SphereEx
+    copyright-owner: SphereEx Authors
 
   paths-ignore:
     - '.github/ISSUE_TEMPLATE/**'
