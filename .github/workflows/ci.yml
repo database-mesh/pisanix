@@ -21,6 +21,9 @@ on:
     branches:
       - master
       - release-*
+  push:
+    tags:
+      - "release-*"
 
 jobs:
   pisa-controller:
@@ -28,6 +31,27 @@ jobs:
     steps:
       - name: "checkout codes"
         uses: actions/checkout@v2
+      - name: "setup go faster"
+        uses: WillAbides/setup-go-faster@v1.7.0
+        with:
+          go-version: '1.18.1'
+      - name: "unit test"
+        run: "cd pisa-controller && go test ./..."
+      - name: Declare some variables
+        id: vars
+        shell: bash
+        run: |
+          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+             echo "##[set-output name=tags;]$(echo ${GITHUB_REF#refs/tags/})"  
+          else
+             echo "##[set-output name=tags;]$(echo '')"
+          fi
+          if [[ $GITHUB_REF == refs/heads/* ]]; then
+             echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"  
+          else
+             echo "##[set-output name=branch;]$(echo '')"
+          fi
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
@@ -35,13 +59,22 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           build_file: pisa-controller/hack/Dockerfile 
-          tag_with_labest: true
+          tag_with_latest: true
+          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tag }}
+
 
   pisa-proxy:
     runs-on: ubuntu-latest 
     steps:
       - name: "checkout codes"
         uses: actions/checkout@v2
+      - name: "prepare rs toolchain" 
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test --manifest-path pisa-proxy/Cargo.toml 
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
@@ -49,4 +82,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           build_file: pisa-proxy/hack/Dockerfile
-          tag_with_latest: true 
+          tag_with_latest: true
+          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tag }}
+
