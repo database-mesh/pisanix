@@ -11,8 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+FROM rust:1.60.0-slim-buster as builder
+COPY pisa-proxy/hack/config ~/.cargo/config
+RUN apt-get update && apt-get  -y  install gcc openssl libssl-dev pkg-config
+WORKDIR /workspace
+COPY pisa-proxy /workspace
+RUN cargo build --release
+
 
 FROM pisanixio/alpine-glibc
-COPY pisa-proxy/target/release/pisa-proxy /pisanix/
+COPY --from=builder /workspace/target/release/pisa-proxy /pisanix/
 WORKDIR /pisanix
 ENTRYPOINT ["./pisa-proxy"]
