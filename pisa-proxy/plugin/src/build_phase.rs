@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use crate::{
-    circuit_break::{self, CircuitBreak, CircuitBreakLayer},
-    concurrency_control::{self, ConcurrencyControl, ConcurrencyControlLayer},
+    circuit_break::{CircuitBreak, CircuitBreakLayer},
+    concurrency_control::{ConcurrencyControl, ConcurrencyControlLayer},
     config,
     err::PluginError,
     layer::*,
