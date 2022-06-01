@@ -30,6 +30,8 @@ fn main() {
     tracing_subscriber::fmt()
         .with_max_level(Level::from_str(config.admin.log_level.as_str()).ok())
         .init();
+    
+    info!("Pisa-Proxy {:?}", &*PisaConfig::get_version());
 
     let mut servers = Vec::with_capacity(config.get_proxies().len());
     let http_server = http::http::new_rocket_server(config.clone());
