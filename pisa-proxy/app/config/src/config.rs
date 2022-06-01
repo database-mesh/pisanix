@@ -97,7 +97,8 @@ impl PisaConfig {
 
     #[tracing::instrument]
     pub fn load_config() -> Self {
-        let matches = Command::new("Pisa-Proxy").version(&*PisaConfig::get_version())
+        let matches = Command::new("Pisa-Proxy")
+            .version(&*PisaConfig::get_version())
             .arg(Arg::new("port").short('p').long("port").help("Http port").takes_value(true))
             .arg(Arg::new("config").short('c').long("config").help("Config path").takes_value(true))
             .arg(Arg::new("loglevel").long("log-level").help("Log level").takes_value(true))
@@ -171,19 +172,19 @@ impl PisaConfig {
         let mut git_tag: String = "".to_string();
         let mut git_commit: String = "".to_string();
         let mut git_branch: String = "".to_string();
-    
+
         if let Ok(tag) = env::var(PISA_PROXY_VERSION_ENV_GIT_TAG) {
             git_tag = tag;
         };
-    
+
         if let Ok(commit) = env::var(PISA_PROXY_VERSION_ENV_GIT_COMMIT) {
             git_commit = commit;
         };
-    
+
         if let Ok(branch) = env::var(PISA_PROXY_VERSION_ENV_GIT_BRANCH) {
             git_branch = branch;
         };
-    
+
         if !git_tag.is_empty() {
             format!("{:?}", git_tag)
         } else {
@@ -191,5 +192,3 @@ impl PisaConfig {
         }
     }
 }
-
-
