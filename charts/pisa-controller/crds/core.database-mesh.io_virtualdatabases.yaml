@@ -50,10 +50,12 @@ spec:
                         password:
                           type: string
                         poolSize:
+                          format: int32
                           type: integer
                         port:
-                          type: string
-                        username:
+                          format: int32
+                          type: integer
+                        user:
                           type: string
                       type: object
                     name:

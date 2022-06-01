@@ -13,7 +13,6 @@
 # limitations under the License.
 
 FROM pisanixio/alpine-glibc
-COPY manifest /pisanix/
 COPY pisa-proxy/target/release/pisa-proxy /pisanix/
 WORKDIR /pisanix
 ENTRYPOINT ["./pisa-proxy"]

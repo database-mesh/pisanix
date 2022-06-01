@@ -48,15 +48,16 @@ spec:
                       password:
                         type: string
                       port:
-                        type: string
-                      username:
+                        format: int32
+                        type: integer
+                      user:
                         type: string
                     required:
                     - db
                     - host
                     - password
                     - port
-                    - username
+                    - user
                     type: object
                 required:
                 - MySQL
