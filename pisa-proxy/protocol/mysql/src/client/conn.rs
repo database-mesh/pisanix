@@ -121,7 +121,7 @@ impl ClientConn {
 
                 Some(Ok(Some(data))) => {
                     // If data.len() > 0, means that `Prepare` return error.
-                    if data.len() > 0 {
+                    if !data.is_empty() {
                         self.framed = Some(Box::new(ClientCodec::Stmt(stmt_codec)));
                         return Err(ProtocolError::PrepareError(data.to_vec()));
                     }
@@ -246,7 +246,7 @@ impl ConnAttr for ClientConn {
 
     fn get_db(&self) -> Option<String> {
         if let Some(auth_info) = &self.auth_info {
-            if auth_info.db == "" {
+            if auth_info.db.is_empty() {
                 None
             } else {
                 Some(auth_info.db.clone())
