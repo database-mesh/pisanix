@@ -171,7 +171,7 @@ impl MySqlServer {
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         self.trans_fsm.set_db(sql.to_string());
-        let res = client_conn.send_use_db(sql).await?;
+        let mut res = client_conn.send_use_db(sql).await?;
         self.trans_fsm.put_conn(client_conn);
 
         if res.1 {
@@ -181,12 +181,8 @@ impl MySqlServer {
                 Ok(())
             }
         } else {
-            let err_info = self.client.pkt.make_err_packet(MySQLError::new(
-                1049,
-                "42000".as_bytes().to_vec(),
-                String::from_utf8_lossy(&res.0[4..]).to_string(),
-            ));
-            self.client.pkt.write_buf(&err_info).await.map_err(ProtocolError::Io)
+            self.client.pkt.make_packet_header(res.0.len() - 4, &mut res.0);
+            self.client.pkt.write_buf(&res.0).await.map_err(ProtocolError::Io)
         }
     }
 
