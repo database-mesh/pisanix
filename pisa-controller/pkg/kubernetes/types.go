@@ -15,8 +15,9 @@
 package kubernetes
 
 import (
-	"k8s.io/client-go/dynamic"
 	"time"
+
+	"k8s.io/client-go/dynamic"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -43,11 +44,11 @@ type DatabaseService struct {
 // DatabaseMySQL The type one of VirtualDatabase.Represents a virtual MySQL type
 type DatabaseMySQL struct {
 	Host     string `json:"host,omitempty"`
-	Port     string `json:"port,omitempty"`
-	Username string `json:"username,omitempty"`
+	Port     uint32 `json:"port,omitempty"`
+	User     string `json:"user,omitempty"`
 	Password string `json:"password,omitempty"`
 	DB       string `json:"db,omitempty"`
-	PoolSize int    `json:"poolSize,omitempty"`
+	PoolSize uint32 `json:"poolSize,omitempty"`
 }
 
 // VirtualDatabaseStatus defines the observed state of VirtualDatabase
@@ -102,8 +103,8 @@ type Database struct {
 // MySQL Configuration Definition
 type MySQL struct {
 	Host     string `json:"host"`
-	Port     string `json:"port"`
-	Username string `json:"username"`
+	Port     uint32 `json:"port"`
+	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
 }

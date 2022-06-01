@@ -39,6 +39,7 @@ func GetConfig(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, err)
 		return
 	}
+
 	ctx.JSON(http.StatusOK, proxyConfig)
 }
 
@@ -103,7 +104,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			proxy.BackendType = "mysql"
 			proxy.DB = service.DatabaseService.DatabaseMySQL.DB
 			proxy.Name = service.Name
-			proxy.Username = service.DatabaseService.DatabaseMySQL.Username
+			proxy.User = service.DatabaseService.DatabaseMySQL.User
 			proxy.Password = service.DatabaseService.DatabaseMySQL.Password
 			proxy.PoolSize = service.DatabaseService.DatabaseMySQL.PoolSize
 			proxy.ListenAddr = fmt.Sprintf("%s:%s", service.DatabaseService.DatabaseMySQL.Host, service.DatabaseService.DatabaseMySQL.Port)
@@ -116,7 +117,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			if len(tsSpec.ConcurrencyControls) != 0 {
 				for _, control := range tsSpec.ConcurrencyControls {
 					// TODO: Convert CRD to configuration file json format.Need a better implementation
-					// ref: https://stackoverflow.com/questions/24613271/golang-is-conversion-between-different-struct-types-possible
+					// Ref: https://stackoverflow.com/questions/24613271/golang-is-conversion-between-different-struct-types-possible
 					proxy.Plugin.ConcurrencyControls = append(proxy.Plugin.ConcurrencyControls, *(*ConcurrencyControl)(&control))
 				}
 			}
@@ -134,9 +135,10 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 				proxyconfig.Mysql.Nodes = append(proxyconfig.Mysql.Nodes, Node{
 					Name:     dbe.GetName(),
 					Db:       dbeSpec.Database.MySQL.DB,
-					User:     dbeSpec.Database.MySQL.Username,
+					User:     dbeSpec.Database.MySQL.User,
 					Password: dbeSpec.Database.MySQL.Password,
-					Addr:     fmt.Sprintf("%s:%s", dbeSpec.Database.MySQL.Host, dbeSpec.Database.MySQL.Port),
+					Host:     dbeSpec.Database.MySQL.Host,
+					Port:     dbeSpec.Database.MySQL.Port,
 					Weight:   1,
 				})
 			}

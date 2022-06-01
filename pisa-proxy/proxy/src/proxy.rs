@@ -100,7 +100,8 @@ pub struct MySQLNode {
     pub db: String,
     pub user: String,
     pub password: String,
-    pub addr: String,
+    pub host: String,
+    pub port: u32,
     pub weight: i64,
 }
 
@@ -172,7 +173,7 @@ impl Proxy {
                 Some(_) => {
                     let endpoint = Endpoint {
                         name: node.name,
-                        addr: node.addr,
+                        addr: format!("{}:{}", node.host, node.port),
                         db: node.db,
                         user: node.user,
                         password: node.password,
