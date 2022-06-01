@@ -29,7 +29,7 @@ Pisanix 除了理解 SQL 协议外, 能读懂 SQL 语句也是一个很重要的
 
 ### AST 说明
 Pisanix 中的 SQL 解析不会为所有表达式都生成 AST，只会为 Pisanix 感兴趣的部分生成 AST。
-详细信息请参考[ Github ](https://github.com/database-mesh/pisanix/pisa-proxy/parser/mysql/src/ast)。
+详细信息请参考[ Github ](https://github.com/database-mesh/pisanix/tree/master/pisa-proxy/parser/mysql/src/ast)。
 
 ### 测试
 目前使用了 MySQL test 框架中能正常运行的 SQL 语句作为测试集来测试。目前只测试了 `SELECT` 语句，有`98%`的语句能成功解析, 还在不断完善中。
