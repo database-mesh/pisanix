@@ -22,7 +22,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::listener::listener::Listener;
+use crate::listener::Listener;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProxiesConfig {
