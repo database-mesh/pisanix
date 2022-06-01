@@ -27,7 +27,7 @@ pub struct Plugin {
 pub struct ConcurrencyControl {
     pub regex: String,
     pub max_concurrency: u32,
-    #[serde_as(as = "serde_with::DurationSeconds<String>")]
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub duration: Duration,
 }
 
