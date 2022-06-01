@@ -251,7 +251,6 @@ impl TransFsm {
     }
 
     pub async fn trigger(&mut self, state_name: TransEventName) -> Result<(), Error> {
-
         for event in &self.events {
             if event.name == state_name && event.src_state == self.current_state {
                 match event.src_state {
