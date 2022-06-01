@@ -28,7 +28,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           build_file: pisa-controller/hack/Dockerfile 
-          tag_with_labest: true
+          tag_with_latest: true
 
   pisa-proxy:
     runs-on: ubuntu-latest 
@@ -41,7 +41,7 @@ jobs:
           toolchain: stable
       - uses: actions-rs/cargo@v1
         with:
-          command: test 
+          command: test --manifest-path pisa-proxy/Cargo.toml 
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
