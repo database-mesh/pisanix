@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ver::version::get_version;
+use config::config::PisaConfig;
 
 #[get("/version")]
 pub fn version() -> String {
-    get_version()
+    PisaConfig::get_version()
 }

@@ -185,9 +185,9 @@ impl PisaConfig {
         };
     
         if !git_tag.is_empty() {
-            return format!("{:?}", git_tag)
+            format!("{:?}", git_tag)
         } else {
-            return format!("{:?}-{:?}", git_branch, git_commit);
+            format!("{:?}-{:?}", git_branch, git_commit)
         }
     }
 }
