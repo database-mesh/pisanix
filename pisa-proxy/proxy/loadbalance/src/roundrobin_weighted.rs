@@ -104,9 +104,8 @@ impl LoadBalance for RoundRobinWeightd {
 
 #[inline]
 fn gcd(mut x: i64, mut y: i64) -> i64 {
-    let mut t: i64 = 0;
     loop {
-        t = x % y;
+        let t = x % y;
         if t > 0 {
             x = y;
             y = t;

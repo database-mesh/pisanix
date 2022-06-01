@@ -20,12 +20,12 @@ use mysql_parser::parser::Parser;
 use pisa_error::error::{Error, ErrorKind};
 use plugin::build_phase::PluginPhase;
 use proxy::{
-    listener::listener::Listener,
+    listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
 use tracing::error;
 
-use crate::myserver::MySqlServer;
+use crate::server::MySqlServer;
 
 pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,

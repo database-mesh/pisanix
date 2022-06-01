@@ -54,7 +54,7 @@ impl LoadBalance for RandomWeighted {
             }
         }
         let item = &self.items[self.items.len() - 1];
-        Some(&item)
+        Some(item)
     }
 
     // add: add endpoint
