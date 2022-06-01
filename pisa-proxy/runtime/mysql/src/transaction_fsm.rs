@@ -21,7 +21,6 @@ use loadbalance::balance::LoadBalance;
 use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::{Error, ErrorKind};
 use tokio::sync::Mutex;
-use conn_pool::ConnAttr;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TransState {

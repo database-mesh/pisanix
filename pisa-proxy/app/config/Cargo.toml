@@ -2,6 +2,11 @@
 name = "config"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
+
+[build-dependencies]
+anyhow = { version = "1.0", default-features = false }
+vergen = { version = "6", default-features = false, features = ["build", "rustc"] }
 
 [dependencies]
 toml = "0.5"

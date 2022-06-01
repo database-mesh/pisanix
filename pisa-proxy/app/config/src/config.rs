@@ -53,6 +53,10 @@ const PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG: &str = "LOCAL_CONFIG";
 const PISA_PROXY_CONFIG_ENV_PORT: &str = "PORT";
 const PISA_PROXY_CONFIG_ENV_LOG_LEVEL: &str = "LOG_LEVEL";
 
+const PISA_PROXY_VERSION_ENV_GIT_TAG: &str = "GIT_TAG";
+const PISA_PROXY_VERSION_ENV_GIT_BRANCH: &str = "GIT_BRANCH";
+const PISA_PROXY_VERSION_ENV_GIT_COMMIT: &str = "GIT_COMMIT";
+
 impl PisaConfig {
     pub fn get_proxies(&self) -> &Vec<ProxyConfig> {
         &self.proxies
@@ -93,7 +97,7 @@ impl PisaConfig {
 
     #[tracing::instrument]
     pub fn load_config() -> Self {
-        let matches = Command::new("Pisa-Proxy")
+        let matches = Command::new("Pisa-Proxy").version(&*get_version())
             .arg(Arg::new("port").short('p').long("port").help("Http port").takes_value(true))
             .arg(Arg::new("config").short('c').long("config").help("Config path").takes_value(true))
             .arg(Arg::new("loglevel").long("log-level").help("Log level").takes_value(true))
@@ -160,5 +164,29 @@ impl PisaConfig {
         trace!("{}", serde_json::to_string(&pisa_config).unwrap());
 
         pisa_config
+    }
+}
+
+fn get_version() -> String {
+    let mut git_tag: String = "".to_string();
+    let mut git_commit: String = "".to_string();
+    let mut git_branch: String = "".to_string();
+
+    if let Ok(tag) = env::var(PISA_PROXY_VERSION_ENV_GIT_TAG) {
+        git_tag = tag;
+    };
+
+    if let Ok(commit) = env::var(PISA_PROXY_VERSION_ENV_GIT_COMMIT) {
+        git_commit = commit;
+    };
+
+    if let Ok(branch) = env::var(PISA_PROXY_VERSION_ENV_GIT_BRANCH) {
+        git_branch = branch;
+    };
+
+    if !git_tag.is_empty() {
+        return format!("{:?}", git_tag)
+    } else {
+        return format!("{:?}-{:?}", git_branch, git_commit);
     }
 }
