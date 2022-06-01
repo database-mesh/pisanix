@@ -15,13 +15,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use conn_pool::{Pool, PoolConn};
+use conn_pool::{ConnAttr, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::LoadBalance;
 use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::{Error, ErrorKind};
 use tokio::sync::Mutex;
-use conn_pool::ConnAttr;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TransState {
@@ -252,7 +251,6 @@ impl TransFsm {
     }
 
     pub async fn trigger(&mut self, state_name: TransEventName) -> Result<(), Error> {
-
         for event in &self.events {
             if event.name == state_name && event.src_state == self.current_state {
                 match event.src_state {
