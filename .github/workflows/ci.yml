@@ -28,6 +28,21 @@ jobs:
     steps:
       - name: "checkout codes"
         uses: actions/checkout@v2
+      - name: Declare some variables
+        id: vars
+        shell: bash
+        run: |
+          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+             echo "##[set-output name=tags;]$(echo ${GITHUB_REF#refs/tags/})"  
+          else
+             echo "##[set-output name=tags;]$(echo '')"
+          fi
+          if [[ $GITHUB_REF == refs/heads/* ]]; then
+             echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"  
+          else
+             echo "##[set-output name=branch;]$(echo '')"
+          fi
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
@@ -36,6 +51,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           build_file: pisa-controller/hack/Dockerfile 
           tag_with_labest: true
+          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tag }}
 
   pisa-proxy:
     runs-on: ubuntu-latest 
@@ -49,4 +65,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           build_file: pisa-proxy/hack/Dockerfile
-          tag_with_latest: true 
+          tag_with_latest: true
+          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tag }}
+
