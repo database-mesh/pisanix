@@ -13,10 +13,6 @@
 # limitations under the License.
 
 FROM rust:1.60.0-slim-buster as builder
-ARG GIT_BRANCH
-ARG GIT_COMMIT
-ARG GIT_TAG
-COPY pisa-proxy/hack/config ~/.cargo/config
 RUN apt-get update && apt-get  -y  install gcc openssl libssl-dev pkg-config
 WORKDIR /workspace
 COPY pisa-proxy /workspace
@@ -24,6 +20,12 @@ RUN cargo build --release
 
 
 FROM pisanixio/alpine-glibc
+ARG GIT_BRANCH
+ARG GIT_COMMIT
+ARG GIT_TAG
+ENV GIT_BRANCH=${GIT_BRANCH}
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV GIT_TAG=${GIT_TAG}
 COPY --from=builder /workspace/target/release/proxy /pisanix/
 WORKDIR /pisanix
 ENTRYPOINT ["./proxy"]

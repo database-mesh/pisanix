@@ -6,8 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-server = {path = "../app/server"}
-config = {path = "../app/config"}
 ver = {package = "version", path = "../version"}
 rocket = "0.5.0-rc.1" 
 async-trait = "0.1"
@@ -17,3 +15,5 @@ serde = { version = "1.0.126", features = ["derive"] }
 warp = { version = "0.3" }
 pisa_metrics = {path = "../app/metrics", package = "metrics"}
 pisa_error = {path = "../error", package = "error"}
+server = {path = "../app/server"}
+config = {path = "../app/config"}

@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use config::config::PisaConfig;
+use anyhow::Result;
+use vergen::{vergen, Config};
 
-#[get("/version")]
-pub fn version() -> String {
-    PisaConfig::get_version()
+fn main() -> Result<()> {
+    // Generate the default 'cargo:' instruction output
+    vergen(Config::default())
 }
