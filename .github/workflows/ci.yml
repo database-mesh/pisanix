@@ -68,13 +68,21 @@ jobs:
     steps:
       - name: "checkout codes"
         uses: actions/checkout@v2
-      - name: "prepare rs toolchain" 
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test --manifest-path pisa-proxy/Cargo.toml 
+      - name: Declare some variables
+        id: vars
+        shell: bash
+        run: |
+          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+             echo "##[set-output name=tags;]$(echo ${GITHUB_REF#refs/tags/})"  
+          else
+             echo "##[set-output name=tags;]$(echo '')"
+          fi
+          if [[ $GITHUB_REF == refs/heads/* ]]; then
+             echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"  
+          else
+             echo "##[set-output name=branch;]$(echo '')"
+          fi
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
