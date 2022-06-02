@@ -33,6 +33,7 @@ pub enum SqlStmt {
     BeginStmt(Box<BeginStmt>),
     Set(Box<SetOptValues>),
     Deallocate(Box<Deallocate>),
+    ShowDatabasesStmt(Box<ShowDatabasesStmt>),
     None,
 }
 
