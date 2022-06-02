@@ -42,7 +42,7 @@ To build Pisanix from scratch you will need to install the following tools:
       ```
       git checkout master
       git fetch upstream
-      git rebase upstrea/master
+      git rebase upstream/master
       git checkout -b futures-0.1.0-dev
       ```
 5. If you have added code that should be tested, add unit tests.
