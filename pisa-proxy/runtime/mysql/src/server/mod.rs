@@ -416,7 +416,6 @@ impl MySqlServer {
                 Err(err) => Err(err[0].clone()),
                 Ok(stmt) => {
                     ast_cache.set(sql.to_string(), stmt.clone());
-                    //(*self.ast_cache.clone()).put(sql.to_string(), stmt);
                     Ok(stmt)
                 }
             },
