@@ -60,7 +60,7 @@ impl MySqlServer {
         lb: Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>,
         proxy_config: ProxyConfig,
         parser: Arc<Parser>,
-        ast_cache: Arc<parking_lot::Mutex<ParserAstCache>>,
+        ast_cache: Arc<plMutex<ParserAstCache>>,
         plugin: Option<PluginPhase>,
     ) -> MySqlServer {
         MySqlServer {
