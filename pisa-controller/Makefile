@@ -23,7 +23,5 @@ build:
 	@echo -e "\033[33mbuild output to ./bin directory\033[0"
 
 docker:
-	ROOT_DIR=$(realpath ..)
-	#@cd $(ROOT_DIR)
 	sudo docker build --build-arg GIT_BRANCH=$(GIT_BRANCH) --build-arg GIT_COMMIT=$(GIT_COMMIT) --build-arg GIT_TAG=$(GIT_TAG) \
 		-f hack/Dockerfile -t $(REPO_NAME)/$(IMAGE_NAME):$(IMAGE_TAG) $(realpath ..)
