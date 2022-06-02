@@ -24,4 +24,4 @@ Before making any significant changes, please [open an issue](https://github.com
 Once we've discussed your changes and you've got your code ready, make sure that tests are passing and open your pull request. Your PR is most likely to be accepted if it:
 
 * References the original issue in the description, e.g. "Resolves #123".
-* Has a [good commit message](https://github.com/database-mesh/pisanix/blob/futures-0.1.0-docs/CONTRIBUTING.md).
+* Has a [good commit message](https://github.com/database-mesh/pisanix/blob/master/CONTRIBUTING.md).

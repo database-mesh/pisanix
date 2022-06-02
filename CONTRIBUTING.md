@@ -139,5 +139,3 @@ Pisanix uses [GitHub issues](https://github.com/database-mesh/pisanix/issues) to
 
 ## Code of Conduct
 Please refer to the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/master/code-of-conduct.md), which describes the expectations for interactions within the community. 
-
-## Roadmap

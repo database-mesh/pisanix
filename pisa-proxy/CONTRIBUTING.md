@@ -47,7 +47,7 @@ Once we've discussed your changes and you've got your code ready, make sure that
 
 * Includes tests for new functionality.
 * References the original issue in the description, e.g. "Resolves #123".
-* Has a [good commit message](https://github.com/database-mesh/pisanix/blob/futures-0.1.0-docs/CONTRIBUTING.md).
+* Has a [good commit message](https://github.com/database-mesh/pisanix/blob/master/CONTRIBUTING.md).
 
 ## rust code style
 * https://rust-coding-guidelines.github.io/rust-coding-guidelines-zh/overview.html
