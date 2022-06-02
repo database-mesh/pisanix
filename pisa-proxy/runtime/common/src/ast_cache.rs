@@ -12,27 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
+use lru::LruCache;
 use mysql_parser::ast::SqlStmt;
 
-#[derive(Clone)]
 pub struct ParserAstCache {
-    pub ast_cache: HashMap<String, Vec<SqlStmt>>,
+    pub ast_cache: LruCache<String, Vec<SqlStmt>>,
 }
 
 impl ParserAstCache {
     pub fn new() -> ParserAstCache {
-        ParserAstCache { ast_cache: HashMap::new() }
+        // LruCache default size is 512
+        // TODO: make LruCache size as a parameter
+        ParserAstCache { ast_cache: LruCache::new(512) }
     }
 
     pub fn set(&mut self, key: String, sql_stmt: Vec<SqlStmt>) {
-        self.ast_cache.insert(key, sql_stmt);
+        self.ast_cache.put(key, sql_stmt);
     }
 
-    pub fn get(&self, key: String) -> Option<&Vec<SqlStmt>> {
+    pub fn get(&mut self, key: String) -> Option<&Vec<SqlStmt>> {
         self.ast_cache.get(&key)
     }
-
-    //TODO: local storage
 }
