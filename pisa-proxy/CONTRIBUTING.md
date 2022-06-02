@@ -1,26 +1,30 @@
 # Contributing to Pisa-Proxy
 
-Thanks for your interest in contributing to Pisa-Proxy! This document outlines some of the conventions on building, running, and testing Pisa-Proxy, the development workflow, commit message formatting, contact points and other resources.
-
-If you need any help or mentoring getting started, understanding the codebase, or making a PR (or anything else really), please ask on [Slack](https://databasemesh.slack.com/). If you don't know where to start, please click on the contributor icon below to get you on the right contributing path.
-
-# Building From Source
-
-## Install prerequisites
+## Prerequisites
 
 Pisa-proxy is written in Rust, to build Pisa-Proxy from scratch you will need to install the following tools:
-- Git
-- Rust Install with [rustup](https://rustup.rs/)
-- Install Clippy with `rustup`
+- Install Rust 1.6.0 with [rustup](https://rustup.rs/)
+- Install [clippy](https://github.com/rust-lang/rust-clippy) with `rustup`
+- Install [fmt](https://github.com/rust-lang/rustfmt) 
 
-## Get the Pisa-Proxy code
+## Fork and Clone
 
 ```
 git clone https://github.com/database-mesh/pisanix.git
 cd pisanix/pisa-proxy
 ```
 
-## Run make
+## run clippy
+```
+make clippy
+```
+
+## run format
+```
+make fmt
+```
+
+## build with release
 
 ```
 # make release
@@ -34,6 +38,16 @@ We provide a docker image with full development requirements.
 ```
 # make docker
 ```
+
+## How to add a new feature or change an existing one
+
+Before making any significant changes, please [open an issue](https://github.com/database-mesh/pisanix/issues). Discussing your proposed changes ahead of time will make the contribution process smooth for everyone.
+
+Once we've discussed your changes and you've got your code ready, make sure that tests are passing and open your pull request. Your PR is most likely to be accepted if it:
+
+* Includes tests for new functionality.
+* References the original issue in the description, e.g. "Resolves #123".
+* Has a [good commit message](https://github.com/database-mesh/pisanix/blob/futures-0.1.0-docs/CONTRIBUTING.md).
 
 ## rust code style
 * https://rust-coding-guidelines.github.io/rust-coding-guidelines-zh/overview.html

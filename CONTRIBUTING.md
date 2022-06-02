@@ -1,20 +1,28 @@
 # Contributing to Pisanix
 
-Thanks for your interest in contributing to Pisanix! This document outlines some of the conventions on building, running, and testing Pisa-Proxy, the development workflow, commit message formatting, contact points and other resources.
+Thanks for your interest in contributing to Pisanix! This document outlines some of the conventions on building, running, and testing Pisanix, the development workflow, commit message formatting, contact points and other resources.
 
 If you need any help or mentoring getting started, understanding the codebase, or making a PR (or anything else really), please ask on [Slack](https://databasemesh.slack.com/). If you don't know where to start, please click on the contributor icon below to get you on the right contributing path.
 
-## First Pisanix Pull Request
+You can choose from the following two projects to contribute to the one you are interested in.
 
-### Prerequisites
+* [Pisa-Proxy](https://github.com/database-mesh/pisanix/blob/master/pisa-proxy/CONTRIBUTING.md)
+* [Pisa-Controller](https://github.com/database-mesh/pisanix/blob/master/pisa-controller/CONTRIBUTING.md)
+
+# First Pisanix Pull Request
+
+## Prerequisites
+
 To build Pisanix from scratch you will need to install the following tools:
+
 * Git
-* Rust install with [rustup](https://rustup.rs/)
-* golang
+* Rust 1.16 install with [rustup](https://rustup.rs/)
+* [Golang 1.16](https://golang.org/dl/)
+* make
 
-### Pull Requests
+## Pull Requests
 
-#### Submit a PR
+### Submit a PR
 1. Fork the Pisanix repo and set remote repo.
       ```
       # git clone https://github.com/wbtlb/pisanix.git
@@ -48,7 +56,7 @@ To build Pisanix from scratch you will need to install the following tools:
       ```
 9.  Change the status to “Ready for review”.
 
-#### PR Template
+### PR Template
 
 ```
 <!--
@@ -101,7 +109,7 @@ If this PR will be picked to release branch, then a release note is probably req
 
 ```
 
-#### PR Commit Message
+### PR Commit Message
 
 Format: `<type>(<scope>): <subject>`
 
@@ -126,10 +134,10 @@ More types:
 * `test`: adding missing tests, refactoring tests; no production code change.
 * `chore`: updating grunt tasks etc; no production code change.
 
-### Issues
+## Issues
 Pisanix uses [GitHub issues](https://github.com/database-mesh/pisanix/issues) to track bugs. Please include necessary information and instructions to reproduce your issue.
-### Documentation
 
-### Code of Conduct
+## Code of Conduct
+Please refer to the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/master/code-of-conduct.md), which describes the expectations for interactions within the community. 
 
-### Roadmap
+## Roadmap
