@@ -36,6 +36,7 @@ use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 use tracing::{debug, error};
+use parking_lot::Mutex as plMutex;
 
 use crate::transaction_fsm::*;
 
@@ -44,7 +45,7 @@ pub struct MySqlServer {
     pub buf: BytesMut,
     mysql_parser: Arc<Parser>,
     trans_fsm: TransFsm,
-    ast_cache: ParserAstCache,
+    ast_cache: Arc<plMutex<ParserAstCache>>,
     plugin: Option<PluginPhase>,
     is_quit: bool,
     // `concurrency_control_rule_idx` is index of concurrency_control rules
@@ -59,7 +60,7 @@ impl MySqlServer {
         lb: Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>,
         proxy_config: ProxyConfig,
         parser: Arc<Parser>,
-        ast_cache: ParserAstCache,
+        ast_cache: Arc<parking_lot::Mutex<ParserAstCache>>,
         plugin: Option<PluginPhase>,
     ) -> MySqlServer {
         MySqlServer {
@@ -406,12 +407,16 @@ impl MySqlServer {
 
     fn get_ast(&mut self, payload: &[u8]) -> Result<Vec<SqlStmt>, ParseError> {
         let sql = str::from_utf8(payload).unwrap();
-        match self.ast_cache.get(sql.to_string()) {
+        let mut ast_cache = self.ast_cache.lock();
+        let try_ast = ast_cache.get(sql.to_string());
+
+        match try_ast {
             Some(stmt) => Ok(stmt.to_vec()),
             None => match self.mysql_parser.parse(sql) {
                 Err(err) => Err(err[0].clone()),
                 Ok(stmt) => {
-                    self.ast_cache.set(sql.to_string(), stmt.clone());
+                    ast_cache.set(sql.to_string(), stmt.clone());
+                    //(*self.ast_cache.clone()).put(sql.to_string(), stmt);
                     Ok(stmt)
                 }
             },

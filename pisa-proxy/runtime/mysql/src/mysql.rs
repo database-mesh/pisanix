@@ -24,6 +24,7 @@ use proxy::{
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
 use tracing::error;
+use parking_lot::Mutex;
 
 use crate::server::MySqlServer;
 
@@ -50,7 +51,7 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         let pool = Pool::new(self.proxy_config.pool_size as usize);
 
-        let ast_cache = ParserAstCache::new();
+        let ast_cache = Arc::new(Mutex::new(ParserAstCache::new()));
         // TODO: using a loadbalancer factory for different load balance strategy.
         // Currently simple_loadbalancer purely provide a list of nodes without any strategy.
         let lb = proxy

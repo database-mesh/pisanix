@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.0.0", features = ["full", "tracing"] }
+lru = "0.7.6"
 pisa_error = {path = "../../error", package = "error"}
 mysql_parser = {path = "../../parser/mysql"}
