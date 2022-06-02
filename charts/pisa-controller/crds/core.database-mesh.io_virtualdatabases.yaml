@@ -29,6 +29,8 @@ spec:
     listKind: VirtualDatabaseList
     plural: virtualdatabases
     singular: virtualdatabase
+    shortNames:
+      - vdb
   scope: Namespaced
   versions:
   - name: v1alpha1

@@ -29,6 +29,8 @@ spec:
     listKind: TrafficStrategyList
     plural: trafficstrategies
     singular: trafficstrategy
+    shortNames:
+      - ts
   scope: Namespaced
   versions:
   - name: v1alpha1
