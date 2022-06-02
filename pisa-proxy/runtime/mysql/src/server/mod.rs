@@ -31,12 +31,12 @@ use mysql_protocol::{
     server::{conn::Connection, err::MySQLError},
     util::*,
 };
+use parking_lot::Mutex as plMutex;
 use pisa_metrics::metrics::*;
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 use tracing::{debug, error};
-use parking_lot::Mutex as plMutex;
 
 use crate::transaction_fsm::*;
 

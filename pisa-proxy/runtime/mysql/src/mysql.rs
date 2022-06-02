@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
 use mysql_parser::parser::Parser;
+use parking_lot::Mutex;
 use pisa_error::error::{Error, ErrorKind};
 use plugin::build_phase::PluginPhase;
 use proxy::{
@@ -24,7 +25,6 @@ use proxy::{
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
 use tracing::error;
-use parking_lot::Mutex;
 
 use crate::server::MySqlServer;
 

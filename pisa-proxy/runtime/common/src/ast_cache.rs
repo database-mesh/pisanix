@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use lru::LruCache;
-
 use mysql_parser::ast::SqlStmt;
 
 pub struct ParserAstCache {
