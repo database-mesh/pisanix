@@ -21,8 +21,6 @@ on:
     branches:
       - master
       - release-*
-    tags:
-      - "release-*"
 
 jobs:
   pisa-controller:
