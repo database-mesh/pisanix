@@ -29,6 +29,8 @@ spec:
     listKind: DatabaseEndpointList
     plural: databaseendpoints
     singular: databaseendpoint
+    shortNames:
+    - dbep
   scope: Namespaced
   versions:
   - name: v1alpha1
