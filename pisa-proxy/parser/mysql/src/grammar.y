@@ -100,6 +100,7 @@ sql_stmt -> SqlStmt:
   | begin_stmt	  { SqlStmt::BeginStmt($1) }
   | set           { SqlStmt::Set($1) }
   | deallocate    { SqlStmt::Deallocate($1) }
+  | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
   ;
 
 end_of_input -> SqlStmt:
@@ -5894,6 +5895,21 @@ option_type -> OptType:
   | SESSION         { OptType::Session }
 ;
 
+show_databases_stmt -> Box<ShowDatabasesStmt>:
+    'SHOW' 'DATABASES' opt_wild_or_where
+    {
+    	Box::new(ShowDatabasesStmt {
+    	   span: $span,
+    	   opt_wild_or_where: $3,
+    	})
+    }
+;
+
+opt_wild_or_where -> Option<WildOrWhere>:
+   /* empty */                { None }
+  | 'LIKE' 'TEXT_STRING'      { Some(WildOrWhere::LikeTextString(String::from($lexer.span_str($2.as_ref().unwrap().span())))) }
+  | where_clause              { Some(WildOrWhere::WhereClause($1)) }
+;
 
 %%
 
