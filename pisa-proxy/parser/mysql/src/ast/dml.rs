@@ -3040,3 +3040,15 @@ impl Visitor for Deallocate {
         self.clone()
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowDatabasesStmt {
+    pub span: Span,
+    pub opt_wild_or_where: Option<WildOrWhere>,
+}
+
+#[derive(Debug, Clone)]
+pub enum WildOrWhere {
+    LikeTextString(String),
+    WhereClause(WhereClause),
+}
