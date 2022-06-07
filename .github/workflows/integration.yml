@@ -92,7 +92,7 @@ jobs:
           kubectl port-forward -n default svc/test 3306:3306 &
       - name: "install mysql-cli" 
         run: |
-          apt-get install mysql-client -y
+          sudo apt-get update & sudo apt-get upgrade & sudo apt-get -f install mysql-client 
       - name: "run tests" 
         run: |
-          bash test/kubernetes/run.sh
+          sudo bash test/kubernetes/run.sh
