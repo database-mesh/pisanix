@@ -116,8 +116,13 @@ impl ClientConn {
         stmt_codec.send((COM_STMT_PREPARE, val)).await?;
 
         loop {
+            // Decode prepare complete
+            if stmt_codec.codec().is_complete() {
+                break;
+            }
+
             match stmt_codec.next().await {
-                Some(Ok(None)) => break,
+                Some(Ok(None)) => {},
 
                 Some(Ok(Some(data))) => {
                     // If data.len() > 0, means that `Prepare` return error.

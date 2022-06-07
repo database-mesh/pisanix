@@ -24,7 +24,7 @@ use crate::{
 };
 
 #[allow(clippy::enum_variant_names)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum DecodeStmtState {
     PrepareFirst,
     PrepareCols,
@@ -53,8 +53,6 @@ pub struct Stmt {
     pub cols_data: Vec<Vec<u8>>,
 
     next_state: DecodeStmtState,
-    cols_idx: u16,
-    params_idx: u16,
     seq: u8,
     pub auth_info: Option<ClientAuth>,
 }
@@ -74,8 +72,6 @@ impl Stmt {
             cols_data: vec![vec![0; 0]; 0],
 
             next_state: DecodeStmtState::PrepareFirst,
-            cols_idx: 0,
-            params_idx: 0,
             seq: 0,
             auth_info: None,
         }
@@ -94,11 +90,12 @@ impl Stmt {
         codec
     }
 
-    fn decode_prepare_return(&mut self, length: usize, src: &mut BytesMut) -> Option<BytesMut> {
-        if length + 4 > src.len() {
-            return None;
-        }
+    // Check if decode is completed
+    pub fn is_complete(&self) -> bool {
+        self.next_state == DecodeStmtState::PrepareComplete
+    }
 
+    fn decode_prepare_return(&mut self, length: usize, src: &mut BytesMut) -> Option<BytesMut> {
         let mut data = src.split_to(length + 4);
 
         if data[4] == ERR_HEADER {
@@ -124,76 +121,44 @@ impl Stmt {
 
         //warning_count (2) -- number of warnings
         let _ = data.split_to(2);
-        if !src.is_empty() {
-            self.next_state = DecodeStmtState::PrepareParams;
-            for _ in 0..self.params_count {
-                self.decode_prepare_params(get_length(&*src) as usize, src);
-                if src.is_empty() {
-                    break;
-                }
-            }
 
-            if src.len() < 4 {
-                return None;
-            }
+        self.next_state = DecodeStmtState::PrepareParams;
 
-            if !src.is_empty() && src[4] == EOF_HEADER {
-                let length = get_length(&*src) as usize;
-                let _ = src.split_to(length + 4);
-            }
-        }
-
-        if !src.is_empty() {
-            self.next_state = DecodeStmtState::PrepareCols;
-            for _ in 0..self.cols_count {
-                self.decode_prepare_cols(get_length(&*src) as usize, src);
-                if src.is_empty() {
-                    break;
-                }
-            }
-
-            if !src.is_empty() && src[4] == EOF_HEADER {
-                let length = get_length(&*src) as usize;
-                let _ = src.split_to(length + 4);
-            }
-        } else if self.params_count > 0 {
-            self.next_state = DecodeStmtState::PrepareParams
+        if self.params_count == 0 && self.cols_count == 0 {
+           self.next_state = DecodeStmtState::PrepareComplete; 
+        } else if self.params_count == 0 {
+           self.next_state = DecodeStmtState::PrepareCols; 
         }
 
         None
     }
 
+    // Return true when decode prepare params complete, otherwise return false 
     fn decode_prepare_params(&mut self, length: usize, src: &mut BytesMut) -> bool {
-        if length + 4 > src.len() {
-            return false;
-        }
-
-        let data = src.split_to(length + 4);
-        if data[4] == EOF_HEADER || self.params_idx == self.params_count {
-            if self.cols_count > 0 {
-                self.next_state = DecodeStmtState::PrepareCols
-            }
-        } else {
-            self.params_idx += 1;
-            self.params_data.push(data.to_vec());
-        }
-
-        self.params_idx == self.params_count
-    }
-
-    fn decode_prepare_cols(&mut self, length: usize, src: &mut BytesMut) -> bool {
-        if length + 4 > src.len() {
-            return false;
-        }
         let data = src.split_to(length + 4);
         if data[4] == EOF_HEADER {
-            self.next_state = DecodeStmtState::PrepareComplete
+            if self.cols_count > 0 {
+                self.next_state = DecodeStmtState::PrepareCols;
+            } else {
+                self.next_state = DecodeStmtState::PrepareComplete;
+            }
+            true
         } else {
-            self.cols_idx += 1;
-            self.cols_data.push(data.to_vec());
+            self.params_data.push(data.to_vec());
+            false
         }
+    }
 
-        self.cols_idx == self.cols_count
+    // Return true when decode prepare columns complete, otherwise return false 
+    fn decode_prepare_cols(&mut self, length: usize, src: &mut BytesMut) -> bool {
+        let data = src.split_to(length + 4);
+        if data[4] == EOF_HEADER {
+            self.next_state = DecodeStmtState::PrepareComplete;
+            true
+        } else {
+            self.cols_data.push(data.to_vec());
+            false
+        }
     }
 }
 
@@ -209,27 +174,31 @@ impl Decoder for Stmt {
 
         let length = get_length(&*src) as usize;
 
+        if (length + 4) > src.len() {
+            return Ok(None)
+        }
+
         self.seq = src[3];
         match self.next_state {
             // Return Ok(Some(data)) only when prepare return error, otherwise return Ok(Some(None)).
-            DecodeStmtState::PrepareFirst => Ok(Some(self.decode_prepare_return(length, src))),
+            DecodeStmtState::PrepareFirst => {
+                let res = self.decode_prepare_return(length, src);
+                Ok(Some(res))
+            }
 
             DecodeStmtState::PrepareParams => {
-                let res = self.decode_prepare_params(length, src);
-                if res {
-                    Ok(Some(None))
-                } else {
-                    Ok(Some(Some(BytesMut::new())))
-                }
+                let _ = self.decode_prepare_params(length, src);
+
+                Ok(Some(None))
             }
 
             DecodeStmtState::PrepareCols => {
-                let res = self.decode_prepare_cols(length, src);
-                if res {
-                    Ok(Some(None))
-                } else {
-                    Ok(Some(Some(BytesMut::new())))
-                }
+                //if self.cols_count == 0 {
+                //    self.next_state = DecodeStmtState::PrepareComplete;
+                //}
+
+                let _ = self.decode_prepare_cols(length, src);
+                Ok(Some(None))
             }
 
             DecodeStmtState::PrepareComplete => Ok(Some(None)),
