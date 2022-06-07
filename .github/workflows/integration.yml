@@ -30,6 +30,10 @@ jobs:
     steps:
       - name: "checkout codes" 
         uses: actions/checkout@v3
+      - name: "prepare mysql" 
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+         mysql-version: '8.0'
       - name: "setup kind"
         uses: helm/kind-action@v1.2.0
       - name: "setup helm"
@@ -95,6 +99,6 @@ jobs:
       - name: "prepare mysql" 
         uses: shogo82148/actions-setup-mysql@v1
         with:
-         mysql-version: '5.7'
+         mysql-version: '8.0'
       - name: "run some test" 
         run: mysql -h127.0.0.1 -P3307 -urandom_user -prandom_password -e 'SELECT version()'
