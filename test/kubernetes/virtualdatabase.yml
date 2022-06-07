@@ -24,8 +24,8 @@ spec:
   - databaseMySQL:
       db: test 
       host: 127.0.0.1
-      password: random_password
+      password: root 
       port: 3306
-      user: random_user 
+      user: root 
     name: mysql
     trafficStrategy: test 

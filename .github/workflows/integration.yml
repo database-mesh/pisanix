@@ -79,11 +79,11 @@ jobs:
         run: |
           export PISANIX_NAMESPACE="pisanix-system"
           kubectl create namespace ${PISANIX_NAMESPACE}
+          kubectl label namespace default pisanix.io/inject=enabled
           cd charts/pisa-controller 
           helm dependency build
           cd ..
-          helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.tag=${{ steps.vars.outputs.imagetag}},proxyImage.tag=${{ steps.vars.outputs.imagetag}}
-          kubectl get pod -n ${PISANIX_NAMESPACE}
+          helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.tag=${{ steps.vars.outputs.imagetag }},proxyImage.tag=${{ steps.vars.outputs.imagetag }}
           kubectl wait --timeout=60s --for=condition=ready --all pod -n ${PISANIX_NAMESPACE}
           cd ..
           cd test/kubernetes
@@ -93,12 +93,11 @@ jobs:
           kubectl apply -f databaseendpoint.yml
           kubectl apply -f app.yml 
           kubectl wait --timeout=60s --for=condition=ready --all pod
-          kubectl get deployment pisa-controller -n ${PISANIX_NAMESPACE} -o yaml  
-          kubectl get pod -n ${PISANIX_NAMESPACE}
-          kubectl port-forward -n default svc/test 3307:3306 &
+          kubectl port-forward svc/test 3308:3306 &
+          sleep 3
       - name: "prepare mysql" 
         uses: shogo82148/actions-setup-mysql@v1
         with:
-         mysql-version: '8.0'
+         mysql-version: '5.7'
       - name: "run some test" 
-        run: mysql -h127.0.0.1 -P3307 -urandom_user -prandom_password -e 'SELECT version()'
+        run: mysql -h127.0.0.1 -P3308 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
