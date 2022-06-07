@@ -125,15 +125,15 @@ impl Stmt {
         self.next_state = DecodeStmtState::PrepareParams;
 
         if self.params_count == 0 && self.cols_count == 0 {
-           self.next_state = DecodeStmtState::PrepareComplete; 
+            self.next_state = DecodeStmtState::PrepareComplete;
         } else if self.params_count == 0 {
-           self.next_state = DecodeStmtState::PrepareCols; 
+            self.next_state = DecodeStmtState::PrepareCols;
         }
 
         None
     }
 
-    // Return true when decode prepare params complete, otherwise return false 
+    // Return true when decode prepare params complete, otherwise return false
     fn decode_prepare_params(&mut self, length: usize, src: &mut BytesMut) -> bool {
         let data = src.split_to(length + 4);
         if data[4] == EOF_HEADER {
@@ -149,7 +149,7 @@ impl Stmt {
         }
     }
 
-    // Return true when decode prepare columns complete, otherwise return false 
+    // Return true when decode prepare columns complete, otherwise return false
     fn decode_prepare_cols(&mut self, length: usize, src: &mut BytesMut) -> bool {
         let data = src.split_to(length + 4);
         if data[4] == EOF_HEADER {
@@ -175,7 +175,7 @@ impl Decoder for Stmt {
         let length = get_length(&*src) as usize;
 
         if (length + 4) > src.len() {
-            return Ok(None)
+            return Ok(None);
         }
 
         self.seq = src[3];
@@ -188,15 +188,10 @@ impl Decoder for Stmt {
 
             DecodeStmtState::PrepareParams => {
                 let _ = self.decode_prepare_params(length, src);
-
                 Ok(Some(None))
             }
 
             DecodeStmtState::PrepareCols => {
-                //if self.cols_count == 0 {
-                //    self.next_state = DecodeStmtState::PrepareComplete;
-                //}
-
                 let _ = self.decode_prepare_cols(length, src);
                 Ok(Some(None))
             }
