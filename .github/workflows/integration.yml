@@ -16,7 +16,7 @@ jobs:
       - name: "checkout codes" 
         uses: actions/checkout@master
       - name: "setup kind"
-        uses: helm/kind-action
+        uses: helm/kind-action@v1.2.0
       - name: "setup helm"
         uses: azure/setup-helm@v2.1
       - name: "setup kubectl" 
