@@ -96,9 +96,9 @@ jobs:
           kubectl get deployment pisa-controller -n ${PISANIX_NAMESPACE} -o yaml  
           kubectl get pod -n ${PISANIX_NAMESPACE}
           kubectl port-forward -n default svc/test 3306:3306 &
-      - name: "prepare mysql" 
-        uses: shogo82148/actions-setup-mysql@v1
-        with:
-         mysql-version: '8.0'
+      # - name: "prepare mysql" 
+      #   uses: shogo82148/actions-setup-mysql@v1
+      #   with:
+      #    mysql-version: '8.0'
       - name: "run some test" 
         run: mysql -h127.0.0.1 -P3307 -urandom_user -prandom_password -e 'SELECT version()'
