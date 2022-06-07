@@ -95,4 +95,4 @@ jobs:
         with:
          mysql-version: '8.0'
       - name: "run some test" 
-      - run: mysql -h127.0.0.1 -P3307 -urandom_user -prandom_password -e 'SELECT version()'
+        run: mysql -h127.0.0.1 -P3307 -urandom_user -prandom_password -e 'SELECT version()'
