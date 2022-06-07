@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use byteorder::{ByteOrder, LittleEndian};
-use bytes::BytesMut;
+use bytes::{Buf, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
-use bytes::Buf;
 
 use super::{auth::ClientAuth, resultset::write_command_binary};
 use crate::{
@@ -220,7 +219,7 @@ impl Decoder for Stmt {
                 let res = self.decode_prepare_return(length, &mut src.clone());
                 src.clear();
                 Ok(Some(res))
-            },
+            }
 
             DecodeStmtState::PrepareParams => {
                 let res = self.decode_prepare_params(length, src);
@@ -232,7 +231,7 @@ impl Decoder for Stmt {
             }
 
             DecodeStmtState::PrepareCols => {
-                let res = self.decode_prepare_cols(length, src); 
+                let res = self.decode_prepare_cols(length, src);
                 if res {
                     Ok(Some(None))
                 } else {
@@ -240,8 +239,7 @@ impl Decoder for Stmt {
                 }
             }
 
-            DecodeStmtState::PrepareComplete => {
-                Ok(Some(None))},
+            DecodeStmtState::PrepareComplete => Ok(Some(None)),
         }
     }
 }
