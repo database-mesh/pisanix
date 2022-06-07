@@ -114,7 +114,8 @@ mod test {
             //"BEGIN WORK",
             //"set AUTOCOMMIT=1",
             //"SELECT w, SUM(w) OVER (ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) FROM t;",
-            "SHOW DATABASES LIKE 'ds%'",
+            //"SHOW DATABASES LIKE 'ds%'",
+            "SHOW FULL tables FROM test like 't_%'",
         ];
 
         let p = Parser::new();
