@@ -14,4 +14,4 @@
 
 #!/bin/bash
 
-mysql -h 127.0.0.1 -urandom_user -prandom_password -P3306 < ./test.sql
+mysql -h 127.0.0.1 -urandom_user -prandom_password -P3307 < ./test.sql
