@@ -1,0 +1,15 @@
+apiVersion: core.database-mesh.io/v1alpha1
+kind: DatabaseEndpoint
+metadata:
+  labels:
+    source: test 
+  name: mysql 
+  namespace: default 
+spec:
+  database:
+    MySQL:
+      db: test 
+      host: mysql.default 
+      password: root 
+      port: 3306
+      user: root

@@ -1,0 +1,12 @@
+apiVersion: core.database-mesh.io/v1alpha1
+kind: TrafficStrategy
+metadata:
+  name: test 
+  namespace: default 
+spec:
+  loadBalance:
+    simpleLoadBalance:
+      kind: random
+  selector:
+    matchLabels:
+      source: test

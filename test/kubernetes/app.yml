@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nginx
+  name: nginx
+  namespace: default
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: nginx
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: nginx
+        pisanix.io/inject: enabled
+    spec:
+      volumes:
+      - name: index
+        configMap:
+          name: nginx 
+      containers:
+      - name: nginx
+        image: nginx:1.9.1
+        volumeMounts:
+        - name: index
+          mountPath: /etc/nginx/nginx.conf
+        ports:
+        - containerPort: 3307
+          protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx 
+  namespace: default
+spec:
+  ports:
+  - port: 3307
+    protocol: TCP
+    targetPort: 3307
+  selector:
+    app: nginx 
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+data:
+  nginx.conf: |-
+    user  nginx;
+    worker_processes  1;
+
+    error_log  /var/log/nginx/error.log warn;
+    pid        /var/run/nginx.pid;
+
+
+    events {
+        worker_connections  1024;
+    }
+
+    stream {
+      upstream mysql {
+        server 127.0.0.1:3306;
+      }
+
+      server {
+        listen 3307;
+        proxy_pass mysql;
+      }
+
+    }
+kind: ConfigMap
+metadata:
+  name: nginx
+  namespace: default
+

@@ -1,0 +1,15 @@
+apiVersion: core.database-mesh.io/v1alpha1
+kind: VirtualDatabase
+metadata:
+  name: test 
+  namespace: default 
+spec:
+  services:
+  - databaseMySQL:
+      db: test 
+      host: 127.0.0.1
+      password: random_password
+      port: 3306
+      user: random_user 
+    name: mysql
+    trafficStrategy: test 
