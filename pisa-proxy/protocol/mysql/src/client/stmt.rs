@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use byteorder::{ByteOrder, LittleEndian};
-use bytes::{Buf, BytesMut};
+use bytes::BytesMut;
 use tokio_util::codec::{Decoder, Encoder};
 
 use super::{auth::ClientAuth, resultset::write_command_binary};
@@ -208,9 +208,6 @@ impl Decoder for Stmt {
         }
 
         let length = get_length(&*src) as usize;
-        if length + 4 > src.len() {
-            return Ok(None);
-        }
 
         self.seq = src[3];
         match self.next_state {
