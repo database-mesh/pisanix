@@ -90,9 +90,9 @@ jobs:
           kubectl apply -f app.yml 
           kubectl wait --timeout=60s --for=condition=ready --all pod
           kubectl port-forward -n default svc/test 3306:3306 &
-      - name: "install mysql-cli" 
-        run: |
-          sudo apt-get update & sudo apt-get upgrade & sudo apt-get -f install mysql-client 
-      - name: "run tests" 
-        run: |
-          sudo bash test/kubernetes/run.sh
+      - name: "prepare mysql" 
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+         mysql-version: '8.0'
+      - name: "run some test" 
+      - run: mysql -h127.0.0.1 -P3307 -urandom_user -prandom_password -e 'SELECT version()'
