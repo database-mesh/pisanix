@@ -1,0 +1,1 @@
+select unix_timestamp();

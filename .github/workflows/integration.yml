@@ -1,8 +1,12 @@
 name: Integration Test
+
 on:
   pull_request:
     branches:
       - master
+  push:
+    branches:
+      - ci 
 
 jobs:
   run:
@@ -66,7 +70,7 @@ jobs:
           kubectl apply -f databaseendpoint.yml
           kubectl apply -f app.yml 
           kubectl wait --timeout=60s --for=condition=ready --all pod
-          kubectl port-forward -n default svc/nginx 3307:3307 &
+          kubectl port-forward -n default svc/test 3306:3306 &
       - name: "install mysql-cli" 
         run: |
           apt-get install mysql-cli

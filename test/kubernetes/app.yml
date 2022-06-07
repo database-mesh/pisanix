@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   labels:
     app: nginx
-  name: nginx
+  name: test
   namespace: default
 spec:
   progressDeadlineSeconds: 600
@@ -24,15 +24,16 @@ spec:
         pisanix.io/inject: enabled
     spec:
       volumes:
-      - name: index
+      - name: nginx 
         configMap:
-          name: nginx 
+          name: test 
       containers:
       - name: nginx
         image: nginx:1.9.1
         volumeMounts:
-        - name: index
+        - name: nginx 
           mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
         ports:
         - containerPort: 3307
           protocol: TCP
@@ -40,13 +41,18 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx 
+  name: test 
   namespace: default
 spec:
   ports:
   - port: 3307
     protocol: TCP
     targetPort: 3307
+    name: nginx
+  - port: 3306
+    protocol: TCP
+    targetPort: 3306
+    name: pisa-proxy
   selector:
     app: nginx 
   sessionAffinity: None
@@ -79,6 +85,6 @@ data:
     }
 kind: ConfigMap
 metadata:
-  name: nginx
+  name: test 
   namespace: default
 
