@@ -80,11 +80,14 @@ jobs:
           export PISANIX_NAMESPACE="pisanix-system"
           kubectl create namespace ${PISANIX_NAMESPACE}
           kubectl label namespace default pisanix.io/inject=enabled
+          kubectl get namespaces --show-labels
           cd charts/pisa-controller 
           helm dependency build
           cd ..
-          helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.tag=${{ steps.vars.outputs.imagetag }},proxyImage.tag=${{ steps.vars.outputs.imagetag }}
-          kubectl wait --timeout=180s --for=condition=ready --all pod -n ${PISANIX_NAMESPACE}
+          helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.tag=v0.1.0,proxyImage.tag=v0.1.0
+          kubectl get pod -n ${PISANIX_NAMESPACE}
+          kubectl wait --timeout=60s --for=condition=ready --all pod -n ${PISANIX_NAMESPACE}
+          kubectl get deployment pisa-controller -n ${PISANIX_NAMESPACE} -o yaml  
           cd ..
           cd test/kubernetes
           kubectl apply -f mysql.yml 
@@ -92,8 +95,13 @@ jobs:
           kubectl apply -f trafficstrategy.yml
           kubectl apply -f databaseendpoint.yml
           kubectl apply -f app.yml 
+          sleep 3
           kubectl wait --timeout=60s --for=condition=ready --all pod
+          kubectl get pod --show-labels
+          kubectl get pod -o yaml 
+          kubectl logs $(kubectl get pod | grep test | cut -d" " -f1) pisanix-proxy
           kubectl port-forward svc/test 3308:3306 &
+          # kubectl port-forward pod/$(kubectl get pod | grep mysql | cut -d" " -f1) 3308:3306 &
           sleep 3
       - name: "prepare mysql" 
         uses: shogo82148/actions-setup-mysql@v1
