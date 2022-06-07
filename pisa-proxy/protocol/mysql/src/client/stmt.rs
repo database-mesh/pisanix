@@ -15,6 +15,7 @@
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::BytesMut;
 use tokio_util::codec::{Decoder, Encoder};
+use bytes::Buf;
 
 use super::{auth::ClientAuth, resultset::write_command_binary};
 use crate::{
@@ -159,7 +160,6 @@ impl Stmt {
         } else if self.params_count > 0 {
             self.next_state = DecodeStmtState::PrepareParams
         }
-
         None
     }
 
@@ -185,6 +185,7 @@ impl Stmt {
         if length + 4 > src.len() {
             return false;
         }
+
         let data = src.split_to(length + 4);
         if data[4] == EOF_HEADER {
             self.next_state = DecodeStmtState::PrepareComplete
@@ -208,11 +209,18 @@ impl Decoder for Stmt {
         }
 
         let length = get_length(&*src) as usize;
+        if length + 4 > src.len() {
+            return Ok(None);
+        }
 
         self.seq = src[3];
         match self.next_state {
             // Return Ok(Some(data)) only when prepare return error, otherwise return Ok(Some(None)).
-            DecodeStmtState::PrepareFirst => Ok(Some(self.decode_prepare_return(length, src))),
+            DecodeStmtState::PrepareFirst => {
+                let res = self.decode_prepare_return(length, &mut src.clone());
+                src.clear();
+                Ok(Some(res))
+            },
 
             DecodeStmtState::PrepareParams => {
                 let res = self.decode_prepare_params(length, src);
@@ -224,7 +232,7 @@ impl Decoder for Stmt {
             }
 
             DecodeStmtState::PrepareCols => {
-                let res = self.decode_prepare_cols(length, src);
+                let res = self.decode_prepare_cols(length, src); 
                 if res {
                     Ok(Some(None))
                 } else {
@@ -232,7 +240,8 @@ impl Decoder for Stmt {
                 }
             }
 
-            DecodeStmtState::PrepareComplete => Ok(Some(None)),
+            DecodeStmtState::PrepareComplete => {
+                Ok(Some(None))},
         }
     }
 }
