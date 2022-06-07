@@ -74,6 +74,7 @@ jobs:
       - name: "install Pisa Controller"
         run: |
           export PISANIX_NAMESPACE="pisanix-system"
+          kubectl create namespace ${PISANIX_NAMESPACE}
           cd charts/pisa-controller 
           helm dependency build
           cd ..
@@ -90,7 +91,7 @@ jobs:
           kubectl port-forward -n default svc/test 3306:3306 &
       - name: "install mysql-cli" 
         run: |
-          apt-get install mysql-cli
+          apt-get install mysql-client -y
       - name: "run tests" 
         run: |
           bash test/kubernetes/run.sh
