@@ -101,6 +101,7 @@ sql_stmt -> SqlStmt:
   | set           { SqlStmt::Set($1) }
   | deallocate    { SqlStmt::Deallocate($1) }
   | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
+  | show_tables_stmt  { SqlStmt::ShowTablesStmt($1) }
   ;
 
 end_of_input -> SqlStmt:
@@ -5909,6 +5910,41 @@ opt_wild_or_where -> Option<WildOrWhere>:
    /* empty */                { None }
   | 'LIKE' 'TEXT_STRING'      { Some(WildOrWhere::LikeTextString(String::from($lexer.span_str($2.as_ref().unwrap().span())))) }
   | where_clause              { Some(WildOrWhere::WhereClause($1)) }
+;
+
+show_tables_stmt -> Box<ShowTablesStmt>:
+    'SHOW' opt_show_cmd_type 'TABLES' opt_db opt_wild_or_where
+    {
+    	Box::new(ShowTablesStmt {
+    	   span: $span,
+    	   opt_show_cmd_type: $2,
+    	   opt_db: $4,
+    	   opt_wild_or_where: $5,
+    	})
+    }
+;
+
+opt_show_cmd_type -> Option<ShowCmdType>:
+       /* empty */          { None }
+     | FULL                 { Some(ShowCmdType::Full) }
+     | EXTENDED             { Some(ShowCmdType::Extended) }
+     | EXTENDED FULL        { Some(ShowCmdType::ExtendedFull) }
+;
+
+opt_db -> Option<ShowTableDb>:
+       /* empty */  { None }
+      | from_or_in ident {
+           Some(ShowTableDb {
+		span: $span,
+		from_or_in: $1,
+		db: $2.0,
+           })
+        }
+;
+
+from_or_in -> FromOrIn:
+      'FROM' { FromOrIn::From }
+    | 'IN'   { FromOrIn::In }
 ;
 
 %%

@@ -3052,3 +3052,31 @@ pub enum WildOrWhere {
     LikeTextString(String),
     WhereClause(WhereClause),
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowTablesStmt {
+    pub span: Span,
+    pub opt_show_cmd_type: Option<ShowCmdType>,
+    pub opt_db: Option<ShowTableDb>,
+    pub opt_wild_or_where: Option<WildOrWhere>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ShowCmdType {
+    Full,
+    Extended,
+    ExtendedFull,
+}
+
+#[derive(Debug, Clone)]
+pub enum FromOrIn {
+    From,
+    In,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowTableDb {
+    pub span: Span,
+    pub from_or_in: FromOrIn,
+    pub db: String,
+}
