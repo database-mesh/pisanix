@@ -39,6 +39,8 @@ spec:
         app: nginx
         pisanix.io/inject: enabled
     spec:
+      imagePullSecrets:
+      - name: "uhub"
       volumes:
       - name: nginx 
         configMap:
