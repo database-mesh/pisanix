@@ -79,13 +79,6 @@ jobs:
         run: |
           export PISANIX_NAMESPACE="pisanix-system"
           kubectl create namespace ${PISANIX_NAMESPACE}
-<<<<<<< HEAD
-          kubectl label namespace default pisanix.io/inject=enabled
-          cd charts/pisa-controller 
-          helm dependency build
-          cd ..
-          helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.tag=${{ steps.vars.outputs.imagetag }},proxyImage.tag=${{ steps.vars.outputs.imagetag }}
-=======
           kubectl create secret docker-registry uhub --docker-server=${{ secrets.DOCKERHUB_CI_HOST }} --docker-username=${{ secrets.DOCKERHUB_CI_USERNAME }} --docker-password=${{ secrets.DOCKERHUB_CI_PASSWORD }}
           kubectl create secret docker-registry uhub --docker-server=${{ secrets.DOCKERHUB_CI_HOST }} --docker-username=${{ secrets.DOCKERHUB_CI_USERNAME }} --docker-password=${{ secrets.DOCKERHUB_CI_PASSWORD }} -n ${PISANIX_NAMESPACE}
           kubectl label namespace default pisanix.io/inject=enabled
@@ -94,7 +87,6 @@ jobs:
           helm dependency build
           cd ..
           helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=ci --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=ci --set image.imagePullSecrets[0].name=uhub
->>>>>>> chore(ci): intro uhub secret
           kubectl get pod -n ${PISANIX_NAMESPACE}
           kubectl get deployment pisa-controller -n ${PISANIX_NAMESPACE} -o yaml
           kubectl wait --timeout=60s --for=condition=ready --all pod -n ${PISANIX_NAMESPACE}
@@ -115,16 +107,11 @@ jobs:
           kubectl get pod --show-labels
           kubectl get pod $(kubectl get pod | grep test | cut -d" " -f1) -o yaml 
           kubectl wait --timeout=60s --for=condition=ready --all pod
-<<<<<<< HEAD
-          kubectl get pod --show-labels
-          kubectl port-forward svc/test 3308:3306 &
-=======
           # kubectl get pod --show-labels
           # kubectl get deployment test -o yaml
           # kubectl logs $(kubectl get pod | grep test | cut -d" " -f1) pisanix-proxy
           kubectl port-forward svc/test 3308:3306 &
           # kubectl port-forward pod/$(kubectl get pod | grep mysql | cut -d" " -f1) 3308:3306 &
->>>>>>> chore(ci): intro uhub secret
           sleep 3
       - name: "prepare mysql" 
         uses: shogo82148/actions-setup-mysql@v1
@@ -133,9 +120,4 @@ jobs:
       - name: "test port"
         run: "netstat -antlp | grep 3308"
       - name: "run some test" 
-<<<<<<< HEAD
         run: mysql -h127.0.0.1 -P3308 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
-=======
-        run: mysql -h127.0.0.1 -P3308 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
-   
->>>>>>> chore(ci): intro uhub secret
