@@ -43,14 +43,14 @@ jobs:
           echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
           if [[ $GITHUB_REF == refs/tags/* ]]; then
              echo "##[set-output name=tags;]$(echo ${GITHUB_REF#refs/tags/})"  
-             echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/tags/})"  
+             echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/tags/})-$(git rev-parse --short HEAD)"  
           else
              echo "##[set-output name=tags;]$(echo '')"
              echo "##[set-output name=imagetag;]$(echo '')"
           fi
           if [[ $GITHUB_REF == refs/heads/* ]]; then
              echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"  
-             echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/heads/})"  
+             echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/heads/})-$(git rev-parse --short HEAD)"  
           else
              echo "##[set-output name=branch;]$(echo '')"
              echo "##[set-output name=imagetag;]$(echo '')"
@@ -86,7 +86,7 @@ jobs:
           cd charts/pisa-controller 
           helm dependency build
           cd ..
-          helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=ci --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=ci --set image.imagePullSecrets[0].name=uhub
+          helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=${{ steps.vars.outputs.imagetag }} --set image.imagePullSecrets[0].name=uhub
           kubectl get pod -n ${PISANIX_NAMESPACE}
           kubectl get deployment pisa-controller -n ${PISANIX_NAMESPACE} -o yaml
           kubectl wait --timeout=60s --for=condition=ready --all pod -n ${PISANIX_NAMESPACE}
