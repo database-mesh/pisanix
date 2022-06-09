@@ -100,9 +100,12 @@ jobs:
           kubectl apply -f databaseendpoint.yml
           kubectl apply -f app.yml 
           sleep 3
-          # kubectl patch deployment test  -p='{"spec": {"template": {"spec": {"imagePullSecrets": [{"name": "uhub"}]}}}}'
-          kubectl patch pod $(kubectl get pod | grep test | cut -d" " -f1) -p='{"spec": {"imagePullSecrets": [{"name": "uhub"}]}}'
+          kubectl patch deployment test  -p='{"spec": {"replicas": 0, "template": {"spec": {"imagePullSecrets": [{"name": "uhub"}]}}}}'
+          # kubectl patch pod $(kubectl get pod | grep test | cut -d" " -f1) -p='{"spec": {"imagePullSecrets": [{"name": "uhub"}]}}'
           kubectl get pod --show-labels
+          sleep 15 
+          kubectl get pod --show-labels
+          kubectl scale deployment test --replicas=1 
           sleep 15 
           kubectl get pod --show-labels
           kubectl get pod $(kubectl get pod | grep test | cut -d" " -f1) -o yaml 
