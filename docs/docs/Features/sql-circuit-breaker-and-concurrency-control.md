@@ -23,7 +23,7 @@ regex = "SELECT \\*"
 
 限流规则表示在 `duration` 秒内并发运行匹配正则的 SQL 语句只能有 `max_concurrency` 条，
 
-#### 示例配置
+#### 配置示例
 如：不允许100秒内并发执行多于1条 `SELECT *`
 
 ``` toml
@@ -35,6 +35,22 @@ duration = 100
 
 > 注：可以有多个规则
 
+#### 使用场景
+SQL 限流通常使用在慢查询或者 OLAP 查询中，即一个 SQL 查询需要耗费大量时间的场景下。例如, 这里使用两个客户端同时执行以下 SQL 语句, 可以看出，当地一条 SQL 语句被阻塞后，在 `duration = 100` 周期内，另外一条 SQL 语句已经被插件限制执行 `max_concurrency = 1` 次。
+
+
+```
+# client 1
+
+MySQL [(none)]> SELECT * FROM (SELECT SLEEP(5)) AS sock;
+```
+
+```
+# client 2
+
+MySQL [test]> SELECT * from sbtest1 limit 1;
+ERROR 1047 (08S01):  concurrency control plugin rejected
+```
 
 ## 设计说明
 
