@@ -120,10 +120,11 @@ impl MySqlServer {
 
             // TODO: take the metrics as a function wrapper
             let earlier = SystemTime::now();
-
+            set_sql_under_processing_inc(&["pisa", "sql", "mysql"]);
             if let Err(err) = self.handle_command(&mut buf).await {
                 error!("exec command err: {:?}", err);
             };
+            set_sql_under_processing_dec(&["pisa", "sql", "mysql"]);
 
             if let Some(idx) = &self.concurrency_control_rule_idx {
                 self.plugin.as_mut().unwrap().concurrency_control.add_permits(*idx);

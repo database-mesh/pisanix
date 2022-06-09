@@ -70,6 +70,10 @@ pub fn set_sql_processed_duration(labels: &[&str], duration: f64) {
     SQL_PROCESSED_DURATION.with_label_values(labels).observe(duration);
 }
 
-pub fn set_sql_under_processing(labels: &[&str]) {
-    SQL_UNDER_PROCESSING.with_label_values(labels);
+pub fn set_sql_under_processing_inc(labels: &[&str]) {
+    SQL_UNDER_PROCESSING.with_label_values(labels).inc();
+}
+
+pub fn set_sql_under_processing_dec(labels: &[&str]) {
+    SQL_UNDER_PROCESSING.with_label_values(labels).dec();
 }
