@@ -87,10 +87,7 @@ jobs:
           helm dependency build
           cd ..
           helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=${{ steps.vars.outputs.imagetag }} --set image.imagePullSecrets[0].name=uhub
-          kubectl get pod -n ${PISANIX_NAMESPACE}
-          kubectl get deployment pisa-controller -n ${PISANIX_NAMESPACE} -o yaml
           kubectl wait --timeout=60s --for=condition=ready --all pod -n ${PISANIX_NAMESPACE}
-          kubectl get pod -n ${PISANIX_NAMESPACE}
           cd ..
           cd test/kubernetes
           kubectl apply -f mysql.yml 
@@ -98,15 +95,14 @@ jobs:
           kubectl apply -f trafficstrategy.yml
           kubectl apply -f databaseendpoint.yml
           kubectl apply -f app.yml 
-          sleep 3
+          sleep 5
           kubectl patch deployment test  -p='{"spec": {"replicas": 0, "template": {"spec": {"imagePullSecrets": [{"name": "uhub"}]}}}}'
           kubectl get pod --show-labels
-          sleep 15 
+          sleep 5 
           kubectl get pod --show-labels
           kubectl scale deployment test --replicas=1 
-          sleep 15 
+          sleep 5 
           kubectl get pod --show-labels
-          kubectl get pod $(kubectl get pod | grep test | cut -d" " -f1) -o yaml 
           kubectl wait --timeout=60s --for=condition=ready --all pod
           kubectl port-forward svc/test 3308:3306 &
           sleep 3
@@ -114,7 +110,5 @@ jobs:
         uses: shogo82148/actions-setup-mysql@v1
         with:
          mysql-version: '5.7'
-      - name: "test port"
-        run: "netstat -antlp | grep 3308"
-      - name: "run some test" 
+      - name: "run basic select test" 
         run: mysql -h127.0.0.1 -P3308 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
