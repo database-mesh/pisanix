@@ -90,7 +90,6 @@ jobs:
           kubectl get pod -n ${PISANIX_NAMESPACE}
           kubectl get deployment pisa-controller -n ${PISANIX_NAMESPACE} -o yaml
           kubectl wait --timeout=60s --for=condition=ready --all pod -n ${PISANIX_NAMESPACE}
-          # kubectl get deployment pisa-controller -n ${PISANIX_NAMESPACE} -o yaml  
           kubectl get pod -n ${PISANIX_NAMESPACE}
           cd ..
           cd test/kubernetes
@@ -101,7 +100,6 @@ jobs:
           kubectl apply -f app.yml 
           sleep 3
           kubectl patch deployment test  -p='{"spec": {"replicas": 0, "template": {"spec": {"imagePullSecrets": [{"name": "uhub"}]}}}}'
-          # kubectl patch pod $(kubectl get pod | grep test | cut -d" " -f1) -p='{"spec": {"imagePullSecrets": [{"name": "uhub"}]}}'
           kubectl get pod --show-labels
           sleep 15 
           kubectl get pod --show-labels
@@ -110,11 +108,7 @@ jobs:
           kubectl get pod --show-labels
           kubectl get pod $(kubectl get pod | grep test | cut -d" " -f1) -o yaml 
           kubectl wait --timeout=60s --for=condition=ready --all pod
-          # kubectl get pod --show-labels
-          # kubectl get deployment test -o yaml
-          # kubectl logs $(kubectl get pod | grep test | cut -d" " -f1) pisanix-proxy
           kubectl port-forward svc/test 3308:3306 &
-          # kubectl port-forward pod/$(kubectl get pod | grep mysql | cut -d" " -f1) 3308:3306 &
           sleep 3
       - name: "prepare mysql" 
         uses: shogo82148/actions-setup-mysql@v1
