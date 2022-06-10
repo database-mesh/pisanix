@@ -225,10 +225,6 @@ pub fn write_command_binary(item: (u8, &[u8]), dst: &mut BytesMut) {
     dst.extend_from_slice(item.1);
 }
 
-pub trait BufMutExt: BufMut {
-    fn parse_column_info(&mut self) {}
-}
-
 #[cfg(test)]
 mod test {
     //use std::{time::{Duration, self}, thread};

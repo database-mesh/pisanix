@@ -118,27 +118,6 @@ pub fn length_encode_int(data: &[u8]) -> (u64, bool, u64) {
     }
 }
 
-pub fn put_length_encoded_int(n: u64) -> Vec<u8> {
-    if n <= 250 {
-        vec![n as u8]
-    } else if n <= 0xffff {
-        vec![0xfc, n as u8, (n >> 8) as u8]
-    } else if n <= 0xffffff {
-        vec![0xfd, n as u8, (n >> 8) as u8, (n >> 16) as u8]
-    } else {
-        vec![
-            0xfe,
-            n as u8,
-            (n >> 8) as u8,
-            (n >> 25) as u8,
-            (n >> 32) as u8,
-            (n >> 40) as u8,
-            (n >> 48) as u8,
-            (n >> 56) as u8,
-        ]
-    }
-}
-
 pub trait BufExt: Buf {
     fn get_lenc_int(&mut self) -> (u64, bool, u64) {
         let first = self.get_u8();
@@ -151,23 +130,25 @@ pub trait BufExt: Buf {
         }
     }
 
+    fn get_lenc_str_bytes(&mut self) -> (Vec<u8>, bool);
+}
+
+// Implemet BufExt
+impl BufExt for BytesMut {
     fn get_lenc_str_bytes(&mut self) -> (Vec<u8>, bool) {
-        let (num, is_null, pos) = self.get_lenc_int();
-        self.advance(pos as usize);
+        let (num, is_null, _) = self.get_lenc_int();
 
         if num < 1 {
-            return (vec![0xfb], is_null);
+            return (vec![num as u8], is_null);
         }
 
         if !self.has_remaining() {
             return (vec![], false);
         }
 
-        (self.chunk().to_vec(), is_null)
+        (self.split_to(num as usize).to_vec(), is_null)
     }
 }
-
-impl BufExt for BytesMut {}
 
 pub trait BufMutExt: BufMut {
     fn put_lenc_int(&mut self, n: u64) {
@@ -187,15 +168,6 @@ pub trait BufMutExt: BufMut {
 }
 
 impl BufMutExt for Vec<u8> {}
-
-pub fn put_length_encoded_string(mut b: Vec<u8>) -> Vec<u8> {
-    //let mut data = vec![0; b.len() + 9];
-    let mut data = Vec::with_capacity(b.len() + 9);
-    data.put_lenc_int(b.len() as u64);
-    //data.append(&mut put_length_encoded_int(b.len() as u64));
-    data.append(&mut b);
-    data
-}
 
 pub fn length_encoded_string(data: &mut BytesMut) -> (Vec<u8>, bool) {
     let (num, is_null, pos) = length_encode_int(data);
@@ -233,28 +205,28 @@ pub fn get_length(buf: &[u8]) -> usize {
     out.to_le() as usize
 }
 
-#[test]
-fn test_timestap() {
-    println!("{:#?}", random_buf(20));
-}
 #[cfg(test)]
 mod test {
     use bytes::BytesMut;
-
-    use super::length_encoded_string;
+    use super::{length_encoded_string, BufExt};
 
     #[test]
     fn test_length_enc_string() {
-        let data = [
-            0x14, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x00, 0x0b, 0x01,
-            0x06, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x02, 0x01, 0x31,
-        ];
-
-        //skip status, warnings, transactions 6 bytes
+        let data = [0x04, 0x55, 0x73, 0x65, 0x72];
         let mut buf = BytesMut::from(&data[..]);
-        let _ = buf.split_to(11);
 
-        let (_info, _is_null) = length_encoded_string(&mut buf);
-        println!("buf {:?}", String::from_utf8_lossy(&buf));
+        let (info, _is_null) = length_encoded_string(&mut buf);
+        let name = std::str::from_utf8(&info).unwrap();
+        assert_eq!(name, "User");
+    }
+
+    #[test]
+    fn test_buf_length_enc_string() {
+        let data = [0x04, 0x55, 0x73, 0x65, 0x72];
+        let mut buf = BytesMut::from(&data[..]);
+
+        let (info, _is_null) = buf.get_lenc_str_bytes();
+        let name = std::str::from_utf8(&info).unwrap();
+        assert_eq!(name, "User");
     }
 }
