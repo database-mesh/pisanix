@@ -404,14 +404,17 @@ mod test {
         .unwrap();
         let _ = driver.handshake().await;
 
+        let query = "select user from mysql.user".as_bytes();
         let mut stream =
-            driver.send_query(&"select user from mysql.user".as_bytes().to_vec()).await.unwrap();
+            driver.send_query(query).await.unwrap();
 
         while let Some(data) = stream.next().await {
             assert_eq!(data.is_ok(), true);
         }
 
-        let s = driver.send_common_command(3, &"show databases;".as_bytes().to_vec()).await;
+        let query = "show databases;".as_bytes();
+
+        let s = driver.send_common_command(3, query).await;
 
         let mut stream = s.unwrap();
 
