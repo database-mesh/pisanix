@@ -108,69 +108,137 @@ iota! {
          ,CLIENT_SESSION_TRACK
 }
 
-iota! {
-    pub const MYSQL_TYPE_DECIMAL: u8 = iota;
-         ,MYSQL_TYPE_TINY
-         ,MYSQL_TYPE_SHORT
-         ,MYSQL_TYPE_LONG
-         ,MYSQL_TYPE_FLOAT
-         ,MYSQL_TYPE_DOUBLE
-         ,MYSQL_TYPE_NULL
-         ,MYSQL_TYPE_TIMESTAMP
-         ,MYSQL_TYPE_LONGLONG
-         ,MYSQL_TYPE_INT24
-         ,MYSQL_TYPE_DATE
-         ,MYSQL_TYPE_TIME
-         ,MYSQL_TYPE_DATETIME
-         ,MYSQL_TYPE_YEAR
-         ,MYSQL_TYPE_NEWDATE
-         ,MYSQL_TYPE_VARCHAR
-         ,MYSQL_TYPE_BIT
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq)]
+#[repr(u8)]
+pub enum ColumnType {
+    MYSQL_TYPE_DECIMAL,
+    MYSQL_TYPE_TINY,
+    MYSQL_TYPE_SHORT,
+    MYSQL_TYPE_LONG,
+    MYSQL_TYPE_FLOAT,
+    MYSQL_TYPE_DOUBLE,
+    MYSQL_TYPE_NULL,
+    MYSQL_TYPE_TIMESTAMP,
+    MYSQL_TYPE_LONGLONG,
+    MYSQL_TYPE_INT24,
+    MYSQL_TYPE_DATE,
+    MYSQL_TYPE_TIME,
+    MYSQL_TYPE_DATETIME,
+    MYSQL_TYPE_YEAR,
+    MYSQL_TYPE_NEWDATE,
+    MYSQL_TYPE_VARCHAR,
+    MYSQL_TYPE_BIT,
+    MYSQL_TYPE_NEWDECIMAL = 0xf6,
+    MYSQL_TYPE_ENUM,
+    MYSQL_TYPE_SET,
+    MYSQL_TYPE_TINY_BLOB,
+    MYSQL_TYPE_MEDIUM_BLOB,
+    MYSQL_TYPE_LONG_BLOB,
+    MYSQL_TYPE_BLOB,
+    MYSQL_TYPE_VAR_STRING,
+    MYSQL_TYPE_STRING,
+    MYSQL_TYPE_GEOMETRY,
 }
 
-iota! {
-    const MYSQL_TYPE_NEWDECIMAL: u8 = iota + 0xf6;
-         ,MYSQL_TYPE_ENUM
-         ,MYSQL_TYPE_SET
-         ,MYSQL_TYPE_TINY_BLOB
-         ,MYSQL_TYPE_MEDIUM_BLOB
-         ,MYSQL_TYPE_LONG_BLOB
-         ,MYSQL_TYPE_BLOB
-         ,MYSQL_TYPE_VAR_STRING
-         ,MYSQL_TYPE_STRING
-         ,MYSQL_TYPE_GEOMETRY
+impl From<u8> for ColumnType {
+    #[inline]
+    fn from(t: u8) -> ColumnType {
+        unsafe { std::mem::transmute::<u8, ColumnType>(t) }
+    }
 }
 
-#[allow(dead_code)]
-const NOT_NULL_FLAG: i64 = 1;
-#[allow(dead_code)]
-const PRI_KEY_FLAG: i64 = 2;
-#[allow(dead_code)]
-const UNIQUE_KEY_FLAG: i64 = 4;
-#[allow(dead_code)]
-const BLOB_FLAG: i64 = 16;
-#[allow(dead_code)]
-const UNSIGNED_FLAG: i64 = 32;
-#[allow(dead_code)]
-const ZEROFILL_FLAG: i64 = 64;
-#[allow(dead_code)]
-const BINARY_FLAG: i64 = 128;
-#[allow(dead_code)]
-const ENUM_FLAG: i64 = 256;
-#[allow(dead_code)]
-const AUTO_INCREMENT_FLAG: i64 = 512;
-#[allow(dead_code)]
-const TIMESTAMP_FLAG: i64 = 1024;
-#[allow(dead_code)]
-const SET_FLAG: i64 = 2048;
-#[allow(dead_code)]
-const NUM_FLAG: i64 = 32768;
-#[allow(dead_code)]
-const PART_KEY_FLAG: i64 = 16384;
-#[allow(dead_code)]
-const GROUP_FLAG: i64 = 32768;
-#[allow(dead_code)]
-const UNIQUE_FLAG: i64 = 65536;
+impl AsRef<str> for ColumnType {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        match self {
+            ColumnType::MYSQL_TYPE_DECIMAL => "decimal",
+            ColumnType::MYSQL_TYPE_TINY => "tiny",
+            ColumnType::MYSQL_TYPE_SHORT => "short",
+            ColumnType::MYSQL_TYPE_LONG => "long",
+            ColumnType::MYSQL_TYPE_FLOAT => "float",
+            ColumnType::MYSQL_TYPE_DOUBLE => "double",
+            ColumnType::MYSQL_TYPE_NULL => "null",
+            ColumnType::MYSQL_TYPE_TIMESTAMP => "timestamp",
+            ColumnType::MYSQL_TYPE_LONGLONG => "longlong",
+            ColumnType::MYSQL_TYPE_INT24 => "int24",
+            ColumnType::MYSQL_TYPE_DATE => "date",
+            ColumnType::MYSQL_TYPE_TIME => "time",
+            ColumnType::MYSQL_TYPE_DATETIME => "datetime",
+            ColumnType::MYSQL_TYPE_YEAR => "year",
+            ColumnType::MYSQL_TYPE_NEWDATE => "newdate",
+            ColumnType::MYSQL_TYPE_VARCHAR => "varchar",
+            ColumnType::MYSQL_TYPE_BIT => "bit",
+            ColumnType::MYSQL_TYPE_NEWDECIMAL => "new_decimal",
+            ColumnType::MYSQL_TYPE_ENUM => "enum",
+            ColumnType::MYSQL_TYPE_SET => "set",
+            ColumnType::MYSQL_TYPE_TINY_BLOB => "tiny_blob",
+            ColumnType::MYSQL_TYPE_MEDIUM_BLOB => "medium_blob",
+            ColumnType::MYSQL_TYPE_LONG_BLOB => "long_blob",
+            ColumnType::MYSQL_TYPE_BLOB => "tiny_blob",
+            ColumnType::MYSQL_TYPE_VAR_STRING => "var",
+            ColumnType::MYSQL_TYPE_STRING => "string",
+            ColumnType::MYSQL_TYPE_GEOMETRY => "geometry",
+        }
+    }
+}
+
+// Column flag, see https://dev.mysql.com/doc/dev/mysql-server/latest/group__group__cs__column__definition__flags.html
+// Column flag is 2 bytes
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq)]
+#[repr(u16)]
+pub enum ColumnFlag {
+    NOT_NULL_FLAG = 1,  
+    PRI_KEY_FLAG = 2,
+    UNIQUE_KEY_FLAG = 4,
+    MULTIPLE_KEY_FLAG = 8,
+    BLOB_FLAG = 16,
+    UNSIGNED_FLAG = 32,
+    ZEROFILL_FLAG = 64,
+    BINARY_FLAG = 128,
+    ENUM_FLAG = 256,
+    AUTO_INCREMENT_FLAG = 512,
+    TIMESTAMP_FLAG = 1024,
+    SET_FLAG = 2048,
+    NO_DEFAULT_VALUE_FLAG = 4096,
+    ON_UPDATE_NOW_FLAG = 8192,
+    PART_KEY_FLAG = 16384,
+    NUM_FLAG = 32768,
+}
+
+impl From<u16> for ColumnFlag {
+    #[inline]
+    fn from(t: u16) -> ColumnFlag {
+        unsafe { std::mem::transmute::<u16, ColumnFlag>(t) }
+    }
+}
+
+
+impl AsRef<str> for ColumnFlag {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        match self {
+            ColumnFlag::NOT_NULL_FLAG => "not_null",
+            ColumnFlag::PRI_KEY_FLAG => "pri_key",
+            ColumnFlag::UNIQUE_KEY_FLAG => "unique_key",
+            ColumnFlag::MULTIPLE_KEY_FLAG => "multiple_key",
+            ColumnFlag::BLOB_FLAG => "blob",
+            ColumnFlag::UNSIGNED_FLAG => "unsigned",
+            ColumnFlag::ZEROFILL_FLAG => "zerofill",
+            ColumnFlag::BINARY_FLAG => "binary",
+            ColumnFlag::ENUM_FLAG => "enum",
+            ColumnFlag::AUTO_INCREMENT_FLAG => "auto_increment",
+            ColumnFlag::TIMESTAMP_FLAG => "timestamp",
+            ColumnFlag::SET_FLAG => "set",
+            ColumnFlag::NO_DEFAULT_VALUE_FLAG => "no_default",
+            ColumnFlag::ON_UPDATE_NOW_FLAG => "on_update_now",
+            ColumnFlag::PART_KEY_FLAG => "part_key",
+            ColumnFlag::NUM_FLAG => "num",
+        }
+    }
+}
+
 #[allow(dead_code)]
 const AUTH_NAME: &str = "mysql_native_password";
 
@@ -217,7 +285,32 @@ pub enum Com {
     ResetConnection,
 }
 
-#[test]
-fn test_const() {
-    assert_eq!(NOT_NULL_FLAG, 1);
+
+
+
+#[cfg(test)]
+mod test {
+    use super::{ColumnType, ColumnFlag};
+
+    #[test]
+    fn test_column_type() {
+        let t = ColumnType::MYSQL_TYPE_DATE;
+        assert_eq!(t as u8, 0x0a);
+
+        let columt_type = ColumnType::from(0x0a);
+        assert_eq!(columt_type, ColumnType::MYSQL_TYPE_DATE);
+
+        assert_eq!(columt_type.as_ref(), "date")
+    }
+
+    #[test]
+    fn test_column_flag() {
+        let t = ColumnFlag::ENUM_FLAG;
+        assert_eq!(t as u16, 0x100);
+
+        let column_flag = ColumnFlag::from(0x100);
+        assert_eq!(column_flag, ColumnFlag::ENUM_FLAG);
+
+        assert_eq!(column_flag.as_ref(), "enum");
+    }
 }
