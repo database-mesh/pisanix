@@ -26,10 +26,15 @@ pub struct ColumnInfo {
     pub decimals: u8,
 }
 
+/// ColumnBuf trait， Inherit BufExt
 pub trait ColumnBuf: BufExt {
     fn parse_column_info(&mut self) -> ColumnInfo;
 }
 
+/// Implments ColumnBuf for BytesMut.
+/// For example:
+/// let mut buf = BytesMut::new(&[0x01,0x02]);
+/// buf.parse_column_info(); 
 impl ColumnBuf for BytesMut {
     // Parse column info, see https://dev.mysql.com/doc/internals/en/com-query-response.html#packet-Protocol::ColumnDefinition41
     fn parse_column_info(&mut self) -> ColumnInfo {
