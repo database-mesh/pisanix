@@ -51,11 +51,11 @@ impl<T: ConnLike + ConnAttr> PoolInner<T> {
         PoolInner { inner: ArrayQueue::new(size) }
     }
 
-    pub fn get_conn(&self) -> Option<T> {
+    fn get_conn(&self) -> Option<T> {
         self.inner.pop()
     }
 
-    pub fn put_conn(&self, conn: T) {
+    fn put_conn(&self, conn: T) {
         if !self.inner.is_full() {
             let _ = self.inner.push(conn);
         }
@@ -128,6 +128,10 @@ where
         };
 
         Ok(PoolConn { pool: self.pool.clone(), conn: Some(conn) })
+    }
+
+    pub fn len(&self) -> usize {
+        self.pool.inner.len()
     }
 }
 
