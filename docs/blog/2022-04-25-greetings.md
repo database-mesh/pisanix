@@ -11,7 +11,7 @@ As the first open source project of [Database Mesh 2.0](https://www.database-mes
 
 ## Who is Pisanix ?
 
-Pisanix is the open source solution for Database Mesh, which composes of threee different componenets: `Pisa-Controller`, `Pisa-Proxy` and `Pisa-Daemon`(***Comming Soon***), and is sponsored by [SphereEx](https://www.sphere-ex.com).
+Pisanix is the open source solution for Database Mesh, which composes of three different components: `Pisa-Controller`, `Pisa-Proxy` and `Pisa-Daemon`(***Coming Soon***), and is sponsored by [SphereEx](https://www.sphere-ex.com).
 
 Written with Golang and Rustlang, Pisanix is going to build an experience that support SQL aware traffic management, runtime oriented resource programming and Database Reliability Engineering.
 
@@ -23,7 +23,7 @@ Like classical Service Mesh deployment pattern, Pisanix also contains a `control
 
 Act as the required part of Pisanix, Pisa-Controller is responsible for:
 
-* Sidecar injection: Using MutationAdmissionWebhook inject sidecar to selected Pods
+* Sidecar injection: Using MutatingAdmissionWebhook inject sidecar to selected Pods
 * Pisa-Proxy configuration conversion: Retrieve service discovery, load balance, concurrency control, SQL circuit break configs in CRDs and convert them to Pisa-Proxy configurations
 * Pisa-Daemon configuration conversion: Retrieve traffic QoS configs in CRDs and convert them to Pisa-Daemon configurations
 
@@ -57,8 +57,8 @@ This is the first release of `Pisanix`.
 #### Pisa-Controller
 ##### Setup
 * Label-based sidecar injection
-##### Configuration convertion
-* Kubernetes CRD convertion to Pisa-Proxy configurations, including `VirtualDatabase`, `TrafficStrategy`, `DatabaseEndpoint` 
+##### Configuration conversion 
+* Kubernetes CRD conversion to Pisa-Proxy configurations, including `VirtualDatabase`, `TrafficStrategy`, `DatabaseEndpoint` 
 
 #### Pisa-Proxy
 ##### Setup
@@ -79,15 +79,15 @@ This is the first release of `Pisanix`.
 
 ## What can I do with Pisanix ?
 
-Database Mesh designs with these buildling blocks and terminology below:
-* Virtual Database: A database endpoint could be consumed by appliction
-* Traffic Strategy: Various strategy for database traffic, such as load balancing, shardng, rate limite and circuit breaker
+Database Mesh designs with these building blocks and terminology below:
+* Virtual Database: A database endpoint could be consumed by application
+* Traffic Strategy: Various strategy for database traffic, such as load balancing, sharding, rate limit and circuit breaker
 * Access Control: Providing fine-grained admission mechanism
 * Security Claim: Claim for security enhance mechanism, such as encryption
 * Audit Request: Request for user operation audit
 * Observability: Provide a config for observability of databases
 * Event Bus: Sink database change events to external systems
-* QoS Claim: Porviding several object guarantations for databases
+* QoS Claim: Porviding several object guarantee for databases
 * Backup Job: Database backup jobs
 * Schema Pipeline: Using pipeline for versioned schema changing
 
@@ -164,7 +164,7 @@ After the application is running, we can checkout the Socks-shop website as belo
 ![](/img/socks-shop.png)
 
 ## How about the next steps ?
-As we can see that Pisanix is very young, and have a definitly long way to run. In the next, we will first enhance the ability of traffic governance, like adding data sharding, data access behavior auditing, runtime resource Qos, etc. And we also continuously improving the performance and operationability of Pisanix. More extensions mechanism like plugins will be in the future, help users to build their own solution very easily.
+As we can see that Pisanix is very young, and have a definitely long way to run. In the next, we will first enhance the ability of traffic governance, like adding data sharding, data access behavior auditing, runtime resource Qos, etc. And we also continuously improving the performance and operability of Pisanix. More extensions mechanism like plugins will be in the future, help users to build their own solution very easily.
 
 ## Community Call
 
