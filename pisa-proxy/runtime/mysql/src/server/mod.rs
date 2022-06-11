@@ -33,7 +33,6 @@ use mysql_protocol::{
 };
 use once_cell::sync::Lazy;
 use parking_lot::Mutex as plMutex;
-// use pisa_metrics::metrics::*;
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
 use rocket_prometheus::prometheus::{opts, GaugeVec, HistogramOpts, HistogramVec, IntCounterVec};
@@ -479,7 +478,7 @@ pub static SQL_UNDER_PROCESSING: Lazy<GaugeVec> = Lazy::new(|| {
 });
 
 #[derive(Clone, Copy)]
-pub struct MySqlServerMetricsCollector {}
+pub struct MySqlServerMetricsCollector;
 
 impl MySqlServerMetricsCollector {
     pub fn new() -> Self {
