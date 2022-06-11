@@ -14,7 +14,7 @@
 
 use config::config::PisaConfig;
 use pisa_error::error::*;
-use pisa_metrics::metrics::PisaMetrics;
+use pisa_metrics::metrics::MetricsManager;
 
 use crate::controllers::{healthz::healthz, version::version};
 
@@ -25,27 +25,27 @@ pub trait HttpServer {
 
 pub struct RocketServer {
     pisa_config: PisaConfig,
+    metrics_manager: MetricsManager,
 }
 
-pub fn new_rocket_server(pisa_config: PisaConfig) -> RocketServer {
-    RocketServer { pisa_config }
+pub fn new_rocket_server(pisa_config: PisaConfig, metrics_manager: MetricsManager) -> RocketServer {
+    RocketServer { pisa_config, metrics_manager }
 }
 
 impl RocketServer {
-    pub fn new(pisa_config: PisaConfig) -> RocketServer {
-        RocketServer { pisa_config }
+    pub fn new(pisa_config: PisaConfig, metrics_manager: MetricsManager) -> RocketServer {
+        RocketServer { pisa_config, metrics_manager }
     }
 }
 
 #[async_trait::async_trait]
 impl HttpServer for RocketServer {
     async fn start(&mut self) -> Result<(), Error> {
-        let m = PisaMetrics::new();
-        m.register();
-
+        self.metrics_manager.register();
         let p = &self.pisa_config.get_admin().port.to_string();
         let httpport: i32 = p.parse().unwrap();
 
+        // TODO: align this with configuration
         let hostaddr = "0.0.0.0";
         let figment = rocket::Config::figment()
             .merge(("port", httpport))
@@ -54,9 +54,9 @@ impl HttpServer for RocketServer {
             .merge(("shutdown.ctrlc", false));
 
         return rocket::Rocket::custom(figment)
-            .attach(m.get_routes())
+            .attach(self.metrics_manager.get_routes())
             .mount("/", routes![healthz, version])
-            .mount("/metrics", m.get_routes())
+            .mount("/metrics", self.metrics_manager.get_routes()) // TODO: Try remove one ?
             .launch()
             .await
             .map_err(|e| Error::new(ErrorKind::Rocket(Box::new(e))));
