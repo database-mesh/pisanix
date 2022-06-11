@@ -31,10 +31,12 @@ use mysql_protocol::{
     server::{conn::Connection, err::MySQLError},
     util::*,
 };
+use once_cell::sync::Lazy;
 use parking_lot::Mutex as plMutex;
-use pisa_metrics::metrics::*;
+// use pisa_metrics::metrics::*;
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
+use rocket_prometheus::prometheus::{opts, GaugeVec, HistogramOpts, HistogramVec, IntCounterVec};
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 use tracing::{debug, error};
 
@@ -51,6 +53,8 @@ pub struct MySqlServer {
     // `concurrency_control_rule_idx` is index of concurrency_control rules
     // `concurrency_control_rule_idx` is required to add permits when the concurrency_control layer service is enabled
     concurrency_control_rule_idx: Option<usize>,
+
+    pub metrics_collector: MySqlServerMetricsCollector,
 }
 
 impl MySqlServer {
@@ -62,6 +66,7 @@ impl MySqlServer {
         parser: Arc<Parser>,
         ast_cache: Arc<plMutex<ParserAstCache>>,
         plugin: Option<PluginPhase>,
+        metrics_collector: MySqlServerMetricsCollector,
     ) -> MySqlServer {
         MySqlServer {
             client: Connection::new(
@@ -77,6 +82,7 @@ impl MySqlServer {
             plugin,
             is_quit: false,
             concurrency_control_rule_idx: None,
+            metrics_collector,
         }
     }
 
@@ -119,12 +125,13 @@ impl MySqlServer {
             }
 
             // TODO: take the metrics as a function wrapper
+            self.metrics_collector.set_sql_processed_total(&["runtime", "sql", "mysql"]);
             let earlier = SystemTime::now();
-            set_sql_under_processing_inc(&["pisa", "sql", "mysql"]);
+            self.metrics_collector.set_sql_under_processing_inc(&["runtime", "sql", "mysql"]);
             if let Err(err) = self.handle_command(&mut buf).await {
                 error!("exec command err: {:?}", err);
             };
-            set_sql_under_processing_dec(&["pisa", "sql", "mysql"]);
+            self.metrics_collector.set_sql_under_processing_dec(&["runtime", "sql", "mysql"]);
 
             if let Some(idx) = &self.concurrency_control_rule_idx {
                 self.plugin.as_mut().unwrap().concurrency_control.add_permits(*idx);
@@ -133,7 +140,8 @@ impl MySqlServer {
 
             let now = SystemTime::now();
             let duration = now.duration_since(earlier).unwrap();
-            set_sql_processed_duration(&["pisa", "sql", "mysql"], duration.as_secs_f64());
+            self.metrics_collector
+                .set_sql_processed_duration(&["runtime", "sql", "mysql"], duration.as_secs_f64());
         }
     }
 
@@ -442,5 +450,54 @@ impl MySqlServer {
         }
 
         Ok(())
+    }
+}
+
+pub static SQL_PROCESSED_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
+        opts!("sql_processed_total", "The total of processed SQL"),
+        &["domain", "type", "server"],
+    )
+    .expect("Could not create SQL_PROCESSED_TOTAL")
+});
+
+pub static SQL_PROCESSED_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    let opt = HistogramOpts {
+        common_opts: opts!("sql_processed_duration", "The duration of processed SQL"),
+        buckets: Vec::<f64>::new(),
+    };
+    HistogramVec::new(opt, &["domain", "type", "server"])
+        .expect("Cound not create SQL_PROCESSED_DURATION")
+});
+
+pub static SQL_UNDER_PROCESSING: Lazy<GaugeVec> = Lazy::new(|| {
+    GaugeVec::new(
+        opts!("sql_under_processing", "The active SQL under processing"),
+        &["domain", "type", "server"],
+    )
+    .expect("Cound not create SQL_UNDER_PROCESSING")
+});
+
+#[derive(Clone, Copy)]
+pub struct MySqlServerMetricsCollector {}
+
+impl MySqlServerMetricsCollector {
+    pub fn new() -> Self {
+        MySqlServerMetricsCollector {}
+    }
+    pub fn set_sql_processed_total(&self, labels: &[&str]) {
+        SQL_PROCESSED_TOTAL.with_label_values(labels).inc();
+    }
+
+    pub fn set_sql_processed_duration(&self, labels: &[&str], duration: f64) {
+        SQL_PROCESSED_DURATION.with_label_values(labels).observe(duration);
+    }
+
+    pub fn set_sql_under_processing_inc(&self, labels: &[&str]) {
+        SQL_UNDER_PROCESSING.with_label_values(labels).inc();
+    }
+
+    pub fn set_sql_under_processing_dec(&self, labels: &[&str]) {
+        SQL_UNDER_PROCESSING.with_label_values(labels).dec();
     }
 }
