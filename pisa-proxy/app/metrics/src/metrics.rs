@@ -12,68 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use once_cell::sync::Lazy;
-use rocket_prometheus::{
-    prometheus::{opts, GaugeVec, HistogramOpts, HistogramVec, IntCounterVec},
-    PrometheusMetrics,
-};
+use rocket_prometheus::PrometheusMetrics;
+use runtime_mysql::server::*;
 
-pub static SQL_PROCESSED_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
-    IntCounterVec::new(
-        opts!("sql_processed_total", "The total of processed SQL"),
-        &["domain", "type", "server"],
-    )
-    .expect("Could not create SQL_PROCESSED_TOTAL")
-});
-
-pub static SQL_PROCESSED_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
-    let opt = HistogramOpts {
-        common_opts: opts!("sql_processed_duration", "The duration of processed SQL"),
-        buckets: Vec::<f64>::new(),
-    };
-    HistogramVec::new(opt, &["domain", "type", "server"])
-        .expect("Cound not create SQL_PROCESSED_DURATION")
-});
-
-pub static SQL_UNDER_PROCESSING: Lazy<GaugeVec> = Lazy::new(|| {
-    GaugeVec::new(
-        opts!("sql_under_processing", "The active SQL under processing"),
-        &["domain", "type", "server"],
-    )
-    .expect("Cound not create SQL_UNDER_PROCESSING")
-});
-
-pub struct PisaMetrics {
-    m: PrometheusMetrics,
+pub struct MetricsManager {
+    pub server: PrometheusMetrics,
 }
 
-impl PisaMetrics {
+impl MetricsManager {
     pub fn new() -> Self {
-        PisaMetrics { m: PrometheusMetrics::new() }
+        MetricsManager { server: PrometheusMetrics::new() }
     }
-    // TODO: implementing register different metrics
-    pub fn register(&self) {
-        self.m.registry().register(Box::new(SQL_PROCESSED_TOTAL.clone())).unwrap();
-        self.m.registry().register(Box::new(SQL_PROCESSED_DURATION.clone())).unwrap();
-        self.m.registry().register(Box::new(SQL_UNDER_PROCESSING.clone())).unwrap();
-    }
+
     pub fn get_routes(&self) -> PrometheusMetrics {
-        self.m.clone()
+        self.server.clone()
     }
-}
 
-pub fn set_sql_processed_total(labels: &[&str]) {
-    SQL_PROCESSED_TOTAL.with_label_values(labels).inc();
-}
-
-pub fn set_sql_processed_duration(labels: &[&str], duration: f64) {
-    SQL_PROCESSED_DURATION.with_label_values(labels).observe(duration);
-}
-
-pub fn set_sql_under_processing_inc(labels: &[&str]) {
-    SQL_UNDER_PROCESSING.with_label_values(labels).inc();
-}
-
-pub fn set_sql_under_processing_dec(labels: &[&str]) {
-    SQL_UNDER_PROCESSING.with_label_values(labels).dec();
+    pub fn register(&self) {
+        self.server.registry().register(Box::new(SQL_PROCESSED_TOTAL.clone())).unwrap();
+        self.server.registry().register(Box::new(SQL_PROCESSED_DURATION.clone())).unwrap();
+        self.server.registry().register(Box::new(SQL_UNDER_PROCESSING.clone())).unwrap();
+    }
 }
