@@ -1512,9 +1512,8 @@ dependencies = [
 name = "metrics"
 version = "0.1.0"
 dependencies = [
- "once_cell",
- "rocket",
  "rocket_prometheus",
+ "runtime_mysql",
 ]
 
 [[package]]
@@ -2022,6 +2021,7 @@ dependencies = [
  "config",
  "futures",
  "http 0.1.0",
+ "metrics",
  "num_cpus 1.13.1",
  "pprof",
  "proxy",
@@ -2597,12 +2597,13 @@ dependencies = [
  "futures",
  "iota",
  "loadbalance",
- "metrics",
  "mysql_parser",
  "mysql_protocol",
+ "once_cell",
  "parking_lot 0.12.0",
  "plugin",
  "proxy",
+ "rocket_prometheus",
  "serde",
  "serde_derive",
  "thiserror",

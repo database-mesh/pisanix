@@ -25,7 +25,8 @@ mysql_protocol = {path = "../../protocol/mysql", package = "mysql_protocol"}
 pisa_error = {path = "../../error", package = "error"}
 loadbalance = {path = "../../proxy/loadbalance"}
 endpoint = {path = "../../proxy/endpoint"}
-pisa_metrics = {path =  "../../app/metrics", package = "metrics"}
 mysql_parser = {path = "../../parser/mysql"}
 common = {path = "../common"}
 plugin = {path = "../../plugin" }
+rocket_prometheus = "0.10.0-rc.1"
+once_cell = "1.10.0"
