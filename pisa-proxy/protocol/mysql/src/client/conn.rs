@@ -122,7 +122,7 @@ impl ClientConn {
             }
 
             match stmt_codec.next().await {
-                Some(Ok(None)) => {},
+                Some(Ok(None)) => {}
 
                 Some(Ok(Some(data))) => {
                     // If data.len() > 0, means that `Prepare` return error.
@@ -204,6 +204,10 @@ impl ClientConn {
         self.framed = Some(Box::new(ClientCodec::Common(common_codec)));
 
         Ok(CommonStream::new(self.framed.as_mut()))
+    }
+
+    pub fn get_endpoint(&self) -> Option<String> {
+        Some(self.endpoint.clone())
     }
 }
 

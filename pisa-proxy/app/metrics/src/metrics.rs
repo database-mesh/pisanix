@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use rocket_prometheus::PrometheusMetrics;
-use runtime_mysql::server::*;
+use runtime_mysql::server::metrics::*;
 
 pub struct MetricsManager {
     pub server: PrometheusMetrics,
