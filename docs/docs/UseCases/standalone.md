@@ -12,7 +12,7 @@ sidebar_position: 2
 
 ## 部署说明
 
-Pisa-Proxy 支持从配置文件和 Remote API 获取配置。在当前版本,若需要从本地文件加载配置需要导出 ```LOCAL_CONFIG=true``` 环境变量，并通过 ```-c，--config``` 参数指定配置文件路径。若不指定，默认从 ```./etc/config.toml``` 文件中进行加载。Pisa-Proxy 支持通过命令行参数和环境变量进行服务启动配置。配置详解如下：
+Pisa-Proxy 支持从配置文件和 Remote API 获取配置。在当前版本,若需要从本地文件加载配置需要导出 ```LOCAL_CONFIG=true``` 环境变量，并通过 ```-c，--config``` 参数指定配置文件路径。若不指定，默认从 ```./etc/config.toml``` 文件中进行加载。此外，Pisa-Proxy 支持通过命令行参数和环境变量进行服务启动配置。配置详解如下：
 
 ### 命令行参数
 ```
@@ -87,8 +87,15 @@ host = "127.0.0.1"
 port = 3307
 ```
 
-### 配置示例
-#### 配置多个代理
+### 部署示例
+
+#### 编译 Pisa-Proxy
+首先在 `pisa-proxy` 目录中执行 `make build` 即可编译得到二进制的 `pisa-proxy`。注意，首次编译更新 Crates 耗时较长。
+
+
+#### 编写配置文件 
+然后参考如下示例，配置多个代理或后端数据库负载均衡：
+
 ```
 [admin]
 port = "8081"
@@ -162,5 +169,14 @@ password = "root"
 host = "127.0.0.1"
 port = 3308
 ```
-在部署 ***Pisa-Proxy*** 后即可使用应用根据配置信息进行访问。
+
+#### 启动 Pisa-Proxy
+
+这里假设配置文件存放路径为 `examples/example-config.toml`，最后使用如下命令即可完成启动。
+
+```shell
+LOCAL_CONFIG=true ../bin/proxy -c examples/example-config.toml
+```
+
+当观察日志确认***Pisa-Proxy*** 启动后即可进行访问。
 
