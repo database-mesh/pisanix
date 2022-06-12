@@ -26,7 +26,8 @@ use proxy::{
 };
 use tracing::error;
 
-use crate::server::{MySqlServer, MySqlServerMetricsCollector};
+use crate::server::metrics::MySqlServerMetricsCollector;
+use crate::server::server::MySqlServer;
 
 pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,
