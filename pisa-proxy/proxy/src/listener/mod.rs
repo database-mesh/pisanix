@@ -18,13 +18,19 @@ use tokio::net::{TcpListener, TcpStream};
 use tracing::info;
 
 pub struct Listener {
+    pub name: String,
     pub listen_addr: String,
     pub backend_type: String,
 }
 
 impl Listener {
     pub fn build_listener(&mut self) -> Result<TcpListener, Error> {
-        info!("{:?} proxy listen on: {:?}", self.backend_type.clone(), self.listen_addr.clone());
+        info!(
+            "{:?} proxy {:?} is listening on: {:?}",
+            self.backend_type.clone(),
+            self.name.clone(),
+            self.listen_addr.clone()
+        );
         let listener = {
             let std_listenner = match std::net::TcpListener::bind(self.listen_addr.clone()) {
                 Err(err) => return Err(err),
@@ -45,6 +51,7 @@ impl Listener {
             Err(err) => return Err(err),
         };
 
+        //TODO: need refactor this log
         info!("pisa-proxy client_ip: {:?} - backend_type: {:?}", addr.ip(), self.backend_type);
 
         socket.set_nodelay(true).unwrap();
