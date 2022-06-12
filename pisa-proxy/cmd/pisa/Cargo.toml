@@ -28,4 +28,5 @@ server = {path = "../../app/server"}
 http = {path = "../../http"}
 proxy = {path = "../../proxy"}
 config = {path = "../../app/config"}
+pisa_metrics = {path = "../../app/metrics", package = "metrics"}
 

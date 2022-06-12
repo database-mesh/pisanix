@@ -22,6 +22,7 @@ use tracing::{error, info, warn, Level};
 extern crate tokio;
 
 use config::config::PisaConfig;
+use pisa_metrics::metrics::MetricsManager;
 use proxy::factory::Factory;
 use server::backend_const::{BACKEND_TYPE_MYSQL, BACKEND_TYPE_SHARDING_PROXY};
 
@@ -34,7 +35,8 @@ fn main() {
     info!("Pisa-Proxy {}", &*PisaConfig::get_version());
 
     let mut servers = Vec::with_capacity(config.get_proxies().len());
-    let http_server = http::http::new_rocket_server(config.clone());
+    let metrics_manager = MetricsManager::new();
+    let http_server = http::http::new_rocket_server(config.clone(), metrics_manager);
 
     build_runtime().block_on(async move {
         for proxy_config in config.get_proxies() {

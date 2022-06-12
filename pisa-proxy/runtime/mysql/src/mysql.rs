@@ -26,7 +26,7 @@ use proxy::{
 };
 use tracing::error;
 
-use crate::server::MySqlServer;
+use crate::server::{MySqlServer, MySqlServerMetricsCollector};
 
 pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,
@@ -64,8 +64,10 @@ impl proxy::factory::Proxy for MySQLProxy {
         };
 
         let parser = Arc::new(Parser::new());
+        let metrics_collector = MySqlServerMetricsCollector::new();
 
         loop {
+            // TODO: need refactor
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
             let pool = pool.clone();
             let lb = Arc::clone(&lb);
@@ -75,8 +77,17 @@ impl proxy::factory::Proxy for MySQLProxy {
             let plugin = plugin.clone();
 
             //TODO: add multiple thread limit with Semaphore
-            let mut mysql_server =
-                MySqlServer::new(socket, pool, lb, pcfg, parser, ast_cache, plugin).await;
+            let mut mysql_server = MySqlServer::new(
+                socket,
+                pool,
+                lb,
+                pcfg,
+                parser,
+                ast_cache,
+                plugin,
+                metrics_collector,
+            )
+            .await;
 
             if let Err(err) = mysql_server.handshake().await {
                 error!("{:?}", err);
