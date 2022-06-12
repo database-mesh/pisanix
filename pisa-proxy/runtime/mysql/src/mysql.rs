@@ -26,8 +26,7 @@ use proxy::{
 };
 use tracing::error;
 
-use crate::server::metrics::MySqlServerMetricsCollector;
-use crate::server::server::MySqlServer;
+use crate::server::{metrics::MySqlServerMetricsCollector, server::MySqlServer};
 
 pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,
@@ -38,6 +37,7 @@ pub struct MySQLProxy {
 impl proxy::factory::Proxy for MySQLProxy {
     async fn start(&mut self) -> Result<(), Error> {
         let listener = Listener {
+            name: self.proxy_config.name.clone(),
             backend_type: "mysql".to_string(),
             listen_addr: self.proxy_config.listen_addr.clone(),
         };

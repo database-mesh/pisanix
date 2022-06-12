@@ -1,11 +1,11 @@
 // Copyright 2022 SphereEx Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -37,8 +37,7 @@ use proxy::proxy::ProxyConfig;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 use tracing::{debug, error};
 
-use crate::transaction_fsm::*;
-use crate::server::metrics::MySqlServerMetricsCollector;
+use crate::{server::metrics::*, transaction_fsm::*};
 
 pub struct MySqlServer {
     pub client: Connection,
@@ -53,6 +52,8 @@ pub struct MySqlServer {
     concurrency_control_rule_idx: Option<usize>,
 
     pub metrics_collector: MySqlServerMetricsCollector,
+    // TODO: this should be a common property of proxy runtime
+    pub name: String,
 }
 
 impl MySqlServer {
@@ -81,6 +82,7 @@ impl MySqlServer {
             is_quit: false,
             concurrency_control_rule_idx: None,
             metrics_collector,
+            name: proxy_config.name,
         }
     }
 
@@ -96,6 +98,7 @@ impl MySqlServer {
 
     pub async fn run(&mut self) -> Result<(), ProtocolError> {
         if let Err(err) = self.trans_fsm.trigger(TransEventName::DummyEvent).await {
+            //TODO: need refactor
             error!("err: {:?}", err);
         };
 
@@ -122,24 +125,14 @@ impl MySqlServer {
                 return Ok(());
             }
 
-            // TODO: take the metrics as a function wrapper
-            self.metrics_collector.set_sql_processed_total(&["runtime", "sql", "mysql"]);
-            let earlier = SystemTime::now();
-            self.metrics_collector.set_sql_under_processing_inc(&["runtime", "sql", "mysql"]);
             if let Err(err) = self.handle_command(&mut buf).await {
                 error!("exec command err: {:?}", err);
             };
-            self.metrics_collector.set_sql_under_processing_dec(&["runtime", "sql", "mysql"]);
 
             if let Some(idx) = &self.concurrency_control_rule_idx {
                 self.plugin.as_mut().unwrap().concurrency_control.add_permits(*idx);
                 self.concurrency_control_rule_idx = None;
             }
-
-            let now = SystemTime::now();
-            let duration = now.duration_since(earlier).unwrap();
-            self.metrics_collector
-                .set_sql_processed_duration(&["runtime", "sql", "mysql"], duration.as_secs_f64());
         }
     }
 
@@ -170,15 +163,29 @@ impl MySqlServer {
         payload: &[u8],
         is_send_ok: bool,
     ) -> Result<(), ProtocolError> {
+        let earlier = SystemTime::now();
         if let Err(err) = self.trans_fsm.trigger(TransEventName::UseEvent).await {
             error!("err:{:?}", err);
         }
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
+        collect_sql_processed_total!(
+            self,
+            "COM_INIT_DB",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
+        collect_sql_under_processing_inc!(
+            self,
+            "COM_INIT_DB",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         self.trans_fsm.set_db(sql.to_string());
         let res = client_conn.send_use_db(sql).await?;
+        let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
+        collect_sql_under_processing_dec!(self, "COM_INIT_DB", ep.as_str());
+        collect_sql_processed_duration!(self, "COM_INIT_DB", ep.as_str(), earlier);
 
         if res.1 {
             if is_send_ok {
@@ -199,12 +206,22 @@ impl MySqlServer {
     }
 
     pub async fn handle_field_list(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+        let earlier = SystemTime::now();
         if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent).await {
             error!("err: {:?}", err);
         }
 
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
-
+        collect_sql_processed_total!(
+            self,
+            "COM_FIELD_LIST",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
+        collect_sql_under_processing_inc!(
+            self,
+            "COM_FIELD_LIST",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
         let mut stream = client_conn.send_common_command(COM_FIELD_LIST, payload).await?;
 
         let mut buf = BytesMut::with_capacity(128);
@@ -224,17 +241,30 @@ impl MySqlServer {
         }
 
         self.client.pkt.write_buf(&buf).await?;
+        let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
+        collect_sql_under_processing_dec!(self, "COM_FIELD_LIST", ep.as_str());
+        collect_sql_processed_duration!(self, "COM_FIELD_LIST", ep.as_str(), earlier);
         Ok(())
     }
 
     pub async fn handle_prepare(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+        let earlier = SystemTime::now();
         if let Err(err) = self.trans_fsm.trigger(TransEventName::PrepareEvent).await {
             error!("error: {:?}", err);
         };
 
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
-
+        collect_sql_processed_total!(
+            self,
+            "COM_PREPARE",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
+        collect_sql_under_processing_inc!(
+            self,
+            "COM_PREPARE",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
         let try_stmt = client_conn.send_prepare(payload).await;
         if let Err(ProtocolError::PrepareError(mut data)) = try_stmt {
             self.client.pkt.make_packet_header(data.len() - 4, &mut data);
@@ -243,7 +273,10 @@ impl MySqlServer {
         }
 
         let stmt = try_stmt.unwrap();
+        let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
+        collect_sql_under_processing_dec!(self, "COM_PREPARE", ep.as_str());
+        collect_sql_processed_duration!(self, "COM_PREPARE", ep.as_str(), earlier);
 
         let mut data = BytesMut::from(&vec![0; 4][..]);
         data.put_u8(0);
@@ -278,10 +311,21 @@ impl MySqlServer {
     }
 
     pub async fn handle_query(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+        let earlier = SystemTime::now();
         if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent).await {
             error!("err:{:?}", err);
         }
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
+        collect_sql_processed_total!(
+            self,
+            "COM_QUERY",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
+        collect_sql_under_processing_inc!(
+            self,
+            "COM_QUERY",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
         let sql = str::from_utf8(payload).unwrap();
         let stream = client_conn.send_query(payload).await?;
 
@@ -297,8 +341,10 @@ impl MySqlServer {
                 _ => self.handle_query_resultset(stream).await,
             },
         };
-
+        let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
+        collect_sql_under_processing_dec!(self, "COM_QUERY", ep.as_str());
+        collect_sql_processed_duration!(self, "COM_QUERY", ep.as_str(), earlier);
         res
     }
 
@@ -366,11 +412,24 @@ impl MySqlServer {
     }
 
     pub async fn handle_execute(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+        let earlier = SystemTime::now();
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
-
+        collect_sql_processed_total!(
+            self,
+            "COM_EXECUTE",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
+        collect_sql_under_processing_inc!(
+            self,
+            "COM_EXECUTE",
+            client_conn.get_endpoint().unwrap().as_str()
+        );
         let stream = client_conn.send_execute(payload).await?;
         self.handle_query_resultset(stream).await?;
+        let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
+        collect_sql_under_processing_dec!(self, "COM_EXECUTE", ep.as_str());
+        collect_sql_processed_duration!(self, "COM_EXECUTE", ep.as_str(), earlier);
         Ok(())
     }
 
