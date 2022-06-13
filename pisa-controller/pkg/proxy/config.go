@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
@@ -47,10 +48,12 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	ctx := context.Background()
 
 	proxyconfig := PisaProxyConfig{Admin: struct {
-		Port     string `json:"port"`
+		Host     string `json:"host,omitempty"`
+		Port     uint32 `json:"port,omitempty"`
 		LogLevel string `json:"log_level"`
 	}(struct {
-		Port     string
+		Host     string
+		Port     uint32
 		LogLevel string
 	}{LogLevel: "INFO"})}
 
@@ -74,6 +77,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	if err != nil {
 		return nil, err
 	}
+
 	vdbSpec := &kubernetes.VirtualDatabaseSpec{}
 	vdbs, _ := json.Marshal(vdb.Object["spec"])
 	if err != nil {
@@ -90,10 +94,14 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	vdbm, _ := json.Marshal(vdb.Object["metadata"])
 
 	_ = json.Unmarshal(vdbm, vdbmetedata)
-	proxyconfig.Admin.Port = vdbmetedata.Annotations["database-mesh.io/metrics-port"]
-	if proxyconfig.Admin.Port == "" {
-		proxyconfig.Admin.Port = "8888"
+
+	port, err := strconv.Atoi(vdbmetedata.Annotations["database-mesh.io/metrics-port"])
+	if port <= 0 || err != nil {
+		proxyconfig.Admin.Port = 8888
+	} else {
+		proxyconfig.Admin.Port = uint32(port)
 	}
+
 	for _, service := range vdbSpec.Services {
 		ts, err := client.Resource(trafficstrategies).Namespace(namespace).Get(ctx, service.TrafficStrategy, metav1.GetOptions{})
 		if err != nil {
