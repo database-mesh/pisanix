@@ -50,6 +50,7 @@ const PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE: &str = "default";
 const PISA_PROXY_DEFAULT_CONFIG_PATH: &str = "etc/config.toml";
 
 const PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG: &str = "LOCAL_CONFIG";
+const PISA_PROXY_CONFIG_ENV_HOST: &str = "HOST";
 const PISA_PROXY_CONFIG_ENV_PORT: &str = "PORT";
 const PISA_PROXY_CONFIG_ENV_LOG_LEVEL: &str = "LOG_LEVEL";
 
@@ -140,8 +141,13 @@ impl PisaConfig {
             sharding_proxy_nodes: vec![],
         };
 
+        if let Ok(env_host) = env::var(PISA_PROXY_CONFIG_ENV_HOST) {
+            pisa_config.admin.host = env_host;
+        }
+
         if let Ok(env_port) = env::var(PISA_PROXY_CONFIG_ENV_PORT) {
-            pisa_config.admin.port = env_port;
+            let port = env_port.to_string();
+            pisa_config.admin.port = port.parse::<u32>().unwrap();
         }
 
         if let Ok(log_level) = env::var(PISA_PROXY_CONFIG_ENV_LOG_LEVEL) {
