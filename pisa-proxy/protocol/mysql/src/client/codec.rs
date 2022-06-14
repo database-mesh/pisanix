@@ -22,6 +22,7 @@ use futures::Stream;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use pin_project::pin_project;
+use protocol_codegen::mysql_codec_convert;
 use tokio_util::codec::{Decoder, Encoder, Framed};
 
 use super::{
@@ -40,61 +41,12 @@ use crate::{
 
 pub type SendCommand<'a> = (u8, &'a str);
 
-#[derive(Debug)]
+#[derive(Debug, mysql_codec_convert)]
 pub enum ClientCodec {
     ClientAuth(Framed<LocalStream, ClientAuth>),
     Resultset(Framed<LocalStream, ResultsetCodec>),
     Stmt(Framed<LocalStream, Stmt>),
     Common(Framed<LocalStream, CommonCodec>),
-}
-
-impl ClientCodec {
-    pub fn into_resultset(self) -> Framed<LocalStream, ResultsetCodec> {
-        match self {
-            Self::ClientAuth(item) => {
-                item.map_codec(|codec| ResultsetCodec::with_auth_info(Some(codec)))
-            }
-            Self::Resultset(mut item) => {
-                item.codec_mut().renew();
-                item
-            }
-            Self::Stmt(item) => {
-                item.map_codec(|codec| ResultsetCodec::with_auth_info(codec.auth_info))
-            }
-            Self::Common(item) => {
-                item.map_codec(|codec| ResultsetCodec::with_auth_info(codec.auth_info))
-            }
-        }
-    }
-
-    pub fn into_stmt(self) -> Framed<LocalStream, Stmt> {
-        match self {
-            Self::ClientAuth(item) => item.map_codec(|codec| Stmt::with_auth_info(Some(codec))),
-            Self::Resultset(item) => item.map_codec(|codec| Stmt::with_auth_info(codec.auth_info)),
-            Self::Stmt(mut item) => {
-                item.codec_mut().renew();
-                item
-            }
-            Self::Common(item) => item.map_codec(|codec| Stmt::with_auth_info(codec.auth_info)),
-        }
-    }
-
-    pub fn into_common(self) -> Framed<LocalStream, CommonCodec> {
-        match self {
-            Self::ClientAuth(item) => {
-                item.map_codec(|codec| CommonCodec::with_auth_info(Some(codec)))
-            }
-            Self::Resultset(item) => {
-                item.map_codec(|codec| CommonCodec::with_auth_info(codec.auth_info))
-            }
-            Self::Stmt(item) => {
-                item.map_codec(|codec| CommonCodec::with_auth_info(codec.auth_info))
-            }
-            Self::Common(item) => {
-                item.map_codec(|codec| CommonCodec::with_auth_info(codec.auth_info))
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -405,8 +357,7 @@ mod test {
         let _ = driver.handshake().await;
 
         let query = "select user from mysql.user".as_bytes();
-        let mut stream =
-            driver.send_query(query).await.unwrap();
+        let mut stream = driver.send_query(query).await.unwrap();
 
         while let Some(data) = stream.next().await {
             assert_eq!(data.is_ok(), true);
