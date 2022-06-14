@@ -22,6 +22,7 @@ use futures::Stream;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use pin_project::pin_project;
+use protocol_codegen::mysql_codec_convert;
 use tokio_util::codec::{Decoder, Encoder, Framed};
 
 use super::{
@@ -40,7 +41,6 @@ use crate::{
 
 pub type SendCommand<'a> = (u8, &'a str);
 
-use protocol_codegen::mysql_codec_convert;
 #[derive(Debug, mysql_codec_convert)]
 pub enum ClientCodec {
     ClientAuth(Framed<LocalStream, ClientAuth>),
@@ -357,8 +357,7 @@ mod test {
         let _ = driver.handshake().await;
 
         let query = "select user from mysql.user".as_bytes();
-        let mut stream =
-            driver.send_query(query).await.unwrap();
+        let mut stream = driver.send_query(query).await.unwrap();
 
         while let Some(data) = stream.next().await {
             assert_eq!(data.is_ok(), true);
