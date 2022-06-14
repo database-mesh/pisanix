@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod auth;
-pub mod err;
-pub mod stmt;
+use proc_macro::TokenStream;
 
-pub mod codec;
-pub mod conn;
-pub mod resultset;
-pub mod stream;
-mod column;
+mod mysql_codec;
+
+#[proc_macro_derive(mysql_codec_convert)]
+pub fn derive_mysql_codec_convert(input: TokenStream) -> TokenStream {
+    mysql_codec::derive(input)
+}

@@ -1,0 +1,17 @@
+[package]
+name = "protocol_codegen"
+version = "0.1.0"
+description = "Procedural macros for the protocol"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0"
+syn = "1.0.96"
+proc-macro2 = "1.0.39"
+
+[dev-dependencies]
+tokio-util = { version = "0.7.0", features = ["full"] }
+mysql_protocol = { path = "../mysql" }
