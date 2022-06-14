@@ -16,7 +16,7 @@ use rocket_prometheus::PrometheusMetrics;
 use runtime_mysql::server::metrics::*;
 
 pub struct MetricsManager {
-    pub server: PrometheusMetrics,
+    server: PrometheusMetrics,
 }
 
 impl MetricsManager {
@@ -24,7 +24,7 @@ impl MetricsManager {
         MetricsManager { server: PrometheusMetrics::new() }
     }
 
-    pub fn get_routes(&self) -> PrometheusMetrics {
+    pub fn get_server(&self) -> PrometheusMetrics {
         self.server.clone()
     }
 

@@ -14,7 +14,7 @@
 ## limitations under the License.
 ##
 
-name: ci
+name: unit test 
 
 on:
   pull_request:

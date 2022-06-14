@@ -32,31 +32,20 @@ pub fn new_rocket_server(pisa_config: PisaConfig, metrics_manager: MetricsManage
     RocketServer { pisa_config, metrics_manager }
 }
 
-impl RocketServer {
-    pub fn new(pisa_config: PisaConfig, metrics_manager: MetricsManager) -> RocketServer {
-        RocketServer { pisa_config, metrics_manager }
-    }
-}
-
 #[async_trait::async_trait]
 impl HttpServer for RocketServer {
     async fn start(&mut self) -> Result<(), Error> {
         self.metrics_manager.register();
-        let p = &self.pisa_config.get_admin().port.to_string();
-        let httpport: i32 = p.parse().unwrap();
-
-        // TODO: align this with configuration
-        let hostaddr = "0.0.0.0";
         let figment = rocket::Config::figment()
-            .merge(("port", httpport))
-            .merge(("address", hostaddr))
+            .merge(("address", &self.pisa_config.get_admin().host))
+            .merge(("port", &self.pisa_config.get_admin().port))
             .merge(("cli_colors", false))
             .merge(("shutdown.ctrlc", false));
 
         return rocket::Rocket::custom(figment)
-            .attach(self.metrics_manager.get_routes())
+            .attach(self.metrics_manager.get_server())
             .mount("/", routes![healthz, version])
-            .mount("/metrics", self.metrics_manager.get_routes()) // TODO: Try remove one ?
+            .mount("/metrics", self.metrics_manager.get_server())
             .launch()
             .await
             .map_err(|e| Error::new(ErrorKind::Rocket(Box::new(e))));
