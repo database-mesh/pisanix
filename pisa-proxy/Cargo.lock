@@ -2244,6 +2244,7 @@ dependencies = [
  "plugin",
  "serde",
  "serde_derive",
+ "strategy",
  "tokio",
  "tokio-util 0.7.1",
  "tracing",

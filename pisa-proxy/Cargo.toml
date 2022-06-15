@@ -17,6 +17,7 @@ members = [
     "proxy",
     "proxy/endpoint",
     "proxy/loadbalance",
+    "proxy/strategy",
     "runtime/common",
     "runtime/mysql",
     "runtime/shardingproxy",

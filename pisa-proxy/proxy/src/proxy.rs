@@ -23,6 +23,7 @@ use tokio::{
 };
 
 use crate::listener::Listener;
+use strategy::config::ReadWriteSplitting;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProxiesConfig {
@@ -52,6 +53,8 @@ pub struct ProxyConfig {
     pub sharding_master_slave: Option<ProxyConfigShardingMasterSlave>,
     pub simple_loadbalance: Option<ProxySimpleLoadBalance>,
     pub plugin: Option<plugin::config::Plugin>,
+    /// read write splitting config structure
+    pub read_write_splitting: ReadWriteSplitting,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -105,6 +108,7 @@ pub struct MySQLNode {
     #[serde(default = "default_mysql_node_port")]
     pub port: u32,
     pub weight: i64,
+    pub role: Vec<String>,
 }
 
 fn default_auto_proxy_name() -> String {
