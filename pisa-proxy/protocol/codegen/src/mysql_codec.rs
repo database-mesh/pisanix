@@ -69,7 +69,7 @@ pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 let filter_codecs = codecs.iter().filter(|c| c.0 != v.ident).collect::<Vec<_>>();
                 let curr_codec = codecs.iter().find(|c| c.0 == v.ident).unwrap();
                 let return_codec_name = &curr_codec.1;
-                
+
                 // Convert to TokenStream.
                 let mut codecs = filter_codecs
                     .iter()
