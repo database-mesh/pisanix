@@ -22,7 +22,8 @@ import (
 
 type PisaProxyConfig struct {
 	Admin struct {
-		Port     string `json:"port"`
+		Host     string `json:"host,omitempty"`
+		Port     uint32 `json:"port,omitempty"`
 		LogLevel string `json:"log_level"`
 	} `json:"admin"`
 	Mysql struct {

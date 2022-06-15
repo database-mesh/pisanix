@@ -19,5 +19,5 @@ pub mod stmt;
 pub mod codec;
 mod column;
 pub mod conn;
-mod resultset;
+pub mod resultset;
 pub mod stream;

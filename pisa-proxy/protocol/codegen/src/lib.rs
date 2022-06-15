@@ -12,28 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde::{Deserialize, Serialize};
+use proc_macro::TokenStream;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Admin {
-    #[serde(default = "default_admin_host")]
-    pub host: String,
+mod mysql_codec;
 
-    #[serde(default = "default_admin_port")]
-    pub port: u32,
-
-    #[serde(default = "default_log_level")]
-    pub log_level: String,
-}
-
-fn default_admin_host() -> String {
-    "0.0.0.0".into()
-}
-
-fn default_admin_port() -> u32 {
-    8888
-}
-
-fn default_log_level() -> String {
-    "ERROR".into()
+#[proc_macro_derive(mysql_codec_convert)]
+pub fn derive_mysql_codec_convert(input: TokenStream) -> TokenStream {
+    mysql_codec::derive(input)
 }
