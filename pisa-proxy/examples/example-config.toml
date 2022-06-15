@@ -83,4 +83,4 @@ host = "127.0.0.1"
 port = 3308
 # 负载均衡节点权重
 weight = 1
-role = ["read"]
+role = "read"

@@ -108,7 +108,7 @@ pub struct MySQLNode {
     #[serde(default = "default_mysql_node_port")]
     pub port: u32,
     pub weight: i64,
-    pub role: Vec<String>,
+    pub role: String,
 }
 
 fn default_auto_proxy_name() -> String {
