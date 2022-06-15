@@ -53,7 +53,7 @@ pub struct ProxyConfig {
     pub sharding_master_slave: Option<ProxyConfigShardingMasterSlave>,
     pub simple_loadbalance: Option<ProxySimpleLoadBalance>,
     pub plugin: Option<plugin::config::Plugin>,
-    /// read write splitting config structure
+    // read write splitting config structure
     pub read_write_splitting: ReadWriteSplitting,
 }
 

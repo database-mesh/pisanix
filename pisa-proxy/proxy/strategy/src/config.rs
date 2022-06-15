@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReadWriteSplitting {
-    #[serde(alias = "static")]
+    #[serde(rename = "static")]
     model: ReadWriteSplittingStatic,
 }
 
