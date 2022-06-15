@@ -734,7 +734,7 @@ impl Visitor for Expr {
 
             Self::None => Self::None,
 
-            Self::Ori(val) => Self::Ori(String::from(val.clone())),
+            Self::Ori(val) => Self::Ori(val.clone()),
         }
     }
 }
@@ -1439,8 +1439,6 @@ impl Visitor for OptTypeFollowing {
 
 #[cfg(test)]
 mod test {
-    use std::marker::PhantomData;
-
     use lrpar::Span;
 
     use crate::ast::*;

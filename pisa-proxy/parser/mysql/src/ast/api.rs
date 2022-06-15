@@ -20,6 +20,7 @@ include!(concat!(env!("OUT_DIR"), "/ast_api.rs"));
 /// Used to generate custom ast tree.
 ///
 /// As an example:
+/// ``` ignore
 /// #[derive(Debug, Clone)]
 /// struct S {
 ///     a: String,
@@ -37,7 +38,7 @@ include!(concat!(env!("OUT_DIR"), "/ast_api.rs"));
 ///                *value = "2".to_string();
 ///            }
 ///
-///            _ => {}
+///            _ => {},
 ///        };
 ///
 ///        self.a = "11111".to_string();
@@ -45,6 +46,7 @@ include!(concat!(env!("OUT_DIR"), "/ast_api.rs"));
 ///        self.clone()
 ///    }
 ///}
+///```
 pub trait Transformer {
     fn trans(&mut self, node: &mut Node) -> Self
     where
