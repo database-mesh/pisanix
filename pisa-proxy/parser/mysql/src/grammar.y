@@ -687,15 +687,6 @@ expr -> Expr:
         operator: Op::OR
       }
     }
-  //| expr OR_OR expr %prec 'OR_OR'
-  //  {
-  //    Expr::BinaryOperationExpr {
-  //      span: $span,
-  //      left: Box::new($1),
-  //      right: Box::new($3),
-  //      operator: Op::OR
-  //    }
-  //  }
   | expr 'XOR' expr %prec 'XOR'
     {
       Expr::BinaryOperationExpr {
