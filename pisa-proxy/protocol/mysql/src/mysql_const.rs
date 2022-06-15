@@ -189,7 +189,7 @@ impl AsRef<str> for ColumnType {
 #[derive(Debug, PartialEq)]
 #[repr(u16)]
 pub enum ColumnFlag {
-    NOT_NULL_FLAG = 1,  
+    NOT_NULL_FLAG = 1,
     PRI_KEY_FLAG = 2,
     UNIQUE_KEY_FLAG = 4,
     MULTIPLE_KEY_FLAG = 8,
@@ -213,7 +213,6 @@ impl From<u16> for ColumnFlag {
         unsafe { std::mem::transmute::<u16, ColumnFlag>(t) }
     }
 }
-
 
 impl AsRef<str> for ColumnFlag {
     #[inline]
@@ -285,12 +284,9 @@ pub enum Com {
     ResetConnection,
 }
 
-
-
-
 #[cfg(test)]
 mod test {
-    use super::{ColumnType, ColumnFlag};
+    use super::{ColumnFlag, ColumnType};
 
     #[test]
     fn test_column_type() {

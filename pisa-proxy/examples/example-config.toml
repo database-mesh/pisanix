@@ -31,6 +31,25 @@ balance_type = "random"
 # 选择挂载后端节点
 nodes = ["ds001"]
 
+[proxy.config.read_write_splitting]
+
+[proxy.config.read_write_splitting.static]
+default_target = "read"
+
+[[proxy.config.read_write_splitting.static.rule]]
+name = "read-rule"
+type = "regex"
+regex = [".*"]
+target = "read"
+algorith_name = "random"
+
+[[proxy.config.read_write_splitting.static.rule]]
+name = "write-rule"
+type = "regex"
+regex = [".*"]
+target = "read_write"
+algorith_name = "roundrobin"
+
 [[proxy.config.plugin.concurrency_control]]
 regex = "aaa"
 max_concurrency = 5
@@ -64,3 +83,4 @@ host = "127.0.0.1"
 port = 3308
 # 负载均衡节点权重
 weight = 1
+role = "read"

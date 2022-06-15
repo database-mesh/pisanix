@@ -17,6 +17,7 @@ use std::{collections::HashMap, sync::Arc};
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{Balance, LoadBalance};
 use serde::{Deserialize, Serialize};
+use strategy::config::ReadWriteSplitting;
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::Mutex,
@@ -52,6 +53,8 @@ pub struct ProxyConfig {
     pub sharding_master_slave: Option<ProxyConfigShardingMasterSlave>,
     pub simple_loadbalance: Option<ProxySimpleLoadBalance>,
     pub plugin: Option<plugin::config::Plugin>,
+    // read write splitting config structure
+    pub read_write_splitting: ReadWriteSplitting,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -105,6 +108,7 @@ pub struct MySQLNode {
     #[serde(default = "default_mysql_node_port")]
     pub port: u32,
     pub weight: i64,
+    pub role: String,
 }
 
 fn default_auto_proxy_name() -> String {

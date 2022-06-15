@@ -18,3 +18,4 @@ tracing-subscriber = "0.2.2"
 plugin = { path = "../plugin"}
 loadbalance = {path = "./loadbalance"}
 endpoint = {path = "./endpoint"}
+strategy = {path = "./strategy"}
