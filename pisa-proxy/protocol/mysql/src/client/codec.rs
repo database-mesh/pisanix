@@ -405,8 +405,7 @@ mod test {
         let _ = driver.handshake().await;
 
         let query = "select user from mysql.user".as_bytes();
-        let mut stream =
-            driver.send_query(query).await.unwrap();
+        let mut stream = driver.send_query(query).await.unwrap();
 
         while let Some(data) = stream.next().await {
             assert_eq!(data.is_ok(), true);

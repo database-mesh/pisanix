@@ -208,6 +208,7 @@ pub fn get_length(buf: &[u8]) -> usize {
 #[cfg(test)]
 mod test {
     use bytes::BytesMut;
+
     use super::{length_encoded_string, BufExt};
 
     #[test]

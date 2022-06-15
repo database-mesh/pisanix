@@ -17,13 +17,13 @@ use std::{collections::HashMap, sync::Arc};
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{Balance, LoadBalance};
 use serde::{Deserialize, Serialize};
+use strategy::config::ReadWriteSplitting;
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::Mutex,
 };
 
 use crate::listener::Listener;
-use strategy::config::ReadWriteSplitting;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProxiesConfig {
