@@ -18,6 +18,9 @@ pub use base::*;
 pub mod dml;
 pub use dml::*;
 
+pub mod tcl;
+pub use tcl::*;
+
 #[macro_use]
 pub mod api;
 pub use api::*;
@@ -35,6 +38,9 @@ pub enum SqlStmt {
     Deallocate(Box<Deallocate>),
     ShowDatabasesStmt(Box<ShowDatabasesStmt>),
     ShowTablesStmt(Box<ShowTablesStmt>),
+    Start(Start),
+    Commit(Commit),
+    Rollback(Rollback),
     None,
 }
 

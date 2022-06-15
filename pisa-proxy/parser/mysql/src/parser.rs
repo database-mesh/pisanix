@@ -116,11 +116,15 @@ mod test {
             //"SELECT w, SUM(w) OVER (ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) FROM t;",
             //"SHOW DATABASES LIKE 'ds%'",
             "SHOW FULL tables FROM test like 't_%'",
+            "START TRANSACTION",
+            "COMMIT",
+            "ROLLBACK",
         ];
 
         let p = Parser::new();
         for input in inputs {
             let res = p.parse(input);
+            assert!(res.is_ok());
             match res {
                 Err(e) => {
                     println!("sql={:?} {:?}", input, e)

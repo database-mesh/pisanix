@@ -30,6 +30,7 @@
 %token SUBQUERY_AS_EXPR
 %token LOWER_THEN_INTERVAL
 %token LOWER_THEN_TEXT_STRING
+%token LOWER_THEN_SAVEPOINT
 
 
 
@@ -61,16 +62,18 @@
 %nonassoc 'LOWER_THEN_TEXT_STRING'
 %nonassoc 'TEXT_STRING'
 %nonassoc 'QUICK'
+%nonassoc LOWER_THEN_SAVEPOINT
+%nonassoc SAVEPOINT
 
 
 %left 'EMPTY_FROM_CLAUSE'
 %right 'INTO'
 
 
-%start Start
+%start StartRule
 
 %%
-Start -> Vec<SqlStmt>:
+StartRule -> Vec<SqlStmt>:
   multi_sql_stmt
   {
     $1
@@ -91,6 +94,8 @@ multi_sql_stmt -> Vec<SqlStmt>:
 
 sql_stmt -> SqlStmt:
     end_of_input  { $1 }
+  | commit              { SqlStmt::Commit($1) }
+  | rollback_stmt           { SqlStmt::Rollback($1) }
   | select_stmt   { SqlStmt::SelectStmt($1) }
   | insert_stmt   { SqlStmt::InsertStmt($1) }
   | update_stmt   { SqlStmt::UpdateStmt($1) }
@@ -101,7 +106,9 @@ sql_stmt -> SqlStmt:
   | set           { SqlStmt::Set($1) }
   | deallocate    { SqlStmt::Deallocate($1) }
   | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
-  | show_tables_stmt  { SqlStmt::ShowTablesStmt($1) }
+  | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
+  | start               { SqlStmt::Start($1) } 
+  
   ;
 
 end_of_input -> SqlStmt:
@@ -671,16 +678,7 @@ optional_braces -> Option<String>:
   ;
 
 expr -> Expr:
-    expr 'OR' expr %prec 'OR_OR'
-    {
-      Expr::BinaryOperationExpr {
-        span: $span,
-        left: Box::new($1),
-        right: Box::new($3),
-        operator: Op::OR
-      }
-    }
-  | expr OR_OR expr %prec 'OR_OR'
+    expr or expr %prec 'OR_OR'
     {
       Expr::BinaryOperationExpr {
         span: $span,
@@ -1261,6 +1259,7 @@ simple_expr -> Expr:
   | '(' expr_list ',' expr ')' 
     {
       $2.push($4);
+      
       Expr::RowExpr($2)
     }
   | 'ROW' '(' expr_list ',' expr ')' 
@@ -5946,6 +5945,132 @@ from_or_in -> FromOrIn:
       'FROM' { FromOrIn::From }
     | 'IN'   { FromOrIn::In }
 ;
+
+
+start -> Start:
+  START TRANSACTION opt_start_transaction_option_list
+  {
+    Start {
+      span: $span,
+      transaction_opts: $3, 
+    }
+  }
+  ;
+
+opt_start_transaction_option_list -> u8:
+    /* empty */
+    {
+      0
+    }
+  | start_transaction_option_list
+    {
+      $1
+    }
+;
+
+start_transaction_option_list -> u8:
+  start_transaction_option
+    {
+      $1
+    }
+  | start_transaction_option_list ',' start_transaction_option
+    {
+      $1 | $3
+    }
+;
+
+start_transaction_option -> u8:
+    WITH CONSISTENT SNAPSHOT
+    {
+      // $$= MYSQL_START_TRANS_OPT_WITH_CONS_SNAPSHOT;
+      // see https://github.com/mysql/mysql-server/blob/8.0/sql/handler.h#L631
+      1
+    }
+  | READ ONLY
+    {
+      // $$= MSQL_START_TRANS_OPT_READ_ONLY;
+      2
+    }
+  | READ WRITE
+    {
+      //$$= MYSQL_START_TRANS_OPT_READ_WRITE;
+      4
+    }
+;
+
+commit -> Commit:
+  COMMIT opt_work opt_chain opt_release
+    {
+      Commit {
+        span: $span,
+        opt_work: $2,
+        opt_chain: $3,
+        opt_release: $4,
+      }
+    }
+  ;
+
+rollback_stmt -> Rollback:
+    ROLLBACK opt_work opt_chain opt_release
+    {
+      Rollback {
+        span: $span,
+        opt_work: $2,
+        opt_chain: $3,
+        opt_release: $4,
+        opt_savepoint: false,
+        ident: None,
+      }
+    }
+  | ROLLBACK opt_work 'TO' opt_savepoint ident  
+    {
+      Rollback {
+        span: $span,
+        opt_work: $2,
+        opt_chain: YesNoUnknown::TvlUnknown,
+        opt_release: YesNoUnknown::TvlUnknown,
+        opt_savepoint: $4,
+        ident: Some($5.0),
+      }
+    }
+;
+
+opt_chain -> YesNoUnknown:
+    /* empty */
+    { 
+      YesNoUnknown::TvlUnknown 
+    }
+  | AND NO CHAIN  
+    {  
+      YesNoUnknown::TvlNo 
+    }
+  | AND CHAIN
+    { 
+      YesNoUnknown::TvlYes 
+    }
+;
+
+opt_release -> YesNoUnknown:
+    /* empty */
+    { 
+      YesNoUnknown::TvlUnknown 
+    }
+  | 'RELEASE'     
+    { 
+      YesNoUnknown::TvlYes 
+    }
+  | NO 'RELEASE' 
+    { 
+      YesNoUnknown::TvlNo
+    }
+;
+
+opt_savepoint ->  bool:
+    /* empty */  %prec LOWER_THEN_SAVEPOINT { false }
+  | 'SAVEPOINT'     { true  }
+;
+
+
 
 %%
 
