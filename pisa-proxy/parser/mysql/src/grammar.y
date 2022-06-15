@@ -3919,7 +3919,7 @@ non_reserved_keyword -> &'input str:
   | 'ROW_COUNT'                                        { "ROW_COUNT" }
   | 'ROW_FORMAT'                                       { "ROW_FORMAT" }
   | 'RTREE'                                            { "RTREE" }
-  | 'SAVEPOINT'                                         { "SAVEPOINT" }
+  | 'SAVEPOINT'                                        { "SAVEPOINT" }
   | 'SCHEDULE'                                         { "SCHEDULE" }
   | 'SCHEMA_NAME'                                      { "SCHEMA_NAME" }
   | 'SECOND'                                           { "SECOND" }
