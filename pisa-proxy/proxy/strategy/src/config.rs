@@ -39,6 +39,13 @@ pub struct RegexRule {
     #[serde(rename = "type")]
     pub rule_type: String,
     pub regex: Vec<String>,
-    pub target: String,
+    pub target: TargetRole,
     pub algorith_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum TargetRole {
+    Read,
+    ReadWrite,
 }

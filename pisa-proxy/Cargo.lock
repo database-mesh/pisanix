@@ -2027,6 +2027,7 @@ dependencies = [
  "pprof",
  "proxy",
  "serde",
+ "serde_json",
  "server",
  "tokio",
  "tokio-stream",
@@ -2811,6 +2812,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-attributes"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3aba2af3c3b9cd6f3a919056dac6005b71fceecc1cdfa65c4df3912f64e07e60"
+dependencies = [
+ "darling_core",
+ "serde-rename-rule",
+ "syn",
+]
+
+[[package]]
+name = "serde-enum-str"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2a41bf2fc78a58589b9a6948bfc918c9b2dc918732f2ac14eed982ffb876b39"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "serde-attributes",
+ "syn",
+]
+
+[[package]]
+name = "serde-rename-rule"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd2930103714ccef4f1fe5b6a5f2b6fdcfe462a6c802464714bd41e5b5097c33"
+
+[[package]]
 name = "serde_derive"
 version = "1.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3132,6 +3163,7 @@ name = "strategy"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde-enum-str",
  "serde_derive",
 ]
 
