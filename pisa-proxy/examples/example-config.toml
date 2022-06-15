@@ -47,7 +47,7 @@ algorith_name = "random"
 name = "write-rule"
 type = "regex"
 regex = [".*"]
-target = "read_write"
+target = "readwrite"
 algorith_name = "roundrobin"
 
 [[proxy.config.plugin.concurrency_control]]
