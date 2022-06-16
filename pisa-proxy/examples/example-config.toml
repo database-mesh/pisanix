@@ -41,14 +41,14 @@ name = "read-rule"
 type = "regex"
 regex = [".*"]
 target = "read"
-algorith_name = "random"
+algorithm_name = "random"
 
 [[proxy.config.read_write_splitting.static.rule]]
 name = "write-rule"
 type = "regex"
 regex = [".*"]
 target = "readwrite"
-algorith_name = "roundrobin"
+algorithm_name = "roundrobin"
 
 [[proxy.config.plugin.concurrency_control]]
 regex = "aaa"

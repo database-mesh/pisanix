@@ -21,7 +21,7 @@ pub struct Balance;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
-pub enum AlgorithName {
+pub enum AlgorithmName {
     Random,
     RoundRobin,
 }
@@ -38,11 +38,11 @@ pub trait LoadBalance {
 impl Balance {
     pub fn build_balance(
         &mut self,
-        algorith_name: AlgorithName,
+        algorithm_name: AlgorithmName,
     ) -> Box<dyn LoadBalance + Send + Sync> {
-        match algorith_name {
-            AlgorithName::Random => Box::new(RandomWeighted::default()),
-            AlgorithName::RoundRobin => Box::new(RoundRobinWeightd::default()),
+        match algorithm_name {
+            AlgorithmName::Random => Box::new(RandomWeighted::default()),
+            AlgorithmName::RoundRobin => Box::new(RoundRobinWeightd::default()),
         }
     }
 }
