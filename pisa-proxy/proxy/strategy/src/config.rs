@@ -30,7 +30,7 @@ pub struct ReadWriteSplittingStatic {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum ReadWriteSplittingRule {
-    Rule(RegexRule),
+    Regex(RegexRule),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
