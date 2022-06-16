@@ -35,14 +35,61 @@ pub trait LoadBalance {
     fn remove_all(&mut self);
 }
 
-impl Balance {
-    pub fn build_balance(
-        &mut self,
-        algorithm_name: AlgorithmName,
-    ) -> Box<dyn LoadBalance + Send + Sync> {
-        match algorithm_name {
-            AlgorithmName::Random => Box::new(RandomWeighted::default()),
-            AlgorithmName::RoundRobin => Box::new(RoundRobinWeightd::default()),
+pub enum BalanceType {
+    Random(RandomWeighted),
+    RoundRobin(RoundRobinWeightd),
+}
+
+impl LoadBalance for BalanceType {
+    fn next(&mut self) -> Option<&Endpoint> {
+        match self {
+            BalanceType::Random(inner_random) => inner_random.next(),
+            BalanceType::RoundRobin(inner_roundrobin) => inner_roundrobin.next(),
         }
+    }
+
+    fn add(&mut self, endpoint: Endpoint) {
+        match self {
+            BalanceType::Random(inner_random) => inner_random.add(endpoint),
+            BalanceType::RoundRobin(inner_roundrobin) => inner_roundrobin.add(endpoint),
+        }
+    }
+
+    fn item_exists(&self, endpoint: &Endpoint) -> bool {
+        match self {
+            BalanceType::Random(inner_random) => inner_random.item_exists(endpoint),
+            BalanceType::RoundRobin(inner_roundrobin) => inner_roundrobin.item_exists(endpoint),
+        }
+    }
+
+    fn get_all(&mut self) -> &Vec<Endpoint> {
+        match self {
+            BalanceType::Random(inner_random) => inner_random.get_all(),
+            BalanceType::RoundRobin(inner_roundrobin) => inner_roundrobin.get_all(),
+        }
+    }
+    fn remove_item(&mut self, endpoint: Endpoint) {
+        match self {
+            BalanceType::Random(inner_random) => inner_random.remove_item(endpoint),
+            BalanceType::RoundRobin(inner_roundrobin) => inner_roundrobin.remove_item(endpoint),
+        }
+    }
+
+    fn remove_all(&mut self) {
+        match self {
+            BalanceType::Random(inner_random) => inner_random.remove_all(),
+            BalanceType::RoundRobin(inner_roundrobin) => inner_roundrobin.remove_all(),
+        }
+    }
+}
+
+impl Balance {
+    pub fn build_balance(&mut self, algorithm_name: AlgorithmName) -> BalanceType {
+        match algorithm_name {
+            AlgorithmName::Random => return BalanceType::Random(RandomWeighted::default()),
+            AlgorithmName::RoundRobin => {
+                return BalanceType::RoundRobin(RoundRobinWeightd::default())
+            }
+        };
     }
 }
