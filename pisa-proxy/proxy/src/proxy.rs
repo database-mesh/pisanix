@@ -15,7 +15,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use endpoint::endpoint::Endpoint;
-use loadbalance::balance::{Balance, LoadBalance};
+use loadbalance::balance::{AlgorithName, Balance, LoadBalance};
 use serde::{Deserialize, Serialize};
 use strategy::config::ReadWriteSplitting;
 use tokio::{
@@ -88,7 +88,7 @@ pub struct ProxyConfigShardingMasterSlave {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxySimpleLoadBalance {
     #[serde(default = "default_auto_balance_type")]
-    pub balance_type: String,
+    pub balance_type: AlgorithName,
     pub nodes: Vec<String>,
 }
 
@@ -143,8 +143,8 @@ fn default_auto_proxy_db() -> String {
     "".into()
 }
 
-fn default_auto_balance_type() -> String {
-    "random".into()
+fn default_auto_balance_type() -> AlgorithName {
+    AlgorithName::Random
 }
 
 fn default_mysql_node_host() -> String {
@@ -181,7 +181,7 @@ impl Proxy {
             None => return Err(std::io::Error::new(std::io::ErrorKind::Other, "config error")),
         };
 
-        let mut b = balance.build_balance(lb.balance_type.clone()).unwrap();
+        let mut b = balance.build_balance(lb.balance_type.clone());
         for node in self.backend_nodes.clone() {
             match nodes.iter().find(|&x| x == node.name.as_str()) {
                 Some(_) => {
