@@ -14,11 +14,11 @@
 
 use std::{
     io::{Error, ErrorKind},
-    ptr::copy_nonoverlapping,
+    ptr::copy_nonoverlapping, u8,
 };
 
 use bytes::{BufMut, BytesMut};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufStream};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt, BufStream}, net::TcpStream};
 
 use super::stream::LocalStream;
 use crate::{mysql_const::*, server::err::MySQLError, util::get_length};

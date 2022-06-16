@@ -25,7 +25,7 @@ use mysql_parser::{
     parser::{ParseError, Parser},
 };
 use mysql_protocol::{
-    client::{codec::ResultsetStream, conn::ClientConn},
+    client::{codec::ResultsetStream, conn::{ClientConn, self}},
     err::ProtocolError,
     mysql_const::*,
     server::{conn::Connection, err::MySQLError},
@@ -40,8 +40,12 @@ use tracing::{debug, error};
 use crate::{server::metrics::*, transaction_fsm::*};
 
 pub struct MySqlServer {
+    // TODO: this should be a common property of proxy runtime
+    pub name: String,
+    pub metrics_collector: MySqlServerMetricsCollector,
     pub client: Connection,
     pub buf: BytesMut,
+
     mysql_parser: Arc<Parser>,
     trans_fsm: TransFsm,
     ast_cache: Arc<plMutex<ParserAstCache>>,
@@ -50,12 +54,25 @@ pub struct MySqlServer {
     // `concurrency_control_rule_idx` is index of concurrency_control rules
     // `concurrency_control_rule_idx` is required to add permits when the concurrency_control layer service is enabled
     concurrency_control_rule_idx: Option<usize>,
-
-    pub metrics_collector: MySqlServerMetricsCollector,
-    // TODO: this should be a common property of proxy runtime
-    pub name: String,
 }
 
+// pub type Result<T> = Result<T, Error>;
+
+pub struct MySqlServerBuilder {
+    // inner: Result<MySqlServer, ()>,
+    __name: String,
+    __client: Connection,
+    __buf: BytesMut,
+    __mysql_parser: Arc<Parser>,
+    __trans_fsm: TransFsm,
+    __ast_cache: Arc<plMutex<ParserAstCache>>,
+    __plugin: Option<PluginPhase>,
+    __is_quit: bool,
+    __concurrency_control_rule_idx: Option<usize>,
+    __metrics_collector: MySqlServerMetricsCollector,
+}
+
+<<<<<<< HEAD
 impl MySqlServer {
     pub async fn new(
         client: TcpStream,
@@ -83,8 +100,128 @@ impl MySqlServer {
             concurrency_control_rule_idx: None,
             metrics_collector,
             name: proxy_config.name,
+=======
+// impl Default for MySqlServerBuilder {
+//     #[inline]
+//     fn default() -> MySqlServerBuilder {
+//         MySqlServerBuilder{
+//             inner: Ok(MySqlServer::new()),
+//         }
+//     }
+// }
+
+impl MySqlServerBuilder {
+    pub fn new(connection: Connection) -> MySqlServerBuilder {
+        MySqlServerBuilder{
+            __name: String::new(), 
+            __client: connection,
+            __buf: BytesMut::new(),
+            __mysql_parser: Arc::new(Parser::new()),
+            __trans_fsm: ,
+            __ast_cache: Arc::new(plMutex::new(ParserAstCache::new())), 
+            __plugin: plugin,
+            __is_quit: false,
+            __concurrency_control_rule_idx: None,
+            __metrics_collector: MySqlServerMetricsCollector::new(),
+>>>>>>> wip: refactor runtime server with builder
         }
     }
+
+    pub fn with_name(mut self, name: String) -> MySqlServerBuilder {
+        self.__name = name;
+        self
+    } 
+
+    pub fn with_connection(mut self, connection: Connection) -> MySqlServerBuilder {
+        self.__client = connection;
+        self
+    }
+
+    pub fn with_buf(mut self, buf: BytesMut) -> MySqlServerBuilder {
+        self.__buf = buf;
+        self
+    }
+
+    pub fn with_mysql_parser(mut self, parser: Arc<Parser>) -> MySqlServerBuilder {
+        self.__mysql_parser = parser;
+        self
+    }
+
+    pub fn with_trans_fsm(mut self, fsm: TransFsm) -> MySqlServerBuilder {
+        self.__trans_fsm = fsm;
+        self
+    }
+
+    pub fn with_ast_cache(mut self, cache: Arc<plMutex<ParserAstCache>>) -> MySqlServerBuilder {
+        self.__ast_cache = cache;
+        self
+    }
+
+    pub fn with_plugin(mut self, plugin: Option<PluginPhase>) -> MySqlServerBuilder {
+        self.__plugin = plugin;
+        self
+    }
+
+    pub fn is_quit(mut self, quit: bool) -> MySqlServerBuilder {
+        self.__is_quit = quit;
+        self
+    }
+
+    pub fn with_concurrency_control_rule_idx(mut self, idx: Option<usize>) -> MySqlServerBuilder {
+        self.__concurrency_control_rule_idx = idx;
+        self
+    }
+
+    pub fn with_metrics_collector(mut self, collector: MySqlServerMetricsCollector) -> MySqlServerBuilder {
+        self.__metrics_collector = collector;
+        self
+    }
+
+    pub async fn build(self) -> MySqlServer {
+        MySqlServer {
+            client: self.__client,
+            buf: self.__buf,
+            mysql_parser: self.__mysql_parser,
+            trans_fsm: self.__trans_fsm,
+            ast_cache: self.__ast_cache,
+            plugin: self.__plugin,
+            is_quit: self.__is_quit,
+            concurrency_control_rule_idx: self.__concurrency_control_rule_idx,
+            metrics_collector: self.__metrics_collector,
+            name: self.__name,
+        }    
+    }
+}
+
+impl MySqlServer {
+    // pub async fn new(
+    //     client: TcpStream,
+    //     pool: Pool<ClientConn>,
+    //     lb: Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>,
+    //     proxy_config: ProxyConfig,
+    //     parser: Arc<Parser>,
+    //     ast_cache: Arc<plMutex<ParserAstCache>>,
+    //     plugin: Option<PluginPhase>,
+    //     metrics_collector: MySqlServerMetricsCollector,
+    // ) -> MySqlServer {
+    //     MySqlServer {
+    //         client: Connection::new(
+    //             client,
+    //             proxy_config.user,
+    //             proxy_config.password,
+    //             proxy_config.db,
+    //         ),
+    //         buf: BytesMut::with_capacity(8192),
+    //         mysql_parser: parser,
+    //         trans_fsm: TransFsm::new_trans_fsm(lb, pool),
+    //         ast_cache,
+    //         plugin,
+    //         is_quit: false,
+    //         concurrency_control_rule_idx: None,
+    //         metrics_collector,
+    //         name: proxy_config.name,
+    //     }
+    // }
 
     pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
         if let Err(err) = self.client.handshake().await {

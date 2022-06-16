@@ -49,6 +49,7 @@ const DEFAULT_CAPABILITY: u32 = CLIENT_LONG_PASSWORD
     | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
 
 // client <=> Pisa
+
 pub struct Connection {
     salt: Vec<u8>,
     status: u16,

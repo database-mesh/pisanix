@@ -13,10 +13,17 @@
 // limitations under the License.
 
 use std::sync::Arc;
-
+use bytes::{Buf, BufMut, BytesMut};
 use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
 use mysql_parser::parser::Parser;
+use mysql_protocol::{
+    client::{codec::ResultsetStream, conn::{ClientConn, self}},
+    err::ProtocolError,
+    mysql_const::*,
+    server::{conn::Connection, err::MySQLError},
+    util::*,
+};
 use parking_lot::Mutex;
 use pisa_error::error::{Error, ErrorKind};
 use plugin::build_phase::PluginPhase;
@@ -26,7 +33,7 @@ use proxy::{
 };
 use tracing::error;
 
-use crate::server::{metrics::MySqlServerMetricsCollector, server::MySqlServer};
+use crate::{server::{metrics::MySqlServerMetricsCollector, server::MySqlServer, server::MySqlServerBuilder}, transaction_fsm::TransFsm};
 
 pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,
@@ -78,17 +85,39 @@ impl proxy::factory::Proxy for MySQLProxy {
             let plugin = plugin.clone();
 
             //TODO: add multiple thread limit with Semaphore
-            let mut mysql_server = MySqlServer::new(
+            // let mut mysql_server = MySqlServer::new(
+            //     socket,
+            //     pool,
+            //     lb,
+            //     pcfg,
+            //     parser,
+            //     ast_cache,
+            //     plugin,
+            //     metrics_collector,
+            // )
+            // .await;
+            let mysql_server = MySqlServerBuilder::new(Connection::new(
                 socket,
-                pool,
-                lb,
-                pcfg,
-                parser,
-                ast_cache,
-                plugin,
-                metrics_collector,
-            )
-            .await;
+                pcfg.user,
+                pcfg.password,
+                pcfg.db,
+            )).
+                    with_name(pcfg.name).
+                    // with_connection(Connection::new(
+                    //     socket,
+                    //     pcfg.user,
+                    //     pcfg.password,
+                    //     pcfg.db,
+                    // )).
+                    with_buf(BytesMut::with_capacity(8192)).
+                    with_mysql_parser(parser).
+                    with_trans_fsm(TransFsm::new_trans_fsm(lb, pool)).
+                    with_ast_cache(ast_cache).
+                    with_plugin(plugin).
+                    is_quit(false).
+                    with_concurrency_control_rule_idx(None).
+                    with_metrics_collector(metrics_collector).
+                    build().await;
 
             if let Err(err) = mysql_server.handshake().await {
                 error!("{:?}", err);
