@@ -181,7 +181,7 @@ impl Proxy {
             None => return Err(std::io::Error::new(std::io::ErrorKind::Other, "config error")),
         };
 
-        let mut b = balance.build_balance(lb.balance_type.clone());
+        let mut balancer = balance.build_balance(lb.balance_type.clone());
         for node in self.backend_nodes.clone() {
             match nodes.iter().find(|&x| x == node.name.as_str()) {
                 Some(_) => {
@@ -193,11 +193,11 @@ impl Proxy {
                         password: node.password,
                         weight: node.weight,
                     };
-                    b.add(endpoint);
+                    balancer.add(endpoint);
                 }
                 _ => continue,
             }
         }
-        Ok(Arc::new(Mutex::new(b)))
+        Ok(Arc::new(Mutex::new(balancer)))
     }
 }
