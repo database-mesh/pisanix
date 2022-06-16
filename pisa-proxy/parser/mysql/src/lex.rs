@@ -355,11 +355,13 @@ impl<'a> Scanner<'a> {
             let var_key = self.chars[self.pos..].iter().collect::<String>();
             match var_key.to_lowercase() {
                 k if k.starts_with("global.") => {
-                    self.next_n(7);
+                    lexemes.push(Ok(DefaultLexeme::new(T_GLOBAL, self.pos, 6)));
+                    self.next_n(6);
                 }
 
                 k if k.starts_with("session.") => {
-                    self.next_n(8);
+                    lexemes.push(Ok(DefaultLexeme::new(T_GLOBAL, self.pos, 7)));
+                    self.next_n(7);
                 }
                 _ => {}
             }
@@ -385,6 +387,10 @@ impl<'a> Scanner<'a> {
                     old_pos,
                     self.pos - old_pos + 1,
                 )));
+            }
+
+            '.' => {
+                lexemes.push(Ok(DefaultLexeme::new(T_DOT, self.pos, 1)));
             }
 
             ch if is_user_var_char(ch) => {

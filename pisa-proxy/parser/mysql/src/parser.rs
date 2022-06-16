@@ -115,10 +115,16 @@ mod test {
             //"set AUTOCOMMIT=1",
             //"SELECT w, SUM(w) OVER (ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) FROM t;",
             //"SHOW DATABASES LIKE 'ds%'",
-            "SHOW FULL tables FROM test like 't_%'",
-            "START TRANSACTION",
-            "COMMIT",
-            "ROLLBACK",
+            //"SHOW FULL tables FROM test like 't_%'",
+            //"START TRANSACTION",
+            //"COMMIT",
+            //"ROLLBACK",
+            //"set names utf8mb4",
+            //"SET character_set_connection = gbk;",
+            //"SET character_set_results = gbk;",
+            //"SET character_set_client = \"gbk\";",
+            "SET @@GLOBAL.character_set_client = gbk;",
+            "SET @@SESSION.character_set_client = gbk;",
         ];
 
         let p = Parser::new();
