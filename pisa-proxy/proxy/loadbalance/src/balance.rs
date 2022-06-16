@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::{Error, ErrorKind};
-
+// use std::io::{Error, ErrorKind};
 use endpoint::endpoint::Endpoint;
+use serde::{Deserialize, Serialize};
 
 use crate::{random_weighted::RandomWeighted, roundrobin_weighted::RoundRobinWeightd};
 pub struct Balance;
 
-pub enum BalanceStrategy {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum AlgorithmName {
     Random,
     RoundRobin,
 }
@@ -36,12 +38,11 @@ pub trait LoadBalance {
 impl Balance {
     pub fn build_balance(
         &mut self,
-        bs: String,
-    ) -> Result<Box<dyn LoadBalance + Send + Sync>, Error> {
-        match bs.as_str() {
-            "random" => Ok(Box::new(RandomWeighted::default())),
-            "roundrobin" => Ok(Box::new(RoundRobinWeightd::default())),
-            &_ => Err(Error::new(ErrorKind::Other, "balancer type not support")),
+        algorithm_name: AlgorithmName,
+    ) -> Box<dyn LoadBalance + Send + Sync> {
+        match algorithm_name {
+            AlgorithmName::Random => Box::new(RandomWeighted::default()),
+            AlgorithmName::RoundRobin => Box::new(RoundRobinWeightd::default()),
         }
     }
 }

@@ -30,7 +30,7 @@ pub struct ReadWriteSplittingStatic {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum ReadWriteSplittingRule {
-    Rule(RegexRule),
+    Regex(RegexRule),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -40,7 +40,7 @@ pub struct RegexRule {
     pub rule_type: String,
     pub regex: Vec<String>,
     pub target: TargetRole,
-    pub algorith_name: String,
+    pub algorithm_name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
