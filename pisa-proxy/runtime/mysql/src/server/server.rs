@@ -21,7 +21,7 @@ use conn_pool::Pool;
 use futures::StreamExt;
 use loadbalance::balance::BalanceType;
 use mysql_parser::{
-    ast::{BeginStmt, SqlStmt},
+    ast::{BeginStmt, SqlStmt, SetOptValues, SetOpts},
     parser::{ParseError, Parser},
 };
 use mysql_protocol::{
@@ -326,26 +326,50 @@ impl MySqlServer {
             "COM_QUERY",
             client_conn.get_endpoint().unwrap().as_str()
         );
-        let sql = str::from_utf8(payload).unwrap();
-        let stream = client_conn.send_query(payload).await?;
 
-        let res = match self.get_ast(payload) {
+        let stream = match self.get_ast(payload) {
             Err(err) => {
                 error!("err: {:?}", err);
-                self.handle_query_resultset(stream).await
+                client_conn.send_query(payload).await?
             }
 
-            Ok(stmt) => match &stmt[0].clone() {
+            Ok(stmt) => match &stmt[0] {
+                SqlStmt::Set(stmt) => {
+                    self.handle_set_stmt(stmt);
+                    client_conn.send_query(payload).await?
+                },
                 //TODO: split sql stmt for sql audit
-                SqlStmt::BeginStmt(stmt) => self.handle_begin_stmt(stream, stmt, sql).await,
-                _ => self.handle_query_resultset(stream).await,
+                SqlStmt::BeginStmt(_stmt) => client_conn.send_query(payload).await?,
+                _ => client_conn.send_query(payload).await?,
             },
         };
+        
+        self.handle_query_resultset(stream).await?;
+
         let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
         collect_sql_under_processing_dec!(self, "COM_QUERY", ep.as_str());
         collect_sql_processed_duration!(self, "COM_QUERY", ep.as_str(), earlier);
-        res
+        Ok(())
+    }
+
+    // Set charset name 
+    fn handle_set_stmt(&mut self, stmt: &SetOptValues) {
+        match stmt {
+            SetOptValues::OptValues(vals) => {
+                match &vals.opt {
+                    SetOpts::SetNames(name) => {
+                        if let Some(name) = &name.charset_name {
+                            self.client.charset = name.clone();
+                            self.trans_fsm.set_charset(name.clone())
+                        }
+                    },
+                    _ => {}
+                }
+            },
+
+            _ => {}
+        }
     }
 
     pub async fn handle_query_resultset<'b>(
@@ -459,11 +483,11 @@ impl MySqlServer {
         self.client.pkt.conn.shutdown().await.map_err(ProtocolError::Io)
     }
 
-    async fn handle_begin_stmt<'b>(
+    // TODO, add handle for begin stmt
+    async fn _handle_begin_stmt<'b>(
         &mut self,
         stream: ResultsetStream<'b>,
         _stmt: &BeginStmt,
-        _sql: &str,
     ) -> Result<(), ProtocolError> {
         if let Err(err) = self.trans_fsm.trigger(TransEventName::StartEvent).await {
             error!("err: {:?}", err);
