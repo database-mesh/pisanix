@@ -86,10 +86,8 @@ impl LoadBalance for BalanceType {
 impl Balance {
     pub fn build_balance(&mut self, algorithm_name: AlgorithmName) -> BalanceType {
         match algorithm_name {
-            AlgorithmName::Random => return BalanceType::Random(RandomWeighted::default()),
-            AlgorithmName::RoundRobin => {
-                return BalanceType::RoundRobin(RoundRobinWeightd::default())
-            }
-        };
+            AlgorithmName::Random => BalanceType::Random(RandomWeighted::default()),
+            AlgorithmName::RoundRobin => BalanceType::RoundRobin(RoundRobinWeightd::default()),
+        }
     }
 }
