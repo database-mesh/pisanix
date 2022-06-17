@@ -15,15 +15,20 @@
 use std::{convert::From, str};
 
 use byteorder::{ByteOrder, LittleEndian};
-use bytes::{BufMut, BytesMut};
+use bytes::{Buf, BufMut, BytesMut};
 use futures::{SinkExt, StreamExt};
 use rand::rngs::OsRng;
 use rsa::{pkcs8::DecodePublicKey, PaddingScheme, PublicKey, RsaPublicKey};
 use sha1::Sha1;
 use tokio_util::codec::{Decoder, Encoder, Framed};
+use regex::Regex;
 
 use super::{codec::ClientCodec, stream::LocalStream};
-use crate::{charset::DEFAULT_COLLATION_ID, err::ProtocolError, mysql_const::*, util::*};
+use crate::{charset::*, err::ProtocolError, mysql_const::*, util::*};
+
+lazy_static! {
+    static ref RE: Regex = Regex::new(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)").unwrap();
+}
 
 /// Handshake state
 #[derive(Debug, Clone)]
@@ -46,13 +51,34 @@ impl Default for HandshakeState {
 }
 
 #[derive(Debug, Default, Clone)]
+pub struct ServerVersion {
+    pub major: u8,
+    pub minor: u8,
+    pub patch: u8,
+}
+
+impl From<(&str, &str, &str)> for ServerVersion {
+    fn from(version: (&str, &str, &str)) -> ServerVersion {
+        let major = version.0.parse::<u8>().unwrap();
+        let minor = version.1.parse::<u8>().unwrap();
+        let patch = version.2.parse::<u8>().unwrap();
+
+        ServerVersion {
+            major,
+            minor,
+            patch,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct ClientAuth {
     pub next_state: HandshakeState,
     pub connection_id: u32,
     pub salt: Vec<u8>,
     pub capability: u32,
     pub client_capability: u32,
-    pub charset: u8,
+    pub charset: String,
     pub status: u16,
     pub auth_plugin_name: String,
     pub tls_config: Option<()>,
@@ -60,6 +86,7 @@ pub struct ClientAuth {
     pub password: String,
     pub db: String,
     pub seq: u8,
+    pub server_version: ServerVersion,
 }
 
 impl ClientAuth {
@@ -73,11 +100,12 @@ impl ClientAuth {
             status: 0,
             auth_plugin_name: "".to_string(),
             tls_config: None,
-            charset: 0,
+            charset: "".to_string(),
             user: "".to_string(),
             password: "".to_string(),
             db: "".to_string(),
             seq: 0,
+            server_version: ServerVersion::default(),
         }
     }
 
@@ -97,7 +125,19 @@ impl ClientAuth {
 
         // skip server version, end with 0x00
         let pos = data.iter().position(|&x| x == 0x00).unwrap();
-        let _ = data.split_to(pos + 1);
+        let version_bytes = data.split_to(pos + 1);
+        let version = str::from_utf8(&version_bytes).unwrap();
+        if let Some(caps) = RE.captures(version) {
+            let ver = ServerVersion::from(
+                ( 
+                    caps.name("major").unwrap().as_str(), 
+                    caps.name("minor").unwrap().as_str(), 
+                    caps.name("patch").unwrap().as_str(),
+                )
+            );
+
+            self.server_version = ver;
+        }
 
         // connection id length is 4
         self.connection_id = LittleEndian::read_u32(&data.split_to(4));
@@ -122,9 +162,14 @@ impl ClientAuth {
             return Ok(self.clone());
         }
 
-        // skip server charset
+        // server charset
         // self.charset = data[pos]
-        self.charset = data.split_to(1)[0] as u8;
+        let charset_id = data.get_u8();
+        match self.server_version.major {
+            5 => self.charset = CHARSET_ID_NAME_MYSQL5[&charset_id].to_string(),
+            _ => self.charset = CHARSET_ID_NAME_MYSQL8[&charset_id].to_string(),
+        }
+
 
         self.status = LittleEndian::read_u16(&data.split_to(2));
 
@@ -251,8 +296,11 @@ impl ClientAuth {
         //data[11] = 0x00;
 
         //charset [1 byte]
-        // data[12] = DEFAULT_COLLATION_ID as u8;
-        data.put_u8(DEFAULT_COLLATION_ID);
+        self.charset = DEFAULT_CHARSET_NAME.to_string();
+        match self.server_version.major {
+            5 => data.put_u8(CHARSET_NAME_ID_MYSQL5[DEFAULT_CHARSET_NAME]),
+            _ => data.put_u8(CHARSET_NAME_ID_MYSQL8[DEFAULT_CHARSET_NAME]),
+        }
 
         data.put_slice(&[0; 23]);
 
@@ -622,7 +670,7 @@ mod test {
         assert_eq!(c.salt[0], 0x29);
         assert_eq!(c.salt[c.salt.len() - 1], 0x59);
         assert_eq!(c.auth_plugin_name, "caching_sha2_password".to_string());
-        assert_eq!(c.charset, 0xff);
+        assert_eq!(c.charset, "utf8mb4");
     }
 
     // test auth success with mysql_native_password plugin

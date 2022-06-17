@@ -52,14 +52,13 @@ const DEFAULT_CAPABILITY: u32 = CLIENT_LONG_PASSWORD
 pub struct Connection {
     salt: Vec<u8>,
     status: u16,
-    collation: CollationId,
     capability: u32,
     connection_id: u32,
-    _charset: String,
     user: String,
     password: String,
     auth_data: BytesMut,
     pub auth_plugin_name: String,
+    pub charset: String,
     pub db: String,
     pub affected_rows: i64,
     pub pkt: Packet,
@@ -72,10 +71,9 @@ impl Connection {
         Connection {
             salt: crate::util::random_buf(20),
             status: SERVER_STATUS_AUTOCOMMIT,
-            collation: DEFAULT_COLLATION_ID,
             capability: 0,
             connection_id: CONNECTION_ID.load(Ordering::Relaxed),
-            _charset: DEFAULT_CHARSET.to_string(),
+            charset: DEFAULT_CHARSET_NAME.to_string(),
             auth_plugin_name: "".to_string(),
             user,
             password,
@@ -141,10 +139,7 @@ impl Connection {
         data.put_u8((DEFAULT_CAPABILITY >> 8) as u8);
 
         //charset, utf-8 default
-        if self.collation == 0 {
-            self.collation = DEFAULT_COLLATION_ID;
-        }
-        data.put_u8(self.collation);
+        data.put_u8(CHARSET_NAME_ID_MYSQL5[&*self.charset]);
 
         //status
         data.put_u8(self.status as u8);

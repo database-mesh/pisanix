@@ -231,6 +231,7 @@ pub struct TransFsm {
     pub client_conn: Option<PoolConn<ClientConn>>,
     pub endpoint: Option<Endpoint>,
     pub db: Option<String>,
+    pub charset: String,
 }
 
 impl TransFsm {
@@ -247,6 +248,7 @@ impl TransFsm {
             client_conn: None,
             endpoint: None,
             db: None,
+            charset: String::from("utf8mb4"),
         }
     }
 
@@ -255,17 +257,14 @@ impl TransFsm {
             if event.name == state_name && event.src_state == self.current_state {
                 match event.src_state {
                     TransState::TransDummyState => {
-                        let (mut client_conn, endpoint) = event
+                        let (client_conn, endpoint) = event
                             .driver
                             .as_ref()
                             .unwrap()
                             .get_driver_conn(self.lb.clone(), &mut self.pool)
                             .await?;
-                        if let None = client_conn.get_db() {
-                            if let Some(db) = &self.db {
-                                client_conn.send_use_db(db).await.map_err(ErrorKind::Protocol)?;
-                            }
-                        }
+                        
+                        
                         self.client_conn = Some(client_conn);
                         self.endpoint = endpoint;
                     }
@@ -284,11 +283,19 @@ impl TransFsm {
         self.db = Some(db)
     }
 
+    // Set current charset
+    pub fn set_charset(&mut self, name: String) {
+        self.charset = name;
+    }
+
     pub async fn get_conn(&mut self) -> Result<PoolConn<ClientConn>, Error> {
         let conn = self.client_conn.take();
         let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
         match conn {
-            Some(client_conn) => Ok(client_conn),
+            Some(mut client_conn) => {
+                self.init_session_attr(&mut client_conn).await?;
+                Ok(client_conn)
+            }
             None => match self.pool.get_conn_with_opts(addr).await {
                 Ok(client_conn) => Ok(client_conn),
                 Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
@@ -298,5 +305,24 @@ impl TransFsm {
 
     pub fn put_conn(&mut self, conn: PoolConn<ClientConn>) {
         self.client_conn = Some(conn)
+    }
+
+    // init session attrs, db and charset attr
+    #[inline]
+    async fn init_session_attr(&mut self, conn: &mut PoolConn<ClientConn>) -> Result<(), Error> {
+        // set db
+        if self.db != conn.get_db() {
+            if let Some(db) = &self.db {
+                conn.send_use_db(db).await.map_err(ErrorKind::Protocol)?;
+            }
+        }
+
+        //set charset
+        if Some(&self.charset) != conn.get_charset().as_ref() {
+            conn.set_charset(&self.charset);
+            conn.send_query_discard_result(&format!("SET NAMES {}", &self.charset)).await.map_err(ErrorKind::Protocol)?;
+        }
+
+        Ok(())
     }
 }

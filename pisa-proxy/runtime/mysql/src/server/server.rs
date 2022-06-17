@@ -12,26 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{str, sync::Arc, time::SystemTime};
+use std::{str, sync::Arc, time::SystemTime, iter::Product};
 
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Buf, BufMut, BytesMut};
 use common::ast_cache::ParserAstCache;
-use conn_pool::Pool;
+use conn_pool::{Pool, PoolConn};
 use futures::StreamExt;
 use loadbalance::balance::LoadBalance;
 use mysql_parser::{
-    ast::{BeginStmt, SqlStmt},
+    ast::{BeginStmt, SqlStmt, SetOptValues, SetOpts},
     parser::{ParseError, Parser},
 };
 use mysql_protocol::{
-    client::{codec::ResultsetStream, conn::ClientConn},
+    client::{codec::ResultsetStream, conn::ClientConn, auth::ClientAuth},
     err::ProtocolError,
     mysql_const::*,
     server::{conn::Connection, err::MySQLError},
     util::*,
 };
 use parking_lot::Mutex as plMutex;
+use pisa_error::error::{ErrorKind, Error};
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
@@ -326,26 +327,50 @@ impl MySqlServer {
             "COM_QUERY",
             client_conn.get_endpoint().unwrap().as_str()
         );
-        let sql = str::from_utf8(payload).unwrap();
-        let stream = client_conn.send_query(payload).await?;
 
-        let res = match self.get_ast(payload) {
+        let stream = match self.get_ast(payload) {
             Err(err) => {
                 error!("err: {:?}", err);
-                self.handle_query_resultset(stream).await
+                client_conn.send_query(payload).await?
             }
 
-            Ok(stmt) => match &stmt[0].clone() {
+            Ok(stmt) => match &stmt[0] {
+                SqlStmt::Set(stmt) => {
+                    let _ = self.handle_set_stmt(stmt).await;
+                    client_conn.send_query(payload).await?
+                },
                 //TODO: split sql stmt for sql audit
-                SqlStmt::BeginStmt(stmt) => self.handle_begin_stmt(stream, stmt, sql).await,
-                _ => self.handle_query_resultset(stream).await,
+                SqlStmt::BeginStmt(_stmt) => client_conn.send_query(payload).await?,
+                _ => client_conn.send_query(payload).await?,
             },
         };
+        
+        self.handle_query_resultset(stream).await?;
+
         let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
         collect_sql_under_processing_dec!(self, "COM_QUERY", ep.as_str());
         collect_sql_processed_duration!(self, "COM_QUERY", ep.as_str(), earlier);
-        res
+        Ok(())
+    }
+
+    // Set charset name 
+    async fn handle_set_stmt(&mut self, stmt: &SetOptValues) {
+        match stmt {
+            SetOptValues::OptValues(vals) => {
+                match &vals.opt {
+                    SetOpts::SetNames(name) => {
+                        if let Some(name) = &name.charset_name {
+                            self.client.charset = name.clone();
+                            self.trans_fsm.set_charset(name.clone())
+                        }
+                    },
+                    _ => {}
+                }
+            },
+
+            _ => {}
+        }
     }
 
     pub async fn handle_query_resultset<'b>(
@@ -459,11 +484,11 @@ impl MySqlServer {
         self.client.pkt.conn.shutdown().await.map_err(ProtocolError::Io)
     }
 
-    async fn handle_begin_stmt<'b>(
+    // TODO, add handle for begin stmt
+    async fn _handle_begin_stmt<'b>(
         &mut self,
         stream: ResultsetStream<'b>,
         _stmt: &BeginStmt,
-        _sql: &str,
     ) -> Result<(), ProtocolError> {
         if let Err(err) = self.trans_fsm.trigger(TransEventName::StartEvent).await {
             error!("err: {:?}", err);
