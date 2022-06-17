@@ -206,11 +206,7 @@ impl ClientConn {
     pub async fn send_query_discard_result(&mut self, val: &str) -> Result<(), ProtocolError> {
         let mut stream = self.send_common_command(COM_QUERY, val.as_bytes()).await?;
 
-        while stream.next().await.is_some() {
-            if stream.next().await.is_none() {
-                break;
-            }
-        }
+        while stream.next().await.is_some() {}
 
         Ok(())
     }
