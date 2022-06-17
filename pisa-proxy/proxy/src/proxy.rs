@@ -15,7 +15,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use endpoint::endpoint::Endpoint;
-use loadbalance::balance::{AlgorithmName, Balance, LoadBalance};
+use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
 use serde::{Deserialize, Serialize};
 use strategy::config::ReadWriteSplitting;
 use tokio::{
@@ -54,7 +54,7 @@ pub struct ProxyConfig {
     pub simple_loadbalance: Option<ProxySimpleLoadBalance>,
     pub plugin: Option<plugin::config::Plugin>,
     // read write splitting config structure
-    pub read_write_splitting: ReadWriteSplitting,
+    pub read_write_splitting: Option<ReadWriteSplitting>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -173,7 +173,7 @@ impl Proxy {
     pub fn build_loadbalance(
         &mut self,
         nodes: Vec<String>,
-    ) -> Result<Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>, std::io::Error> {
+    ) -> Result<Arc<Mutex<BalanceType>>, std::io::Error> {
         let mut balance = Balance {};
 
         let lb = match &self.app.simple_loadbalance {
@@ -193,6 +193,7 @@ impl Proxy {
                         password: node.password,
                         weight: node.weight,
                     };
+                    println!("{:#?}", endpoint);
                     balancer.add(endpoint);
                 }
                 _ => continue,

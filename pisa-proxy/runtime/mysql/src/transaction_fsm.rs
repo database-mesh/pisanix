@@ -17,7 +17,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use conn_pool::{ConnAttr, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
-use loadbalance::balance::LoadBalance;
+use loadbalance::balance::{BalanceType, LoadBalance};
 use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::{Error, ErrorKind};
 use tokio::sync::Mutex;
@@ -51,7 +51,7 @@ pub enum TransEventName {
 pub trait ConnDriver {
     async fn get_driver_conn(
         &self,
-        loadbalance: Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>,
+        loadbalance: Arc<Mutex<BalanceType>>,
         pool: &mut Pool<ClientConn>,
     ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error>;
 }
@@ -63,7 +63,7 @@ pub struct Driver;
 impl ConnDriver for Driver {
     async fn get_driver_conn(
         &self,
-        loadbalance: Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>,
+        loadbalance: Arc<Mutex<BalanceType>>,
         pool: &mut Pool<ClientConn>,
     ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error> {
         let mut lb = loadbalance.clone().lock_owned().await;
@@ -226,7 +226,7 @@ pub struct TransFsm {
     pub events: Vec<TransEvent>,
     pub current_state: TransState,
     pub current_event: TransEventName,
-    pub lb: Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>,
+    pub lb: Arc<Mutex<BalanceType>>,
     pub pool: Pool<ClientConn>,
     pub client_conn: Option<PoolConn<ClientConn>>,
     pub endpoint: Option<Endpoint>,
@@ -234,10 +234,7 @@ pub struct TransFsm {
 }
 
 impl TransFsm {
-    pub fn new_trans_fsm(
-        lb: Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>,
-        pool: Pool<ClientConn>,
-    ) -> TransFsm {
+    pub fn new_trans_fsm(lb: Arc<Mutex<BalanceType>>, pool: Pool<ClientConn>) -> TransFsm {
         TransFsm {
             events: init_trans_events(),
             current_state: TransState::TransDummyState,
