@@ -19,7 +19,7 @@ use bytes::{Buf, BufMut, BytesMut};
 use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
 use futures::StreamExt;
-use loadbalance::balance::LoadBalance;
+use loadbalance::balance::BalanceType;
 use mysql_parser::{
     ast::{BeginStmt, SqlStmt},
     parser::{ParseError, Parser},
@@ -60,7 +60,7 @@ impl MySqlServer {
     pub async fn new(
         client: TcpStream,
         pool: Pool<ClientConn>,
-        lb: Arc<Mutex<Box<dyn LoadBalance + Send + Sync>>>,
+        lb: Arc<Mutex<BalanceType>>,
         proxy_config: ProxyConfig,
         parser: Arc<Parser>,
         ast_cache: Arc<plMutex<ParserAstCache>>,
