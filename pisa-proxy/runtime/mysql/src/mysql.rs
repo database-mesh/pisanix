@@ -57,7 +57,7 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         let listener = proxy.build_listener().unwrap();
 
-        let pool = Pool::new(self.proxy_config.pool_size as usize);
+        let pool = Pool::<ClientConn>::new(self.proxy_config.pool_size as usize);
 
         let ast_cache = Arc::new(Mutex::new(ParserAstCache::new()));
         // TODO: using a loadbalancer factory for different load balance strategy.
@@ -77,47 +77,23 @@ impl proxy::factory::Proxy for MySQLProxy {
         loop {
             // TODO: need refactor
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
-            let pool = pool.clone();
             let lb = Arc::clone(&lb);
+            let plugin = plugin.clone();
             let pcfg = self.proxy_config.clone();
             let parser = parser.clone();
             let ast_cache = ast_cache.clone();
-            let plugin = plugin.clone();
+            let pool = pool.clone();
 
-            //TODO: add multiple thread limit with Semaphore
-            // let mut mysql_server = MySqlServer::new(
-            //     socket,
-            //     pool,
-            //     lb,
-            //     pcfg,
-            //     parser,
-            //     ast_cache,
-            //     plugin,
-            //     metrics_collector,
-            // )
-            // .await;
-            let mysql_server = MySqlServerBuilder::new(Connection::new(
-                socket,
-                pcfg.user,
-                pcfg.password,
-                pcfg.db,
-            )).
-                    with_name(pcfg.name).
-                    // with_connection(Connection::new(
-                    //     socket,
-                    //     pcfg.user,
-                    //     pcfg.password,
-                    //     pcfg.db,
-                    // )).
+            let mut mysql_server = MySqlServerBuilder::new(socket, lb,  plugin).
+                    with_pcfg(pcfg).
+                    with_pool(pool).
                     with_buf(BytesMut::with_capacity(8192)).
                     with_mysql_parser(parser).
-                    with_trans_fsm(TransFsm::new_trans_fsm(lb, pool)).
                     with_ast_cache(ast_cache).
-                    with_plugin(plugin).
                     is_quit(false).
                     with_concurrency_control_rule_idx(None).
                     with_metrics_collector(metrics_collector).
-                    build().await;
+                    build();
 
             if let Err(err) = mysql_server.handshake().await {
                 error!("{:?}", err);
