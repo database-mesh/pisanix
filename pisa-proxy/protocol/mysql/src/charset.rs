@@ -17,6 +17,7 @@ use std::collections::HashMap;
 pub const DEFAULT_CHARSET_NAME: &str = "utf8mb4";
 pub const DEFAULT_COLLATION_NAME: &str = "utf8mb4_general_ci";
 
+// Data from `select ID,CHARACTER_SET_NAME from COLLATIONS where IS_DEFAULT='yes';`.
 //charset key is charset name and value is default collation id
 lazy_static! {
     pub static ref CHARSET_NAME_ID_MYSQL5: HashMap<&'static str, u8> = HashMap::from([
