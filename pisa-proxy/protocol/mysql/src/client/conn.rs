@@ -231,7 +231,6 @@ impl Clone for ClientConn {
             password: self.password.clone(),
             endpoint: self.endpoint.clone(),
             framed: None,
-            //auth_info: None,
         }
     }
 }
