@@ -335,7 +335,7 @@ impl MySqlServer {
 
             Ok(stmt) => match &stmt[0] {
                 SqlStmt::Set(stmt) => {
-                    let _ = self.handle_set_stmt(stmt).await;
+                    self.handle_set_stmt(stmt);
                     client_conn.send_query(payload).await?
                 },
                 //TODO: split sql stmt for sql audit
@@ -354,7 +354,7 @@ impl MySqlServer {
     }
 
     // Set charset name 
-    async fn handle_set_stmt(&mut self, stmt: &SetOptValues) {
+    fn handle_set_stmt(&mut self, stmt: &SetOptValues) {
         match stmt {
             SetOptValues::OptValues(vals) => {
                 match &vals.opt {
