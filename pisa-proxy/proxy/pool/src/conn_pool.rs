@@ -39,6 +39,8 @@ pub trait ConnAttr {
     fn get_endpoint(&self) -> String;
     // Get current db on conn
     fn get_db(&self) -> Option<String>;
+    // Get current charset
+    fn get_charset(&self) -> Option<String>;
 }
 
 #[derive(Debug)]

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::{
+    ops::{Deref, DerefMut},
     pin::Pin,
     task::{Context, Poll},
 };
@@ -47,6 +48,31 @@ pub enum ClientCodec {
     Resultset(Framed<LocalStream, ResultsetCodec>),
     Stmt(Framed<LocalStream, Stmt>),
     Common(Framed<LocalStream, CommonCodec>),
+}
+
+// Access `AuthInfo` struct by dereferencing the `ClientCodec` struct.
+impl Deref for ClientCodec {
+    type Target = ClientAuth;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::ClientAuth(framed) => framed.codec(),
+            Self::Resultset(framed) => framed.codec().auth_info.as_ref().unwrap(),
+            Self::Stmt(framed) => framed.codec().auth_info.as_ref().unwrap(),
+            Self::Common(framed) => framed.codec().auth_info.as_ref().unwrap(),
+        }
+    }
+}
+
+// Modify `AuthInfo` struct by dereferencing the `ClientCodec` struct.
+impl DerefMut for ClientCodec {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Self::ClientAuth(framed) => framed.codec_mut(),
+            Self::Resultset(framed) => framed.codec_mut().auth_info.as_mut().unwrap(),
+            Self::Stmt(framed) => framed.codec_mut().auth_info.as_mut().unwrap(),
+            Self::Common(framed) => framed.codec_mut().auth_info.as_mut().unwrap(),
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -34,7 +34,6 @@ use crate::{err::ProtocolError, mysql_const::*};
 #[derive(Debug, Default)]
 pub struct ClientConn {
     pub framed: Option<Box<ClientCodec>>,
-    pub auth_info: Option<ClientAuth>,
     user: String,
     password: String,
     endpoint: String,
@@ -74,7 +73,6 @@ impl ClientConn {
         ))));
 
         let res = handshake(*(framed.take().unwrap())).await?;
-        let auth_info = Some(res.0.codec().clone());
         let framed = Some(Box::new(ClientCodec::ClientAuth(res.0)));
 
         Ok(ClientConn {
@@ -82,13 +80,11 @@ impl ClientConn {
             password: self.password.clone(),
             endpoint: self.endpoint.clone(),
             framed,
-            auth_info,
         })
     }
 
     pub async fn handshake(&mut self) -> Result<(bool, Vec<u8>), ProtocolError> {
         let res = handshake(*(self.framed.take().unwrap())).await?;
-        self.auth_info = Some(res.0.codec().clone());
         self.framed = Some(Box::new(ClientCodec::ClientAuth(res.0)));
 
         Ok((res.1, res.2))
@@ -102,7 +98,7 @@ impl ClientConn {
 
         let mut resultset_codec = framed.into_resultset();
 
-        resultset_codec.send(ResultSendCommand::Binary((0x03, val))).await?;
+        resultset_codec.send(ResultSendCommand::Binary((COM_QUERY, val))).await?;
 
         self.framed = Some(Box::new(ClientCodec::Resultset(resultset_codec)));
 
@@ -206,8 +202,21 @@ impl ClientConn {
         Ok(CommonStream::new(self.framed.as_mut()))
     }
 
+    // Send query, but discard result
+    pub async fn send_query_discard_result(&mut self, val: &str) -> Result<(), ProtocolError> {
+        let mut stream = self.send_common_command(COM_QUERY, val.as_bytes()).await?;
+
+        while stream.next().await.is_some() {}
+
+        Ok(())
+    }
+
     pub fn get_endpoint(&self) -> Option<String> {
         Some(self.endpoint.clone())
+    }
+
+    pub fn set_charset(&mut self, name: &str) {
+        self.framed.as_mut().unwrap().charset = name.to_string()
     }
 }
 
@@ -218,7 +227,6 @@ impl Clone for ClientConn {
             password: self.password.clone(),
             endpoint: self.endpoint.clone(),
             framed: None,
-            auth_info: None,
         }
     }
 }
@@ -254,11 +262,26 @@ impl ConnAttr for ClientConn {
     }
 
     fn get_db(&self) -> Option<String> {
-        if let Some(auth_info) = &self.auth_info {
-            if auth_info.db.is_empty() {
+        let codec = self.framed.as_ref();
+
+        if let Some(codec) = codec {
+            if codec.db.is_empty() {
                 None
             } else {
-                Some(auth_info.db.clone())
+                Some(codec.db.clone())
+            }
+        } else {
+            None
+        }
+    }
+
+    fn get_charset(&self) -> Option<String> {
+        let codec = self.framed.as_ref();
+        if let Some(codec) = codec {
+            if codec.charset.is_empty() {
+                None
+            } else {
+                Some(codec.charset.clone())
             }
         } else {
             None
