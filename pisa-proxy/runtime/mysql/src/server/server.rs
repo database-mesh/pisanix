@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{str, sync::Arc, time::SystemTime, iter::Product};
+use std::{str, sync::Arc, time::SystemTime};
 
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Buf, BufMut, BytesMut};
 use common::ast_cache::ParserAstCache;
-use conn_pool::{Pool, PoolConn};
+use conn_pool::Pool;
 use futures::StreamExt;
 use loadbalance::balance::LoadBalance;
 use mysql_parser::{
@@ -25,14 +25,13 @@ use mysql_parser::{
     parser::{ParseError, Parser},
 };
 use mysql_protocol::{
-    client::{codec::ResultsetStream, conn::ClientConn, auth::ClientAuth},
+    client::{codec::ResultsetStream, conn::ClientConn},
     err::ProtocolError,
     mysql_const::*,
     server::{conn::Connection, err::MySQLError},
     util::*,
 };
 use parking_lot::Mutex as plMutex;
-use pisa_error::error::{ErrorKind, Error};
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
