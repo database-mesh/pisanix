@@ -263,8 +263,7 @@ impl TransFsm {
                             .unwrap()
                             .get_driver_conn(self.lb.clone(), &mut self.pool)
                             .await?;
-                        
-                        
+
                         self.client_conn = Some(client_conn);
                         self.endpoint = endpoint;
                     }
@@ -320,7 +319,9 @@ impl TransFsm {
         //set charset
         if Some(&self.charset) != conn.get_charset().as_ref() {
             conn.set_charset(&self.charset);
-            conn.send_query_discard_result(&format!("SET NAMES {}", &self.charset)).await.map_err(ErrorKind::Protocol)?;
+            conn.send_query_discard_result(&format!("SET NAMES {}", &self.charset))
+                .await
+                .map_err(ErrorKind::Protocol)?;
         }
 
         Ok(())

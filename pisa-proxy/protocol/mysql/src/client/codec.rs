@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use std::{
+    ops::{Deref, DerefMut},
     pin::Pin,
-    task::{Context, Poll}, ops::DerefMut,
+    task::{Context, Poll},
 };
 
 use bytes::{Buf, BufMut, BytesMut};
@@ -39,8 +40,6 @@ use crate::{
     util::{get_length, length_encode_int, length_encoded_string},
 };
 
-use std::ops::Deref;
-
 pub type SendCommand<'a> = (u8, &'a str);
 
 #[derive(Debug, mysql_codec_convert)]
@@ -61,7 +60,7 @@ impl Deref for ClientCodec {
             Self::Stmt(framed) => framed.codec().auth_info.as_ref().unwrap(),
             Self::Common(framed) => framed.codec().auth_info.as_ref().unwrap(),
         }
-    } 
+    }
 }
 
 // Modify `AuthInfo` struct by dereferencing the `ClientCodec` struct.

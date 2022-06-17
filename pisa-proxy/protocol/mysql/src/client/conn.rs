@@ -209,7 +209,7 @@ impl ClientConn {
 
         while stream.next().await.is_some() {
             if stream.next().await.is_none() {
-                break
+                break;
             }
         }
 

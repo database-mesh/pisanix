@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-pub const DEFAULT_CHARSET_NAME: &str = "utf8mb4"; 
+pub const DEFAULT_CHARSET_NAME: &str = "utf8mb4";
 pub const DEFAULT_COLLATION_NAME: &str = "utf8mb4_general_ci";
 
 //charset key is charset name and value is default collation id
