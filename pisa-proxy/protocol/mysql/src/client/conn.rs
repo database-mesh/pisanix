@@ -85,7 +85,6 @@ impl ClientConn {
 
     pub async fn handshake(&mut self) -> Result<(bool, Vec<u8>), ProtocolError> {
         let res = handshake(*(self.framed.take().unwrap())).await?;
-        //self.auth_info = Some(res.0.codec().clone());
         self.framed = Some(Box::new(ClientCodec::ClientAuth(res.0)));
 
         Ok((res.1, res.2))
