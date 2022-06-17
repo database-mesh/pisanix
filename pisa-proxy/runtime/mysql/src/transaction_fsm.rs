@@ -296,7 +296,10 @@ impl TransFsm {
                 Ok(client_conn)
             }
             None => match self.pool.get_conn_with_opts(addr).await {
-                Ok(client_conn) => Ok(client_conn),
+                Ok(mut client_conn) => {
+                    self.init_session_attr(&mut client_conn).await?;
+                    Ok(client_conn)
+                },
                 Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
             },
         }
