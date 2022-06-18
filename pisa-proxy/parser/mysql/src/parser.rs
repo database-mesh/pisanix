@@ -123,15 +123,15 @@ mod test {
             //"SET character_set_connection = gbk;",
             //"SET character_set_results = gbk;",
             //"SET character_set_client = \"gbk\";",
-            // "SET @@GLOBAL.character_set_client = gbk;",
-            // "SET @@SESSION.character_set_client = gbk;",
+            //"SET @@GLOBAL.character_set_client = gbk;",
+            //"SET @@SESSION.character_set_client = gbk;",
             "create database if not exists db CHARACTER SET = utf8;",
         ];
 
         let p = Parser::new();
         for input in inputs {
             let res = p.parse(input);
-            // assert!(res.is_ok());
+            assert!(res.is_ok());
             match res {
                 Err(e) => {
                     println!("sql={:?} {:?}", input, e)
