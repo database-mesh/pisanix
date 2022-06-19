@@ -21,6 +21,9 @@ pub use dml::*;
 pub mod tcl;
 pub use tcl::*;
 
+pub mod ddl;
+pub use ddl::*;
+
 #[macro_use]
 pub mod api;
 pub use api::*;
@@ -41,6 +44,7 @@ pub enum SqlStmt {
     Start(Start),
     Commit(Commit),
     Rollback(Rollback),
+    Create(Create),
     None,
 }
 
