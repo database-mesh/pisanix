@@ -641,9 +641,15 @@ impl<'a> Scanner<'a> {
             }
         });
 
-        self.is_ident_dot = self.peek() == '.';
-
         let ident_str = self.text[old_pos..self.pos].to_uppercase();
+
+        // Check whether has the `ident.ident` format.
+        if self.is_ident_dot {
+            self.pos -= 1;
+            return DefaultLexeme::new(T_IDENT, old_pos, ident_str.len());
+        }
+
+        self.is_ident_dot = self.peek() == '.';
 
         if ident_str.starts_with('_') {
             // check `UNDERSCORE_CHARSET` token
