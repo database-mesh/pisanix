@@ -107,7 +107,8 @@ sql_stmt -> SqlStmt:
   | deallocate    { SqlStmt::Deallocate($1) }
   | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
-  | start               { SqlStmt::Start($1) } 
+  | start               { SqlStmt::Start($1) }
+  | create        { SqlStmt::Create($1) }
   
   ;
 
@@ -6070,7 +6071,111 @@ opt_savepoint ->  bool:
   | 'SAVEPOINT'     { true  }
 ;
 
+create -> Create:
+          'CREATE' 'DATABASE' opt_if_not_exists ident opt_create_database_options
+          {
+		Create::CreateDatabase(Box::new(
+			CreateDatabase{
+				is_not_exists: $3,
+				database_name: $4.0,
+				opt_create_database_options: $5,
+			}
+		))
+          }
+        ;
 
+opt_if_not_exists -> bool:
+          /* empty */   { false }
+        | 'IF' not 'EXISTS' { true }
+        ;
+
+opt_create_database_options -> Vec<CreateDatabaseOption>:
+          /* empty */ { vec![] }
+        | create_database_options { $1 }
+        ;
+
+create_database_options -> Vec<CreateDatabaseOption>:
+          create_database_option
+          {
+          	vec![$1]
+          }
+        | create_database_options create_database_option
+        {
+        	$1.push($2);
+        	$1
+        }
+        ;
+
+create_database_option -> CreateDatabaseOption:
+          default_collation
+          {
+            $1
+          }
+        | default_charset
+          {
+            $1
+          }
+        | default_encryption
+          {
+            $1
+          }
+        ;
+
+default_collation -> CreateDatabaseOption:
+          opt_default 'COLLATE' opt_equal collation_name {
+          	let is_default = match $1 {
+          		Some(_) => true,
+          		None => false,
+          	};
+          	let is_equal = match $3 {
+          		Some(_) => true,
+          		None => false,
+          	};
+		CreateDatabaseOption::DefaultCollation(DefaultCollation{
+		    is_default: is_default,
+		    is_equal: is_equal,
+		    collation_name: $4,
+		})
+          }
+        ;
+
+default_charset -> CreateDatabaseOption:
+          opt_default character_set opt_equal charset_name
+          {
+		let is_default = match $1 {
+			Some(_) => true,
+			None => false,
+		};
+		let is_equal = match $3 {
+			Some(_) => true,
+			None => false,
+		};
+		CreateDatabaseOption::DefaultCharset(DefaultCharset{
+		    is_default: is_default,
+		    is_equal: is_equal,
+		    charset_name: $4,
+		})
+          }
+        ;
+
+default_encryption -> CreateDatabaseOption:
+          opt_default 'ENCRYPTION' opt_equal 'TEXT_STRING'
+          {
+		let is_default = match $1 {
+			Some(_) => true,
+			None => false,
+		};
+		let is_equal = match $3 {
+			Some(_) => true,
+			None => false,
+		};
+		CreateDatabaseOption::DefaultEncryption(DefaultEncryption{
+		    is_default: is_default,
+		    is_equal: is_equal,
+		    encryption: String::from($lexer.span_str($4.as_ref().unwrap().span())),
+		})
+          }
+        ;
 
 %%
 
