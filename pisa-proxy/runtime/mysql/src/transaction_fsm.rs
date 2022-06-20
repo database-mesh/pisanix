@@ -31,6 +31,12 @@ pub enum TransState {
     TransPrepareState,
 }
 
+impl Default for TransState {
+    fn default() -> Self {
+        TransState::TransDummyState
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TransEventName {
     DummyEvent,
@@ -45,6 +51,12 @@ pub enum TransEventName {
     ResetEvent,
     CommitRollBackEvent,
     DropEvent,
+}
+
+impl Default for TransEventName {
+    fn default() -> Self {
+        TransEventName::DummyEvent
+    } 
 }
 
 #[async_trait]
