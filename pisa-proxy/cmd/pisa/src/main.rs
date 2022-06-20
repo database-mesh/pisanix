@@ -49,7 +49,7 @@ fn main() {
             match proxy_config.backend_type.as_str() {
                 BACKEND_TYPE_MYSQL => servers
                     .push(tokio::spawn(new_proxy_server(factory.build_proxy(ProxyKind::MySQL)))),
-                BACKEND_TYPE_SHARDING_PROXY => servers.push(tokio::spawn(new_proxy_server(
+                BACKEND_TYPE_SHARDINGSPHERE_PROXY => servers.push(tokio::spawn(new_proxy_server(
                     factory.build_proxy(ProxyKind::ShardingProxy),
                 ))),
                 &_ => {}
