@@ -6,3 +6,6 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0.133", default-features = false, features = ["derive"] }
 serde_derive = "1.0"
+regex = "1"
+loadbalance = { path = "../loadbalance" }
+endpoint = { path = "../endpoint" }
