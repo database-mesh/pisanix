@@ -1,5 +1,5 @@
 [package]
-name = "runtime_shardingproxy"
+name = "runtime_shardingsphereproxy"
 version = "0.1.0"
 edition = "2021"
 

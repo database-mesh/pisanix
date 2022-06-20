@@ -14,7 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Admin {
     #[serde(default = "default_admin_host")]
     pub host: String,

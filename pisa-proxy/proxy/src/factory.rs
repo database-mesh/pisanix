@@ -16,8 +16,7 @@ use pisa_error::error::Error;
 
 pub enum ProxyKind {
     MySQL,
-    // TODO: rename to ShardingSphereProxy
-    ShardingProxy,
+    ShardingSphereProxy,
 }
 
 #[async_trait::async_trait]
@@ -25,6 +24,6 @@ pub trait Proxy {
     async fn start(&mut self) -> Result<(), Error>;
 }
 
-pub trait Factory {
+pub trait ProxyFactory {
     fn build_proxy(&self, kind: ProxyKind) -> Box<dyn Proxy + Send>;
 }

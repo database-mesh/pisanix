@@ -31,15 +31,15 @@ pub struct Config {
 #[derive(Debug, Clone)]
 pub enum Node {
     MySQL(Vec<MySQLNode>),
-    ShardingProxy(Vec<MySQLNode>),
+    ShardingSphereProxy(Vec<MySQLNode>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PisaConfig {
     pub admin: Admin,
     pub proxies: Vec<ProxyConfig>,
     pub mysql_nodes: Vec<MySQLNode>,
-    pub sharding_proxy_nodes: Vec<MySQLNode>,
+    pub shardingsphere_proxy_nodes: Vec<MySQLNode>,
 }
 
 const PISA_CONTROLLER_DEFAULT_SERVICE: &str = "pisa-controller";
@@ -138,7 +138,7 @@ impl PisaConfig {
             admin: config.admin,
             proxies: vec![],
             mysql_nodes: vec![],
-            sharding_proxy_nodes: vec![],
+            shardingsphere_proxy_nodes: vec![],
         };
 
         if let Ok(env_host) = env::var(PISA_PROXY_CONFIG_ENV_HOST) {

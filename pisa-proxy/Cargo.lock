@@ -2632,7 +2632,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "runtime_shardingproxy"
+name = "runtime_shardingsphereproxy"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -2891,7 +2891,7 @@ dependencies = [
  "rand_core 0.6.3",
  "rocket",
  "runtime_mysql",
- "runtime_shardingproxy",
+ "runtime_shardingsphereproxy",
  "serde",
  "serde_derive",
  "socket2",

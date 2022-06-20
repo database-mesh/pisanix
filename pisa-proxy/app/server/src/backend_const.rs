@@ -13,4 +13,4 @@
 // limitations under the License.
 
 pub const BACKEND_TYPE_MYSQL: &str = "mysql";
-pub const BACKEND_TYPE_SHARDING_PROXY: &str = "shardingsphere-proxy";
+pub const BACKEND_TYPE_SHARDINGSPHERE_PROXY: &str = "shardingsphere-proxy";
