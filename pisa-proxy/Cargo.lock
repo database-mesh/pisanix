@@ -1644,6 +1644,7 @@ dependencies = [
  "pin-project",
  "protocol_codegen",
  "rand 0.8.5",
+ "regex",
  "rsa",
  "rust-crypto",
  "rustls-pemfile",

@@ -26,6 +26,10 @@ pub enum AlgorithmName {
     RoundRobin,
 }
 
+impl Default for AlgorithmName {
+    fn default() -> Self { AlgorithmName::Random }
+}
+
 pub trait LoadBalance {
     fn next(&mut self) -> Option<&Endpoint>;
     fn add(&mut self, endpoint: Endpoint);

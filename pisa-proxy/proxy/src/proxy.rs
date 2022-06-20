@@ -30,7 +30,7 @@ pub struct ProxiesConfig {
     pub config: Option<Vec<ProxyConfig>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ProxyConfig {
     #[serde(default = "default_auto_proxy_name")]
     pub name: String,
@@ -193,7 +193,6 @@ impl Proxy {
                         password: node.password,
                         weight: node.weight,
                     };
-                    println!("{:#?}", endpoint);
                     balancer.add(endpoint);
                 }
                 _ => continue,

@@ -14,13 +14,13 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
     model: ReadWriteSplittingStatic,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplittingStatic {
     pub default_target: String,
     #[serde(rename = "rule")]

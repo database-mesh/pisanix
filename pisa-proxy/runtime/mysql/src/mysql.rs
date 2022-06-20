@@ -14,9 +14,11 @@
 
 use std::sync::Arc;
 
+use bytes::BytesMut;
 use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
 use mysql_parser::parser::Parser;
+use mysql_protocol::client::conn::ClientConn;
 use parking_lot::Mutex;
 use pisa_error::error::{Error, ErrorKind};
 use plugin::build_phase::PluginPhase;
@@ -26,7 +28,7 @@ use proxy::{
 };
 use tracing::error;
 
-use crate::server::{metrics::MySqlServerMetricsCollector, server::MySqlServer};
+use crate::server::{metrics::MySqlServerMetricsCollector, server::MySqlServerBuilder};
 
 pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,
@@ -50,7 +52,7 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         let listener = proxy.build_listener().unwrap();
 
-        let pool = Pool::new(self.proxy_config.pool_size as usize);
+        let pool = Pool::<ClientConn>::new(self.proxy_config.pool_size as usize);
 
         let ast_cache = Arc::new(Mutex::new(ParserAstCache::new()));
         // TODO: using a loadbalancer factory for different load balance strategy.
@@ -70,25 +72,23 @@ impl proxy::factory::Proxy for MySQLProxy {
         loop {
             // TODO: need refactor
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
-            let pool = pool.clone();
             let lb = Arc::clone(&lb);
+            let plugin = plugin.clone();
             let pcfg = self.proxy_config.clone();
             let parser = parser.clone();
             let ast_cache = ast_cache.clone();
-            let plugin = plugin.clone();
+            let pool = pool.clone();
 
-            //TODO: add multiple thread limit with Semaphore
-            let mut mysql_server = MySqlServer::new(
-                socket,
-                pool,
-                lb,
-                pcfg,
-                parser,
-                ast_cache,
-                plugin,
-                metrics_collector,
-            )
-            .await;
+            let mut mysql_server = MySqlServerBuilder::new(socket, lb, plugin)
+                .with_pcfg(pcfg)
+                .with_pool(pool)
+                .with_buf(BytesMut::with_capacity(8192))
+                .with_mysql_parser(parser)
+                .with_ast_cache(ast_cache)
+                .is_quit(false)
+                .with_concurrency_control_rule_idx(None)
+                .with_metrics_collector(metrics_collector)
+                .build();
 
             if let Err(err) = mysql_server.handshake().await {
                 error!("{:?}", err);
