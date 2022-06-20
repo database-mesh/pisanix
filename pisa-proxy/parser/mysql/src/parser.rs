@@ -125,6 +125,7 @@ mod test {
             //"SET character_set_client = \"gbk\";",
             //"SET @@GLOBAL.character_set_client = gbk;",
             //"SET @@SESSION.character_set_client = gbk;",
+            "SELECT * from mysql.select;",
             "create database if not exists db CHARACTER SET = utf8;",
         ];
 
