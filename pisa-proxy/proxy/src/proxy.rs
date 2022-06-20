@@ -193,7 +193,6 @@ impl Proxy {
                         password: node.password,
                         weight: node.weight,
                     };
-                    println!("{:#?}", endpoint);
                     balancer.add(endpoint);
                 }
                 _ => continue,

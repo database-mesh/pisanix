@@ -25,7 +25,7 @@ use mysql_parser::{
     parser::{ParseError, Parser},
 };
 use mysql_protocol::{
-    client::{codec::ResultsetStream, conn::{ClientConn, self}},
+    client::{codec::ResultsetStream, conn::ClientConn},
     err::ProtocolError,
     mysql_const::*,
     server::{conn::Connection, err::MySQLError},
@@ -158,35 +158,6 @@ impl MySqlServerBuilder {
 }
 
 impl MySqlServer {
-    pub async fn new(
-        client: TcpStream,
-        pool: Pool<ClientConn>,
-        lb: Arc<Mutex<BalanceType>>,
-        proxy_config: ProxyConfig,
-        parser: Arc<Parser>,
-        ast_cache: Arc<plMutex<ParserAstCache>>,
-        plugin: Option<PluginPhase>,
-        metrics_collector: MySqlServerMetricsCollector,
-    ) -> MySqlServer {
-        MySqlServer {
-            client: Connection::new(
-                client,
-                proxy_config.user,
-                proxy_config.password,
-                proxy_config.db,
-            ),
-            buf: BytesMut::with_capacity(8192),
-            mysql_parser: parser,
-            trans_fsm: TransFsm::new_trans_fsm(lb, pool),
-            ast_cache,
-            plugin,
-            is_quit: false,
-            concurrency_control_rule_idx: None,
-            metrics_collector,
-            name: proxy_config.name,
-        }
-    }
-
     pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
         if let Err(err) = self.client.handshake().await {
             if let ProtocolError::AuthFailed(err) = err {
