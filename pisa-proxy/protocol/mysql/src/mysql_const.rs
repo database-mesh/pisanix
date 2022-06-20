@@ -240,7 +240,7 @@ impl AsRef<str> for ColumnFlag {
 #[allow(dead_code)]
 const AUTH_NAME: &str = "mysql_native_password";
 
-pub const CACHING_SHA2_PASSORD_REQUEST_PUBLIC_KEY: i64 = 2;
+pub const CACHING_SHA2_PASSWORD_REQUEST_PUBLIC_KEY: i64 = 2;
 pub const CACHING_SHA2_PASSWORD_FAST_AUTH_SUCCESS: i64 = 3;
 pub const CACHING_SHA2_PASSWORD_PERFORM_FULL_AUTHENTICATION: i64 = 4;
 
