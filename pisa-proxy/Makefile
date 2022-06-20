@@ -29,7 +29,7 @@ clean:
 
 build:
 	@mkdir -p ../bin && cargo build && /bin/cp -af target/debug/$(BINARY_NAME) ../bin/$(BINARY_NAME)
-	@echo -e "\033[33mbuild output to ./bin directory\033[0"
+	@echo -e "\033[33mbuild output to ./bin directory\033[0m"
 
 release:
 	cargo build --release
