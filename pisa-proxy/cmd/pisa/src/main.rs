@@ -22,9 +22,13 @@ use tracing::{error, info, warn, Level};
 extern crate tokio;
 
 use config::config::PisaConfig;
+use http::http::{new_http_server, HttpFactory, HttpServerKind, PisaHttpServerFactory};
 use pisa_metrics::metrics::MetricsManager;
-use proxy::factory::Factory;
-use server::backend_const::{BACKEND_TYPE_MYSQL, BACKEND_TYPE_SHARDING_PROXY};
+use proxy::factory::{ProxyFactory, ProxyKind};
+use server::{
+    backend_const::{BACKEND_TYPE_MYSQL, BACKEND_TYPE_SHARDING_PROXY},
+    server::{new_proxy_server, PisaProxyFactory},
+};
 
 fn main() {
     let config = PisaConfig::load_config();
@@ -35,27 +39,24 @@ fn main() {
     info!("Pisa-Proxy {}", &*PisaConfig::get_version());
 
     let mut servers = Vec::with_capacity(config.get_proxies().len());
-    let metrics_manager = MetricsManager::new();
-    let http_server = http::http::new_rocket_server(config.clone(), metrics_manager);
+    let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
+        .build_http_server(HttpServerKind::Rocket);
 
     build_runtime().block_on(async move {
         for proxy_config in config.get_proxies() {
             let cfg = proxy_config.clone();
-            let factory = server::server::SimpleFactory::new(cfg, config.clone());
+            let factory = PisaProxyFactory::new(cfg, config.clone());
             match proxy_config.backend_type.as_str() {
-                BACKEND_TYPE_MYSQL => servers.push(tokio::spawn(server::server::new_proxy_server(
-                    factory.build_proxy(proxy::factory::ProxyKind::MySQL),
+                BACKEND_TYPE_MYSQL => servers
+                    .push(tokio::spawn(new_proxy_server(factory.build_proxy(ProxyKind::MySQL)))),
+                BACKEND_TYPE_SHARDING_PROXY => servers.push(tokio::spawn(new_proxy_server(
+                    factory.build_proxy(ProxyKind::ShardingProxy),
                 ))),
-                BACKEND_TYPE_SHARDING_PROXY => {
-                    servers.push(tokio::spawn(server::server::new_proxy_server(
-                        factory.build_proxy(proxy::factory::ProxyKind::ShardingProxy),
-                    )))
-                }
                 &_ => {}
             }
         }
 
-        servers.push(tokio::spawn(http::http::bg_task(http_server)));
+        servers.push(tokio::spawn(new_http_server(http_server)));
 
         for server in servers {
             if let Err(e) = server.await {

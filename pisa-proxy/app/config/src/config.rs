@@ -34,7 +34,7 @@ pub enum Node {
     ShardingProxy(Vec<MySQLNode>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PisaConfig {
     pub admin: Admin,
     pub proxies: Vec<ProxyConfig>,

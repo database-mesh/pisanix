@@ -25,6 +25,6 @@ pub trait Proxy {
     async fn start(&mut self) -> Result<(), Error>;
 }
 
-pub trait Factory {
+pub trait ProxyFactory {
     fn build_proxy(&self, kind: ProxyKind) -> Box<dyn Proxy + Send>;
 }

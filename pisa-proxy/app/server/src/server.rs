@@ -14,22 +14,22 @@
 
 use config::config::PisaConfig;
 use proxy::{
-    factory::{Factory, Proxy, ProxyKind},
+    factory::{Proxy, ProxyFactory, ProxyKind},
     proxy::ProxyConfig,
 };
 
-pub struct SimpleFactory {
+pub struct PisaProxyFactory {
     pub proxy_config: ProxyConfig,
     pub pisa_config: PisaConfig,
 }
 
-impl SimpleFactory {
+impl PisaProxyFactory {
     pub fn new(proxy_config: ProxyConfig, pisa_config: PisaConfig) -> Self {
         Self { proxy_config, pisa_config }
     }
 }
 
-impl Factory for SimpleFactory {
+impl ProxyFactory for PisaProxyFactory {
     fn build_proxy(&self, kind: ProxyKind) -> Box<dyn Proxy + Send> {
         let config = self.proxy_config.clone();
         match kind {
