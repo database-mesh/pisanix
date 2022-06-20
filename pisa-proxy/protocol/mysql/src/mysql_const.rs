@@ -20,7 +20,6 @@ pub const MAX_PAYLOAD_LEN: usize = (1 << 24) - 1;
 pub const OK_HEADER: u8 = 0x00;
 pub const ERR_HEADER: u8 = 0xff;
 pub const EOF_HEADER: u8 = 0xfe;
-pub const LOCALINFILE_HEADER: u8 = 0xfb;
 pub const MORE_DATA_HEADER: u8 = 0x01;
 pub const LOCAL_IN_FILE_HEADER: u8 = 0xfb;
 pub const CACHE_SHA2_FAST_AUTH: u8 = 0x03;
@@ -241,9 +240,9 @@ impl AsRef<str> for ColumnFlag {
 #[allow(dead_code)]
 const AUTH_NAME: &str = "mysql_native_password";
 
-pub const CACHING_SHA2PASSORD_REQUEST_PUBLIC_KEY: i64 = 2;
-pub const CACHING_SHA2PASSWORD_FAST_AUTH_SUCCESS: i64 = 3;
-pub const CACHING_SHA2PASSWORD_PERFORM_FULL_AUTHENTICATION: i64 = 4;
+pub const CACHING_SHA2_PASSWORD_REQUEST_PUBLIC_KEY: i64 = 2;
+pub const CACHING_SHA2_PASSWORD_FAST_AUTH_SUCCESS: i64 = 3;
+pub const CACHING_SHA2_PASSWORD_PERFORM_FULL_AUTHENTICATION: i64 = 4;
 
 use num_derive::FromPrimitive;
 
