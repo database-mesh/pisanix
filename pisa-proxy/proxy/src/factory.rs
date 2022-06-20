@@ -16,8 +16,7 @@ use pisa_error::error::Error;
 
 pub enum ProxyKind {
     MySQL,
-    // TODO: rename to ShardingSphereProxy
-    ShardingProxy,
+    ShardingSphereProxy,
 }
 
 #[async_trait::async_trait]

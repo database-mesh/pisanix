@@ -20,7 +20,7 @@ members = [
     "proxy/strategy",
     "runtime/common",
     "runtime/mysql",
-    "runtime/shardingproxy",
+    "runtime/shardingsphereproxy",
     "version"
 ]
 

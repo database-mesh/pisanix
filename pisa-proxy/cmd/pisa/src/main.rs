@@ -26,7 +26,7 @@ use http::http::{new_http_server, HttpFactory, HttpServerKind, PisaHttpServerFac
 use pisa_metrics::metrics::MetricsManager;
 use proxy::factory::{ProxyFactory, ProxyKind};
 use server::{
-    backend_const::{BACKEND_TYPE_MYSQL, BACKEND_TYPE_SHARDING_PROXY},
+    backend_const::{BACKEND_TYPE_MYSQL, BACKEND_TYPE_SHARDINGSPHERE_PROXY},
     server::{new_proxy_server, PisaProxyFactory},
 };
 
@@ -50,7 +50,7 @@ fn main() {
                 BACKEND_TYPE_MYSQL => servers
                     .push(tokio::spawn(new_proxy_server(factory.build_proxy(ProxyKind::MySQL)))),
                 BACKEND_TYPE_SHARDINGSPHERE_PROXY => servers.push(tokio::spawn(new_proxy_server(
-                    factory.build_proxy(ProxyKind::ShardingProxy),
+                    factory.build_proxy(ProxyKind::ShardingSphereProxy),
                 ))),
                 &_ => {}
             }

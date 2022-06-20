@@ -12,4 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod shardingproxy;
+use pisa_error::error::Error;
+use proxy::proxy::{MySQLNode, ProxyConfig};
+
+pub struct ShardingSphereProxy {
+    pub proxy_config: ProxyConfig,
+    pub shardingsphereproxy_nodes: Vec<MySQLNode>,
+}
+
+#[async_trait::async_trait]
+impl proxy::factory::Proxy for ShardingSphereProxy {
+    async fn start(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+}
