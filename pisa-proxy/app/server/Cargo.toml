@@ -33,5 +33,5 @@ version = { path = "../../version", package = "version" }
 endpoint = {path = "../../proxy/endpoint"}
 proxy = {path = "../../proxy"}
 runtime_mysql = {path = "../../runtime/mysql"}
-runtime_shardingproxy = {path = "../../runtime/shardingproxy"}
+runtime_shardingsphereproxy = {path = "../../runtime/shardingsphereproxy"}
 config = {path = "../config"}

@@ -14,22 +14,22 @@
 
 use config::config::PisaConfig;
 use proxy::{
-    factory::{Factory, Proxy, ProxyKind},
+    factory::{Proxy, ProxyFactory, ProxyKind},
     proxy::ProxyConfig,
 };
 
-pub struct SimpleFactory {
+pub struct PisaProxyFactory {
     pub proxy_config: ProxyConfig,
     pub pisa_config: PisaConfig,
 }
 
-impl SimpleFactory {
+impl PisaProxyFactory {
     pub fn new(proxy_config: ProxyConfig, pisa_config: PisaConfig) -> Self {
         Self { proxy_config, pisa_config }
     }
 }
 
-impl Factory for SimpleFactory {
+impl ProxyFactory for PisaProxyFactory {
     fn build_proxy(&self, kind: ProxyKind) -> Box<dyn Proxy + Send> {
         let config = self.proxy_config.clone();
         match kind {
@@ -37,10 +37,10 @@ impl Factory for SimpleFactory {
                 proxy_config: config,
                 mysql_nodes: self.pisa_config.mysql_nodes.clone(),
             }),
-            ProxyKind::ShardingProxy => {
-                Box::new(runtime_shardingproxy::shardingproxy::ShardingProxy {
+            ProxyKind::ShardingSphereProxy => {
+                Box::new(runtime_shardingsphereproxy::shardingsphereproxy::ShardingSphereProxy {
                     proxy_config: config,
-                    shardingproxy_nodes: self.pisa_config.sharding_proxy_nodes.clone(),
+                    shardingsphereproxy_nodes: self.pisa_config.shardingsphere_proxy_nodes.clone(),
                 })
             }
         }

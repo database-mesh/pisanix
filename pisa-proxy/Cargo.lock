@@ -1302,6 +1302,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1363,7 +1372,6 @@ dependencies = [
  "rand_distr",
  "serde",
  "serde_derive",
- "strategy",
 ]
 
 [[package]]
@@ -1644,6 +1652,7 @@ dependencies = [
  "pin-project",
  "protocol_codegen",
  "rand 0.8.5",
+ "regex",
  "rsa",
  "rust-crypto",
  "rustls-pemfile",
@@ -2203,7 +2212,7 @@ checksum = "32d3ebd75ac2679c2af3a92246639f9fcc8a442ee420719cc4fe195b98dd5fa3"
 dependencies = [
  "bytes",
  "heck 0.3.3",
- "itertools",
+ "itertools 0.9.0",
  "log",
  "multimap",
  "petgraph",
@@ -2220,7 +2229,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "169a15f3008ecb5160cba7d37bcd690a7601b6d30cfb87a117d45e59d52af5d4"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.9.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -2611,6 +2620,7 @@ dependencies = [
  "error",
  "futures",
  "iota",
+ "itertools 0.10.3",
  "loadbalance",
  "mysql_parser",
  "mysql_protocol",
@@ -2621,6 +2631,7 @@ dependencies = [
  "rocket_prometheus",
  "serde",
  "serde_derive",
+ "strategy",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -2631,7 +2642,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "runtime_shardingproxy"
+name = "runtime_shardingsphereproxy"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -2890,7 +2901,7 @@ dependencies = [
  "rand_core 0.6.3",
  "rocket",
  "runtime_mysql",
- "runtime_shardingproxy",
+ "runtime_shardingsphereproxy",
  "serde",
  "serde_derive",
  "socket2",
@@ -3133,6 +3144,9 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 name = "strategy"
 version = "0.1.0"
 dependencies = [
+ "endpoint",
+ "loadbalance",
+ "regex",
  "serde",
  "serde_derive",
 ]

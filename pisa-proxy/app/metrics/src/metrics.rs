@@ -15,6 +15,7 @@
 use rocket_prometheus::PrometheusMetrics;
 use runtime_mysql::server::metrics::*;
 
+#[derive(Clone, Default)]
 pub struct MetricsManager {
     server: PrometheusMetrics,
 }

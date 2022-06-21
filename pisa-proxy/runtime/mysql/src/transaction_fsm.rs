@@ -17,7 +17,6 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use conn_pool::{ConnAttr, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
-use loadbalance::balance::{BalanceType, LoadBalance};
 use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::{Error, ErrorKind};
 use strategy::route::{RouteStrategy, Route, RouteInput};
@@ -30,6 +29,12 @@ pub enum TransState {
     TransSetSessionState,
     TransStartState,
     TransPrepareState,
+}
+
+impl Default for TransState {
+    fn default() -> Self {
+        TransState::TransDummyState
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -46,6 +51,12 @@ pub enum TransEventName {
     ResetEvent,
     CommitRollBackEvent,
     DropEvent,
+}
+
+impl Default for TransEventName {
+    fn default() -> Self {
+        TransEventName::DummyEvent
+    } 
 }
 
 #[async_trait]

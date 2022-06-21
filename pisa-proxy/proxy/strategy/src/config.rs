@@ -15,13 +15,13 @@
 use loadbalance::balance::AlgorithmName;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
     pub model: Option<ReadWriteSplittingStatic>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplittingStatic {
     pub default_target: TargetRole,
     #[serde(rename = "rule")]
@@ -49,4 +49,10 @@ pub struct RegexRule {
 pub enum TargetRole {
     Read,
     ReadWrite,
+}
+
+impl Default for TargetRole {
+   fn default() -> Self {
+       Self::ReadWrite
+   } 
 }

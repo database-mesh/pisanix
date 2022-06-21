@@ -23,13 +23,39 @@ pub trait HttpServer {
     async fn start(&mut self) -> Result<(), Error>;
 }
 
-pub struct RocketServer {
+pub trait HttpFactory {
+    fn build_http_server(&self, kind: HttpServerKind) -> Box<dyn HttpServer + Send>;
+}
+
+pub enum HttpServerKind {
+    Rocket,
+}
+
+pub struct PisaHttpServerFactory {
     pisa_config: PisaConfig,
     metrics_manager: MetricsManager,
 }
+impl PisaHttpServerFactory {
+    pub fn new(pcfg: PisaConfig, mgr: MetricsManager) -> PisaHttpServerFactory {
+        PisaHttpServerFactory { pisa_config: pcfg, metrics_manager: mgr }
+    }
+}
 
-pub fn new_rocket_server(pisa_config: PisaConfig, metrics_manager: MetricsManager) -> RocketServer {
-    RocketServer { pisa_config, metrics_manager }
+impl HttpFactory for PisaHttpServerFactory {
+    fn build_http_server(&self, kind: HttpServerKind) -> Box<dyn HttpServer + Send> {
+        match kind {
+            HttpServerKind::Rocket => Box::new(RocketServer {
+                pisa_config: self.pisa_config.clone(),
+                metrics_manager: self.metrics_manager.clone(),
+            }),
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct RocketServer {
+    pisa_config: PisaConfig,
+    metrics_manager: MetricsManager,
 }
 
 #[async_trait::async_trait]
@@ -52,6 +78,6 @@ impl HttpServer for RocketServer {
     }
 }
 
-pub async fn bg_task<T: HttpServer>(mut s: T) {
+pub async fn new_http_server(mut s: Box<dyn HttpServer + Send>) {
     s.start().await.unwrap();
 }
