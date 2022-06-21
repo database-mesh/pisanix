@@ -1,0 +1,10 @@
+[package]
+name = "runtime_shardingsphereproxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+proxy = {path = "../../proxy"}
+pisa_error = {path = "../../error", package = "error"}
+runtime_mysql = {path = "../mysql"}
