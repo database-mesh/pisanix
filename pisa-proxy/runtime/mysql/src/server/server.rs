@@ -34,6 +34,7 @@ use mysql_protocol::{
 use parking_lot::Mutex as plMutex;
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
+use strategy::route::RouteStrategy;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 use tracing::{debug, error};
 
@@ -60,7 +61,7 @@ impl MySqlServer {
     pub async fn new(
         client: TcpStream,
         pool: Pool<ClientConn>,
-        lb: Arc<Mutex<BalanceType>>,
+        lb: Arc<Mutex<RouteStrategy>>,
         proxy_config: ProxyConfig,
         parser: Arc<Parser>,
         ast_cache: Arc<plMutex<ParserAstCache>>,

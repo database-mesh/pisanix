@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use endpoint::endpoint::Endpoint;
-
-use crate::config::ReadWriteSplitting;
-
 pub mod rule_match;
 pub mod static_rw;
+pub use static_rw::*;
 
+use endpoint::endpoint::Endpoint;
+
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Clone)]
 pub struct ReadWriteEndpoint {

@@ -17,7 +17,7 @@ use std::{collections::HashMap, sync::Arc};
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
 use serde::{Deserialize, Serialize};
-use strategy::config::ReadWriteSplitting;
+use strategy::config::{ReadWriteSplitting, TargetRole};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::Mutex,
@@ -108,7 +108,7 @@ pub struct MySQLNode {
     #[serde(default = "default_mysql_node_port")]
     pub port: u32,
     pub weight: i64,
-    pub role: String,
+    pub role: TargetRole,
 }
 
 fn default_auto_proxy_name() -> String {
@@ -153,6 +153,19 @@ fn default_mysql_node_host() -> String {
 
 fn default_mysql_node_port() -> u32 {
     3306
+}
+
+impl From<MySQLNode> for Endpoint {
+    fn from(node: MySQLNode) -> Self {
+        Self {
+            weight: node.weight,
+            name: node.name,
+            db: node.db,
+            user: node.user,
+            password: node.password,
+            addr: node.host,
+        }
+    }
 }
 
 pub struct Proxy {

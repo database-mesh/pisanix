@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::error::Error;
-
 use endpoint::endpoint::Endpoint;
-use loadbalance::balance::BalanceType;
+use loadbalance::balance::{BalanceType, LoadBalance};
 
-use crate::config::TargetRole;
+use crate::{config::{TargetRole, self}, readwritesplitting::{ReadWriteEndpoint, ReadWriteSplittingStaticBuilder, ReadWriteSplittingStatic}};
 
 
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 pub enum RouteInput {
     Statement(String),
@@ -28,7 +27,7 @@ pub enum RouteInput {
 pub trait Route {
     type Error;
     
-    fn do_route<'a>(&'a mut self, input: RouteInput) -> Result<Option<&'a Endpoint>, Self::Error>;
+    fn dispatch<'a>(&'a mut self, input: RouteInput) -> Result<Option<&'a Endpoint>, Self::Error>;
 }
 
 pub trait RouteRuleMatch {
@@ -39,11 +38,37 @@ pub trait RouteBalance {
     fn get(&mut self, input: &RouteInput) -> (&mut BalanceType, TargetRole);
 }
 
+pub enum RouteStrategy {
+    Static(ReadWriteSplittingStatic),
+    Simple(BalanceType),
+    None,
+}
 
-#[cfg(test)]
-mod test {
-    #[test]
-    fn test() {
-        assert!(true)
+impl RouteStrategy {
+   pub fn new(config: config::ReadWriteSplitting, rw_endpoint: ReadWriteEndpoint) -> Self {
+       if let Some(config) = config.model {
+           return Self::Static(ReadWriteSplittingStaticBuilder::build(config, rw_endpoint))
+       }
+
+
+       Self::None
+   }
+
+   pub fn new_with_simple_route(balance: BalanceType) -> Self {
+       Self::Simple(balance)
+   }
+}
+
+impl Route for RouteStrategy {
+    type Error = BoxError;
+
+    fn dispatch<'a>(&'a mut self, input: RouteInput) -> Result<Option<&'a Endpoint>, Self::Error> {
+        match self {
+            Self::Static(ins) => ins.dispatch(input),
+
+            Self::Simple(ins) => Ok(ins.next()),
+
+            _ => Ok(None)
+        }
     }
 }

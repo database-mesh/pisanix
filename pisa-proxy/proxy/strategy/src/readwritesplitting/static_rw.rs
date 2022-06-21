@@ -13,18 +13,15 @@
 // limitations under the License.
 
 
-use std::marker::PhantomData;
-
 use endpoint::endpoint::Endpoint;
-use loadbalance::balance::BalanceType;
 use loadbalance::balance::LoadBalance;
 
 use crate::RouteInput;
 use crate::Route;
 use crate::config;
-use crate::config::TargetRole;
 use crate::route::RouteBalance;
 
+use super::BoxError;
 use super::ReadWriteEndpoint;
 use super::rule_match::RulesMatch;
 use super::rule_match::RulesMatchBuilder;
@@ -44,11 +41,9 @@ pub struct ReadWriteSplittingStatic {
    rules_match: RulesMatch
 }
 
-pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
-
 impl Route for ReadWriteSplittingStatic {
     type Error = BoxError;
-    fn do_route<'a>(&'a mut self, input: RouteInput) -> Result<Option<&'a Endpoint>, Self::Error> {
+    fn dispatch<'a>(&'a mut self, input: RouteInput) -> Result<Option<&'a Endpoint>, Self::Error> {
         let b = self.rules_match.get(&input);
         Ok(b.0.next())
     }
@@ -60,7 +55,7 @@ mod test {
     use endpoint::endpoint::Endpoint;
     use loadbalance::balance::AlgorithmName;
 
-    use crate::{route::{Route, RouteInput}, config::{ReadWriteSplittingRule, RegexRule, TargetRole}, readwritesplitting::{ReadWriteEndpoint, rule_match::RulesMatchBuilder, static_rw::ReadWriteSplittingStaticBuilder}};
+    use crate::{route::RouteInput, config::{ReadWriteSplittingRule, RegexRule, TargetRole}, readwritesplitting::{ReadWriteEndpoint, static_rw::ReadWriteSplittingStaticBuilder}};
 
 
     #[test]
@@ -113,13 +108,13 @@ mod test {
         };
 
         let config = super::config::ReadWriteSplitting {
-            model: super::config::ReadWriteSplittingStatic {
+            model: Some(super::config::ReadWriteSplittingStatic {
                 default_target,
                 rules,
-            },
+            }),
         };
 
-        let mut rws = ReadWriteSplittingStaticBuilder::build(config.model, rw_endpoint);
+        let mut rws = ReadWriteSplittingStaticBuilder::build(config.model.unwrap(), rw_endpoint);
         let input = RouteInput::Statement("insert".to_string());
         let res = rws.do_route(input).unwrap();
         println!("{:#?}", res);
