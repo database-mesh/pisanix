@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -30,23 +31,80 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
-var pisanixProxyImage, pisaControllerService, pisaControllerNameSpace string
+var (
+	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost string
+	pisaProxyAdminListenPort                                                                 uint32
+)
 
 const (
-	SidecarNamePisaProxy = "pisa-proxy"
+	SidecarNamePisaProxy            = "pisa-proxy"
+	EnvPisaProxyAdminListenHost     = "PISA_PROXY_ADMIN_LISTEN_HOST"
+	EnvPisaProxyAdminListenPort     = "PISA_PROXY_ADMIN_LISTEN_PORT"
+	DefaultPisaProxyAdminListenHost = "0.0.0.0"
+	DefaultPisaProxyAdminListenPort = 5590
 )
 
 func init() {
-	pisanixProxyImage = os.Getenv("PISA_PROXY_IMAGE")
-	if pisanixProxyImage == "" {
-		pisanixProxyImage = "pisanixio/proxy:latest"
+	pisaProxyImage = os.Getenv("PISA_PROXY_IMAGE")
+	if pisaProxyImage == "" {
+		pisaProxyImage = "pisanixio/proxy:latest"
 	}
 	pisaControllerService = os.Getenv("PISA_CONTROLLER_SERVICE")
-	pisaControllerNameSpace = os.Getenv("PISA_CONTROLLER_NAMESPACE")
+	pisaControllerNamespace = os.Getenv("PISA_CONTROLLER_NAMESPACE")
+	if host := os.Getenv(EnvPisaProxyAdminListenHost); host == "" {
+		pisaProxyAdminListenHost = DefaultPisaProxyAdminListenHost
+	} else {
+		pisaProxyAdminListenHost = host
+	}
+	if port, err := strconv.Atoi(os.Getenv(EnvPisaProxyAdminListenPort)); port <= 0 || err != nil {
+		pisaProxyAdminListenPort = DefaultPisaProxyAdminListenPort
+	} else {
+		pisaProxyAdminListenPort = uint32(port)
+	}
+
 }
 
 const (
-	podsSidecarPatch = `[{"op":"add", "path":"/spec/containers/-","value":{"image":"%v","name":"%s","resources":{},"env": [{"name": "PISA_CONTROLLER_SERVICE","value": "%s"},{"name": "PISA_CONTROLLER_NAMESPACE","value": "%s"},{"name": "PISA_DEPLOYED_NAMESPACE","value": "%s"},{"name": "PISA_DEPLOYED_NAME","value": "%s"}]}}]`
+	podsSidecarPatch = `[
+		{
+			"op":"add", 
+			"path":"/spec/containers/-",
+			"value":{
+				"image":"%v",
+				"name":"%s",
+				"ports": [
+					{
+						"containerPort": %d,
+						"name": "pisa-admin",
+						"protocol": "TCP"
+					}	
+				]
+				"resources":{},
+				"env": [
+					{
+						"name": "PISA_CONTROLLER_SERVICE",
+						"value": "%s"
+					},{
+						"name": "PISA_CONTROLLER_NAMESPACE",
+						"value": "%s"
+					},{
+						"name": "PISA_DEPLOYED_NAMESPACE",
+						"value": "%s"
+					},{
+						"name": "PISA_DEPLOYED_NAME",
+						"value": "%s"
+					},{
+						"name": "PISA_PROXY_ADMIN_LISTEN_HOST",
+						"value": "%s"
+					},{
+						"name": "PISA_PROXY_ADMIN_LISTEN_PORT",
+						"value": "%d"
+					}
+
+				]
+			}
+		}
+	]`
 )
 
 var (
@@ -85,7 +143,7 @@ func InjectSidecar(ctx *gin.Context) {
 	_ = json.Unmarshal(ar.Request.Object.Raw, podinfo)
 	podSlice := strings.Split(podinfo.Metadata.GenerateName, "-")
 	podSlice = podSlice[:len(podSlice)-2]
-	ar.Response = applyPodPatch(ar, shouldPatchPod, fmt.Sprintf(podsSidecarPatch, pisanixProxyImage, SidecarNamePisaProxy, pisaControllerService, pisaControllerNameSpace, ar.Request.Namespace, strings.Join(podSlice, "-")))
+	ar.Response = applyPodPatch(ar, shouldPatchPod, fmt.Sprintf(podsSidecarPatch, pisaProxyImage, SidecarNamePisaProxy, pisaProxyAdminListenPort, pisaControllerService, pisaControllerNamespace, ar.Request.Namespace, strings.Join(podSlice, "-"), pisaProxyAdminListenHost, pisaProxyAdminListenPort))
 	log.Info("mutating Success")
 
 	ctx.JSON(http.StatusOK, ar)
