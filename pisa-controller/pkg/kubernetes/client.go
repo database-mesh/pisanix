@@ -15,30 +15,97 @@
 package kubernetes
 
 import (
+	"flag"
+	"log"
+	"path/filepath"
+	"strings"
+	"sync"
+
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
-	"sync"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
 )
 
 var client *KClient
 var once sync.Once
-var initErr error
+var kubeConfigPath *string
 
-func GetInClusterClient() (*KClient, error) {
-	once.Do(func() {
+func init() {
+	if home := homedir.HomeDir(); home != "" {
+		kubeConfigPath = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	} else {
+		kubeConfigPath = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	}
+}
+
+type ConfigBuilder struct {
+	path string
+}
+
+func NewConfigBuilder() *ConfigBuilder {
+	return &ConfigBuilder{
+		path: "",
+	}
+}
+
+func (b *ConfigBuilder) WithPath(path string) *ConfigBuilder {
+	b.path = path
+	return b
+}
+
+func (b *ConfigBuilder) Build() (*rest.Config, error) {
+	if strings.EqualFold(b.path, "") {
 		config, err := rest.InClusterConfig()
 		if err != nil {
-			initErr = err
-			return
+			return nil, err
 		}
-		clientset, err := dynamic.NewForConfig(config)
+		return config, nil
+	} else {
+		config, err := clientcmd.BuildConfigFromFlags("", b.path)
 		if err != nil {
-			initErr = err
-			return
+			return nil, err
+		}
+		return config, nil
+	}
+}
+
+type ClientBuilder struct {
+	config *rest.Config
+}
+
+func NewClientBuilder() *ClientBuilder {
+	return &ClientBuilder{
+		config: &rest.Config{},
+	}
+}
+
+func (b *ClientBuilder) WithKubeConfig(config *rest.Config) *ClientBuilder {
+	b.config = config
+	return b
+}
+
+func (b *ClientBuilder) Build() (dynamic.Interface, error) {
+	clientset, err := dynamic.NewForConfig(b.config)
+	if err != nil {
+		return nil, err
+	}
+	return clientset, nil
+}
+
+func GetClient() *KClient {
+	once.Do(func() {
+		config, err := NewConfigBuilder().WithPath(*kubeConfigPath).Build()
+		if err != nil {
+			log.Fatal(err)
+		}
+		clientset, err := NewClientBuilder().WithKubeConfig(config).Build()
+		if err != nil {
+			log.Fatal(err)
 		}
 		client = &KClient{}
 		client.Client = clientset
 	})
 
-	return client, initErr
+	return client
 }

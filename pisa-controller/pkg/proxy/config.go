@@ -34,7 +34,7 @@ import (
 func GetConfig(ctx *gin.Context) {
 	namespace := ctx.Param("namespace")
 	appname := ctx.Param("appname")
-	client, _ := kubernetes.GetInClusterClient()
+	client := kubernetes.GetClient()
 	proxyConfig, err := getConfig(client.Client, namespace, appname)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, err)
