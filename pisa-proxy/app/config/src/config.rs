@@ -40,6 +40,7 @@ pub struct PisaConfig {
     pub proxies: Vec<ProxyConfig>,
     pub mysql_nodes: Vec<MySQLNode>,
     pub shardingsphere_proxy_nodes: Vec<MySQLNode>,
+    pub version: String,
 }
 
 const PISA_CONTROLLER_DEFAULT_SERVICE: &str = "pisa-controller";
@@ -139,7 +140,11 @@ impl PisaConfig {
             proxies: vec![],
             mysql_nodes: vec![],
             shardingsphere_proxy_nodes: vec![],
+            version: String::default(),
         };
+        
+        //TODO: need refactor
+        pisa_config.version = PisaConfig::get_version();
 
         if let Ok(env_host) = env::var(PISA_PROXY_CONFIG_ENV_HOST) {
             pisa_config.admin.host = env_host;

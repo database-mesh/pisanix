@@ -70,6 +70,7 @@ pub struct MySqlServerBuilder {
     _lb: Arc<Mutex<BalanceType>>,
     _pool: Pool<ClientConn>,
     _plugin: Option<PluginPhase>,
+    _pisa_version: String,
 }
 
 impl MySqlServerBuilder {
@@ -91,6 +92,7 @@ impl MySqlServerBuilder {
             _lb: lb,
             _plugin: plugin,
             _pool: Pool::new(1),
+            _pisa_version: String::new(),
         }
     }
 
@@ -129,6 +131,11 @@ impl MySqlServerBuilder {
         self
     }
 
+    pub fn with_pisa_version(mut self, version: String) -> MySqlServerBuilder {
+        self._pisa_version = version;
+        self
+    }
+
     pub fn with_metrics_collector(
         mut self,
         collector: MySqlServerMetricsCollector,
@@ -144,7 +151,7 @@ impl MySqlServerBuilder {
                 self._pcfg.user,
                 self._pcfg.password,
                 self._pcfg.db,
-                self._pcfg.server_version.clone(),
+                format!("{} pisa {}", self._pcfg.server_version, self._pisa_version),
             ),
             buf: self._buf,
             mysql_parser: self._mysql_parser,

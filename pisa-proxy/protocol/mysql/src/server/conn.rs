@@ -25,9 +25,6 @@ use tracing::debug;
 use super::{err::MySQLError, stream::LocalStream};
 use crate::{charset::*, err, err::ProtocolError, mysql_const::*, server::packet::Packet, util::*};
 
-// server version start with version， regex is ^(\d{1,2})\.(\d{1,2})\.(\d{1,3})
-const PISA_VERSION: &str = "pisa 0.1.0";
-
 lazy_static! {
     static ref CONNECTION_ID: AtomicU32 = AtomicU32::new(0);
 }
@@ -130,7 +127,7 @@ impl Connection {
         data.put_u8(10);
 
         // server version
-        data.extend_from_slice(format!("{} {}", self.server_version, PISA_VERSION).as_bytes());
+        data.extend_from_slice(self.server_version.as_bytes());
         data.put_u8(0);
 
         // connection id

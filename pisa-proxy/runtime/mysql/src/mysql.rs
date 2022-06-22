@@ -30,9 +30,11 @@ use tracing::error;
 
 use crate::server::{metrics::MySqlServerMetricsCollector, server::MySqlServerBuilder};
 
+#[derive(Default)]
 pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,
     pub mysql_nodes: Vec<MySQLNode>,
+    pub pisa_version: String,
 }
 
 #[async_trait::async_trait]
@@ -89,6 +91,7 @@ impl proxy::factory::Proxy for MySQLProxy {
                 .is_quit(false)
                 .with_concurrency_control_rule_idx(None)
                 .with_metrics_collector(metrics_collector)
+                .with_pisa_version(self.pisa_version.clone())
                 .build();
 
             if let Err(err) = mysql_server.handshake().await {
