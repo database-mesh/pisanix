@@ -43,12 +43,13 @@ type DatabaseService struct {
 
 // DatabaseMySQL The type one of VirtualDatabase.Represents a virtual MySQL type
 type DatabaseMySQL struct {
-	Host     string `json:"host,omitempty"`
-	Port     uint32 `json:"port,omitempty"`
-	User     string `json:"user,omitempty"`
-	Password string `json:"password,omitempty"`
-	DB       string `json:"db,omitempty"`
-	PoolSize uint32 `json:"poolSize,omitempty"`
+	Host          string `json:"host,omitempty"`
+	Port          uint32 `json:"port,omitempty"`
+	User          string `json:"user,omitempty"`
+	Password      string `json:"password,omitempty"`
+	DB            string `json:"db,omitempty"`
+	PoolSize      uint32 `json:"poolSize,omitempty"`
+	ServerVersion string `json:"serverVersion,omitempty`
 }
 
 // VirtualDatabaseStatus defines the observed state of VirtualDatabase
