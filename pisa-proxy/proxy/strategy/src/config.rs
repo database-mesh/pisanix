@@ -17,12 +17,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
-    model: ReadWriteSplittingStatic,
+    pub undynamic: ReadWriteSplittingStatic,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplittingStatic {
-    pub default_target: String,
+    pub default_target: TargetRole,
     #[serde(rename = "rule")]
     pub rules: Vec<ReadWriteSplittingRule>,
 }
@@ -43,9 +43,15 @@ pub struct RegexRule {
     pub algorithm_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum TargetRole {
     Read,
     ReadWrite,
+}
+
+impl Default for TargetRole {
+   fn default() -> Self {
+    TargetRole::ReadWrite
+   } 
 }
