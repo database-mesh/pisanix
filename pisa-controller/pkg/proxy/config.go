@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
@@ -88,18 +87,6 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	if err != nil {
 		log.Errorf("%v", err)
 		return nil, err
-	}
-
-	vdbmetedata := &metav1.ObjectMeta{}
-	vdbm, _ := json.Marshal(vdb.Object["metadata"])
-
-	_ = json.Unmarshal(vdbm, vdbmetedata)
-
-	port, err := strconv.Atoi(vdbmetedata.Annotations["database-mesh.io/metrics-port"])
-	if port <= 0 || err != nil {
-		proxyconfig.Admin.Port = 8888
-	} else {
-		proxyconfig.Admin.Port = uint32(port)
 	}
 
 	for _, service := range vdbSpec.Services {
