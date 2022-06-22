@@ -42,6 +42,7 @@ impl proxy::factory::Proxy for MySQLProxy {
             name: self.proxy_config.name.clone(),
             backend_type: "mysql".to_string(),
             listen_addr: self.proxy_config.listen_addr.clone(),
+            server_version: self.proxy_config.server_version.clone(),
         };
 
         let mut proxy = Proxy {
