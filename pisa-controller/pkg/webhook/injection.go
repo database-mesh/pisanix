@@ -32,6 +32,10 @@ import (
 
 var pisanixProxyImage, pisaControllerService, pisaControllerNameSpace string
 
+const (
+	SidecarNamePisaProxy = "pisa-proxy"
+)
+
 func init() {
 	pisanixProxyImage = os.Getenv("PISA_PROXY_IMAGE")
 	if pisanixProxyImage == "" {
@@ -42,7 +46,7 @@ func init() {
 }
 
 const (
-	podsSidecarPatch = `[{"op":"add", "path":"/spec/containers/-","value":{"image":"%v","name":"pisanix-proxy","resources":{},"env": [{"name": "PISA_CONTROLLER_SERVICE","value": "%s"},{"name": "PISA_CONTROLLER_NAMESPACE","value": "%s"},{"name": "PISA_DEPLOYED_NAMESPACE","value": "%s"},{"name": "PISA_DEPLOYED_NAME","value": "%s"}]}}]`
+	podsSidecarPatch = `[{"op":"add", "path":"/spec/containers/-","value":{"image":"%v","name":"%s","resources":{},"env": [{"name": "PISA_CONTROLLER_SERVICE","value": "%s"},{"name": "PISA_CONTROLLER_NAMESPACE","value": "%s"},{"name": "PISA_DEPLOYED_NAMESPACE","value": "%s"},{"name": "PISA_DEPLOYED_NAME","value": "%s"}]}}]`
 )
 
 var (
@@ -75,13 +79,13 @@ func InjectSidecar(ctx *gin.Context) {
 		return
 	}
 	shouldPatchPod := func(pod *corev1.Pod) bool {
-		return !hasContainer(pod.Spec.Containers, "pisa-proxy")
+		return !hasContainer(pod.Spec.Containers, SidecarNamePisaProxy)
 	}
 	podinfo := &PodInfo{}
 	_ = json.Unmarshal(ar.Request.Object.Raw, podinfo)
 	podSlice := strings.Split(podinfo.Metadata.GenerateName, "-")
 	podSlice = podSlice[:len(podSlice)-2]
-	ar.Response = applyPodPatch(ar, shouldPatchPod, fmt.Sprintf(podsSidecarPatch, pisanixProxyImage, pisaControllerService, pisaControllerNameSpace, ar.Request.Namespace, strings.Join(podSlice, "-")))
+	ar.Response = applyPodPatch(ar, shouldPatchPod, fmt.Sprintf(podsSidecarPatch, pisanixProxyImage, SidecarNamePisaProxy, pisaControllerService, pisaControllerNameSpace, ar.Request.Namespace, strings.Join(podSlice, "-")))
 	log.Info("mutating Success")
 
 	ctx.JSON(http.StatusOK, ar)

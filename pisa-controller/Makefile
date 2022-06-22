@@ -22,6 +22,13 @@ build:
 		-o ../bin/controller cmd/pisa-controller/main.go
 	@echo -e "\033[33mbuild output to ./bin directory\033[0"
 
+darwin:
+	@go build \
+		-ldflags "-w -s -X main.branch=$(GIT_BRANCH) -X main.gitcommit=$(GIT_COMMIT) -X main.version=$(GIT_TAG)"  \
+		-gcflags "-N -l" \
+		-o ../bin/controller cmd/pisa-controller/main.go
+	@echo -e "\033[33mbuild output to ./bin directory\033[0"
+
 docker:
 	sudo docker build --build-arg GIT_BRANCH=$(GIT_BRANCH) --build-arg GIT_COMMIT=$(GIT_COMMIT) --build-arg GIT_TAG=$(GIT_TAG) \
 		-f hack/Dockerfile -t $(REPO_NAME)/$(IMAGE_NAME):$(IMAGE_TAG) $(realpath ..)
