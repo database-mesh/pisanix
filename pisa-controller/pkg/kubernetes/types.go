@@ -49,7 +49,7 @@ type DatabaseMySQL struct {
 	Password      string `json:"password,omitempty"`
 	DB            string `json:"db,omitempty"`
 	PoolSize      uint32 `json:"poolSize,omitempty"`
-	ServerVersion string `json:"serverVersion,omitempty`
+	ServerVersion string `json:"serverVersion,omitempty"`
 }
 
 // VirtualDatabaseStatus defines the observed state of VirtualDatabase
