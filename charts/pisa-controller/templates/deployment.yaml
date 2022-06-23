@@ -42,6 +42,7 @@ spec:
             - -webhookPort={{ .Values.service.webhookPort }}
             - -corePort={{ .Values.service.corePort }}
             - -proxyConfigsPort={{ .Values.service.proxyConfigsPort }}
+            - -kubeconfig=""
           env:
             - name: PISA_PROXY_IMAGE
               value: {{ printf "%s:%s" .Values.proxyImage.repository .Values.proxyImage.tag | quote}}
