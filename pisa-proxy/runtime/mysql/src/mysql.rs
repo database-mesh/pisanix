@@ -17,6 +17,8 @@ use std::sync::Arc;
 use bytes::BytesMut;
 use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
+use endpoint::endpoint::Endpoint;
+use loadbalance::balance::{Balance, LoadBalance};
 use mysql_parser::parser::Parser;
 use mysql_protocol::client::conn::ClientConn;
 use parking_lot::Mutex;
@@ -26,6 +28,7 @@ use proxy::{
     listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
+use strategy::{config::TargetRole, route::RouteStrategy, readwritesplitting::ReadWriteEndpoint};
 use tracing::error;
 
 use crate::server::{metrics::MySqlServerMetricsCollector, server::MySqlServerBuilder};
@@ -35,6 +38,36 @@ pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,
     pub mysql_nodes: Vec<MySQLNode>,
     pub pisa_version: String,
+}
+
+impl MySQLProxy {
+    fn build_route(&self) -> RouteStrategy {
+        let length = self.mysql_nodes.len();
+        let (mut rw, mut ro) = (Vec::with_capacity(length), Vec::with_capacity(length));
+        for node in &self.mysql_nodes {
+            let ep = Endpoint::from(node.clone());
+            match node.role {
+                TargetRole::Read => ro.push(ep),
+                TargetRole::ReadWrite => rw.push(ep)
+            }
+        }
+
+        if self.proxy_config.read_write_splitting.is_none() {
+            let balance_type = self.proxy_config.simple_loadbalance.as_ref().unwrap().balance_type.clone();
+            let mut balance = Balance.build_balance(balance_type);
+            rw.append(&mut ro);
+            for ep in rw.into_iter() {
+                balance.add(ep)
+            }
+
+            return RouteStrategy::new_with_simple_route(balance)
+        }
+
+
+        let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
+
+        RouteStrategy::new(self.proxy_config.read_write_splitting.as_ref().unwrap().clone(), rw_endpoint)
+    }
 }
 
 #[async_trait::async_trait]
@@ -60,9 +93,11 @@ impl proxy::factory::Proxy for MySQLProxy {
         let ast_cache = Arc::new(Mutex::new(ParserAstCache::new()));
         // TODO: using a loadbalancer factory for different load balance strategy.
         // Currently simple_loadbalancer purely provide a list of nodes without any strategy.
-        let lb = proxy
-            .build_loadbalance(self.proxy_config.simple_loadbalance.clone().unwrap().nodes)
-            .unwrap();
+        //let lb = proxy
+        //    .build_loadbalance(self.proxy_config.simple_loadbalance.clone().unwrap().nodes)
+        //    .unwrap();
+
+        let lb = Arc::new(tokio::sync::Mutex::new(self.build_route()));
 
         let mut plugin: Option<PluginPhase> = None;
         if let Some(config) = &self.proxy_config.plugin {
