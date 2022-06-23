@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
-    pub undynamic: ReadWriteSplittingStatic,
+    pub undynamic: Option<ReadWriteSplittingStatic>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
