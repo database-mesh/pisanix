@@ -244,7 +244,7 @@ pub struct TransFsm {
     pub events: Vec<TransEvent>,
     pub current_state: TransState,
     pub current_event: TransEventName,
-    pub lb: Arc<Mutex<RouteStrategy>>,
+    pub route_strategy: Arc<Mutex<RouteStrategy>>,
     pub pool: Pool<ClientConn>,
     pub client_conn: Option<PoolConn<ClientConn>>,
     pub endpoint: Option<Endpoint>,
@@ -253,12 +253,12 @@ pub struct TransFsm {
 }
 
 impl TransFsm {
-    pub fn new_trans_fsm(lb: Arc<Mutex<RouteStrategy>>, pool: Pool<ClientConn>) -> TransFsm {
+    pub fn new_trans_fsm(route_strategy: Arc<Mutex<RouteStrategy>>, pool: Pool<ClientConn>) -> TransFsm {
         TransFsm {
             events: init_trans_events(),
             current_state: TransState::TransDummyState,
             current_event: TransEventName::DummyEvent,
-            lb,
+            route_strategy,
             pool,
             client_conn: None,
             endpoint: None,
@@ -276,7 +276,7 @@ impl TransFsm {
                             .driver
                             .as_ref()
                             .unwrap()
-                            .get_driver_conn(self.lb.clone(), &mut self.pool, input)
+                            .get_driver_conn(self.route_strategy.clone(), &mut self.pool, input)
                             .await?;
 
                         self.client_conn = Some(client_conn);

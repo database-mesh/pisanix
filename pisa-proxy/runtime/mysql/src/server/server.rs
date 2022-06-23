@@ -66,7 +66,7 @@ pub struct MySqlServerBuilder {
     _is_quit: bool,
     _concurrency_control_rule_idx: Option<usize>,
     _metrics_collector: MySqlServerMetricsCollector,
-    _lb: Arc<Mutex<RouteStrategy>>,
+    _route_strategy: Arc<Mutex<RouteStrategy>>,
     _pool: Pool<ClientConn>,
     _plugin: Option<PluginPhase>,
 }
@@ -74,7 +74,7 @@ pub struct MySqlServerBuilder {
 impl MySqlServerBuilder {
     pub fn new(
         socket: TcpStream,
-        lb: Arc<Mutex<RouteStrategy>>,
+        route_strategy: Arc<Mutex<RouteStrategy>>,
         plugin: Option<PluginPhase>,
     ) -> MySqlServerBuilder {
         MySqlServerBuilder {
@@ -87,7 +87,7 @@ impl MySqlServerBuilder {
             _is_quit: false,
             _concurrency_control_rule_idx: None,
             _metrics_collector: MySqlServerMetricsCollector::new(),
-            _lb: lb,
+            _route_strategy: route_strategy,
             _plugin: plugin,
             _pool: Pool::new(1),
         }
@@ -146,7 +146,7 @@ impl MySqlServerBuilder {
             ),
             buf: self._buf,
             mysql_parser: self._mysql_parser,
-            trans_fsm: TransFsm::new_trans_fsm(self._lb, self._pool),
+            trans_fsm: TransFsm::new_trans_fsm(self._route_strategy, self._pool),
             ast_cache: self._ast_cache,
             plugin: self._plugin,
             is_quit: self._is_quit,
