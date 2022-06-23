@@ -107,10 +107,10 @@ mod test {
         };
 
         let config = super::config::ReadWriteSplitting {
-            model: Some(super::config::ReadWriteSplittingStatic { default_target, rules }),
+            undynamic: Some(super::config::ReadWriteSplittingStatic { default_target, rules }),
         };
 
-        let mut rws = ReadWriteSplittingStaticBuilder::build(config.model.unwrap(), rw_endpoint);
+        let mut rws = ReadWriteSplittingStaticBuilder::build(config.undynamic.unwrap(), rw_endpoint);
         let input = RouteInput::Statement("insert");
         let res = rws.dispatch(&input).unwrap();
         assert_eq!(res.0.unwrap().addr, "127.0.0.2");
