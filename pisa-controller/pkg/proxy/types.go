@@ -44,6 +44,7 @@ type Proxy struct {
 	User              string            `json:"user"`
 	SimpleLoadBalance SimpleLoadBalance `json:"simple_loadbalance"`
 	Plugin            Plugin            `json:"plugin"`
+	ServerVersion     string            `json:"serverVersion"`
 }
 
 type Plugin struct {
