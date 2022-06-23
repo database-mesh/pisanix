@@ -21,15 +21,17 @@ pub struct Listener {
     pub name: String,
     pub listen_addr: String,
     pub backend_type: String,
+    pub server_version: String,
 }
 
 impl Listener {
     pub fn build_listener(&mut self) -> Result<TcpListener, Error> {
         info!(
-            "{:?} proxy {:?} is listening on: {:?}",
+            "{:?} proxy {:?} is listening on: {:?} with server version: {:?}",
             self.backend_type.clone(),
             self.name.clone(),
-            self.listen_addr.clone()
+            self.listen_addr.clone(),
+            self.server_version.clone()
         );
         let listener = {
             let std_listenner = match std::net::TcpListener::bind(self.listen_addr.clone()) {

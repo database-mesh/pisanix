@@ -21,7 +21,7 @@ use conn_pool::Pool;
 use futures::StreamExt;
 use loadbalance::balance::BalanceType;
 use mysql_parser::{
-    ast::{BeginStmt, SqlStmt, SetOptValues, SetOpts},
+    ast::{BeginStmt, SetOptValues, SetOpts, SqlStmt},
     parser::{ParseError, Parser},
 };
 use mysql_protocol::{
@@ -54,6 +54,7 @@ pub struct MySqlServer {
     // `concurrency_control_rule_idx` is index of concurrency_control rules
     // `concurrency_control_rule_idx` is required to add permits when the concurrency_control layer service is enabled
     concurrency_control_rule_idx: Option<usize>,
+    server_version: String,
 }
 
 pub struct MySqlServerBuilder {
@@ -69,6 +70,7 @@ pub struct MySqlServerBuilder {
     _lb: Arc<Mutex<BalanceType>>,
     _pool: Pool<ClientConn>,
     _plugin: Option<PluginPhase>,
+    _pisa_version: String,
 }
 
 impl MySqlServerBuilder {
@@ -90,8 +92,9 @@ impl MySqlServerBuilder {
             _lb: lb,
             _plugin: plugin,
             _pool: Pool::new(1),
+            _pisa_version: String::new(),
         }
-    }    
+    }
 
     pub fn with_pool(mut self, pool: Pool<ClientConn>) -> MySqlServerBuilder {
         self._pool = pool;
@@ -128,6 +131,11 @@ impl MySqlServerBuilder {
         self
     }
 
+    pub fn with_pisa_version(mut self, version: String) -> MySqlServerBuilder {
+        self._pisa_version = version;
+        self
+    }
+
     pub fn with_metrics_collector(
         mut self,
         collector: MySqlServerMetricsCollector,
@@ -143,6 +151,7 @@ impl MySqlServerBuilder {
                 self._pcfg.user,
                 self._pcfg.password,
                 self._pcfg.db,
+                format!("{} pisa {}", self._pcfg.server_version, self._pisa_version),
             ),
             buf: self._buf,
             mysql_parser: self._mysql_parser,
@@ -153,6 +162,7 @@ impl MySqlServerBuilder {
             concurrency_control_rule_idx: self._concurrency_control_rule_idx,
             metrics_collector: self._metrics_collector,
             name: self._pcfg.name,
+            server_version: self._pcfg.server_version.clone(),
         }
     }
 }
@@ -409,13 +419,13 @@ impl MySqlServer {
                 SqlStmt::Set(stmt) => {
                     self.handle_set_stmt(stmt);
                     client_conn.send_query(payload).await?
-                },
+                }
                 //TODO: split sql stmt for sql audit
                 SqlStmt::BeginStmt(_stmt) => client_conn.send_query(payload).await?,
                 _ => client_conn.send_query(payload).await?,
             },
         };
-        
+
         self.handle_query_resultset(stream).await?;
 
         let ep = client_conn.get_endpoint().unwrap();
@@ -425,19 +435,17 @@ impl MySqlServer {
         Ok(())
     }
 
-    // Set charset name 
+    // Set charset name
     fn handle_set_stmt(&mut self, stmt: &SetOptValues) {
         match stmt {
-            SetOptValues::OptValues(vals) => {
-                match &vals.opt {
-                    SetOpts::SetNames(name) => {
-                        if let Some(name) = &name.charset_name {
-                            self.client.charset = name.clone();
-                            self.trans_fsm.set_charset(name.clone())
-                        }
-                    },
-                    _ => {}
+            SetOptValues::OptValues(vals) => match &vals.opt {
+                SetOpts::SetNames(name) => {
+                    if let Some(name) = &name.charset_name {
+                        self.client.charset = name.clone();
+                        self.trans_fsm.set_charset(name.clone())
+                    }
                 }
+                _ => {}
             },
 
             _ => {}

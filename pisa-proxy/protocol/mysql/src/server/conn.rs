@@ -25,9 +25,6 @@ use tracing::debug;
 use super::{err::MySQLError, stream::LocalStream};
 use crate::{charset::*, err, err::ProtocolError, mysql_const::*, server::packet::Packet, util::*};
 
-// server version start with version， regex is ^(\d{1,2})\.(\d{1,2})\.(\d{1,3})
-const SERVER_VERSION: &str = "5.7.37 pisa 0.1.0";
-
 lazy_static! {
     static ref CONNECTION_ID: AtomicU32 = AtomicU32::new(0);
 }
@@ -62,10 +59,18 @@ pub struct Connection {
     pub db: String,
     pub affected_rows: i64,
     pub pkt: Packet,
+    server_version: String,
 }
 
 impl Connection {
-    pub fn new(socket: TcpStream, user: String, password: String, db: String) -> Connection {
+    //TODO: need refactor
+    pub fn new(
+        socket: TcpStream,
+        user: String,
+        password: String,
+        db: String,
+        server_version: String,
+    ) -> Connection {
         CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
 
         Connection {
@@ -82,6 +87,7 @@ impl Connection {
             affected_rows: 0,
             //pkt: Packet::new(Arc::new(Mutex::new(BufStream::new(socket)))),
             pkt: Packet::new(BufStream::new(LocalStream::from(socket))),
+            server_version,
         }
     }
 
@@ -121,7 +127,7 @@ impl Connection {
         data.put_u8(10);
 
         // server version
-        data.extend_from_slice(SERVER_VERSION.as_bytes());
+        data.extend_from_slice(self.server_version.as_bytes());
         data.put_u8(0);
 
         // connection id

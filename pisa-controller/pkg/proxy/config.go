@@ -106,6 +106,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			proxy.Password = service.DatabaseService.DatabaseMySQL.Password
 			proxy.PoolSize = service.DatabaseService.DatabaseMySQL.PoolSize
 			proxy.ListenAddr = fmt.Sprintf("%s:%d", service.DatabaseService.DatabaseMySQL.Host, service.DatabaseService.DatabaseMySQL.Port)
+			proxy.ServerVersion = service.DatabaseService.DatabaseMySQL.ServerVersion
 			if tsSpec.LoadBalance.SimpleLoadBalance != nil {
 				proxy.SimpleLoadBalance.BalancerType = tsSpec.LoadBalance.SimpleLoadBalance.Kind
 			}
