@@ -122,8 +122,10 @@ spec:
                                   description: 'the type of rule'
                                   type: string
                                 regex:
+                                  items:
+                                    type: string
+                                  type: array
                                   description: 'the regex of rule'
-                                  type: string
                                 target:
                                   description: 'the target of rule'
                                   type: string
