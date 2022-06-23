@@ -63,7 +63,7 @@ pub enum RouteStrategy {
 
 impl RouteStrategy {
     pub fn new(config: config::ReadWriteSplitting, rw_endpoint: ReadWriteEndpoint) -> Self {
-        if let Some(config) = config.undynamic {
+        if let Some(config) = config.statics {
             return Self::Static(ReadWriteSplittingStaticBuilder::build(config, rw_endpoint));
         }
 
