@@ -39,9 +39,14 @@ For DBAs who could and would like to solve problems with programming. Pisanix su
 Full documentation will be available on the [Pisanix website](https://www.pisanix.io/).
 
 # Community & Support
- :link: [GitHub Issues](https://github.com/database-mesh/pisanix/issues). Best for: larger systemic questions/bug reports or anything development related.
-
- :link: [Slack channel](https://join.slack.com/t/databasemesh/shared_invite/zt-12hlythpe-C4rrS1WZ2ZkEd3zn84SqeQ). Best for: instant communications and online meetings, sharing your applications.
+| | |
+|:-|:-|
+| Mailing List| https://groups.google.com/g/database-mesh |
+| Dev Meetings (Starting Feb 27th, 2022), Bi-weekly Wednesday 9:00AM PST|https://meet.google.com/yhv-zrby-pyt |
+| Dev Meetings APAC Friendly (Starting April 27th, 2022), Bi-weekly APAC Wednesday 9:00PM GMT+8|https://meeting.tencent.com/dm/6UXDMNsHBVQO |
+| Wechat Broker|pisanix|
+| Slack |https://join.slack.com/t/databasemesh/shared_invite/zt-19rhvnxkz-USjZ~am~ghd_Q0q~8bAJXA  |
+| Meetings Notes |https://bit.ly/39Fqt3x |
 
 - Wechat User Group: Broker wechat to add you into the user group.
 
