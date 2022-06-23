@@ -15,12 +15,12 @@
 package webhook
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
+	v1 "k8s.io/api/admission/v1"
+	"net/http"
 )
 
 func ApiCheck(ctx *gin.Context) {
-	rawData, _ := ctx.GetRawData()
-	ctx.JSON(http.StatusOK, rawData)
+	ar := v1.AdmissionReview{}
+	ctx.JSON(http.StatusOK, ar)
 }
