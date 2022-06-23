@@ -183,6 +183,7 @@ impl Decoder for Stmt {
             // Return Ok(Some(data)) only when prepare return error, otherwise return Ok(Some(None)).
             DecodeStmtState::PrepareFirst => {
                 let res = self.decode_prepare_return(length, src);
+                src.clear();
                 Ok(Some(res))
             }
 

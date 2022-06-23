@@ -56,7 +56,7 @@ pub enum TransEventName {
 impl Default for TransEventName {
     fn default() -> Self {
         TransEventName::DummyEvent
-    } 
+    }
 }
 
 #[async_trait]
@@ -308,7 +308,7 @@ impl TransFsm {
                 Ok(mut client_conn) => {
                     self.init_session_attr(&mut client_conn).await?;
                     Ok(client_conn)
-                },
+                }
                 Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
             },
         }

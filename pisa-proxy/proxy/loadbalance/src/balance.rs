@@ -27,7 +27,9 @@ pub enum AlgorithmName {
 }
 
 impl Default for AlgorithmName {
-    fn default() -> Self { AlgorithmName::Random }
+    fn default() -> Self {
+        AlgorithmName::Random
+    }
 }
 
 pub trait LoadBalance {
