@@ -19,6 +19,8 @@ futures = "0.3.5"
 async-trait = "0.1"
 byteorder = "0.5.3"
 thiserror = "1.0"
+rocket_prometheus = "0.10.0-rc.1"
+once_cell = "1.10.0"
 proxy = {path = "../../proxy"}
 conn_pool = { path = "../../proxy/pool" }
 mysql_protocol = {path = "../../protocol/mysql", package = "mysql_protocol"}
@@ -28,5 +30,5 @@ endpoint = {path = "../../proxy/endpoint"}
 mysql_parser = {path = "../../parser/mysql"}
 common = {path = "../common"}
 plugin = {path = "../../plugin" }
-rocket_prometheus = "0.10.0-rc.1"
-once_cell = "1.10.0"
+strategy = {path = "../../proxy/strategy"}
+

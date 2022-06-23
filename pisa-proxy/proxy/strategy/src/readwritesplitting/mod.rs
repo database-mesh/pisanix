@@ -12,21 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
+pub mod rule_match;
+pub mod static_rw;
+use endpoint::endpoint::Endpoint;
+pub use static_rw::*;
 
-#[derive(Clone, Default)]
-pub struct Endpoint {
-    pub weight: i64,
-    pub name: String,
-    pub db: String,
-    pub user: String,
-    pub password: String,
-    pub addr: String,
-}
-
-
-impl fmt::Debug for Endpoint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Endpoint: [name:{}, addr:{}, db:{}]", self.name, self.addr, self.db)
-    }
+#[derive(Clone)]
+pub struct ReadWriteEndpoint {
+    pub read: Vec<Endpoint>,
+    pub readwrite: Vec<Endpoint>,
 }

@@ -17,10 +17,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use conn_pool::{ConnAttr, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
-use loadbalance::balance::{BalanceType, LoadBalance};
 use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::{Error, ErrorKind};
+use strategy::route::{RouteStrategy, Route, RouteInput};
 use tokio::sync::Mutex;
+use tracing::debug;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TransState {
@@ -63,8 +64,9 @@ impl Default for TransEventName {
 pub trait ConnDriver {
     async fn get_driver_conn(
         &self,
-        loadbalance: Arc<Mutex<BalanceType>>,
+        loadbalance: Arc<Mutex<RouteStrategy>>,
         pool: &mut Pool<ClientConn>,
+        input: RouteInput<'_>,
     ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error>;
 }
 
@@ -75,11 +77,15 @@ pub struct Driver;
 impl ConnDriver for Driver {
     async fn get_driver_conn(
         &self,
-        loadbalance: Arc<Mutex<BalanceType>>,
+        route_strategy: Arc<Mutex<RouteStrategy>>,
         pool: &mut Pool<ClientConn>,
+        input: RouteInput<'_>,
     ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error> {
-        let mut lb = loadbalance.clone().lock_owned().await;
-        let endpoint = lb.next().unwrap();
+        let mut strategy = route_strategy.clone().lock_owned().await;
+        let dispatch_res = strategy.dispatch(&input).unwrap();
+        debug!("route_strategy to {:?} for input: {:?}", dispatch_res, input);
+
+        let endpoint = dispatch_res.0.unwrap();
 
         let factory = ClientConn::with_opts(
             endpoint.user.clone(),
@@ -238,7 +244,7 @@ pub struct TransFsm {
     pub events: Vec<TransEvent>,
     pub current_state: TransState,
     pub current_event: TransEventName,
-    pub lb: Arc<Mutex<BalanceType>>,
+    pub route_strategy: Arc<Mutex<RouteStrategy>>,
     pub pool: Pool<ClientConn>,
     pub client_conn: Option<PoolConn<ClientConn>>,
     pub endpoint: Option<Endpoint>,
@@ -247,12 +253,12 @@ pub struct TransFsm {
 }
 
 impl TransFsm {
-    pub fn new_trans_fsm(lb: Arc<Mutex<BalanceType>>, pool: Pool<ClientConn>) -> TransFsm {
+    pub fn new_trans_fsm(route_strategy: Arc<Mutex<RouteStrategy>>, pool: Pool<ClientConn>) -> TransFsm {
         TransFsm {
             events: init_trans_events(),
             current_state: TransState::TransDummyState,
             current_event: TransEventName::DummyEvent,
-            lb,
+            route_strategy,
             pool,
             client_conn: None,
             endpoint: None,
@@ -261,7 +267,7 @@ impl TransFsm {
         }
     }
 
-    pub async fn trigger(&mut self, state_name: TransEventName) -> Result<(), Error> {
+    pub async fn trigger(&mut self, state_name: TransEventName, input: RouteInput<'_>) -> Result<(), Error> {
         for event in &self.events {
             if event.name == state_name && event.src_state == self.current_state {
                 match event.src_state {
@@ -270,7 +276,7 @@ impl TransFsm {
                             .driver
                             .as_ref()
                             .unwrap()
-                            .get_driver_conn(self.lb.clone(), &mut self.pool)
+                            .get_driver_conn(self.route_strategy.clone(), &mut self.pool, input)
                             .await?;
 
                         self.client_conn = Some(client_conn);

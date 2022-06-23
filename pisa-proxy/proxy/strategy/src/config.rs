@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use loadbalance::balance::AlgorithmName;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
-    pub undynamic: ReadWriteSplittingStatic,
+    pub statics: Option<ReadWriteSplittingStatic>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -40,7 +41,7 @@ pub struct RegexRule {
     pub rule_type: String,
     pub regex: Vec<String>,
     pub target: TargetRole,
-    pub algorithm_name: String,
+    pub algorithm_name: AlgorithmName,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -51,7 +52,7 @@ pub enum TargetRole {
 }
 
 impl Default for TargetRole {
-   fn default() -> Self {
-    TargetRole::ReadWrite
-   } 
+    fn default() -> Self {
+        Self::ReadWrite
+    }
 }
