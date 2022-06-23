@@ -11,6 +11,6 @@ Applications access databases with SQL, so Pisanix will hijack all SQL traffic. 
 
 In the past, metrics could be retrieved from database instances and display in kinds of charts. Now with Pisanix, DBAs could have more chances to achieve better observability.
 
-### Progammable
+### Programmable
 
 For DBAs who could and would like to solve problems with programming. Pisanix supports many kinds of plugin mechanism, like Lua and Wasm. People will have the chance to 'reshape' the expected behavior of databases.

@@ -1,6 +1,6 @@
 # Contributing to Pisa-Controller
 
-## Prerequistes
+## Prerequisites
 * Install Git
 * Install [Go 1.16](https://golang.org/dl/) or later, and we use go module to manage the go package dependencies.
 * Prepare an available Kubernetes cluster in your workstation, we recommend you to use [KIND](https://kind.sigs.k8s.io/).

@@ -22,7 +22,7 @@ ARGS=""
 help() {
   echo $'Usage:
   This script is used to execute Makefile of the sub project
-  build.sh [PRJECT_NAME] [JOB_NAME] [ARGS]
+  build.sh [PROJECT_NAME] [JOB_NAME] [ARGS]
 
 PROJECT_NAME: Project name is required, value is "pisa-proxy" or "pisa-controller"
 JOB_NAME: Job name is required, the target of Makefile of PROJECT_NAME
@@ -46,7 +46,7 @@ for arg in "$@"; do
 done
 
 if [ -z "${PROJECT_NAME}" ]; then
-  echo 'PRJECT_NAME is required, PROJECT_NAME is first arg'
+  echo 'PROJECT_NAME is required, PROJECT_NAME is first arg'
   help
   exit 1
 fi
