@@ -52,7 +52,7 @@ pub enum TargetRole {
 }
 
 impl Default for TargetRole {
-   fn default() -> Self {
-       Self::ReadWrite
-   } 
+    fn default() -> Self {
+        Self::ReadWrite
+    }
 }

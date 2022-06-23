@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug, Clone, Default)]
+use std::fmt;
+
+#[derive(Clone, Default)]
 pub struct Endpoint {
     pub weight: i64,
     pub name: String,
@@ -20,4 +22,11 @@ pub struct Endpoint {
     pub user: String,
     pub password: String,
     pub addr: String,
+}
+
+
+impl fmt::Debug for Endpoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Endpoint: [name:{}, addr:{}, db:{}]", self.name, self.addr, self.db)
+    }
 }

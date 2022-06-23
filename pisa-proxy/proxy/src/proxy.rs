@@ -163,7 +163,7 @@ impl From<MySQLNode> for Endpoint {
             db: node.db,
             user: node.user,
             password: node.password,
-            addr: node.host,
+            addr: format!("{}:{}", node.host, node.port),
         }
     }
 }

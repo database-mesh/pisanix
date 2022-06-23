@@ -21,6 +21,7 @@ use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::{Error, ErrorKind};
 use strategy::route::{RouteStrategy, Route, RouteInput};
 use tokio::sync::Mutex;
+use tracing::debug;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TransState {
@@ -65,6 +66,7 @@ pub trait ConnDriver {
         &self,
         loadbalance: Arc<Mutex<RouteStrategy>>,
         pool: &mut Pool<ClientConn>,
+        input: RouteInput<'_>,
     ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error>;
 }
 
@@ -75,12 +77,15 @@ pub struct Driver;
 impl ConnDriver for Driver {
     async fn get_driver_conn(
         &self,
-        loadbalance: Arc<Mutex<RouteStrategy>>,
+        route_strategy: Arc<Mutex<RouteStrategy>>,
         pool: &mut Pool<ClientConn>,
+        input: RouteInput<'_>,
     ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error> {
-        let mut lb = loadbalance.clone().lock_owned().await;
-        //let endpoint = lb.next().unwrap();
-        let endpoint = lb.dispatch(RouteInput::Statement("".to_string())).unwrap().unwrap();
+        let mut strategy = route_strategy.clone().lock_owned().await;
+        let dispatch_res = strategy.dispatch(&input).unwrap();
+        debug!("route_strategy to {:?} for input: {:?}", dispatch_res, input);
+
+        let endpoint = dispatch_res.0.unwrap();
 
         let factory = ClientConn::with_opts(
             endpoint.user.clone(),
@@ -262,7 +267,7 @@ impl TransFsm {
         }
     }
 
-    pub async fn trigger(&mut self, state_name: TransEventName) -> Result<(), Error> {
+    pub async fn trigger(&mut self, state_name: TransEventName, input: RouteInput<'_>) -> Result<(), Error> {
         for event in &self.events {
             if event.name == state_name && event.src_state == self.current_state {
                 match event.src_state {
@@ -271,7 +276,7 @@ impl TransFsm {
                             .driver
                             .as_ref()
                             .unwrap()
-                            .get_driver_conn(self.lb.clone(), &mut self.pool)
+                            .get_driver_conn(self.lb.clone(), &mut self.pool, input)
                             .await?;
 
                         self.client_conn = Some(client_conn);

@@ -33,7 +33,7 @@ use mysql_protocol::{
 use parking_lot::Mutex as plMutex;
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
-use strategy::route::RouteStrategy;
+use strategy::route::{RouteStrategy, RouteInput};
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 use tracing::{debug, error};
 
@@ -169,10 +169,10 @@ impl MySqlServer {
     }
 
     pub async fn run(&mut self) -> Result<(), ProtocolError> {
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::DummyEvent).await {
-            //TODO: need refactor
-            error!("err: {:?}", err);
-        };
+        //if let Err(err) = self.trans_fsm.trigger(TransEventName::DummyEvent, "").await {
+        //    //TODO: need refactor
+        //    error!("err: {:?}", err);
+        //};
 
         // set db to trans_fsm
         self.trans_fsm.set_db(self.client.db.clone());
@@ -235,8 +235,10 @@ impl MySqlServer {
         payload: &[u8],
         is_send_ok: bool,
     ) -> Result<(), ProtocolError> {
+        let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
+
         let earlier = SystemTime::now();
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::UseEvent).await {
+        if let Err(err) = self.trans_fsm.trigger(TransEventName::UseEvent, RouteInput::Statement(sql)).await {
             error!("err:{:?}", err);
         }
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
@@ -250,8 +252,7 @@ impl MySqlServer {
             "COM_INIT_DB",
             client_conn.get_endpoint().unwrap().as_str()
         );
-        let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
-
+        
         self.trans_fsm.set_db(sql.to_string());
         let res = client_conn.send_use_db(sql).await?;
         let ep = client_conn.get_endpoint().unwrap();
@@ -279,7 +280,7 @@ impl MySqlServer {
 
     pub async fn handle_field_list(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
         let earlier = SystemTime::now();
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent).await {
+        if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::None).await {
             error!("err: {:?}", err);
         }
 
@@ -321,8 +322,10 @@ impl MySqlServer {
     }
 
     pub async fn handle_prepare(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+        let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
+
         let earlier = SystemTime::now();
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::PrepareEvent).await {
+        if let Err(err) = self.trans_fsm.trigger(TransEventName::PrepareEvent, RouteInput::Statement(sql)).await {
             error!("error: {:?}", err);
         };
 
@@ -383,8 +386,10 @@ impl MySqlServer {
     }
 
     pub async fn handle_query(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+        let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
+
         let earlier = SystemTime::now();
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent).await {
+        if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::Statement(sql)).await {
             error!("err:{:?}", err);
         }
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
@@ -399,7 +404,7 @@ impl MySqlServer {
             client_conn.get_endpoint().unwrap().as_str()
         );
 
-        let stream = match self.get_ast(payload) {
+        let stream = match self.get_ast(sql) {
             Err(err) => {
                 error!("err: {:?}", err);
                 client_conn.send_query(payload).await?
@@ -561,14 +566,13 @@ impl MySqlServer {
         stream: ResultsetStream<'b>,
         _stmt: &BeginStmt,
     ) -> Result<(), ProtocolError> {
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::StartEvent).await {
+        if let Err(err) = self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Statement("begin")).await {
             error!("err: {:?}", err);
         }
         self.handle_query_resultset(stream).await
     }
 
-    fn get_ast(&mut self, payload: &[u8]) -> Result<Vec<SqlStmt>, ParseError> {
-        let sql = str::from_utf8(payload).unwrap();
+    fn get_ast(&mut self, sql: &str) -> Result<Vec<SqlStmt>, ParseError> {
         let mut ast_cache = self.ast_cache.lock();
         let try_ast = ast_cache.get(sql.to_string());
 
