@@ -169,11 +169,6 @@ impl MySqlServer {
     }
 
     pub async fn run(&mut self) -> Result<(), ProtocolError> {
-        //if let Err(err) = self.trans_fsm.trigger(TransEventName::DummyEvent, "").await {
-        //    //TODO: need refactor
-        //    error!("err: {:?}", err);
-        //};
-
         // set db to trans_fsm
         self.trans_fsm.set_db(self.client.db.clone());
 
