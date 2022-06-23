@@ -17,7 +17,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 	"net/http"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 	cmdproxy "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
 	cmdwebhook "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/core"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 
@@ -45,15 +45,14 @@ const (
 )
 
 func init() {
-	_, err := kubernetes.GetInClusterClient()
-	if err != nil {
-		log.Fatal(err)
-	}
 	setVersion()
 	log.Infof("version: %s,gitcommit: %s,branch: %s", version, gitcommit, branch)
 }
 func main() {
 	flag.Parse()
+	kubernetes.GetClient()
+
+	//TODO: need refactor
 	eg.Go(func() error {
 		return newHttpServer(
 			cmdwebhook.Config.Port,

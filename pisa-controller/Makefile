@@ -20,7 +20,14 @@ build:
 		-ldflags "-w -s -X main.branch=$(GIT_BRANCH) -X main.gitcommit=$(GIT_COMMIT) -X main.version=$(GIT_TAG)"  \
 		-gcflags "-N -l" \
 		-o ../bin/controller cmd/pisa-controller/main.go
-	@echo -e "\033[33mbuild output to ./bin directory\033[0"
+	@echo -e "\033[33mbuild output to ./bin directory\033[0m"
+
+darwin:
+	@go build \
+		-ldflags "-w -s -X main.branch=$(GIT_BRANCH) -X main.gitcommit=$(GIT_COMMIT) -X main.version=$(GIT_TAG)"  \
+		-gcflags "-N -l" \
+		-o ../bin/controller cmd/pisa-controller/main.go
+	@echo -e "\033[33mbuild output to ./bin directory\033[0m"
 
 docker:
 	sudo docker build --build-arg GIT_BRANCH=$(GIT_BRANCH) --build-arg GIT_COMMIT=$(GIT_COMMIT) --build-arg GIT_TAG=$(GIT_TAG) \
