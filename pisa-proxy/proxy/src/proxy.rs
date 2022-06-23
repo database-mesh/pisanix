@@ -48,6 +48,8 @@ pub struct ProxyConfig {
     pub pool_size: u8,
     #[serde(default = "default_auto_strategy")]
     pub strategy: String,
+    #[serde(default = "default_auto_server_version")]
+    pub server_version: String,
     pub master_slave: Option<ProxyConfigMasterSlave>,
     pub sharding: Option<ProxyConfigSharding>,
     pub sharding_master_slave: Option<ProxyConfigShardingMasterSlave>,
@@ -153,6 +155,10 @@ fn default_mysql_node_host() -> String {
 
 fn default_mysql_node_port() -> u32 {
     3306
+}
+
+fn default_auto_server_version() -> String {
+    "5.7.37".to_string()
 }
 
 pub struct Proxy {

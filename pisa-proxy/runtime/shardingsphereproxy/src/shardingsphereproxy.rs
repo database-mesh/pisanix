@@ -15,9 +15,11 @@
 use pisa_error::error::Error;
 use proxy::proxy::{MySQLNode, ProxyConfig};
 
+#[derive(Default)]
 pub struct ShardingSphereProxy {
     pub proxy_config: ProxyConfig,
     pub shardingsphereproxy_nodes: Vec<MySQLNode>,
+    pub pisa_version: String,
 }
 
 #[async_trait::async_trait]

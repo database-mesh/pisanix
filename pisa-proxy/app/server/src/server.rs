@@ -36,11 +36,13 @@ impl ProxyFactory for PisaProxyFactory {
             ProxyKind::MySQL => Box::new(runtime_mysql::mysql::MySQLProxy {
                 proxy_config: config,
                 mysql_nodes: self.pisa_config.mysql_nodes.clone(),
+                pisa_version: self.pisa_config.version.clone(), 
             }),
             ProxyKind::ShardingSphereProxy => {
                 Box::new(runtime_shardingsphereproxy::shardingsphereproxy::ShardingSphereProxy {
                     proxy_config: config,
                     shardingsphereproxy_nodes: self.pisa_config.shardingsphere_proxy_nodes.clone(),
+                    pisa_version: self.pisa_config.version.clone(), 
                 })
             }
         }
