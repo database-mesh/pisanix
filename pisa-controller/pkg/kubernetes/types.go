@@ -88,7 +88,7 @@ type ReadWriteSplittingStatic struct {
 type ReadWriteSplittingStaticRule struct {
 	Name          string               `json:"name"`
 	Type          RuleType             `json:"type"`
-	Regex         string               `json:"regex"`
+	Regex         []string             `json:"regex"`
 	Target        string               `json:"target"`
 	AlgorithmName LoadBalanceAlgorithm `json:"algorithmName"`
 }

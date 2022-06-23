@@ -114,7 +114,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			proxy.ListenAddr = fmt.Sprintf("%s:%d", service.DatabaseService.DatabaseMySQL.Host, service.DatabaseService.DatabaseMySQL.Port)
 			proxy.ServerVersion = service.DatabaseService.DatabaseMySQL.ServerVersion
 			if tsSpec.LoadBalance.ReadWriteSplitting != nil {
-				proxy.ReadWriteSplitting = ReadWriteSplitting{
+				proxy.ReadWriteSplitting = &ReadWriteSplitting{
 					Static: &ReadWriteSplittingStatic{},
 				}
 				if tsSpec.LoadBalance.ReadWriteSplitting.Static != nil {
@@ -129,7 +129,9 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 					}
 				}
 			} else if tsSpec.LoadBalance.SimpleLoadBalance != nil {
-				proxy.SimpleLoadBalance.BalancerType = string(tsSpec.LoadBalance.SimpleLoadBalance.Kind)
+				proxy.SimpleLoadBalance = &SimpleLoadBalance{
+					BalancerType: string(tsSpec.LoadBalance.SimpleLoadBalance.Kind),
+				}
 			}
 			if len(tsSpec.CircuitBreaks) != 0 {
 				proxy.Plugin.CircuitBreaks = tsSpec.CircuitBreaks

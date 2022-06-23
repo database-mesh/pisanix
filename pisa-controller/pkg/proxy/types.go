@@ -35,17 +35,17 @@ type PisaProxyConfig struct {
 }
 
 type Proxy struct {
-	BackendType        string             `json:"backend_type"`
-	DB                 string             `json:"db"`
-	ListenAddr         string             `json:"listen_addr"`
-	Name               string             `json:"name"`
-	Password           string             `json:"password"`
-	PoolSize           uint32             `json:"pool_size,omitempty"`
-	User               string             `json:"user"`
-	SimpleLoadBalance  SimpleLoadBalance  `json:"simple_loadbalance"`
-	ReadWriteSplitting ReadWriteSplitting `json:"read_write_splitting"`
-	Plugin             Plugin             `json:"plugin"`
-	ServerVersion      string             `json:"serverVersion"`
+	BackendType        string              `json:"backend_type"`
+	DB                 string              `json:"db"`
+	ListenAddr         string              `json:"listen_addr"`
+	Name               string              `json:"name"`
+	Password           string              `json:"password"`
+	PoolSize           uint32              `json:"pool_size,omitempty"`
+	User               string              `json:"user"`
+	SimpleLoadBalance  *SimpleLoadBalance  `json:"simple_loadbalance,omitempty"`
+	ReadWriteSplitting *ReadWriteSplitting `json:"read_write_splitting,omitempty"`
+	Plugin             Plugin              `json:"plugin"`
+	ServerVersion      string              `json:"serverVersion"`
 }
 
 type Plugin struct {
@@ -68,11 +68,11 @@ type ReadWriteSplittingStatic struct {
 }
 
 type ReadWriteSplittingStaticRule struct {
-	Name          string `json:"name"`
-	Type          string `json:"type"`
-	Regex         string `json:"regex"`
-	Target        string `json:"target"`
-	AlgorithmName string `json:"algorithm_name"`
+	Name          string   `json:"name"`
+	Type          string   `json:"type"`
+	Regex         []string `json:"regex"`
+	Target        string   `json:"target"`
+	AlgorithmName string   `json:"algorithm_name"`
 }
 
 // ConcurrencyControl The conversion used for json key is defined here
