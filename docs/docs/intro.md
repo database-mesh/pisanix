@@ -24,7 +24,7 @@ Pisanix 的架构图如下：
 
 * ***Pisa-Proxy***: 用 Rust 实现的高性能量代理，通过 MySQL 协议获取应用的数据库访问流量，并基于此实现 SQL 流量治理、访问控制、防火墙、可观测性等各种治理能力。
 
-* ***Pisa-Daemon***: 用 Go 实现的数据面，部署在集群中每个节点上，通过宿主机内核的各种能力提供可编程资源管理，如 TrafficQoS 等。
+* ***Pisa-Daemon(即将推出）***: 节点级数据面，部署在集群中每个节点上并通过宿主机内核的各种能力提供可编程资源管理，如 TrafficQoS 等。
 
 
 ## 特性
@@ -56,9 +56,9 @@ Pisanix 支持多种插件机制，如 Lua 和 Wasm，工程师们有机会重�
 |||
 |:-|:-|
 | 邮件列表| https://groups.google.com/g/database-mesh |
-| 社区会议(开始于 2022-02-27), 周三 9:00AM PST|https://meet.google.com/yhv-zrby-pyt |
+| 英文社区会议(开始于 2022-02-27), 周三 9:00AM PST|https://meet.google.com/yhv-zrby-pyt |
 | 中文社区会议 (开始于 2022-04-27), 周三 9:00PM GMT+8|https://meeting.tencent.com/dm/6UXDMNsHBVQO |
-| Slack |https://databasemesh.slack.com/  |
+| Slack | https://join.slack.com/t/databasemesh/shared_invite/zt-19rhvnxkz-USjZ~am~ghd_Q0q~8bAJXA |
 | 会议记录 |https://bit.ly/39Fqt3x |
 
 
