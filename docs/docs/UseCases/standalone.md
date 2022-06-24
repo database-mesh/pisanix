@@ -42,7 +42,7 @@ OPTIONS:
 # api 配置块，对应命令行参数和环境变量
 [admin]
 # api 端口
-port = "8081"
+port = "5591"
 # 日志级别
 log_level = "INFO"
 
@@ -85,6 +85,8 @@ password = "root"
 host = "127.0.0.1"
 # 数据库端口
 port = 3307
+# 配置后端数据源角色(在读写分离中使用)
+role = ""
 ```
 
 ### 部署示例
@@ -135,6 +137,7 @@ user = "root"
 password = "root"
 host = "127.0.0.1"
 port = 3307
+role = ""
 ```
 
 #### 配置后端数据库负载均衡
@@ -160,6 +163,7 @@ user = "root"
 password = "root"
 host = "127.0.0.1"
 port = 3307
+role = ""
 
 [[mysql.node]]
 name = "ds002"
@@ -168,6 +172,57 @@ user = "root"
 password = "root"
 host = "127.0.0.1"
 port = 3308
+role = ""
+```
+
+#### 读写分离配置
+```
+[proxy]
+[[proxy.config]]
+listen_addr = "0.0.0.0:9089"
+user = "root"
+password = "root"
+db = "test"
+backend_type = "mysql"
+pool_size = 3
+
+[proxy.config.read_write_splitting]
+
+[proxy.config.read_write_splitting.static]
+default_target = "readwrite"
+
+[[proxy.config.read_write_splitting.static.rule]]
+name = "read-rule"
+type = "regex"
+regex = ["^select"]
+target = "read"
+algorithm_name = "random"
+
+[[proxy.config.read_write_splitting.static.rule]]
+name = "write-rule"
+type = "regex"
+regex = ["^create","^update","^insert","^delete"]
+target = "readwrite"
+algorithm_name = "roundrobin"
+
+[mysql]
+[[mysql.node]]
+name = "ds001"
+db = "test"
+user = "root"
+password = "root"
+host = "127.0.0.1"
+port = 3307
+role = "readwrite"
+
+[[mysql.node]]
+name = "ds002"
+db = "test"
+user = "root"
+password = "root"
+host = "127.0.0.1"
+port = 3308
+role = "read"
 ```
 
 #### 启动 Pisa-Proxy
