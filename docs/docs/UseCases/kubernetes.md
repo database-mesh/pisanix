@@ -90,6 +90,8 @@ helm uninstall pisa-controller -n <your namespace>
 | `poolSize`                 | 虚拟 MySQL 连接池大小                                      |
 | `serverVersion`            | 虚拟 MySQL 版本                                       |
 
+***VirtualDatabase的名称需要与应用名称一致***
+
 ### TrafficStrategy
 
 | Name                                   | Description                                                  |
@@ -189,6 +191,8 @@ spec:
         db: "socksdb"
       trafficStrategy: "catalogue"
 ```
+
+***VirtualDatabase的名称需要与应用的名称一致***
 
 - TrafficStrategy
 
