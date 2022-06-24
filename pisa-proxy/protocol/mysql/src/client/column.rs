@@ -32,7 +32,7 @@ pub trait ColumnBuf: BufExt {
     fn parse_column_info(&mut self) -> ColumnInfo;
 }
 
-/// Implments ColumnBuf for BytesMut.
+/// Implements ColumnBuf for BytesMut.
 /// For example:
 /// let mut buf = BytesMut::new(&[0x01,0x02]);
 /// buf.parse_column_info();

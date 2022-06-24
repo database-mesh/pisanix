@@ -48,7 +48,7 @@ To build Pisanix from scratch you will need to install the following tools:
 5. If you have added code that should be tested, add unit tests.
 6. Verify and ensure that the test suites passes, make test.
 7. Make sure your code passes both linters, make lint.
-8. Submmit and push your code to the remote repo.
+8. Submit and push your code to the remote repo.
       ```
       git add <file>
       git commit -m 'commit log'
