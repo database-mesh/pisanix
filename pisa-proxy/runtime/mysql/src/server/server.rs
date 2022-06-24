@@ -33,7 +33,7 @@ use mysql_protocol::{
 use parking_lot::Mutex as plMutex;
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
-use strategy::route::{RouteStrategy, RouteInput};
+use strategy::route::{RouteInput, RouteStrategy};
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 use tracing::{debug, error};
 
@@ -243,7 +243,9 @@ impl MySqlServer {
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         let earlier = SystemTime::now();
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::UseEvent, RouteInput::Statement(sql)).await {
+        if let Err(err) =
+            self.trans_fsm.trigger(TransEventName::UseEvent, RouteInput::Statement(sql)).await
+        {
             error!("err:{:?}", err);
         }
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
@@ -257,7 +259,7 @@ impl MySqlServer {
             "COM_INIT_DB",
             client_conn.get_endpoint().unwrap().as_str()
         );
-        
+
         self.trans_fsm.set_db(sql.to_string());
         let res = client_conn.send_use_db(sql).await?;
         let ep = client_conn.get_endpoint().unwrap();
@@ -285,7 +287,8 @@ impl MySqlServer {
 
     pub async fn handle_field_list(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
         let earlier = SystemTime::now();
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::None).await {
+        if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::None).await
+        {
             error!("err: {:?}", err);
         }
 
@@ -330,7 +333,9 @@ impl MySqlServer {
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         let earlier = SystemTime::now();
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::PrepareEvent, RouteInput::Statement(sql)).await {
+        if let Err(err) =
+            self.trans_fsm.trigger(TransEventName::PrepareEvent, RouteInput::Statement(sql)).await
+        {
             error!("error: {:?}", err);
         };
 
@@ -394,7 +399,9 @@ impl MySqlServer {
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         let earlier = SystemTime::now();
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::Statement(sql)).await {
+        if let Err(err) =
+            self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::Statement(sql)).await
+        {
             error!("err:{:?}", err);
         }
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
@@ -569,7 +576,9 @@ impl MySqlServer {
         stream: ResultsetStream<'b>,
         _stmt: &BeginStmt,
     ) -> Result<(), ProtocolError> {
-        if let Err(err) = self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Statement("begin")).await {
+        if let Err(err) =
+            self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Statement("begin")).await
+        {
             error!("err: {:?}", err);
         }
         self.handle_query_resultset(stream).await

@@ -19,7 +19,7 @@ use conn_pool::{ConnAttr, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
 use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::{Error, ErrorKind};
-use strategy::route::{RouteStrategy, Route, RouteInput};
+use strategy::route::{Route, RouteInput, RouteStrategy};
 use tokio::sync::Mutex;
 use tracing::debug;
 
@@ -57,7 +57,7 @@ pub enum TransEventName {
 impl Default for TransEventName {
     fn default() -> Self {
         TransEventName::DummyEvent
-    } 
+    }
 }
 
 #[async_trait]
@@ -253,7 +253,10 @@ pub struct TransFsm {
 }
 
 impl TransFsm {
-    pub fn new_trans_fsm(route_strategy: Arc<Mutex<RouteStrategy>>, pool: Pool<ClientConn>) -> TransFsm {
+    pub fn new_trans_fsm(
+        route_strategy: Arc<Mutex<RouteStrategy>>,
+        pool: Pool<ClientConn>,
+    ) -> TransFsm {
         TransFsm {
             events: init_trans_events(),
             current_state: TransState::TransDummyState,
@@ -267,7 +270,11 @@ impl TransFsm {
         }
     }
 
-    pub async fn trigger(&mut self, state_name: TransEventName, input: RouteInput<'_>) -> Result<(), Error> {
+    pub async fn trigger(
+        &mut self,
+        state_name: TransEventName,
+        input: RouteInput<'_>,
+    ) -> Result<(), Error> {
         for event in &self.events {
             if event.name == state_name && event.src_state == self.current_state {
                 match event.src_state {
@@ -314,7 +321,7 @@ impl TransFsm {
                 Ok(mut client_conn) => {
                     self.init_session_attr(&mut client_conn).await?;
                     Ok(client_conn)
-                },
+                }
                 Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
             },
         }

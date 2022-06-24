@@ -25,7 +25,7 @@ pub struct Plugin {
 #[serde_with::serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConcurrencyControl {
-    pub regex: String,
+    pub regex: Vec<String>,
     pub max_concurrency: u32,
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub duration: Duration,
@@ -33,5 +33,5 @@ pub struct ConcurrencyControl {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CircuitBreak {
-    pub regex: String,
+    pub regex: Vec<String>,
 }

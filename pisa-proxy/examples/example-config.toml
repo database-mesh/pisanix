@@ -53,20 +53,20 @@ target = "readwrite"
 algorithm_name = "roundrobin"
 
 [[proxy.config.plugin.concurrency_control]]
-regex = "aaa"
+regex = ["aaa"]
 max_concurrency = 5
 duration = 333
 
 [[proxy.config.plugin.concurrency_control]]
-regex = "bbb"
+regex = ["bbb"]
 max_concurrency = 5
 duration = 333
 
 [[proxy.config.plugin.circuit_break]]
-regex = "111"
+regex = ["111"]
 
 [[proxy.config.plugin.circuit_break]]
-regex = "222"
+regex = ["222"]
 
 # 后端数据源配置
 [mysql]
