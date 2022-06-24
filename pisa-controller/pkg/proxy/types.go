@@ -80,7 +80,7 @@ type ReadWriteSplittingStaticRule struct {
 // We need to convert it to max_concurrency to fit the pisa-proxy's configuration format
 // FIXME: A better way to convert
 type ConcurrencyControl struct {
-	Regex          string        `json:"regex"`
+	Regex          []string      `json:"regex"`
 	Duration       time.Duration `json:"duration"`
 	MaxConcurrency int           `json:"max_concurrency"`
 }

@@ -80,7 +80,7 @@ type ReadWriteSplitting struct {
 
 // ReadWriteSplittingStatic defines static rules based read-write splitting algorithm
 type ReadWriteSplittingStatic struct {
-	DefaultTarget string                         `json:"defaultTarget,omitempty"`
+	DefaultTarget []string                       `json:"defaultTarget,omitempty"`
 	Rules         []ReadWriteSplittingStaticRule `json:"rules,omitempty"`
 }
 
@@ -116,13 +116,13 @@ type SimpleLoadBalance struct {
 // CircuitBreak works with regular expressions.
 // SQL statements that conform to regular expressions will be denied.
 type CircuitBreak struct {
-	Regex string `json:"regex"`
+	Regex []string `json:"regex"`
 }
 
 // ConcurrencyControl works according to regular expressions.
 // SQL statements that meet the regular conditions will be blown after the maximum concurrency limit is exceeded.
 type ConcurrencyControl struct {
-	Regex          string        `json:"regex"`
+	Regex          []string      `json:"regex"`
 	Duration       time.Duration `json:"duration"`
 	MaxConcurrency int           `json:"maxConcurrency"`
 }
