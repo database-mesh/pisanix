@@ -109,6 +109,7 @@ pub struct MySQLNode {
     pub host: String,
     #[serde(default = "default_mysql_node_port")]
     pub port: u32,
+    #[serde(default = "default_mysql_node_weight")]
     pub weight: i64,
     pub role: TargetRole,
 }
@@ -159,6 +160,10 @@ fn default_mysql_node_port() -> u32 {
 
 fn default_auto_server_version() -> String {
     "5.7.37".to_string()
+}
+
+fn default_mysql_node_weight() -> i64 {
+    1
 }
 
 impl From<MySQLNode> for Endpoint {
