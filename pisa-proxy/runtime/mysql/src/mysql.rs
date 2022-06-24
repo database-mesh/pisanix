@@ -28,7 +28,7 @@ use proxy::{
     listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
-use strategy::{config::TargetRole, route::RouteStrategy, readwritesplitting::ReadWriteEndpoint};
+use strategy::{config::TargetRole, readwritesplitting::ReadWriteEndpoint, route::RouteStrategy};
 use tracing::error;
 
 use crate::server::{metrics::MySqlServerMetricsCollector, server::MySqlServerBuilder};
@@ -48,25 +48,28 @@ impl MySQLProxy {
             let ep = Endpoint::from(node.clone());
             match node.role {
                 TargetRole::Read => ro.push(ep),
-                TargetRole::ReadWrite => rw.push(ep)
+                TargetRole::ReadWrite => rw.push(ep),
             }
         }
 
         if self.proxy_config.read_write_splitting.is_none() {
-            let balance_type = self.proxy_config.simple_loadbalance.as_ref().unwrap().balance_type.clone();
+            let balance_type =
+                self.proxy_config.simple_loadbalance.as_ref().unwrap().balance_type.clone();
             let mut balance = Balance.build_balance(balance_type);
             rw.append(&mut ro);
             for ep in rw.into_iter() {
                 balance.add(ep)
             }
 
-            return RouteStrategy::new_with_simple_route(balance)
+            return RouteStrategy::new_with_simple_route(balance);
         }
-
 
         let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
 
-        RouteStrategy::new(self.proxy_config.read_write_splitting.as_ref().unwrap().clone(), rw_endpoint)
+        RouteStrategy::new(
+            self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
+            rw_endpoint,
+        )
     }
 }
 

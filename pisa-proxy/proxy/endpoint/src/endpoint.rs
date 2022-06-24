@@ -24,7 +24,6 @@ pub struct Endpoint {
     pub addr: String,
 }
 
-
 impl fmt::Debug for Endpoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Endpoint: [name:{}, addr:{}, db:{}]", self.name, self.addr, self.db)

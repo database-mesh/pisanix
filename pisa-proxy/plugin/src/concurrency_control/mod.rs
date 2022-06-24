@@ -34,7 +34,7 @@ pub struct ConcurrencyControlLayer {
 
 #[derive(Clone)]
 pub struct ConcurrencyControlConfig {
-    pub regex: String,
+    pub regex: Vec<String>,
     pub max_concurrency: usize,
     pub duration: Duration,
 }
@@ -42,7 +42,7 @@ pub struct ConcurrencyControlConfig {
 /// `Limit` instance
 #[derive(Debug, Clone)]
 pub struct ConcurrencyControlInstance {
-    regex: Regex,
+    regex: Vec<Regex>,
     max_concurrency: usize,
     semaphore: Arc<Semaphore>,
     // If the first match, the timing starts to take effect,
@@ -64,7 +64,8 @@ impl ConcurrencyControlLayer {
         if let Some(config) = &self.config {
             let mut instances = Vec::with_capacity(config.len());
             for c in config {
-                let regex = Regex::new(&c.regex).unwrap();
+                // let regex = Regex::new(regex).unwrap();
+                let regex = c.regex.iter().map(|r| Regex::new(r).unwrap()).collect::<Vec<Regex>>();
                 let semaphore = Arc::new(Semaphore::new(c.max_concurrency as usize));
                 instances.push(ConcurrencyControlInstance {
                     max_concurrency: c.max_concurrency as usize,
@@ -76,7 +77,6 @@ impl ConcurrencyControlLayer {
             }
             return Some(instances);
         }
-
         None
     }
 }
@@ -109,7 +109,7 @@ impl<S> ConcurrencyControl<S> {
         if let Some(instances) = &self.instances {
             let mut instances = instances.lock();
             for (idx, c) in instances.iter_mut().enumerate() {
-                if !c.regex.is_match(input) {
+                if !c.regex.iter().any(|r| r.is_match(input)) {
                     continue;
                 }
 
@@ -196,7 +196,7 @@ mod test {
     #[test]
     fn test_concurrency_control() {
         let config = vec![config::ConcurrencyControl {
-            regex: String::from(r"[A-Za-z]+$"),
+            regex: vec![String::from(r"[A-Za-z]+$")],
             max_concurrency: 3,
             duration: Duration::new(50, 0),
         }];

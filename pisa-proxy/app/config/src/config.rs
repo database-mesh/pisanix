@@ -142,7 +142,7 @@ impl PisaConfig {
             shardingsphere_proxy_nodes: vec![],
             version: String::default(),
         };
-        
+
         //TODO: need refactor
         pisa_config.version = PisaConfig::get_version();
 

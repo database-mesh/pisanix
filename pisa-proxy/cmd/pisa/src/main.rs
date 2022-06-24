@@ -32,6 +32,7 @@ use server::{
 
 fn main() {
     let config = PisaConfig::load_config();
+    println!("{:#?}", config);
     tracing_subscriber::fmt()
         .with_max_level(Level::from_str(config.admin.log_level.as_str()).ok())
         .init();
