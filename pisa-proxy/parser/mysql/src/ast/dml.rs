@@ -1743,7 +1743,7 @@ impl FieldType {
 
             Self::FieldBoolType => "BOOL".to_string(),
 
-            Self::FieldBooleanType => "BOLLEAN".to_string(),
+            Self::FieldBooleanType => "BOOLEAN".to_string(),
 
             Self::FieldDateType => "Date".to_string(),
 
