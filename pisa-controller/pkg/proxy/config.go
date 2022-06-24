@@ -113,26 +113,32 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			}
 			proxy.ListenAddr = fmt.Sprintf("%s:%d", service.DatabaseService.DatabaseMySQL.Host, service.DatabaseService.DatabaseMySQL.Port)
 			proxy.ServerVersion = service.DatabaseService.DatabaseMySQL.ServerVersion
-			if tsSpec.LoadBalance.ReadWriteSplitting != nil {
-				proxy.ReadWriteSplitting = &ReadWriteSplitting{
-					Static: &ReadWriteSplittingStatic{},
-				}
-				if tsSpec.LoadBalance.ReadWriteSplitting.Static != nil {
-					proxy.ReadWriteSplitting.Static.DefaultTarget = tsSpec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
-					proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingStaticRule, len(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules))
-					for i := range tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules {
-						proxy.ReadWriteSplitting.Static.Rules[i].Name = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
-						proxy.ReadWriteSplitting.Static.Rules[i].Type = string(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
-						proxy.ReadWriteSplitting.Static.Rules[i].Target = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
-						proxy.ReadWriteSplitting.Static.Rules[i].Regex = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
-						proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
+			switch {
+			case tsSpec.LoadBalance.ReadWriteSplitting != nil:
+				{
+					proxy.ReadWriteSplitting = &ReadWriteSplitting{
+						Static: &ReadWriteSplittingStatic{},
+					}
+					if tsSpec.LoadBalance.ReadWriteSplitting.Static != nil {
+						proxy.ReadWriteSplitting.Static.DefaultTarget = tsSpec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
+						proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingStaticRule, len(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules))
+						for i := range tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules {
+							proxy.ReadWriteSplitting.Static.Rules[i].Name = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
+							proxy.ReadWriteSplitting.Static.Rules[i].Type = string(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
+							proxy.ReadWriteSplitting.Static.Rules[i].Target = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
+							proxy.ReadWriteSplitting.Static.Rules[i].Regex = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
+							proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
+						}
 					}
 				}
-			} else if tsSpec.LoadBalance.SimpleLoadBalance != nil {
-				proxy.SimpleLoadBalance = &SimpleLoadBalance{
-					BalancerType: string(tsSpec.LoadBalance.SimpleLoadBalance.Kind),
+			case tsSpec.LoadBalance.SimpleLoadBalance != nil:
+				{
+					proxy.SimpleLoadBalance = &SimpleLoadBalance{
+						BalancerType: string(tsSpec.LoadBalance.SimpleLoadBalance.Kind),
+					}
 				}
 			}
+
 			if len(tsSpec.CircuitBreaks) != 0 {
 				proxy.Plugin.CircuitBreaks = tsSpec.CircuitBreaks
 			}
