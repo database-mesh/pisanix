@@ -27,12 +27,12 @@ pub struct CircuitBreakLayer {
 
 #[derive(Clone)]
 pub struct CircuitBreakConfig {
-    pub regex: String,
+    pub regeies: Vec<String>,
 }
 
 #[derive(Clone)]
 pub struct CircuitBreakInstance {
-    regex: Regex,
+    regex: Vec<Regex>,
 }
 
 impl CircuitBreakLayer {
@@ -48,7 +48,7 @@ impl CircuitBreakLayer {
         if let Some(config) = &self.config {
             let mut instances = Vec::with_capacity(config.len());
             for c in config {
-                let regex = Regex::new(&c.regex).unwrap();
+                let regex = c.regex.iter().map(|r| Regex::new(r).unwrap()).collect::<Vec<Regex>>();
                 instances.push(CircuitBreakInstance { regex })
             }
             return Some(instances);
@@ -78,7 +78,7 @@ impl<S> CircuitBreak<S> {
     fn is_allow(&self, input: &str) -> bool {
         if let Some(instances) = &self.instances {
             for c in instances {
-                if c.regex.is_match(input) {
+                if c.regex.iter().any(|r| r.is_match(input)) {
                     return false;
                 }
             }
@@ -123,7 +123,7 @@ mod test {
 
     #[test]
     fn test_circuit_break() {
-        let config = vec![config::CircuitBreak { regex: String::from(r"[A-Za-z]+") }];
+        let config = vec![config::CircuitBreak { regex: vec![String::from(r"[A-Za-z]+")] }];
 
         let mut wrap_svc = ServiceBuilder::new()
             .with_layer(CircuitBreakLayer::new(config))

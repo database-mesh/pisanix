@@ -18,10 +18,10 @@ use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Buf, BufMut, BytesMut};
 use futures::{SinkExt, StreamExt};
 use rand::rngs::OsRng;
+use regex::Regex;
 use rsa::{pkcs8::DecodePublicKey, PaddingScheme, PublicKey, RsaPublicKey};
 use sha1::Sha1;
 use tokio_util::codec::{Decoder, Encoder, Framed};
-use regex::Regex;
 
 use super::{codec::ClientCodec, stream::LocalStream};
 use crate::{charset::*, err::ProtocolError, mysql_const::*, util::*};
@@ -63,11 +63,7 @@ impl From<(&str, &str, &str)> for ServerVersion {
         let minor = version.1.parse::<u8>().unwrap();
         let patch = version.2.parse::<u8>().unwrap();
 
-        ServerVersion {
-            major,
-            minor,
-            patch,
-        }
+        ServerVersion { major, minor, patch }
     }
 }
 
@@ -128,13 +124,11 @@ impl ClientAuth {
         let version_bytes = data.split_to(pos + 1);
         let version = str::from_utf8(&version_bytes).unwrap();
         if let Some(caps) = RE.captures(version) {
-            let ver = ServerVersion::from(
-                ( 
-                    caps.name("major").unwrap().as_str(), 
-                    caps.name("minor").unwrap().as_str(), 
-                    caps.name("patch").unwrap().as_str(),
-                )
-            );
+            let ver = ServerVersion::from((
+                caps.name("major").unwrap().as_str(),
+                caps.name("minor").unwrap().as_str(),
+                caps.name("patch").unwrap().as_str(),
+            ));
 
             self.server_version = ver;
         }
@@ -169,7 +163,6 @@ impl ClientAuth {
             5 => self.charset = CHARSET_ID_NAME_MYSQL5[&charset_id].to_string(),
             _ => self.charset = CHARSET_ID_NAME_MYSQL8[&charset_id].to_string(),
         }
-
 
         self.status = LittleEndian::read_u16(&data.split_to(2));
 

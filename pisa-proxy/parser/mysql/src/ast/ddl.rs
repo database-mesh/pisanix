@@ -55,4 +55,3 @@ pub struct DefaultEncryption {
     pub is_equal: bool,
     pub encryption: String,
 }
-

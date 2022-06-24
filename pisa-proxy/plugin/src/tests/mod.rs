@@ -29,12 +29,13 @@ fn test_service(input: &str) -> Result<String, Error> {
 #[test]
 fn test_chain_concurrency_control_and_circuit_break() {
     let concurrency_control_config = vec![config::ConcurrencyControl {
-        regex: String::from(r"[A-Za-z]+$"),
+        regex: vec![String::from(r"[A-Za-z]+$")],
         max_concurrency: 0,
         duration: Duration::new(5, 0),
     }];
 
-    let circuit_break_config = vec![config::CircuitBreak { regex: String::from(r"[A-Za-z]+") }];
+    let circuit_break_config =
+        vec![config::CircuitBreak { regex: vec![String::from(r"[A-Za-z]+")] }];
 
     let mut wrap_svc = ServiceBuilder::new()
         .with_layer(ConcurrencyControlLayer::new(concurrency_control_config))
