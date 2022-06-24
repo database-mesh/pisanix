@@ -108,14 +108,15 @@ helm uninstall pisa-controller -n <your namespace>
 | `loadBalance.readWriteSplitting.static.rules[].target`       | 读写分离策略声明静态规则目标后端
 | `loadBalance.readWriteSplitting.static.rules[].algorithmName`       | 读写分离策略声明静态规则算法
 | `circuitBreaks`                        | 断路器                                                       |
-| `circuitBreaks.regex[]`                  | 断路正则规则                                                 |
+| `circuitBreaks.regex[]`                  | 断路正则规则, 类型为数组                                                |
 | `concurrencyControls`                  | 并发控制器                                                   |
-| `concurrencyControls.regex[]`            | 并发控制正则规则                                             |
+| `concurrencyControls.regex[]`            | 并发控制正则规则，类型为数组                                             |
 | `concurrencyControls.duration`         | 并发控制时延                                                 |
 | `concurrencyControls.maxConcurrency`   | 最大并发执行数量                                             |
 
 ### DatabaseEndpoint
 
+Spec 配置说明
 | Name       | Description          |
 | ---------- | -------------------- |
 | `database` | 后端的数据源类型     |
@@ -126,6 +127,8 @@ helm uninstall pisa-controller -n <your namespace>
 | `password` | MySQL 密码           |
 | `db`       | MySQL schema 名字    |
 
+
+Annoations 说明
 在使用读写分离配置的时候，需要在 DatabaseEndpoint 资源的 Annotations 里添加如下注解，标识该节点的角色属性：
 ```
 annotations:
@@ -133,6 +136,7 @@ annotations:
 ```
 
 默认的角色属性为 read 和 readwrite 
+
 
 
 ## Demo 运行
