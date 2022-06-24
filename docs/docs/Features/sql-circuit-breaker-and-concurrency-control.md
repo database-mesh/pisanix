@@ -15,7 +15,7 @@ sidebar_position: 4
 
 ``` toml
 [[proxy.config.plugin.circuit_break]]
-regex = "SELECT \\*"
+regex = ["SELECT \\*"]
 ```
 > 注：可以有多个规则
 
@@ -28,7 +28,7 @@ SQL 并发控制规则表示在 `duration` 秒内并发运行匹配正则的 SQL
 
 ``` toml
 [[proxy.config.plugin.concurrency_control]]
-regex = "SELECT \\*"    
+regex = ["SELECT \\*"]    
 max_concurrency = 1
 duration = 100
 ```
