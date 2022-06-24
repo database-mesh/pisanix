@@ -105,6 +105,7 @@ helm uninstall pisa-controller -n <your namespace>
 
 ### DatabaseEndpoint
 
+Spec 配置说明
 | Name       | Description          |
 | ---------- | -------------------- |
 | `database` | 后端的数据源类型     |
@@ -114,6 +115,12 @@ helm uninstall pisa-controller -n <your namespace>
 | `user`     | MySQL 用户名         |
 | `password` | MySQL 密码           |
 | `db`       | MySQL schema 名字    |
+
+Annoations 配置说明
+| Name       | Description          |
+| ---------- | -------------------- |
+| `database-mesh.io/role`| TargetRole 名称， 请参考读写分离中 TargetRole 说明|
+| `database-mesh.io/metrics-port` | MetricsPort, 默认为5591|
 
 
 ## Demo 运行
