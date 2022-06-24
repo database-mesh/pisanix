@@ -100,8 +100,41 @@ spec:
                     required:
                     - kind
                     type: object
-                required:
-                - simpleLoadBalance
+                  readWriteSplitting:
+                    description: 'ReadWriteSplitting support read-write splitting'
+                    properties:
+                      static:
+                        description: 'Static rule based read write splitting'
+                        type: object 
+                        properties:
+                          defaultTarget:
+                            type: string
+                          rules:                           
+                            type: array
+                            items:
+                              type: object
+                              description: 'A set of rules' 
+                              properties:
+                                name:
+                                  description: 'the name of rule'
+                                  type: string
+                                type:
+                                  description: 'the type of rule'
+                                  type: string
+                                regex:
+                                  items:
+                                    type: string
+                                  type: array
+                                  description: 'the regex of rule'
+                                target:
+                                  description: 'the target of rule'
+                                  type: string
+                                algorithmName:
+                                  description: 'the algorithm of rule'
+                                  type: string
+                    required:
+                    - static 
+                    type: object
                 type: object
               selector:
                 description: A label selector is a label query over a set of resources.

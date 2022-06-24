@@ -113,9 +113,32 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			}
 			proxy.ListenAddr = fmt.Sprintf("%s:%d", service.DatabaseService.DatabaseMySQL.Host, service.DatabaseService.DatabaseMySQL.Port)
 			proxy.ServerVersion = service.DatabaseService.DatabaseMySQL.ServerVersion
-			if tsSpec.LoadBalance.SimpleLoadBalance != nil {
-				proxy.SimpleLoadBalance.BalancerType = tsSpec.LoadBalance.SimpleLoadBalance.Kind
+			switch {
+			case tsSpec.LoadBalance.ReadWriteSplitting != nil:
+				{
+					proxy.ReadWriteSplitting = &ReadWriteSplitting{
+						Static: &ReadWriteSplittingStatic{},
+					}
+					if tsSpec.LoadBalance.ReadWriteSplitting.Static != nil {
+						proxy.ReadWriteSplitting.Static.DefaultTarget = tsSpec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
+						proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingStaticRule, len(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules))
+						for i := range tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules {
+							proxy.ReadWriteSplitting.Static.Rules[i].Name = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
+							proxy.ReadWriteSplitting.Static.Rules[i].Type = string(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
+							proxy.ReadWriteSplitting.Static.Rules[i].Target = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
+							proxy.ReadWriteSplitting.Static.Rules[i].Regex = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
+							proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
+						}
+					}
+				}
+			case tsSpec.LoadBalance.SimpleLoadBalance != nil:
+				{
+					proxy.SimpleLoadBalance = &SimpleLoadBalance{
+						BalancerType: string(tsSpec.LoadBalance.SimpleLoadBalance.Kind),
+					}
+				}
 			}
+
 			if len(tsSpec.CircuitBreaks) != 0 {
 				proxy.Plugin.CircuitBreaks = tsSpec.CircuitBreaks
 			}
@@ -127,28 +150,33 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 				}
 			}
 		}
-		dbes, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(tsSpec.Selector.MatchLabels)})
+		dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(tsSpec.Selector.MatchLabels)})
 		if err != nil {
 			log.Errorf("%v", err)
 			return nil, err
 		}
-		for _, dbe := range dbes.Items {
-			dbeSpec := &kubernetes.DatabaseEndpointSpec{}
-			dbej, _ := json.Marshal(dbe.Object["spec"])
-			_ = json.Unmarshal(dbej, dbeSpec)
-			if dbeSpec.Database.MySQL != nil {
+		for _, dbep := range dbeps.Items {
+			metadata := &metav1.ObjectMeta{}
+			dbepm, _ := json.Marshal(dbep.Object["metadata"])
+
+			_ = json.Unmarshal(dbepm, metadata)
+			spec := &kubernetes.DatabaseEndpointSpec{}
+			dbeps, _ := json.Marshal(dbep.Object["spec"])
+			_ = json.Unmarshal(dbeps, spec)
+			if spec.Database.MySQL != nil {
 				proxyconfig.Mysql.Nodes = append(proxyconfig.Mysql.Nodes, Node{
-					Name:     dbe.GetName(),
-					Db:       dbeSpec.Database.MySQL.DB,
-					User:     dbeSpec.Database.MySQL.User,
-					Password: dbeSpec.Database.MySQL.Password,
-					Host:     dbeSpec.Database.MySQL.Host,
-					Port:     dbeSpec.Database.MySQL.Port,
+					Name:     dbep.GetName(),
+					Db:       spec.Database.MySQL.DB,
+					User:     spec.Database.MySQL.User,
+					Password: spec.Database.MySQL.Password,
+					Host:     spec.Database.MySQL.Host,
+					Port:     spec.Database.MySQL.Port,
 					Weight:   1,
+					Role:     metadata.Annotations["database-mesh.io/role"],
 				})
 			}
 			if tsSpec.LoadBalance.SimpleLoadBalance != nil {
-				proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, dbe.GetName())
+				proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, dbep.GetName())
 			}
 		}
 		proxyconfig.Proxy.Configs = append(proxyconfig.Proxy.Configs, proxy)

@@ -31,7 +31,7 @@ fn default_admin_host() -> String {
 }
 
 fn default_admin_port() -> u32 {
-    8888
+    5591
 }
 
 fn default_log_level() -> String {

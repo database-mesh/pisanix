@@ -69,12 +69,48 @@ type TrafficStrategySpec struct {
 
 // LoadBalance The choice of load balancing strategy, currently supported: SimpleLoadBalance
 type LoadBalance struct {
-	SimpleLoadBalance *SimpleLoadBalance `json:"simpleLoadBalance"`
+	ReadWriteSplitting *ReadWriteSplitting `json:"readWriteSplitting,omitempty"`
+	SimpleLoadBalance  *SimpleLoadBalance  `json:"simpleLoadBalance,omitempty"`
 }
+
+// ReadWriteSplitting support static and dynamic read-write splitting algorithm
+type ReadWriteSplitting struct {
+	Static *ReadWriteSplittingStatic `json:"static"`
+}
+
+// ReadWriteSplittingStatic defines static rules based read-write splitting algorithm
+type ReadWriteSplittingStatic struct {
+	DefaultTarget string                         `json:"defaultTarget,omitempty"`
+	Rules         []ReadWriteSplittingStaticRule `json:"rules,omitempty"`
+}
+
+// ReadWriteSplittingStaticRule defines static rules
+type ReadWriteSplittingStaticRule struct {
+	Name          string               `json:"name"`
+	Type          RuleType             `json:"type"`
+	Regex         []string             `json:"regex"`
+	Target        string               `json:"target"`
+	AlgorithmName LoadBalanceAlgorithm `json:"algorithmName"`
+}
+
+// RuleType defines the type of static rule
+type RuleType string
+
+const (
+	RuleTypeRegex = "regex"
+)
+
+// LoadBalanceAlgorithm defines the name of managed loadbalance algorithm
+type LoadBalanceAlgorithm string
+
+const (
+	LoadBalanceAlgorithmRandom     = "random"
+	LoadBalanceAlgorithmRoundRobin = "roundrobin"
+)
 
 // SimpleLoadBalance support load balancing type: 1. random 2. roundrobin
 type SimpleLoadBalance struct {
-	Kind string `json:"kind"`
+	Kind LoadBalanceAlgorithm `json:"kind"`
 }
 
 // CircuitBreak works with regular expressions.
