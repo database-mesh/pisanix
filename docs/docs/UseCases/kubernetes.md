@@ -97,9 +97,9 @@ helm uninstall pisa-controller -n <your namespace>
 | `loadBalance.simpleLoadBalancer`       | 简单负载均衡声明                                             |
 | `loadBalance.simpleLoadBalancer.kind`  | 负载均衡策略类型                                             |
 | `circuitBreaks`                        | 断路器                                                       |
-| `circuitBreaks.regex`                  | 断路正则规则                                                 |
+| `circuitBreaks.regex`                  | 断路正则规则, 类型为数组                                                |
 | `concurrencyControls`                  | 并发控制器                                                   |
-| `concurrencyControls.regex`            | 并发控制正则规则                                             |
+| `concurrencyControls.regex`            | 并发控制正则规则，类型为数组                                             |
 | `concurrencyControls.duration`         | 并发控制时延                                                 |
 | `concurrencyControls.maxConcurrency`   | 最大并发执行数量                                             |
 
@@ -120,7 +120,6 @@ Annoations 配置说明
 | Name       | Description          |
 | ---------- | -------------------- |
 | `database-mesh.io/role`| TargetRole 名称， 请参考读写分离中 TargetRole 说明|
-| `database-mesh.io/metrics-port` | MetricsPort, 默认为5591|
 
 
 ## Demo 运行

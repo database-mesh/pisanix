@@ -74,7 +74,7 @@ TargetInstnce: 指由 LoadBalance 模块选出的节点。
 | defaultTarget | [enum](#targetrole-enum-值) |  否     |  无   | 默认路由的 TargetRole 组 |
 | rules | [array\<rule\>](#读写分离规则说明)| 是    |  无   | 读写分离规则|
 
-***<span style="color:#0F0">defaultTarget</span> 值在真实场景中要配置成 `readwrite`***
+***defaultTarget 值在真实场景中要配置成 `readwrite`***
 
 ## 读写分离规则说明
 读写分离规则是指 Pisa-Proxy 需要把查询的 SQL 语句和配置的规则做匹配，如果匹配成功，将根据规则把 SQL 语句路由到对应的节点上。如果匹配不成功，SQL 语句将被路由到默认的节点上。
@@ -120,12 +120,14 @@ spec:
         rules:
           - name: read-rule
             type: regex
-            regex: ".*"
+            regex:
+              - "^select"
             target: read // read_write
             algorithmName: random // lb algorithm
           - name: write-rule
             type: regex
-            regex: ".*"
+            regex:
+              - "^insert"
             target: read_write
             algorithmName: roundrobin
 ```
@@ -136,8 +138,7 @@ apiVersion: core.database-mesh.io/v1alpha1
 kind: DatabaseEndpoint
 metadata:
   annotations:
-    database-mesh.io/role: read // or read_write
-    database-mesh.io/weight: 1
+    database-mesh.io/role: read // or readwrite
   labels:
     source: test 
   name: mysql 
