@@ -59,7 +59,10 @@ spec:
                     that conform to regular expressions will be denied.
                   properties:
                     regex:
-                      type: string
+                      items:
+                        type: string
+                      type: array
+                      description: 'the regex of rule'
                   required:
                   - regex
                   type: object
@@ -80,7 +83,10 @@ spec:
                     maxConcurrency:
                       type: integer
                     regex:
-                      type: string
+                      items:
+                        type: string
+                      type: array
+                      description: 'the regex of rule'
                   required:
                   - duration
                   - maxConcurrency
