@@ -80,7 +80,7 @@ type ReadWriteSplitting struct {
 
 // ReadWriteSplittingStatic defines static rules based read-write splitting algorithm
 type ReadWriteSplittingStatic struct {
-	DefaultTarget []string                       `json:"defaultTarget,omitempty"`
+	DefaultTarget string                         `json:"defaultTarget,omitempty"`
 	Rules         []ReadWriteSplittingStaticRule `json:"rules,omitempty"`
 }
 
