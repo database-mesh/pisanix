@@ -87,6 +87,8 @@ helm uninstall pisa-controller -n <your namespace>
 | `user`                     | 虚拟 MySQL 用户名                                          |
 | `password`                 | 虚拟 MySQL 密码                                            |
 | `db`                       | 虚拟 MySQL schema名字                                      |
+| `poolSize`                 | 虚拟 MySQL 连接池大小                                      |
+| `serverVersion`            | 虚拟 MySQL 版本                                       |
 
 ### TrafficStrategy
 
@@ -94,12 +96,21 @@ helm uninstall pisa-controller -n <your namespace>
 | -------------------------------------- | ------------------------------------------------------------ |
 | `selector`                             | 标签选择器，用于选择 [DatabaseEndpoint](###DatabaseEndpoint) |
 | `loadBalance`                          | 负载均衡器，现阶段支持：simpleLoadBalancer                   |
-| `loadBalance.simpleLoadBalancer`       | 简单负载均衡声明                                             |
+| `loadBalance.simpleLoadBalancer`       | 基础负载均衡声明                                             |
 | `loadBalance.simpleLoadBalancer.kind`  | 负载均衡策略类型                                             |
+| `loadBalance.readWriteSplitting`       | 读写分离策略声明 
+| `loadBalance.readWriteSplitting.static`| 读写分离策略声明静态配置 
+| `loadBalance.readWriteSplitting.static.defaultTarget`       | 读写分离策略声明静态配置默认后端
+| `loadBalance.readWriteSplitting.static.rules`       | 读写分离策略声明静态规则集
+| `loadBalance.readWriteSplitting.static.rules[].name`       | 读写分离策略声明静态规则名称
+| `loadBalance.readWriteSplitting.static.rules[].type`       | 读写分离策略声明静态规则类型
+| `loadBalance.readWriteSplitting.static.rules[].regex[]`       | 读写分离策略声明静态规则正则表达式
+| `loadBalance.readWriteSplitting.static.rules[].target`       | 读写分离策略声明静态规则目标后端
+| `loadBalance.readWriteSplitting.static.rules[].algorithmName`       | 读写分离策略声明静态规则算法
 | `circuitBreaks`                        | 断路器                                                       |
-| `circuitBreaks.regex`                  | 断路正则规则                                                 |
+| `circuitBreaks.regex[]`                  | 断路正则规则                                                 |
 | `concurrencyControls`                  | 并发控制器                                                   |
-| `concurrencyControls.regex`            | 并发控制正则规则                                             |
+| `concurrencyControls.regex[]`            | 并发控制正则规则                                             |
 | `concurrencyControls.duration`         | 并发控制时延                                                 |
 | `concurrencyControls.maxConcurrency`   | 最大并发执行数量                                             |
 
@@ -114,6 +125,14 @@ helm uninstall pisa-controller -n <your namespace>
 | `user`     | MySQL 用户名         |
 | `password` | MySQL 密码           |
 | `db`       | MySQL schema 名字    |
+
+在使用读写分离配置的时候，需要在 DatabaseEndpoint 资源的 Annotations 里添加如下注解，标识该节点的角色属性：
+```
+annotations:
+    database-mesh.io/role: read
+```
+
+默认的角色属性为 read 和 readwrite 
 
 
 ## Demo 运行

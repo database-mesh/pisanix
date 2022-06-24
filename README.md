@@ -18,7 +18,7 @@ Pisanix has 3 components:
 
 * ***Pisa-Controller***: A Golang control plane designed for sidecar injection and configuration transformation
 * ***Pisa-Proxy***: A high performance Rust data plane used as SQL traffic proxy, support various of traffic governance capabilities.
-* ***Pisa-Daemon(Coming Soon)***: A Golang optional data plane works on every node, provide programmable runtime management such as TrafficQoS.
+* ***Pisa-Daemon(Coming Soon)***: A optional data plane works on every node, provide programmable runtime management such as TrafficQoS.
 
 # Features
 ## Database traffic governance
