@@ -133,7 +133,7 @@ impl Connection {
         // connection id
         data.extend_from_slice(&self.connection_id.to_le_bytes());
 
-        // auth-plutin-data-part-1
+        // auth-plugin-data-part-1
         // data.extend_from_slice(&mut self.salt[0..8]);
         data.extend_from_slice(&self.salt[0..8]);
 
