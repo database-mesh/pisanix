@@ -155,7 +155,7 @@ func InjectSidecar(ctx *gin.Context) {
 		 pisaProxyAdminListenHost, 
 		 pisaProxyAdminListenPort)
 	ar.Response = applyPodPatch(ar, shouldPatchPod, patch)
-	log.Infof("mutating Success %v", )
+	log.Infof("mutating Success %v", patch)
 
 	ctx.JSON(http.StatusOK, ar)
 }
