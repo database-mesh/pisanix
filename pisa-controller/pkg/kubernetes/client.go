@@ -92,6 +92,7 @@ func (b *ClientBuilder) Build() (dynamic.Interface, error) {
 
 func GetClient() *KClient {
 	once.Do(func() {
+		log.Println("kubeconfig", *kubeConfigPath)
 		if *kubeConfigPath != "" {
 			if _, err := os.Stat(*kubeConfigPath); os.IsNotExist(err) {
 				if home := homedir.HomeDir(); home != "" {
