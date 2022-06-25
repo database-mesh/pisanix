@@ -61,16 +61,16 @@ jobs:
           build_file: pisa-controller/hack/Dockerfile 
           tag_with_latest: true
           extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
-      #- name: "Pisa-Proxy kaniko build"
-      #  uses: mlycore/action-kaniko@master
-      #  with:
-      #    image: pisanixio/proxy
-      #    username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
-      #    password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
-      #    registry: ${{ secrets.DOCKERHUB_CI_HOST }}
-      #    build_file: pisa-proxy/hack/Dockerfile
-      #    tag_with_latest: true
-      #    extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+      - name: "Pisa-Proxy kaniko build"
+        uses: mlycore/action-kaniko@master
+        with:
+          image: pisanixio/proxy
+          username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
+          registry: ${{ secrets.DOCKERHUB_CI_HOST }}
+          build_file: pisa-proxy/hack/Dockerfile
+          tag_with_latest: true
+          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
       - name: "install Pisa Controller"
         run: |
           export PISANIX_NAMESPACE="pisanix-system"
