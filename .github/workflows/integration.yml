@@ -100,10 +100,10 @@ jobs:
           kubectl patch deployment test  -p='{"spec": {"replicas": 0, "template": {"spec": {"imagePullSecrets": [{"name": "uhub"}]}}}}'
           kubectl get pod -A --show-labels
           sleep 15 
-          kubectl get pod --show-labels
+          kubectl get pod -A --show-labels
           kubectl scale deployment test --replicas=1 
           sleep 15 
-          kubectl get pod --show-labels
+          kubectl get pod -A --show-labels
           kubectl wait --timeout=60s --for=condition=ready --all pod
           kubectl port-forward svc/test 3308:3306 &
           kubectl get pod -A --show-labels
