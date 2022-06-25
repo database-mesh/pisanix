@@ -97,7 +97,7 @@ jobs:
           kubectl apply -f databaseendpoint.yml
           kubectl apply -f app.yml 
           sleep 15
-          kubectl patch deployment test  -p='{"spec": {"replicas": 0, "template": {"spec": {"imagePullSecrets": [{"name": "uhub"}]}}}}'
+          #kubectl patch deployment test  -p='{"spec": {"replicas": 0, "template": {"spec": {"imagePullSecrets": [{"name": "uhub"}]}}}}'
           kubectl get pod -A --show-labels
           sleep 15 
           kubectl get pod -A --show-labels
