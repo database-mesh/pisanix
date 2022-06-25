@@ -78,7 +78,7 @@ const (
 						"name": "pisa-admin",
 						"protocol": "TCP"
 					}	
-				]
+				],
 				"resources":{},
 				"env": [
 					{
