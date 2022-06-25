@@ -144,7 +144,7 @@ func InjectSidecar(ctx *gin.Context) {
 	podSlice := strings.Split(podinfo.Metadata.GenerateName, "-")
 	podSlice = podSlice[:len(podSlice)-2]
 
-	patch := fmt.Sprint(podsSidecarPatch, 
+	patch := fmt.Sprintf(podsSidecarPatch, 
 		pisaProxyImage, 
 		SidecarNamePisaProxy, 
 		pisaProxyAdminListenPort, 
