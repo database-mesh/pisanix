@@ -86,9 +86,10 @@ jobs:
           kubectl get pods -n ${PISANIX_NAMESPACE}
           kubectl describe pods -n ${PISANIX_NAMESPACE}
           #kubectl wait --timeout=300s --for=condition=Ready --all pod -n ${PISANIX_NAMESPACE} || :
+          sleep 30
+          kubectl -l app=pisa-controller logs -n ${PISANIX_NAMESPACE}
           for _ in `seq 1 300`;do
             kubectl describe pods -n ${PISANIX_NAMESPACE}
-            kubectl -l app=pisa-controller logs -n ${PISANIX_NAMESPACE}
             sleep 2
           done
           cd ..
