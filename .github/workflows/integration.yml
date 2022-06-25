@@ -73,6 +73,7 @@ jobs:
       #    extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
       - name: "install Pisa Controller"
         run: |
+          set -x 
           export PISANIX_NAMESPACE="pisanix-system"
           kubectl create namespace ${PISANIX_NAMESPACE}
           kubectl create secret docker-registry uhub --docker-server=${{ secrets.DOCKERHUB_CI_HOST }} --docker-username=${{ secrets.DOCKERHUB_CI_USERNAME }} --docker-password=${{ secrets.DOCKERHUB_CI_PASSWORD }}
