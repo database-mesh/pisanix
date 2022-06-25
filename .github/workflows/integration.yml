@@ -85,8 +85,11 @@ jobs:
           helm install --debug pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=${{ steps.vars.outputs.imagetag }} --set image.imagePullSecrets[0].name=uhub
           kubectl get pods -n ${PISANIX_NAMESPACE}
           kubectl describe pods -n ${PISANIX_NAMESPACE}
-          kubectl wait --timeout=300s --for=condition=Ready --all pod -n ${PISANIX_NAMESPACE}
-          kubectl get pods -n ${PISANIX_NAMESPACE}
+          #kubectl wait --timeout=300s --for=condition=Ready --all pod -n ${PISANIX_NAMESPACE} || :
+          for _ in `seq 1 300`;do
+            kubectl get pods -n ${PISANIX_NAMESPACE} -o wide
+            sleep 2
+          done
           kubectl describe pods -n ${PISANIX_NAMESPACE}
           cd ..
           cd test/kubernetes
