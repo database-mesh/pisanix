@@ -44,7 +44,7 @@ type Proxy struct {
 	User               string              `json:"user"`
 	SimpleLoadBalance  *SimpleLoadBalance  `json:"simple_loadbalance,omitempty"`
 	ReadWriteSplitting *ReadWriteSplitting `json:"read_write_splitting,omitempty"`
-	Plugin             Plugin              `json:"plugin"`
+	Plugin             *Plugin             `json:"plugin,omitempty"`
 	ServerVersion      string              `json:"serverVersion"`
 }
 
