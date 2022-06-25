@@ -87,10 +87,9 @@ jobs:
           kubectl describe pods -n ${PISANIX_NAMESPACE}
           #kubectl wait --timeout=300s --for=condition=Ready --all pod -n ${PISANIX_NAMESPACE} || :
           for _ in `seq 1 300`;do
-            kubectl get pods -n ${PISANIX_NAMESPACE} -o wide
+            kubectl describe pods -n ${PISANIX_NAMESPACE}
             sleep 2
           done
-          kubectl describe pods -n ${PISANIX_NAMESPACE}
           cd ..
           cd test/kubernetes
           kubectl apply -f mysql.yml 
