@@ -174,6 +174,7 @@ func applyPodPatch(ar v1.AdmissionReview, shouldPatchPod func(*corev1.Pod) bool,
 		log.Error(err)
 		return toV1AdmissionResponse(err)
 	}
+	log.Infof("pod %v", pod)
 	reviewResponse := v1.AdmissionResponse{}
 	reviewResponse.UID = ar.Request.UID
 	reviewResponse.Allowed = true
