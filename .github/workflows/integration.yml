@@ -32,45 +32,45 @@ jobs:
         uses: azure/setup-helm@v2.1
       - name: "setup kubectl" 
         uses: azure/setup-kubectl@v2.0
-      - name: "declare github variables" 
-        id: vars
-        shell: bash
-        run: |
-          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-             echo "##[set-output name=tags;]$(echo ${GITHUB_REF#refs/tags/})"  
-             echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/tags/})-$(git rev-parse --short HEAD)"  
-          else
-             echo "##[set-output name=tags;]$(echo '')"
-             echo "##[set-output name=imagetag;]$(echo '')"
-          fi
-          if [[ $GITHUB_REF == refs/heads/* ]]; then
-             echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"  
-             echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/heads/})-$(git rev-parse --short HEAD)"  
-          else
-             echo "##[set-output name=branch;]$(echo '')"
-             echo "##[set-output name=imagetag;]$(echo '')"
-          fi
-      - name: "Pisa-Controller kaniko build"
-        uses: mlycore/action-kaniko@master
-        with:
-          image: pisanixio/controller
-          username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
-          registry: ${{ secrets.DOCKERHUB_CI_HOST }}
-          build_file: pisa-controller/hack/Dockerfile 
-          tag_with_latest: true
-          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
-      - name: "Pisa-Proxy kaniko build"
-        uses: mlycore/action-kaniko@master
-        with:
-          image: pisanixio/proxy
-          username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
-          registry: ${{ secrets.DOCKERHUB_CI_HOST }}
-          build_file: pisa-proxy/hack/Dockerfile
-          tag_with_latest: true
-          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+      #- name: "declare github variables" 
+      #  id: vars
+      #  shell: bash
+      #  run: |
+      #    echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      #    if [[ $GITHUB_REF == refs/tags/* ]]; then
+      #       echo "##[set-output name=tags;]$(echo ${GITHUB_REF#refs/tags/})"  
+      #       echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/tags/})-$(git rev-parse --short HEAD)"  
+      #    else
+      #       echo "##[set-output name=tags;]$(echo '')"
+      #       echo "##[set-output name=imagetag;]$(echo '')"
+      #    fi
+      #    if [[ $GITHUB_REF == refs/heads/* ]]; then
+      #       echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"  
+      #       echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/heads/})-$(git rev-parse --short HEAD)"  
+      #    else
+      #       echo "##[set-output name=branch;]$(echo '')"
+      #       echo "##[set-output name=imagetag;]$(echo '')"
+      #    fi
+      #- name: "Pisa-Controller kaniko build"
+      #  uses: mlycore/action-kaniko@master
+      #  with:
+      #    image: pisanixio/controller
+      #    username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
+      #    password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
+      #    registry: ${{ secrets.DOCKERHUB_CI_HOST }}
+      #    build_file: pisa-controller/hack/Dockerfile 
+      #    tag_with_latest: true
+      #    extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+      #- name: "Pisa-Proxy kaniko build"
+      #  uses: mlycore/action-kaniko@master
+      #  with:
+      #    image: pisanixio/proxy
+      #    username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
+      #    password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
+      #    registry: ${{ secrets.DOCKERHUB_CI_HOST }}
+      #    build_file: pisa-proxy/hack/Dockerfile
+      #    tag_with_latest: true
+      #    extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
       - name: "install Pisa Controller"
         run: |
           export PISANIX_NAMESPACE="pisanix-system"
@@ -104,10 +104,12 @@ jobs:
           kubectl get pod --show-labels
           kubectl wait --timeout=60s --for=condition=ready --all pod
           kubectl port-forward svc/test 3308:3306 &
+          kubectl get pod --show-labels
+          kubectl logs -l app=nginx -n ${PISANIX_NAMESPACE} --all-containers=true
           sleep 3
       - name: "prepare mysql" 
         uses: shogo82148/actions-setup-mysql@v1
         with:
          mysql-version: '5.7'
       - name: "run basic select test" 
-        run: mysql -h127.0.0.1 -P3308 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
+        run: mysql -h127.0.0.1 -P3307 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
