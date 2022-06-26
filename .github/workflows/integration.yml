@@ -51,26 +51,26 @@ jobs:
              echo "##[set-output name=branch;]$(echo '')"
              echo "##[set-output name=imagetag;]$(echo '')"
           fi
-      - name: "Pisa-Controller kaniko build"
-        uses: mlycore/action-kaniko@master
-        with:
-          image: pisanixio/controller
-          username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
-          registry: ${{ secrets.DOCKERHUB_CI_HOST }}
-          build_file: pisa-controller/hack/Dockerfile 
-          tag_with_latest: true
-          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
-      - name: "Pisa-Proxy kaniko build"
-        uses: mlycore/action-kaniko@master
-        with:
-          image: pisanixio/proxy
-          username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
-          registry: ${{ secrets.DOCKERHUB_CI_HOST }}
-          build_file: pisa-proxy/hack/Dockerfile
-          tag_with_latest: true
-          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+      #- name: "Pisa-Controller kaniko build"
+      #  uses: mlycore/action-kaniko@master
+      #  with:
+      #    image: pisanixio/controller
+      #    username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
+      #    password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
+      #    registry: ${{ secrets.DOCKERHUB_CI_HOST }}
+      #    build_file: pisa-controller/hack/Dockerfile 
+      #    tag_with_latest: true
+      #    extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+      #- name: "Pisa-Proxy kaniko build"
+      #  uses: mlycore/action-kaniko@master
+      #  with:
+      #    image: pisanixio/proxy
+      #    username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
+      #    password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
+      #    registry: ${{ secrets.DOCKERHUB_CI_HOST }}
+      #    build_file: pisa-proxy/hack/Dockerfile
+      #    tag_with_latest: true
+      #    extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
       - name: "install Pisa Controller"
         run: |
           set -x 
@@ -83,7 +83,8 @@ jobs:
           cd charts/pisa-controller 
           helm dependency build
           cd ..
-          helm install --debug pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=${{ steps.vars.outputs.imagetag }} --set image.imagePullSecrets[0].name=uhub
+          #helm install --debug pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=${{ steps.vars.outputs.imagetag }} --set image.imagePullSecrets[0].name=uhub
+          helm install --debug pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=fix-integration-test-9da3bde --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=fix-integration-test-9da3bde --set image.imagePullSecrets[0].name=uhub
           kubectl get pods -n ${PISANIX_NAMESPACE}
           kubectl describe pods -n ${PISANIX_NAMESPACE}
           kubectl wait --timeout=60s --for=condition=Ready --all pod -n ${PISANIX_NAMESPACE}
@@ -103,7 +104,7 @@ jobs:
           kubectl scale deployment test --replicas=1 
           kubectl get pod -A --show-labels
           kubectl wait --timeout=60s --for=condition=ready --all pod
-          kubectl port-forward svc/test 3308:3306 &
+          kubectl port-forward svc/test 3308:3307 &
           kubectl get pod -A --show-labels
           sleep 3
       - name: "prepare mysql" 
@@ -111,4 +112,4 @@ jobs:
         with:
          mysql-version: '5.7'
       - name: "run basic select test" 
-        run: mysql -h127.0.0.1 -P3307 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
+        run: mysql -h127.0.0.1 -P3308 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
