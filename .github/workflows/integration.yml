@@ -102,11 +102,12 @@ jobs:
           sleep 15 
           kubectl get pod -A --show-labels
           kubectl scale deployment test --replicas=1 
-          sleep 15 
+          sleep 30
           kubectl get pod -A --show-labels
+          kubectl logs -l app=nginx --all-containers=true
           #kubectl wait --timeout=60s --for=condition=ready --all pod
           for _ in `seq 1 100`;do
-            kubectl describe pods
+            kubectl get pods -o yaml
             sleep 3
           done
           kubectl port-forward svc/test 3308:3306 &
