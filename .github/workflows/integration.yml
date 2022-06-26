@@ -61,16 +61,16 @@ jobs:
           build_file: pisa-controller/hack/Dockerfile 
           tag_with_latest: true
           extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
-      #- name: "Pisa-Proxy kaniko build"
-      #  uses: mlycore/action-kaniko@master
-      #  with:
-      #    image: pisanixio/proxy
-      #    username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
-      #    password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
-      #    registry: ${{ secrets.DOCKERHUB_CI_HOST }}
-      #    build_file: pisa-proxy/hack/Dockerfile
-      #    tag_with_latest: true
-      #    extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+      - name: "Pisa-Proxy kaniko build"
+        uses: mlycore/action-kaniko@master
+        with:
+          image: pisanixio/proxy
+          username: ${{ secrets.DOCKERHUB_CI_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_CI_PASSWORD }}
+          registry: ${{ secrets.DOCKERHUB_CI_HOST }}
+          build_file: pisa-proxy/hack/Dockerfile
+          tag_with_latest: true
+          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
       - name: "install Pisa Controller"
         run: |
           set -x 
@@ -83,8 +83,7 @@ jobs:
           cd charts/pisa-controller 
           helm dependency build
           cd ..
-          #helm install --debug pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=${{ steps.vars.outputs.imagetag }} --set image.imagePullSecrets[0].name=uhub
-          helm install --debug pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=fix-integration-test-29ebd0e --set image.imagePullSecrets[0].name=uhub
+          helm install --debug pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=${{ steps.vars.outputs.imagetag }} --set image.imagePullSecrets[0].name=uhub
           kubectl get pods -n ${PISANIX_NAMESPACE}
           kubectl describe pods -n ${PISANIX_NAMESPACE}
           kubectl wait --timeout=60s --for=condition=Ready --all pod -n ${PISANIX_NAMESPACE}
