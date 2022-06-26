@@ -30,6 +30,10 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
+const (
+	DatabaseEndpointRoleKey = "database-mesh.io/role"
+)
+
 func GetConfig(ctx *gin.Context) {
 	namespace := ctx.Param("namespace")
 	appname := ctx.Param("appname")
@@ -163,6 +167,8 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			spec := &kubernetes.DatabaseEndpointSpec{}
 			dbeps, _ := json.Marshal(dbep.Object["spec"])
 			_ = json.Unmarshal(dbeps, spec)
+
+
 			if spec.Database.MySQL != nil {
 				proxyconfig.Mysql.Nodes = append(proxyconfig.Mysql.Nodes, Node{
 					Name:     dbep.GetName(),
@@ -172,7 +178,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 					Host:     spec.Database.MySQL.Host,
 					Port:     spec.Database.MySQL.Port,
 					Weight:   1,
-					Role:     metadata.Annotations["database-mesh.io/role"],
+					Role:     getDbEpRole(metadata.Annotations),
 				})
 			}
 			if tsSpec.LoadBalance.SimpleLoadBalance != nil {
@@ -182,4 +188,13 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		proxyconfig.Proxy.Configs = append(proxyconfig.Proxy.Configs, proxy)
 	}
 	return proxyconfig, nil
+}
+
+func getDbEpRole(annotations map[string]string) (role string) {
+	role = annotations[DatabaseEndpointRoleKey]
+	if role == ""  {
+		role = "readwrite"
+	}
+
+	return
 }
