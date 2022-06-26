@@ -111,4 +111,4 @@ jobs:
         with:
          mysql-version: '5.7'
       - name: "run basic select test" 
-        run: mysql -h127.0.0.1 -P3308 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
+        run: mysql -h127.0.0.1 -P3307 -uroot -proot -e 'SELECT UNIX_TIMESTAMP()'
