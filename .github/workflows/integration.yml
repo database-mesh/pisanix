@@ -103,11 +103,9 @@ jobs:
           kubectl get pod -A --show-labels
           kubectl scale deployment test --replicas=1 
           kubectl get pod -A --show-labels
-          kubectl logs -l app=nginx --all-containers=true
           kubectl wait --timeout=60s --for=condition=ready --all pod
           kubectl port-forward svc/test 3308:3306 &
           kubectl get pod -A --show-labels
-          kubectl logs -l app=nginx --all-containers=true
           sleep 3
       - name: "prepare mysql" 
         uses: shogo82148/actions-setup-mysql@v1
