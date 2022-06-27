@@ -138,7 +138,7 @@ apiVersion: core.database-mesh.io/v1alpha1
 kind: DatabaseEndpoint
 metadata:
   annotations:
-    database-mesh.io/role: read // or readwrite
+    database-mesh.io/role: read # or readwrite
   labels:
     source: test 
   name: mysql 
