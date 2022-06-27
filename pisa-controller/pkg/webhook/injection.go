@@ -41,7 +41,7 @@ const (
 	EnvPisaProxyAdminListenHost     = "PISA_PROXY_ADMIN_LISTEN_HOST"
 	EnvPisaProxyAdminListenPort     = "PISA_PROXY_ADMIN_LISTEN_PORT"
 	DefaultPisaProxyAdminListenHost = "0.0.0.0"
-	DefaultPisaProxyAdminListenPort = 5590
+	DefaultPisaProxyAdminListenPort = 5591
 )
 
 func init() {
@@ -144,16 +144,16 @@ func InjectSidecar(ctx *gin.Context) {
 	podSlice := strings.Split(podinfo.Metadata.GenerateName, "-")
 	podSlice = podSlice[:len(podSlice)-2]
 
-	patch := fmt.Sprintf(podsSidecarPatch, 
-		pisaProxyImage, 
-		SidecarNamePisaProxy, 
-		pisaProxyAdminListenPort, 
-		pisaControllerService, 
-		pisaControllerNamespace, 
+	patch := fmt.Sprintf(podsSidecarPatch,
+		pisaProxyImage,
+		SidecarNamePisaProxy,
+		pisaProxyAdminListenPort,
+		pisaControllerService,
+		pisaControllerNamespace,
 		ar.Request.Namespace,
-		 strings.Join(podSlice, "-"), 
-		 pisaProxyAdminListenHost, 
-		 pisaProxyAdminListenPort)
+		strings.Join(podSlice, "-"),
+		pisaProxyAdminListenHost,
+		pisaProxyAdminListenPort)
 	ar.Response = applyPodPatch(ar, shouldPatchPod, patch)
 	log.Infof("mutating Success %v", patch)
 
