@@ -30,6 +30,7 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 #[non_exhaustive]
 pub enum RouteInput<'a> {
     Statement(&'a str),
+    Transaction(&'a str),
     None,
 }
 

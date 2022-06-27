@@ -126,5 +126,9 @@ mod test {
         let input = RouteInput::Statement("select 1");
         let res = rws.dispatch(&input).unwrap();
         assert_eq!(res.0.unwrap().addr, "127.0.0.1");
+
+        let input = RouteInput::Transaction("begin");
+        let res = rws.dispatch(&input).unwrap();
+        assert_eq!(res.0.unwrap().addr, "127.0.0.2");
     }
 }

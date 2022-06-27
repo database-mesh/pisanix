@@ -41,6 +41,8 @@ pub trait ConnAttr {
     fn get_db(&self) -> Option<String>;
     // Get current charset
     fn get_charset(&self) -> Option<String>;
+    // Get current autocommit status
+    fn get_autocommit(&self) -> Option<String>;
 }
 
 #[derive(Debug)]
