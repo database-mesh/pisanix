@@ -107,6 +107,7 @@ sql_stmt -> SqlStmt:
   | deallocate    { SqlStmt::Deallocate($1) }
   | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
+  | show_columns_stmt   { SqlStmt::ShowColumnsStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
