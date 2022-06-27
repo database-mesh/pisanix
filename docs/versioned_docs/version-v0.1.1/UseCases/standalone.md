@@ -48,7 +48,7 @@ Pisa-Proxy 在本地作为单独部署启动的时候需要以下配置文件：
 # Http IP 地址
 host = "0.0.0.0"
 # api 端口
-port = "5591"
+port = 5591
 # 日志级别
 log_level = "INFO"
 
