@@ -663,20 +663,6 @@ impl MySqlServer {
         self.client.pkt.conn.shutdown().await.map_err(ProtocolError::Io)
     }
 
-    async fn handle_trans_stmt<'a>(
-        &mut self,
-        client_conn: &'a mut PoolConn<ClientConn>,
-        input: &'a str,
-    ) -> Result<ResultsetStream<'a>, ProtocolError> {
-        if let Err(err) =
-            self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Transaction(input)).await
-        {
-            error!("err: {:?}", err);
-        }
-
-        client_conn.send_query(input.as_bytes()).await
-    }
-
     fn get_ast(&mut self, sql: &str) -> Result<Vec<SqlStmt>, ParseError> {
         let mut ast_cache = self.ast_cache.lock();
         let try_ast = ast_cache.get(sql.to_string());
