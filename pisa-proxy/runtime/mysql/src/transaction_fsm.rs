@@ -289,7 +289,6 @@ impl TransFsm {
         state_name: TransEventName,
         input: RouteInput<'_>,
     ) -> Result<(), Error> {
-        println!("src state {:?}, evt {:?}", self.current_state, self.current_event);
         for event in &self.events {
             if event.name == state_name && event.src_state == self.current_state {
                 match event.src_state {
