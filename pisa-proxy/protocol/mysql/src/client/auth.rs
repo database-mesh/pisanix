@@ -83,6 +83,7 @@ pub struct ClientAuth {
     pub db: String,
     pub seq: u8,
     pub server_version: ServerVersion,
+    pub auotcommit: String,
 }
 
 impl ClientAuth {
@@ -102,6 +103,7 @@ impl ClientAuth {
             db: "".to_string(),
             seq: 0,
             server_version: ServerVersion::default(),
+            auotcommit: "".to_string(),
         }
     }
 

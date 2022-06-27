@@ -218,6 +218,10 @@ impl ClientConn {
     pub fn set_charset(&mut self, name: &str) {
         self.framed.as_mut().unwrap().charset = name.to_string()
     }
+
+    pub fn set_autocommit(&mut self, status: &str) {
+        self.framed.as_mut().unwrap().auotcommit = status.to_string()
+    }
 }
 
 impl Clone for ClientConn {
@@ -282,6 +286,19 @@ impl ConnAttr for ClientConn {
                 None
             } else {
                 Some(codec.charset.clone())
+            }
+        } else {
+            None
+        }
+    }
+
+    fn get_autocommit(&self) -> Option<String> {
+        let codec = self.framed.as_ref();
+        if let Some(codec) = codec {
+            if codec.auotcommit.is_empty() {
+                None
+            } else {
+                Some(codec.auotcommit.clone())
             }
         } else {
             None

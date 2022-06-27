@@ -17,10 +17,10 @@ use std::{str, sync::Arc, time::SystemTime};
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Buf, BufMut, BytesMut};
 use common::ast_cache::ParserAstCache;
-use conn_pool::Pool;
+use conn_pool::{Pool, PoolConn};
 use futures::StreamExt;
 use mysql_parser::{
-    ast::{BeginStmt, SetOptValues, SetOpts, SqlStmt},
+    ast::{Expr, ExprOrDefault, SetOptValues, SetOpts, SqlStmt, Value},
     parser::{ParseError, Parser},
 };
 use mysql_protocol::{
@@ -399,12 +399,85 @@ impl MySqlServer {
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         let earlier = SystemTime::now();
-        if let Err(err) =
-            self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::Statement(sql)).await
-        {
-            error!("err:{:?}", err);
-        }
-        let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
+        //if let Err(err) =
+        //    self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::Statement(sql)).await
+        //{
+        //    error!("err:{:?}", err);
+        //}
+        //let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
+
+        let mut client_conn = match self.get_ast(sql) {
+            Err(err) => {
+                error!("err: {:?}", err);
+                if let Err(err) = self
+                    .trans_fsm
+                    .trigger(TransEventName::QueryEvent, RouteInput::Statement(sql))
+                    .await
+                {
+                    error!("err:{:?}", err);
+                }
+                self.trans_fsm.get_conn().await.unwrap()
+            }
+
+            Ok(stmt) => match &stmt[0] {
+                SqlStmt::Set(stmt) => {
+                    self.handle_set_stmt(stmt, sql).await;
+                    self.trans_fsm.get_conn().await.unwrap()
+                }
+                //TODO: split sql stmt for sql audit
+                SqlStmt::BeginStmt(_stmt) => {
+                    if let Err(err) = self
+                        .trans_fsm
+                        .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
+                        .await
+                    {
+                        error!("err: {:?}", err);
+                    }
+                    self.trans_fsm.get_conn().await.unwrap()
+                }
+                SqlStmt::Start(_stmt) => {
+                    if let Err(err) = self
+                        .trans_fsm
+                        .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
+                        .await
+                    {
+                        error!("err: {:?}", err);
+                    }
+                    self.trans_fsm.get_conn().await.unwrap()
+                }
+                SqlStmt::Commit(_stmt) => {
+                    if let Err(err) = self
+                        .trans_fsm
+                        .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
+                        .await
+                    {
+                        error!("err: {:?}", err);
+                    }
+                    self.trans_fsm.get_conn().await.unwrap()
+                }
+                SqlStmt::Rollback(_stmt) => {
+                    if let Err(err) = self
+                        .trans_fsm
+                        .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
+                        .await
+                    {
+                        error!("err: {:?}", err);
+                    }
+                    self.trans_fsm.get_conn().await.unwrap()
+                }
+                _ => {
+                    if let Err(err) = self
+                        .trans_fsm
+                        .trigger(TransEventName::QueryEvent, RouteInput::Statement(sql))
+                        .await
+                    {
+                        error!("err:{:?}", err);
+                    }
+                    self.trans_fsm.get_conn().await.unwrap()
+                }
+            },
+        };
+
         collect_sql_processed_total!(
             self,
             "COM_QUERY",
@@ -416,22 +489,7 @@ impl MySqlServer {
             client_conn.get_endpoint().unwrap().as_str()
         );
 
-        let stream = match self.get_ast(sql) {
-            Err(err) => {
-                error!("err: {:?}", err);
-                client_conn.send_query(payload).await?
-            }
-
-            Ok(stmt) => match &stmt[0] {
-                SqlStmt::Set(stmt) => {
-                    self.handle_set_stmt(stmt);
-                    client_conn.send_query(payload).await?
-                }
-                //TODO: split sql stmt for sql audit
-                SqlStmt::BeginStmt(_stmt) => client_conn.send_query(payload).await?,
-                _ => client_conn.send_query(payload).await?,
-            },
-        };
+        let stream = client_conn.send_query(payload).await?;
 
         self.handle_query_resultset(stream).await?;
 
@@ -443,13 +501,48 @@ impl MySqlServer {
     }
 
     // Set charset name
-    fn handle_set_stmt(&mut self, stmt: &SetOptValues) {
+    async fn handle_set_stmt(&mut self, stmt: &SetOptValues, input: &str) {
         match stmt {
             SetOptValues::OptValues(vals) => match &vals.opt {
                 SetOpts::SetNames(name) => {
                     if let Some(name) = &name.charset_name {
                         self.client.charset = name.clone();
                         self.trans_fsm.set_charset(name.clone())
+                    }
+                }
+                SetOpts::SetVariable(val) => {
+                    if val.var.to_uppercase() == "AUTOCOMMIT" {
+                        match &val.value {
+                            ExprOrDefault::Expr(expr) => match expr {
+                                Expr::LiteralExpr(Value::Num { value, .. })
+                                | Expr::SimpleIdentExpr(Value::Ident { value, .. }) => {
+                                    if value == "0" || value.to_uppercase() == "OFF" {
+                                        self.trans_fsm
+                                            .trigger(
+                                                TransEventName::SetSessionEvent,
+                                                RouteInput::Transaction(input),
+                                            )
+                                            .await
+                                            .unwrap();
+                                    }
+
+                                    if value == "1" {
+                                        self.trans_fsm.reset_fsm_state();
+                                    }
+
+                                    self.client.autocommit = value.clone();
+                                    self.trans_fsm.set_autocommit(value.clone());
+                                }
+                                _ => {}
+                            },
+                            ExprOrDefault::On => {
+                                self.client.autocommit = String::from("ON");
+                                self.trans_fsm.set_autocommit(String::from("ON"));
+                                self.trans_fsm.reset_fsm_state();
+                            }
+
+                            _ => {}
+                        }
                     }
                 }
                 _ => {}
@@ -570,18 +663,18 @@ impl MySqlServer {
         self.client.pkt.conn.shutdown().await.map_err(ProtocolError::Io)
     }
 
-    // TODO, add handle for begin stmt
-    async fn _handle_begin_stmt<'b>(
+    async fn handle_trans_stmt<'a>(
         &mut self,
-        stream: ResultsetStream<'b>,
-        _stmt: &BeginStmt,
-    ) -> Result<(), ProtocolError> {
+        client_conn: &'a mut PoolConn<ClientConn>,
+        input: &'a str,
+    ) -> Result<ResultsetStream<'a>, ProtocolError> {
         if let Err(err) =
-            self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Statement("begin")).await
+            self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Transaction(input)).await
         {
             error!("err: {:?}", err);
         }
-        self.handle_query_resultset(stream).await
+
+        client_conn.send_query(input.as_bytes()).await
     }
 
     fn get_ast(&mut self, sql: &str) -> Result<Vec<SqlStmt>, ParseError> {
