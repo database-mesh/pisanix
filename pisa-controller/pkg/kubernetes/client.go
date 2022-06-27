@@ -17,6 +17,7 @@ package kubernetes
 import (
 	"flag"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -32,11 +33,7 @@ var once sync.Once
 var kubeConfigPath *string
 
 func init() {
-	if home := homedir.HomeDir(); home != "" {
-		kubeConfigPath = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeConfigPath = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
+	kubeConfigPath = flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
 }
 
 type ConfigBuilder struct {
@@ -95,6 +92,15 @@ func (b *ClientBuilder) Build() (dynamic.Interface, error) {
 
 func GetClient() *KClient {
 	once.Do(func() {
+		log.Println("kubeconfig", *kubeConfigPath)
+		if *kubeConfigPath != "" {
+			if _, err := os.Stat(*kubeConfigPath); os.IsNotExist(err) {
+				if home := homedir.HomeDir(); home != "" {
+					*kubeConfigPath = filepath.Join(home, ".kube", "config")
+				}
+			} 
+		}
+
 		config, err := NewConfigBuilder().WithPath(*kubeConfigPath).Build()
 		if err != nil {
 			log.Fatal(err)

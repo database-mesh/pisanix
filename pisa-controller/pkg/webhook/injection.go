@@ -78,7 +78,7 @@ const (
 						"name": "pisa-admin",
 						"protocol": "TCP"
 					}	
-				]
+				],
 				"resources":{},
 				"env": [
 					{
@@ -143,8 +143,19 @@ func InjectSidecar(ctx *gin.Context) {
 	_ = json.Unmarshal(ar.Request.Object.Raw, podinfo)
 	podSlice := strings.Split(podinfo.Metadata.GenerateName, "-")
 	podSlice = podSlice[:len(podSlice)-2]
-	ar.Response = applyPodPatch(ar, shouldPatchPod, fmt.Sprintf(podsSidecarPatch, pisaProxyImage, SidecarNamePisaProxy, pisaProxyAdminListenPort, pisaControllerService, pisaControllerNamespace, ar.Request.Namespace, strings.Join(podSlice, "-"), pisaProxyAdminListenHost, pisaProxyAdminListenPort))
-	log.Info("mutating Success")
+
+	patch := fmt.Sprintf(podsSidecarPatch, 
+		pisaProxyImage, 
+		SidecarNamePisaProxy, 
+		pisaProxyAdminListenPort, 
+		pisaControllerService, 
+		pisaControllerNamespace, 
+		ar.Request.Namespace,
+		 strings.Join(podSlice, "-"), 
+		 pisaProxyAdminListenHost, 
+		 pisaProxyAdminListenPort)
+	ar.Response = applyPodPatch(ar, shouldPatchPod, patch)
+	log.Infof("mutating Success %v", patch)
 
 	ctx.JSON(http.StatusOK, ar)
 }
@@ -163,6 +174,7 @@ func applyPodPatch(ar v1.AdmissionReview, shouldPatchPod func(*corev1.Pod) bool,
 		log.Error(err)
 		return toV1AdmissionResponse(err)
 	}
+	log.Infof("pod %v", pod)
 	reviewResponse := v1.AdmissionResponse{}
 	reviewResponse.UID = ar.Request.UID
 	reviewResponse.Allowed = true

@@ -73,6 +73,7 @@ jobs:
           extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
       - name: "install Pisa Controller"
         run: |
+          set -x 
           export PISANIX_NAMESPACE="pisanix-system"
           kubectl create namespace ${PISANIX_NAMESPACE}
           kubectl create secret docker-registry uhub --docker-server=${{ secrets.DOCKERHUB_CI_HOST }} --docker-username=${{ secrets.DOCKERHUB_CI_USERNAME }} --docker-password=${{ secrets.DOCKERHUB_CI_PASSWORD }}
@@ -82,8 +83,11 @@ jobs:
           cd charts/pisa-controller 
           helm dependency build
           cd ..
-          helm install pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=${{ steps.vars.outputs.imagetag }} --set image.imagePullSecrets[0].name=uhub
-          kubectl wait --timeout=60s --for=condition=ready --all pod -n ${PISANIX_NAMESPACE}
+          helm install --debug pisa-controller pisa-controller -n ${PISANIX_NAMESPACE} --set image.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/controller  --set image.tag=${{ steps.vars.outputs.imagetag }} --set proxyImage.repository=${{ secrets.DOCKERHUB_CI_HOST }}/pisanixio/proxy  --set proxyImage.tag=${{ steps.vars.outputs.imagetag }} --set image.imagePullSecrets[0].name=uhub
+          kubectl get pods -n ${PISANIX_NAMESPACE}
+          kubectl describe pods -n ${PISANIX_NAMESPACE}
+          kubectl wait --timeout=60s --for=condition=Ready --all pod -n ${PISANIX_NAMESPACE}
+          kubectl -l app=pisa-controller logs -n ${PISANIX_NAMESPACE}
           cd ..
           cd test/kubernetes
           kubectl apply -f mysql.yml 
@@ -93,14 +97,15 @@ jobs:
           kubectl apply -f app.yml 
           sleep 15
           kubectl patch deployment test  -p='{"spec": {"replicas": 0, "template": {"spec": {"imagePullSecrets": [{"name": "uhub"}]}}}}'
-          kubectl get pod --show-labels
+          kubectl get pod -A --show-labels
           sleep 15 
-          kubectl get pod --show-labels
+          kubectl get pod -A --show-labels
           kubectl scale deployment test --replicas=1 
-          sleep 15 
-          kubectl get pod --show-labels
+          kubectl get pod -A --show-labels
           kubectl wait --timeout=60s --for=condition=ready --all pod
+          kubectl -l app=nginx logs  --all-containers=true
           kubectl port-forward svc/test 3308:3306 &
+          kubectl get pod -A --show-labels
           sleep 3
       - name: "prepare mysql" 
         uses: shogo82148/actions-setup-mysql@v1
