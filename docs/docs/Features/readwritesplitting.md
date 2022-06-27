@@ -116,19 +116,19 @@ spec:
   loadBalance:
     readWriteSplitting:
       static:  
-        defaultTarget: read // or read_write
+        defaultTarget: read # or readwrite
         rules:
           - name: read-rule
             type: regex
             regex:
               - "^select"
-            target: read // read_write
-            algorithmName: random // lb algorithm
+            target: read # readwrite
+            algorithmName: random # lb algorithm
           - name: write-rule
             type: regex
             regex:
               - "^insert"
-            target: read_write
+            target: readwrite
             algorithmName: roundrobin
 ```
 
