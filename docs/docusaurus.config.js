@@ -27,6 +27,15 @@ const config = {
 			({
 				docs: {
 					sidebarPath: require.resolve("./sidebars.js"),
+          showLastUpdateAuthor: true,
+          showLastUpdateTime: true,
+          includeCurrentVersion: true,
+          lastVersion: 'current',
+          versions: {
+            current: {
+              label: 'latest',
+            },
+          },
 				},
 				blog: {
 					showReadingTime: true,
@@ -48,10 +57,10 @@ const config = {
 					src: "img/logo.svg",
 				},
 				items: [
-					//TODO: enable this when 1.1 released
-					// {
-					//   type: 'docsVersionDropdown',
-					// },
+					{
+					  type: 'docsVersionDropdown',
+						position: "right",
+					},
 					{
 						type: "localeDropdown",
 						position: "right",
