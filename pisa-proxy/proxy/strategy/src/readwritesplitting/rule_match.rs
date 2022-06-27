@@ -35,9 +35,12 @@ impl RulesMatchBuilder {
     ) -> RulesMatch {
         let inner = RulesMatchBuilder::build_rules(rules, rw_endpoint.clone());
         let default_balance =
-            RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint);
+            RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
 
-        RulesMatch { default_target, inner, default_balance }
+        let default_trans_balance =
+            RulesMatchBuilder::build_default_balance(&TargetRole::ReadWrite, rw_endpoint);
+
+        RulesMatch { default_target, default_trans_balance, inner, default_balance }
     }
 
     fn build_rules(
@@ -76,6 +79,8 @@ impl RulesMatchBuilder {
 pub struct RulesMatch {
     default_target: TargetRole,
     default_balance: BalanceType,
+    // Default transaction balance
+    default_trans_balance: BalanceType,
     inner: Vec<RulesMatchInner>,
 }
 
@@ -86,6 +91,11 @@ enum RulesMatchInner {
 // Retrun balance when match success, otherwise return default_balance
 impl RouteBalance for RulesMatch {
     fn get(&mut self, input: &RouteInput) -> (&mut BalanceType, TargetRole) {
+        // Currently, if RouteInput variant type is Transaction, return readwrite balnace directly.
+        if let RouteInput::Transaction(_) = input {
+            return (&mut self.default_trans_balance, TargetRole::ReadWrite);
+        }
+
         for rule in self.inner.iter_mut() {
             match rule {
                 RulesMatchInner::Regex(inner) => {
@@ -148,7 +158,9 @@ impl RegexRuleMatchInner {
 impl RouteRuleMatch for RegexRuleMatchInner {
     fn is_match(&self, input: &RouteInput) -> bool {
         match input {
-            RouteInput::Statement(val) => self.regexs.iter().any(|r| r.is_match(val)),
+            RouteInput::Statement(val) | RouteInput::Transaction(val) => {
+                self.regexs.iter().any(|r| r.is_match(val))
+            }
 
             RouteInput::None => false,
         }

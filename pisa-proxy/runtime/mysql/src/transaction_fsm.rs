@@ -237,6 +237,18 @@ fn init_trans_events() -> Vec<TransEvent> {
             dst_state: TransState::TransDummyState,
             driver: Some(Box::new(Driver)),
         },
+        TransEvent {
+            name: TransEventName::CommitRollBackEvent,
+            src_state: TransState::TransStartState,
+            dst_state: TransState::TransDummyState,
+            driver: Some(Box::new(Driver)),
+        },
+        TransEvent {
+            name: TransEventName::QueryEvent,
+            src_state: TransState::TransSetSessionState,
+            dst_state: TransState::TransDummyState,
+            driver: Some(Box::new(Driver)),
+        },
     ];
 }
 
@@ -250,6 +262,7 @@ pub struct TransFsm {
     pub endpoint: Option<Endpoint>,
     pub db: Option<String>,
     pub charset: String,
+    pub autocommit: String,
 }
 
 impl TransFsm {
@@ -267,6 +280,7 @@ impl TransFsm {
             endpoint: None,
             db: None,
             charset: String::from("utf8mb4"),
+            autocommit: String::from(""),
         }
     }
 
@@ -299,6 +313,12 @@ impl TransFsm {
         Ok(())
     }
 
+    // when autocommit=0, should be reset fsm state
+    pub fn reset_fsm_state(&mut self) {
+        self.current_state = TransState::TransDummyState;
+        self.current_event = TransEventName::DummyEvent;
+    }
+
     // Set current db.
     pub fn set_db(&mut self, db: String) {
         self.db = Some(db)
@@ -307,6 +327,11 @@ impl TransFsm {
     // Set current charset
     pub fn set_charset(&mut self, name: String) {
         self.charset = name;
+    }
+
+    // Set current autocommit
+    pub fn set_autocommit(&mut self, status: String) {
+        self.autocommit = status
     }
 
     pub async fn get_conn(&mut self) -> Result<PoolConn<ClientConn>, Error> {
@@ -345,6 +370,15 @@ impl TransFsm {
         if Some(&self.charset) != conn.get_charset().as_ref() {
             conn.set_charset(&self.charset);
             conn.send_query_discard_result(&format!("SET NAMES {}", &self.charset))
+                .await
+                .map_err(ErrorKind::Protocol)?;
+        }
+
+        //set autocommit
+        if Some(&self.autocommit) != conn.get_autocommit().as_ref() {
+            conn.set_charset(&self.charset);
+            conn.set_autocommit(&self.autocommit);
+            conn.send_query_discard_result(&format!("SET AUTOCOMMIT = {}", &self.autocommit))
                 .await
                 .map_err(ErrorKind::Protocol)?;
         }
