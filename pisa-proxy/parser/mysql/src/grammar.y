@@ -108,6 +108,7 @@ sql_stmt -> SqlStmt:
   | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
   | show_columns_stmt   { SqlStmt::ShowColumnsStmt($1) }
+  | show_index_stmt     { SqlStmt::ShowIndexStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -3736,6 +3737,7 @@ non_reserved_keyword -> &'input str:
   | 'JSON'                                             { "JSON" }
   | 'JSON_VALUE'                                       { "JSON_VALUE" }
   | 'KEYRING'                                          { "KEYRING" }
+  | 'KEYS'                                             { "KEYS" }
   | 'KEY_BLOCK_SIZE'                                   { "KEY_BLOCK_SIZE" }
   | 'LANGUAGE'                                         { "LANGUAGE" }
   | 'LAST'                                             { "LAST" }
@@ -5975,6 +5977,26 @@ from_table -> ShowFromTable:
 from_or_in -> FromOrIn:
       'FROM' { FromOrIn::From }
     | 'IN'   { FromOrIn::In }
+;
+
+show_index_stmt -> Box<ShowIndexStmt>:
+    'SHOW' opt_show_cmd_type index_cmd_type from_table opt_db opt_wild_or_where
+    {
+    	Box::new(ShowIndexStmt {
+    	   span: $span,
+    	   opt_show_cmd_type: $2,
+    	   index_cmd_type: $3,
+    	   from_table: $4,
+    	   opt_db: $5,
+    	   opt_wild_or_where: $6,
+    	})
+    }
+;
+
+index_cmd_type -> ShowIndexCmdType:
+       INDEX              { ShowIndexCmdType::Index }
+     | INDEXES            { ShowIndexCmdType::Indexes }
+     | KEYS               { ShowIndexCmdType::Keys }
 ;
 
 start -> Start:
