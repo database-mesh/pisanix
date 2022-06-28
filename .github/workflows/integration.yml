@@ -40,16 +40,9 @@ jobs:
           if [[ $GITHUB_REF == refs/tags/* ]]; then
              echo "##[set-output name=tags;]$(echo ${GITHUB_REF#refs/tags/})"  
              echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/tags/})-$(git rev-parse --short HEAD)"  
-          else
-             echo "##[set-output name=tags;]$(echo '')"
-             echo "##[set-output name=imagetag;]$(echo '')"
-          fi
-          if [[ $GITHUB_REF == refs/heads/* ]]; then
+          elif [[ $GITHUB_REF == refs/heads/* ]]; then
              echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"  
              echo "##[set-output name=imagetag;]$(echo ${GITHUB_REF#refs/heads/})-$(git rev-parse --short HEAD)"  
-          else
-             echo "##[set-output name=branch;]$(echo '')"
-             echo "##[set-output name=imagetag;]$(echo '')"
           fi
       - name: "Pisa-Controller kaniko build"
         uses: mlycore/action-kaniko@master
