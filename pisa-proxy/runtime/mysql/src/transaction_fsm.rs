@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use conn_pool::{ConnAttr, Pool, PoolConn, ConnAttrMut};
+use conn_pool::{ConnAttr, ConnAttrMut, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
 use mysql_protocol::client::conn::{ClientConn, SessionAttr};
 use pisa_error::error::{Error, ErrorKind};
@@ -316,10 +316,10 @@ impl TransFsm {
     }
 
     // when autocommit=0, should be reset fsm state
-    pub async fn reset_fsm_state(&mut self, input: RouteInput<'_>) -> Result<(), Error>{
+    pub async fn reset_fsm_state(&mut self, input: RouteInput<'_>) -> Result<(), Error> {
         self.current_state = TransState::TransDummyState;
         self.current_event = TransEventName::DummyEvent;
-        
+
         self.trigger(TransEventName::QueryEvent, input).await?;
         Ok(())
     }
@@ -343,9 +343,7 @@ impl TransFsm {
         let conn = self.client_conn.take();
         let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
         match conn {
-            Some(client_conn) => {
-                Ok(client_conn)
-            }
+            Some(client_conn) => Ok(client_conn),
             None => match self.pool.get_conn_with_opts(addr).await {
                 Ok(mut client_conn) => {
                     client_conn.init(self.build_conn_attrs()).await;
@@ -359,7 +357,6 @@ impl TransFsm {
     pub fn put_conn(&mut self, conn: PoolConn<ClientConn>) {
         self.client_conn = Some(conn)
     }
-
 
     #[inline]
     fn build_conn_attrs(&self) -> Vec<SessionAttr> {
