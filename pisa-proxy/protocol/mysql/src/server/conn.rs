@@ -59,7 +59,7 @@ pub struct Connection {
     pub db: String,
     pub affected_rows: i64,
     pub pkt: Packet,
-    pub autocommit: String,
+    pub autocommit: Option<String>,
     server_version: String,
 }
 
@@ -89,7 +89,7 @@ impl Connection {
             //pkt: Packet::new(Arc::new(Mutex::new(BufStream::new(socket)))),
             pkt: Packet::new(BufStream::new(LocalStream::from(socket))),
             server_version,
-            autocommit: "".to_string(),
+            autocommit: None,
         }
     }
 

@@ -522,18 +522,18 @@ impl MySqlServer {
                                     }
 
                                     if value == "1" {
-                                        self.trans_fsm.reset_fsm_state();
+                                        let _ = self.trans_fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                                     }
 
-                                    self.client.autocommit = value.clone();
+                                    self.client.autocommit = Some(value.clone());
                                     self.trans_fsm.set_autocommit(value.clone());
                                 }
                                 _ => {}
                             },
                             ExprOrDefault::On => {
-                                self.client.autocommit = String::from("ON");
+                                self.client.autocommit = Some(String::from("ON"));
                                 self.trans_fsm.set_autocommit(String::from("ON"));
-                                self.trans_fsm.reset_fsm_state();
+                                let _ = self.trans_fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                             }
 
                             _ => {}

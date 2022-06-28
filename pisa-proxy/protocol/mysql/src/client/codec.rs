@@ -361,14 +361,13 @@ mod test {
 
     #[tokio::test]
     async fn test_handshake() {
-        let mut driver = ClientConn::test_conn(
+        let driver = ClientConn::test_conn(
             "root".to_string(),
             "123456".to_string(),
             "127.0.0.1:13306".to_string(),
         )
-        .await
-        .unwrap();
-        assert_eq!(!driver.handshake().await.is_err(), true)
+        .await;
+        assert_eq!(driver.is_ok(), true)
     }
 
     #[tokio::test]
@@ -380,7 +379,6 @@ mod test {
         )
         .await
         .unwrap();
-        let _ = driver.handshake().await;
 
         let query = "select user from mysql.user".as_bytes();
         let mut stream = driver.send_query(query).await.unwrap();
@@ -417,17 +415,16 @@ mod test {
 
         let _ = packet.split_to(4 + 1);
 
-        let mut driver = ClientConn::test_conn(
+        let driver = ClientConn::test_conn(
             "root".to_string(),
             "123456".to_string(),
-            "192.168.5.144:13306".to_string(),
+            "127.0.0.1:13306".to_string(),
         )
         .await
         .unwrap();
-        let _ = driver.handshake().await;
 
-        let auth_info = driver.auth_info.take().unwrap();
-        let info = ResultOkInfo::decode(&auth_info, &mut packet);
+        let auth_info = driver.framed.as_ref().unwrap();
+        let info = ResultOkInfo::decode(auth_info, &mut packet);
 
         if let Some(SessionState::Schema(schema)) = info.state_info {
             assert_eq!(b"test"[..], schema)
@@ -446,17 +443,16 @@ mod test {
 
         let _ = packet.split_to(4 + 1);
 
-        let mut driver = ClientConn::test_conn(
+        let driver = ClientConn::test_conn(
             "root".to_string(),
             "123456".to_string(),
-            "192.168.5.144:13306".to_string(),
+            "127.0.0.1:13306".to_string(),
         )
         .await
         .unwrap();
-        let _ = driver.handshake().await;
 
-        let auth_info = driver.auth_info.take().unwrap();
-        let info = ResultOkInfo::decode(&auth_info, &mut packet);
+        let auth_info = driver.framed.as_ref().unwrap();
+        let info = ResultOkInfo::decode(auth_info, &mut packet);
 
         if let Some(SessionState::SystemVariables(vars)) = info.state_info {
             assert_eq!(b"autocommit"[..], vars[0].0);
@@ -470,17 +466,16 @@ mod test {
             BytesMut::from(&[0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00][..]);
 
         let _ = packet.split_to(4 + 1);
-        let mut driver = ClientConn::test_conn(
+        let driver = ClientConn::test_conn(
             "root".to_string(),
             "123456".to_string(),
-            "192.168.5.144:13306".to_string(),
+            "127.0.0.1:13306".to_string(),
         )
         .await
         .unwrap();
-        let _ = driver.handshake().await;
 
-        let auth_info = driver.auth_info.take().unwrap();
-        let info = ResultOkInfo::decode(&auth_info, &mut packet);
+        let auth_info = driver.framed.as_ref().unwrap();
+        let info = ResultOkInfo::decode(auth_info, &mut packet);
         assert_eq!(info.state_info.is_none(), true);
     }
 }

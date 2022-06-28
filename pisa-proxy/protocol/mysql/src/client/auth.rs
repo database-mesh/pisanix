@@ -83,7 +83,7 @@ pub struct ClientAuth {
     pub db: String,
     pub seq: u8,
     pub server_version: ServerVersion,
-    pub auotcommit: String,
+    pub auotcommit: Option<String>,
 }
 
 impl ClientAuth {
@@ -97,13 +97,13 @@ impl ClientAuth {
             status: 0,
             auth_plugin_name: "".to_string(),
             tls_config: None,
-            charset: "".to_string(),
+            charset: DEFAULT_CHARSET_NAME.to_string(),
             user: "".to_string(),
             password: "".to_string(),
             db: "".to_string(),
             seq: 0,
             server_version: ServerVersion::default(),
-            auotcommit: "".to_string(),
+            auotcommit: None,
         }
     }
 
@@ -291,7 +291,6 @@ impl ClientAuth {
         //data[11] = 0x00;
 
         //charset [1 byte]
-        self.charset = DEFAULT_CHARSET_NAME.to_string();
         match self.server_version.major {
             5 => data.put_u8(CHARSET_NAME_ID_MYSQL5[DEFAULT_CHARSET_NAME]),
             _ => data.put_u8(CHARSET_NAME_ID_MYSQL8[DEFAULT_CHARSET_NAME]),
