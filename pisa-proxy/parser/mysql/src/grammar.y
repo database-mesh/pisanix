@@ -107,6 +107,7 @@ sql_stmt -> SqlStmt:
   | deallocate    { SqlStmt::Deallocate($1) }
   | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
+  | show_columns_stmt   { SqlStmt::ShowColumnsStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -5924,11 +5925,30 @@ show_tables_stmt -> Box<ShowTablesStmt>:
     }
 ;
 
+show_columns_stmt -> Box<ShowColumnsStmt>:
+    'SHOW' opt_show_cmd_type columns_cmd_type from_table opt_db opt_wild_or_where
+    {
+    	Box::new(ShowColumnsStmt {
+    	   span: $span,
+    	   opt_show_cmd_type: $2,
+    	   columns_cmd_type: $3,
+    	   from_table: $4,
+    	   opt_db: $5,
+    	   opt_wild_or_where: $6,
+    	})
+    }
+;
+
 opt_show_cmd_type -> Option<ShowCmdType>:
        /* empty */          { None }
      | FULL                 { Some(ShowCmdType::Full) }
      | EXTENDED             { Some(ShowCmdType::Extended) }
      | EXTENDED FULL        { Some(ShowCmdType::ExtendedFull) }
+;
+
+columns_cmd_type -> ShowColumnsCmdType:
+       COLUMNS              { ShowColumnsCmdType::Columns }
+     | FIELDS               { ShowColumnsCmdType::Fields }
 ;
 
 opt_db -> Option<ShowTableDb>:
@@ -5942,11 +5962,20 @@ opt_db -> Option<ShowTableDb>:
         }
 ;
 
+from_table -> ShowFromTable:
+       from_or_in ident {
+           ShowFromTable {
+		span: $span,
+		from_or_in: $1,
+		table: $2.0,
+           }
+        }
+;
+
 from_or_in -> FromOrIn:
       'FROM' { FromOrIn::From }
     | 'IN'   { FromOrIn::In }
 ;
-
 
 start -> Start:
   START TRANSACTION opt_start_transaction_option_list

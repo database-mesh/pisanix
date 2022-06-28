@@ -41,6 +41,7 @@ pub enum SqlStmt {
     Deallocate(Box<Deallocate>),
     ShowDatabasesStmt(Box<ShowDatabasesStmt>),
     ShowTablesStmt(Box<ShowTablesStmt>),
+    ShowColumnsStmt(Box<ShowColumnsStmt>),
     Start(Start),
     Commit(Commit),
     Rollback(Rollback),
