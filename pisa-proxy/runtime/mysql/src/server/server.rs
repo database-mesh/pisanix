@@ -497,7 +497,6 @@ impl MySqlServer {
 
     // Set charset name
     async fn handle_set_stmt(&mut self, stmt: &SetOptValues, input: &str) {
-        println!("set {:?}", input);
         match stmt {
             SetOptValues::OptValues(vals) => match &vals.opt {
                 SetOpts::SetNames(name) => {
