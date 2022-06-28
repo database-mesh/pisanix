@@ -127,7 +127,8 @@ mod test {
             //"SET @@SESSION.character_set_client = gbk;",
             //"SELECT * from mysql.select;",
             //"create database if not exists db CHARACTER SET = utf8;",
-            "SHOW COLUMNS FROM t_order;",
+            //"SHOW COLUMNS FROM t_order;",
+            "SHOW CREATE TABLE t_order;",
         ];
 
         let p = Parser::new();

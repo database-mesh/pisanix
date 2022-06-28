@@ -108,6 +108,7 @@ sql_stmt -> SqlStmt:
   | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
   | show_columns_stmt   { SqlStmt::ShowColumnsStmt($1) }
+  | show_create_table_stmt  { SqlStmt::ShowCreateTable($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -5975,6 +5976,16 @@ from_table -> ShowFromTable:
 from_or_in -> FromOrIn:
       'FROM' { FromOrIn::From }
     | 'IN'   { FromOrIn::In }
+;
+
+show_create_table_stmt -> Box<ShowCreateTable>:
+    'SHOW' 'CREATE' 'TABLE' table_ident
+    {
+        Box::new(ShowCreateTable {
+           span: $span,
+           table: $4,
+        })
+    }
 ;
 
 start -> Start:
