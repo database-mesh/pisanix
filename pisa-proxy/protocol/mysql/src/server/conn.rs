@@ -95,9 +95,8 @@ impl Connection {
 
     pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
         match self.write_initial_handshake().await {
-            // Err(err) => return Err(err::ProtocolError::Io(err)),
             Err(err) => return Err(err),
-            Ok(_) => debug!("it is ok"),
+            Ok(_) => debug!("handshake write initial ok"),
         }
 
         match self.read_handshake_response().await {
