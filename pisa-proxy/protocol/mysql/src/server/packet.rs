@@ -21,7 +21,7 @@ use bytes::{BufMut, BytesMut};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufStream};
 
 use super::stream::LocalStream;
-use crate::{mysql_const::*, server::err::MySQLError, util::get_length};
+use crate::{err::ProtocolError, mysql_const::*, server::err::MySQLError, util::get_length};
 
 #[derive(Debug)]
 pub struct Packet {
@@ -36,7 +36,7 @@ impl Packet {
     }
 
     #[inline]
-    pub async fn read_header(&mut self) -> Result<usize, Error> {
+    pub async fn read_header(&mut self) -> Result<usize, ProtocolError> {
         let size = self.conn.read(&mut self.header).await?;
 
         // if no data in the header buffer, means that connection is
@@ -45,14 +45,19 @@ impl Packet {
             if self.header.iter().all(|&x| x == 0) {
                 return Ok(0);
             } else {
-                return Err(Error::new(ErrorKind::ConnectionReset, "Connection reset by peer"));
+                // return Err(Error::new(ErrorKind::ConnectionReset, "Connection reset by peer"));
+                return Err(ProtocolError::Io(Error::new(
+                    ErrorKind::ConnectionReset,
+                    "Connection reset by peer",
+                )));
             }
         }
 
         let sequence = unsafe { *self.header.get_unchecked(3) };
 
         if sequence != self.sequence {
-            return Err(Error::new(ErrorKind::Other, "invalid sequence"));
+            // return Err(Error::new(ErrorKind::Other, "invalid sequence"));
+            return Err(ProtocolError::Io(Error::new(ErrorKind::Other, "invalid sequence")));
         }
 
         self.sequence = self.sequence.wrapping_add(1);
@@ -61,7 +66,7 @@ impl Packet {
         Ok(length as usize)
     }
 
-    pub async fn read_packet_buf(&mut self, buf: &mut BytesMut) -> Result<usize, Error> {
+    pub async fn read_packet_buf(&mut self, buf: &mut BytesMut) -> Result<usize, ProtocolError> {
         let length = self.read_header().await?;
         if length == 0 {
             return Ok(0);
@@ -132,13 +137,13 @@ impl Packet {
         self.set_seq_id(data)
     }
 
-    pub async fn write_buf(&mut self, mut buf: &[u8]) -> Result<(), Error> {
+    pub async fn write_buf(&mut self, mut buf: &[u8]) -> Result<(), ProtocolError> {
         let _ = self.conn.write_all_buf(&mut buf).await;
-        self.conn.flush().await
+        self.conn.flush().await.map_err(ProtocolError::Io)
     }
 
     #[inline]
-    pub async fn write_ok(&mut self) -> Result<(), Error> {
+    pub async fn write_ok(&mut self) -> Result<(), ProtocolError> {
         let mut data = [7, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0];
         self.set_seq_id(&mut data);
         self.write_buf(&data).await
@@ -152,7 +157,7 @@ impl Packet {
     }
 
     #[inline]
-    pub async fn write_eof(&mut self) -> Result<(), Error> {
+    pub async fn write_eof(&mut self) -> Result<(), ProtocolError> {
         let mut eof = [5, 0, 0, 0, 0xfe, 0, 0, 2, 0];
         self.set_seq_id(&mut eof);
         self.write_buf(&eof).await
@@ -188,7 +193,7 @@ impl Packet {
         &mut self,
         salt: &[u8],
         plugin_name: String,
-    ) -> Result<(), Error> {
+    ) -> Result<(), ProtocolError> {
         let mut data = BytesMut::with_capacity(128);
         data.extend_from_slice(&[0; 4]);
         data.put_u8(EOF_HEADER);
