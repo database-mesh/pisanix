@@ -3062,6 +3062,22 @@ pub struct ShowTablesStmt {
 }
 
 #[derive(Debug, Clone)]
+pub struct ShowColumnsStmt {
+    pub span: Span,
+    pub opt_show_cmd_type: Option<ShowCmdType>,
+    pub columns_cmd_type: ShowColumnsCmdType,
+    pub from_table: ShowFromTable,
+    pub opt_db: Option<ShowTableDb>,
+    pub opt_wild_or_where: Option<WildOrWhere>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ShowColumnsCmdType {
+    Columns,
+    Fields,
+}
+
+#[derive(Debug, Clone)]
 pub enum ShowCmdType {
     Full,
     Extended,
@@ -3072,6 +3088,13 @@ pub enum ShowCmdType {
 pub enum FromOrIn {
     From,
     In,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowFromTable {
+    pub span: Span,
+    pub from_or_in: FromOrIn,
+    pub table: String,
 }
 
 #[derive(Debug, Clone)]
