@@ -95,7 +95,8 @@ impl Connection {
 
     pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
         match self.write_initial_handshake().await {
-            Err(err) => return Err(err::ProtocolError::Io(err)),
+            // Err(err) => return Err(err::ProtocolError::Io(err)),
+            Err(err) => return Err(err),
             Ok(_) => debug!("it is ok"),
         }
 
@@ -119,7 +120,7 @@ impl Connection {
         Ok(())
     }
 
-    pub async fn write_initial_handshake(&mut self) -> Result<(), Error> {
+    pub async fn write_initial_handshake(&mut self) -> Result<(), ProtocolError> {
         let mut data = BytesMut::with_capacity(4);
 
         // init header
