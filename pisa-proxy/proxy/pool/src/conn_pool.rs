@@ -45,12 +45,18 @@ pub trait ConnAttr {
     fn get_autocommit(&self) -> Option<String>;
 }
 
+#[async_trait]
+pub trait ConnAttrMut {
+    type Item: Send;
+    async fn init(&mut self, _items: Vec<Self::Item>) {}
+}
+
 #[derive(Debug)]
-pub struct PoolInner<T: ConnLike + ConnAttr> {
+pub struct PoolInner<T: ConnLike + ConnAttr + ConnAttrMut> {
     pub inner: ArrayQueue<T>,
 }
 
-impl<T: ConnLike + ConnAttr> PoolInner<T> {
+impl<T: ConnLike + ConnAttr + ConnAttrMut> PoolInner<T> {
     fn new(size: usize) -> PoolInner<T> {
         PoolInner { inner: ArrayQueue::new(size) }
     }
@@ -67,7 +73,7 @@ impl<T: ConnLike + ConnAttr> PoolInner<T> {
 }
 
 #[derive(Debug)]
-pub struct PoolConn<T: ConnLike + ConnAttr>
+pub struct PoolConn<T: ConnLike + ConnAttr + ConnAttrMut>
 where
     T: ConnLike,
 {
@@ -76,14 +82,14 @@ where
 }
 
 #[derive(Clone)]
-pub struct Pool<T: ConnLike + ConnAttr> {
+pub struct Pool<T: ConnLike + ConnAttr + ConnAttrMut> {
     factory: Option<T>,
     pool: Arc<PoolInner<T>>,
 }
 
 impl<T> Pool<T>
 where
-    T: ConnLike + ConnAttr + std::default::Default,
+    T: ConnLike + ConnAttr + ConnAttrMut + std::default::Default,
 {
     pub fn new(size: usize) -> Pool<T> {
         let pool_inner = PoolInner::new(size);
@@ -139,7 +145,7 @@ where
     }
 }
 
-impl<T: ConnLike + ConnAttr> Deref for PoolConn<T> {
+impl<T: ConnLike + ConnAttr + ConnAttrMut> Deref for PoolConn<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -147,13 +153,13 @@ impl<T: ConnLike + ConnAttr> Deref for PoolConn<T> {
     }
 }
 
-impl<T: ConnLike + ConnAttr> DerefMut for PoolConn<T> {
+impl<T: ConnLike + ConnAttr + ConnAttrMut> DerefMut for PoolConn<T> {
     fn deref_mut(&mut self) -> &mut T {
         self.conn.as_mut().unwrap()
     }
 }
 
-impl<T: ConnLike + ConnAttr> Drop for PoolConn<T> {
+impl<T: ConnLike + ConnAttr + ConnAttrMut> Drop for PoolConn<T> {
     fn drop(&mut self) {
         futures::executor::block_on(async {
             if self.conn.is_some() {

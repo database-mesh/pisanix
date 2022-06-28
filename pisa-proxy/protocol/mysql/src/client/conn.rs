@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 
 use async_trait::async_trait;
 use bytes::BytesMut;
-use conn_pool::{ConnAttr, ConnLike};
+use conn_pool::{ConnAttr, ConnLike, ConnAttrMut};
 use futures::SinkExt;
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
@@ -220,7 +220,7 @@ impl ClientConn {
     }
 
     pub fn set_autocommit(&mut self, status: &str) {
-        self.framed.as_mut().unwrap().auotcommit = status.to_string()
+        self.framed.as_mut().unwrap().auotcommit = Some(status.to_string())
     }
 }
 
@@ -282,11 +282,7 @@ impl ConnAttr for ClientConn {
     fn get_charset(&self) -> Option<String> {
         let codec = self.framed.as_ref();
         if let Some(codec) = codec {
-            if codec.charset.is_empty() {
-                None
-            } else {
-                Some(codec.charset.clone())
-            }
+            Some(codec.charset.clone())
         } else {
             None
         }
@@ -295,13 +291,48 @@ impl ConnAttr for ClientConn {
     fn get_autocommit(&self) -> Option<String> {
         let codec = self.framed.as_ref();
         if let Some(codec) = codec {
-            if codec.auotcommit.is_empty() {
-                None
-            } else {
-                Some(codec.auotcommit.clone())
-            }
+            codec.auotcommit.clone()
         } else {
             None
+        }
+    }
+}
+
+#[non_exhaustive]
+pub enum SessionAttr {
+    DB(Option<String>),
+    Charset(String),
+    Autocommit(Option<String>),
+}
+
+#[async_trait]
+impl ConnAttrMut for ClientConn {
+    type Item = SessionAttr;
+    async fn init(&mut self, items: Vec<SessionAttr>) {
+        for attr in items.iter() {
+            match attr {
+                SessionAttr::DB(val) => {
+                    if val != &self.get_db() {
+                        if let Some(db) = val {
+                            let _ = self.send_use_db(db).await;
+                        }
+                    }
+                },
+                SessionAttr::Charset(val) => {
+                    if Some(val) != self.get_charset().as_ref() {
+                        self.set_charset(val);
+                        let _ = self.send_query_discard_result(&format!("SET NAMES {}", val)).await;
+                    }
+                },
+                SessionAttr::Autocommit(val) => {
+                    if val != &self.get_autocommit() {
+                        if let Some(val) = val {
+                            self.set_autocommit(val);
+                            let _ = self.send_query_discard_result(&format!("SET AUTOCOMMIT = {}", val)).await;
+                        }
+                    }
+                }
+            }
         }
     }
 }
