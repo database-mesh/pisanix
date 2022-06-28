@@ -31,6 +31,7 @@ use mysql_protocol::{
     util::*,
 };
 use parking_lot::Mutex as plMutex;
+use pisa_error::error::{Error, ErrorKind};
 use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::proxy::ProxyConfig;
 use strategy::route::{RouteInput, RouteStrategy};
@@ -38,7 +39,6 @@ use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 use tracing::{debug, error};
 
 use crate::{server::metrics::*, transaction_fsm::*};
-use pisa_error::error::{Error,ErrorKind};
 
 pub struct MySqlServer {
     // TODO: this should be a common property of proxy runtime
@@ -226,21 +226,17 @@ impl MySqlServer {
             COM_INIT_DB => self.handle_init_db(&payload, true).await,
             COM_QUERY => self.handle_query(&payload).await,
             COM_FIELD_LIST => self.handle_field_list(&payload).await,
-            // COM_QUIT => self.handle_quit().await,
-            // COM_PING => self.handle_ok().await,
-            // COM_STMT_PREPARE => self.handle_prepare(&payload).await,
-            // COM_STMT_EXECUTE => self.handle_execute(&payload).await,
-            // COM_STMT_CLOSE => self.handle_stmt_close(&payload).await,
-            // COM_STMT_RESET => self.handle_ok().await,
+            COM_QUIT => self.handle_quit().await,
+            COM_PING => self.handle_ok().await,
+            COM_STMT_PREPARE => self.handle_prepare(&payload).await,
+            COM_STMT_EXECUTE => self.handle_execute(&payload).await,
+            COM_STMT_CLOSE => self.handle_stmt_close(&payload).await,
+            COM_STMT_RESET => self.handle_ok().await,
             _ => self.handle_err(format!("command {} not support", cmd)).await,
         }
     }
 
-    pub async fn handle_init_db(
-        &mut self,
-        payload: &[u8],
-        is_send_ok: bool,
-    ) -> Result<(), Error> {
+    pub async fn handle_init_db(&mut self, payload: &[u8], is_send_ok: bool) -> Result<(), Error> {
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         let earlier = SystemTime::now();
@@ -265,7 +261,7 @@ impl MySqlServer {
 
         let res = match client_conn.send_use_db(sql).await {
             Ok(res) => res,
-            Err(err) => return Err(Error::new(ErrorKind::Protocol(err)))
+            Err(err) => return Err(Error::new(ErrorKind::Protocol(err))),
         };
 
         let ep = client_conn.get_endpoint().unwrap();
@@ -287,7 +283,11 @@ impl MySqlServer {
                 "42000".as_bytes().to_vec(),
                 String::from_utf8_lossy(&res.0[13..]).to_string(),
             ));
-            self.client.pkt.write_buf(&err_info).await.map_err(|e| Error::new(ErrorKind::Protocol(e)))
+            self.client
+                .pkt
+                .write_buf(&err_info)
+                .await
+                .map_err(|e| Error::new(ErrorKind::Protocol(e)))
         }
     }
 
@@ -319,7 +319,7 @@ impl MySqlServer {
         loop {
             let mut data = match stream.next().await {
                 Some(Ok(data)) => data,
-                Some(Err(e)) => return Err(e),
+                Some(Err(e)) => return Err(Error::new(ErrorKind::Protocol(e))),
                 None => break,
             };
 
@@ -330,7 +330,7 @@ impl MySqlServer {
             }
         }
 
-        self.client.pkt.write_buf(&buf).await?;
+        self.client.pkt.write_buf(&buf).await.map_err(|e| Error::new(ErrorKind::Protocol(e)))?;
         let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
         collect_sql_under_processing_dec!(self, "COM_FIELD_LIST", ep.as_str());
@@ -338,7 +338,7 @@ impl MySqlServer {
         Ok(())
     }
 
-    pub async fn handle_prepare(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+    pub async fn handle_prepare(&mut self, payload: &[u8]) -> Result<(), Error> {
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         let earlier = SystemTime::now();
@@ -363,7 +363,12 @@ impl MySqlServer {
         if let Err(ProtocolError::PrepareError(mut data)) = try_stmt {
             self.client.pkt.make_packet_header(data.len() - 4, &mut data);
             self.trans_fsm.put_conn(client_conn);
-            return self.client.pkt.write_buf(&data).await;
+            return self
+                .client
+                .pkt
+                .write_buf(&data)
+                .await
+                .map_err(|e| Error::new(ErrorKind::Protocol(e)));
         }
 
         let stmt = try_stmt.unwrap();
@@ -400,7 +405,7 @@ impl MySqlServer {
             data.extend_from_slice(&self.client.pkt.make_eof_packet());
         }
 
-        self.client.pkt.write_buf(&data).await?;
+        self.client.pkt.write_buf(&data).await.map_err(|e| Error::new(ErrorKind::Protocol(e)))?;
         Ok(())
     }
 
@@ -418,7 +423,9 @@ impl MySqlServer {
         let mut client_conn = match self.get_ast(sql) {
             Err(err) => {
                 error!("err: {:?}", err);
-                self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::Statement(sql)).await?;
+                self.trans_fsm
+                    .trigger(TransEventName::QueryEvent, RouteInput::Statement(sql))
+                    .await?;
                 self.trans_fsm.get_conn().await.unwrap()
             }
 
@@ -429,23 +436,33 @@ impl MySqlServer {
                 }
                 //TODO: split sql stmt for sql audit
                 SqlStmt::BeginStmt(_stmt) => {
-                    self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Transaction(sql)).await?;
+                    self.trans_fsm
+                        .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
+                        .await?;
                     self.trans_fsm.get_conn().await.unwrap()
                 }
                 SqlStmt::Start(_stmt) => {
-                    self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Transaction(sql)).await?;
+                    self.trans_fsm
+                        .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
+                        .await?;
                     self.trans_fsm.get_conn().await.unwrap()
                 }
                 SqlStmt::Commit(_stmt) => {
-                    self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Transaction(sql)).await?;
+                    self.trans_fsm
+                        .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
+                        .await?;
                     self.trans_fsm.get_conn().await.unwrap()
                 }
                 SqlStmt::Rollback(_stmt) => {
-                    self.trans_fsm.trigger(TransEventName::StartEvent, RouteInput::Transaction(sql)).await?;
+                    self.trans_fsm
+                        .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
+                        .await?;
                     self.trans_fsm.get_conn().await.unwrap()
                 }
                 _ => {
-                    self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::Statement(sql)).await?;
+                    self.trans_fsm
+                        .trigger(TransEventName::QueryEvent, RouteInput::Statement(sql))
+                        .await?;
                     self.trans_fsm.get_conn().await.unwrap()
                 }
             },
@@ -462,11 +479,14 @@ impl MySqlServer {
             client_conn.get_endpoint().unwrap().as_str()
         );
 
-        let stream = match client_conn.send_query(payload).await {//.map_err(|e| Error::new(ErrorKind::Protocol(e)));
+        let stream = match client_conn.send_query(payload).await {
+            //.map_err(|e| Error::new(ErrorKind::Protocol(e)));
             Ok(stream) => stream,
             Err(err) => return Err(Error::new(ErrorKind::Protocol(err))),
         };
-        self.handle_query_resultset(stream).await.map_err(|e| Error::new(ErrorKind::Protocol(e)));
+        self.handle_query_resultset(stream)
+            .await
+            .map_err(|e| Error::new(ErrorKind::Protocol(e)))?;
 
         let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
@@ -590,7 +610,7 @@ impl MySqlServer {
         Ok(())
     }
 
-    pub async fn handle_execute(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+    pub async fn handle_execute(&mut self, payload: &[u8]) -> Result<(), Error> {
         let earlier = SystemTime::now();
         let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
         collect_sql_processed_total!(
@@ -603,8 +623,13 @@ impl MySqlServer {
             "COM_EXECUTE",
             client_conn.get_endpoint().unwrap().as_str()
         );
-        let stream = client_conn.send_execute(payload).await?;
-        self.handle_query_resultset(stream).await?;
+        let stream = client_conn
+            .send_execute(payload)
+            .await
+            .map_err(|e| Error::new(ErrorKind::Protocol(e)))?;
+        self.handle_query_resultset(stream)
+            .await
+            .map_err(|e| Error::new(ErrorKind::Protocol(e)))?;
         let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
         collect_sql_under_processing_dec!(self, "COM_EXECUTE", ep.as_str());
@@ -612,8 +637,8 @@ impl MySqlServer {
         Ok(())
     }
 
-    pub async fn handle_ok(&mut self) -> Result<(), ProtocolError> {
-        self.client.pkt.write_ok().await
+    pub async fn handle_ok(&mut self) -> Result<(), Error> {
+        self.client.pkt.write_ok().await.map_err(|e| Error::new(ErrorKind::Protocol(e)))
     }
 
     pub async fn handle_err(&mut self, msg: String) -> Result<(), Error> {
@@ -626,16 +651,16 @@ impl MySqlServer {
         self.client.pkt.write_buf(&err_info).await.map_err(|e| Error::new(ErrorKind::Protocol(e)))
     }
 
-    pub async fn handle_stmt_close(&mut self, payload: &[u8]) -> Result<(), ProtocolError> {
+    pub async fn handle_stmt_close(&mut self, payload: &[u8]) -> Result<(), Error> {
         let stmt_id = LittleEndian::read_u32(payload);
         debug!("stmt close {:?}", stmt_id);
 
         Ok(())
     }
 
-    pub async fn handle_quit(&mut self) -> Result<(), ProtocolError> {
+    pub async fn handle_quit(&mut self) -> Result<(), Error> {
         self.is_quit = true;
-        self.client.pkt.conn.shutdown().await.map_err(ProtocolError::Io)
+        self.client.pkt.conn.shutdown().await.map_err(|e| Error::new(ErrorKind::Io(e)))
     }
 
     fn get_ast(&mut self, sql: &str) -> Result<Vec<SqlStmt>, ParseError> {
