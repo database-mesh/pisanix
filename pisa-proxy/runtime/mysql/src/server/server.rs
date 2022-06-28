@@ -497,12 +497,21 @@ impl MySqlServer {
 
     // Set charset name
     async fn handle_set_stmt(&mut self, stmt: &SetOptValues, input: &str) {
+        println!("set {:?}", input);
         match stmt {
             SetOptValues::OptValues(vals) => match &vals.opt {
                 SetOpts::SetNames(name) => {
                     if let Some(name) = &name.charset_name {
                         self.client.charset = name.clone();
-                        self.trans_fsm.set_charset(name.clone())
+                        self.trans_fsm.set_charset(name.clone());
+                        self.trans_fsm
+                            .trigger(
+                                TransEventName::SetSessionEvent,
+                                RouteInput::Statement(input),
+                            )
+                            .await
+                            .unwrap();
+                            return
                     }
                 }
                 SetOpts::SetVariable(val) => {
@@ -527,6 +536,7 @@ impl MySqlServer {
 
                                     self.client.autocommit = Some(value.clone());
                                     self.trans_fsm.set_autocommit(value.clone());
+                                    return;
                                 }
                                 _ => {}
                             },
@@ -534,6 +544,7 @@ impl MySqlServer {
                                 self.client.autocommit = Some(String::from("ON"));
                                 self.trans_fsm.set_autocommit(String::from("ON"));
                                 let _ = self.trans_fsm.reset_fsm_state(RouteInput::Statement(input)).await;
+                                return;
                             }
 
                             _ => {}
@@ -545,6 +556,16 @@ impl MySqlServer {
 
             _ => {}
         }
+
+        println!("curr state {:?} {:?}", self.trans_fsm.current_state, self.trans_fsm.current_event);
+
+        self.trans_fsm
+            .trigger(
+                TransEventName::SetSessionEvent,
+                RouteInput::Statement(input),
+            )
+            .await
+            .unwrap();
     }
 
     pub async fn handle_query_resultset<'b>(
