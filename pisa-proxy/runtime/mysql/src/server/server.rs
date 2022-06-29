@@ -420,71 +420,51 @@ impl MySqlServer {
         //}
         //let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
 
-        let mut client_conn = match self.get_ast(sql) {
+        let mut client_conn: PoolConn<ClientConn>;
+        match self.get_ast(sql) {
             Err(err) => {
                 error!("err: {:?}", err);
                 self.trans_fsm
                     .trigger(TransEventName::QueryEvent, RouteInput::Statement(sql))
                     .await?;
-                match self.trans_fsm.get_conn().await {
-                    Ok(client_conn) => client_conn,
-                    Err(err) => return Err(err),
-                }
+                client_conn = self.trans_fsm.get_conn().await?;
             }
 
             Ok(stmt) => match &stmt[0] {
                 SqlStmt::Set(stmt) => {
                     self.handle_set_stmt(stmt, sql).await;
-                    match self.trans_fsm.get_conn().await {
-                        Ok(client_conn) => client_conn,
-                        Err(err) => return Err(err),
-                    }
+                    client_conn = self.trans_fsm.get_conn().await?;
                 }
                 //TODO: split sql stmt for sql audit
                 SqlStmt::BeginStmt(_stmt) => {
                     self.trans_fsm
                         .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
                         .await?;
-                    match self.trans_fsm.get_conn().await {
-                        Ok(client_conn) => client_conn,
-                        Err(err) => return Err(err),
-                    }
+                    client_conn = self.trans_fsm.get_conn().await?;
                 }
                 SqlStmt::Start(_stmt) => {
                     self.trans_fsm
                         .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
                         .await?;
-                    match self.trans_fsm.get_conn().await {
-                        Ok(client_conn) => client_conn,
-                        Err(err) => return Err(err),
-                    }
+                    client_conn = self.trans_fsm.get_conn().await?;
                 }
                 SqlStmt::Commit(_stmt) => {
                     self.trans_fsm
                         .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
                         .await?;
-                    match self.trans_fsm.get_conn().await {
-                        Ok(client_conn) => client_conn,
-                        Err(err) => return Err(err),
-                    }
+                    client_conn = self.trans_fsm.get_conn().await?;
                 }
                 SqlStmt::Rollback(_stmt) => {
                     self.trans_fsm
                         .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
                         .await?;
-                    match self.trans_fsm.get_conn().await {
-                        Ok(client_conn) => client_conn,
-                        Err(err) => return Err(err),
-                    }
+                    client_conn = self.trans_fsm.get_conn().await?;
                 }
                 _ => {
                     self.trans_fsm
                         .trigger(TransEventName::QueryEvent, RouteInput::Statement(sql))
                         .await?;
-                    match self.trans_fsm.get_conn().await {
-                        Ok(client_conn) => client_conn,
-                        Err(err) => return Err(err),
-                    }
+                    client_conn = self.trans_fsm.get_conn().await?;
                 }
             },
         };
