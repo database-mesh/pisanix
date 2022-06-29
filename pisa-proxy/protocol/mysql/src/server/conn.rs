@@ -59,7 +59,7 @@ pub struct Connection {
     pub db: String,
     pub affected_rows: i64,
     pub pkt: Packet,
-    pub autocommit: String,
+    pub autocommit: Option<String>,
     server_version: String,
 }
 
@@ -89,14 +89,14 @@ impl Connection {
             //pkt: Packet::new(Arc::new(Mutex::new(BufStream::new(socket)))),
             pkt: Packet::new(BufStream::new(LocalStream::from(socket))),
             server_version,
-            autocommit: "".to_string(),
+            autocommit: None,
         }
     }
 
     pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
         match self.write_initial_handshake().await {
-            Err(err) => return Err(err::ProtocolError::Io(err)),
-            Ok(_) => debug!("it is ok"),
+            Err(err) => return Err(err),
+            Ok(_) => debug!("handshake write initial ok"),
         }
 
         match self.read_handshake_response().await {
@@ -119,7 +119,7 @@ impl Connection {
         Ok(())
     }
 
-    pub async fn write_initial_handshake(&mut self) -> Result<(), Error> {
+    pub async fn write_initial_handshake(&mut self) -> Result<(), ProtocolError> {
         let mut data = BytesMut::with_capacity(4);
 
         // init header

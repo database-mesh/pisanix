@@ -628,7 +628,7 @@ impl<'a> Scanner<'a> {
 
         let old_pos = self.pos;
 
-        self.scan_until(false, |scanner| {
+        self.scan_until(false,  |scanner| {
             let ch = scanner.peek();
             match ch {
                 ch if ch.is_alphanumeric() => false,
@@ -636,6 +636,14 @@ impl<'a> Scanner<'a> {
                 ch if (ch as u32) >= 0x80 && (ch as u32) <= 0xFFFF => false,
 
                 '_' | '$' | '\\' | '\t' => false,
+
+                '.' => {
+                    // If is_ident_dot is true, continue scanning until there is an  exit condition.
+                    match scanner.is_ident_dot {
+                        true => false,
+                        false => true,
+                    }
+                },
 
                 _ => true,
             }
@@ -646,6 +654,8 @@ impl<'a> Scanner<'a> {
         // Check whether has the `ident.ident` format.
         if self.is_ident_dot {
             self.pos -= 1;
+            // reset is_ident_dot is false
+            self.is_ident_dot = false;
             return DefaultLexeme::new(T_IDENT, old_pos, ident_str.len());
         }
 

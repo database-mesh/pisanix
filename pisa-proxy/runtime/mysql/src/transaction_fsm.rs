@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use conn_pool::{ConnAttr, Pool, PoolConn};
+use conn_pool::{ConnAttr, Pool, PoolConn, ConnAttrMut};
 use endpoint::endpoint::Endpoint;
-use mysql_protocol::client::conn::ClientConn;
+use mysql_protocol::client::conn::{ClientConn, SessionAttr};
 use pisa_error::error::{Error, ErrorKind};
 use strategy::route::{Route, RouteInput, RouteStrategy};
 use tokio::sync::Mutex;
@@ -262,7 +262,7 @@ pub struct TransFsm {
     pub endpoint: Option<Endpoint>,
     pub db: Option<String>,
     pub charset: String,
-    pub autocommit: String,
+    pub autocommit: Option<String>,
 }
 
 impl TransFsm {
@@ -280,7 +280,7 @@ impl TransFsm {
             endpoint: None,
             db: None,
             charset: String::from("utf8mb4"),
-            autocommit: String::from(""),
+            autocommit: None,
         }
     }
 
@@ -293,14 +293,16 @@ impl TransFsm {
             if event.name == state_name && event.src_state == self.current_state {
                 match event.src_state {
                     TransState::TransDummyState => {
-                        let (client_conn, endpoint) = event
+                        let (mut client_conn, endpoint) = event
                             .driver
                             .as_ref()
                             .unwrap()
                             .get_driver_conn(self.route_strategy.clone(), &mut self.pool, input)
                             .await?;
 
+                        client_conn.init(self.build_conn_attrs()).await;
                         self.client_conn = Some(client_conn);
+
                         self.endpoint = endpoint;
                     }
                     _ => {}
@@ -314,9 +316,12 @@ impl TransFsm {
     }
 
     // when autocommit=0, should be reset fsm state
-    pub fn reset_fsm_state(&mut self) {
+    pub async fn reset_fsm_state(&mut self, input: RouteInput<'_>) -> Result<(), Error>{
         self.current_state = TransState::TransDummyState;
         self.current_event = TransEventName::DummyEvent;
+        
+        self.trigger(TransEventName::QueryEvent, input).await?;
+        Ok(())
     }
 
     // Set current db.
@@ -331,20 +336,19 @@ impl TransFsm {
 
     // Set current autocommit
     pub fn set_autocommit(&mut self, status: String) {
-        self.autocommit = status
+        self.autocommit = Some(status)
     }
 
     pub async fn get_conn(&mut self) -> Result<PoolConn<ClientConn>, Error> {
         let conn = self.client_conn.take();
         let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
         match conn {
-            Some(mut client_conn) => {
-                self.init_session_attr(&mut client_conn).await?;
+            Some(client_conn) => {
                 Ok(client_conn)
             }
             None => match self.pool.get_conn_with_opts(addr).await {
                 Ok(mut client_conn) => {
-                    self.init_session_attr(&mut client_conn).await?;
+                    client_conn.init(self.build_conn_attrs()).await;
                     Ok(client_conn)
                 }
                 Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
@@ -356,33 +360,13 @@ impl TransFsm {
         self.client_conn = Some(conn)
     }
 
-    // init session attrs, db and charset attr
+
     #[inline]
-    async fn init_session_attr(&mut self, conn: &mut PoolConn<ClientConn>) -> Result<(), Error> {
-        // set db
-        if self.db != conn.get_db() {
-            if let Some(db) = &self.db {
-                conn.send_use_db(db).await.map_err(ErrorKind::Protocol)?;
-            }
-        }
-
-        //set charset
-        if Some(&self.charset) != conn.get_charset().as_ref() {
-            conn.set_charset(&self.charset);
-            conn.send_query_discard_result(&format!("SET NAMES {}", &self.charset))
-                .await
-                .map_err(ErrorKind::Protocol)?;
-        }
-
-        //set autocommit
-        if Some(&self.autocommit) != conn.get_autocommit().as_ref() {
-            conn.set_charset(&self.charset);
-            conn.set_autocommit(&self.autocommit);
-            conn.send_query_discard_result(&format!("SET AUTOCOMMIT = {}", &self.autocommit))
-                .await
-                .map_err(ErrorKind::Protocol)?;
-        }
-
-        Ok(())
+    fn build_conn_attrs(&self) -> Vec<SessionAttr> {
+        vec![
+            SessionAttr::DB(self.db.clone()),
+            SessionAttr::Charset(self.charset.clone()),
+            SessionAttr::Autocommit(self.autocommit.clone()),
+        ]
     }
 }
