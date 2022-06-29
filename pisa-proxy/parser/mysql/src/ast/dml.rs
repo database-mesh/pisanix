@@ -3117,7 +3117,7 @@ pub struct ShowIndexStmt {
     pub index_cmd_type: ShowIndexCmdType,
     pub from_table: ShowFromTable,
     pub opt_db: Option<ShowTableDb>,
-    pub opt_wild_or_where: Option<WildOrWhere>,
+    pub where_clause: Option<WhereClause>,
 }
 
 #[derive(Debug, Clone)]

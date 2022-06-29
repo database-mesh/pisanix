@@ -5991,7 +5991,7 @@ show_create_table_stmt -> Box<ShowCreateTable>:
 ;
 
 show_index_stmt -> Box<ShowIndexStmt>:
-    'SHOW' opt_show_cmd_type index_cmd_type from_table opt_db opt_wild_or_where
+    'SHOW' opt_show_cmd_type index_cmd_type from_table opt_db opt_where_clause
     {
     	Box::new(ShowIndexStmt {
     	   span: $span,
@@ -5999,7 +5999,7 @@ show_index_stmt -> Box<ShowIndexStmt>:
     	   index_cmd_type: $3,
     	   from_table: $4,
     	   opt_db: $5,
-    	   opt_wild_or_where: $6,
+    	   where_clause: $6,
     	})
     }
 ;
