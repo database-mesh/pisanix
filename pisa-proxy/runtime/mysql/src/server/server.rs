@@ -502,7 +502,12 @@ impl MySqlServer {
                 SetOpts::SetNames(name) => {
                     if let Some(name) = &name.charset_name {
                         self.client.charset = name.clone();
-                        self.trans_fsm.set_charset(name.clone())
+                        self.trans_fsm.set_charset(name.clone());
+                        self.trans_fsm
+                            .trigger(TransEventName::SetSessionEvent, RouteInput::Statement(input))
+                            .await
+                            .unwrap();
+                        return;
                     }
                 }
                 SetOpts::SetVariable(val) => {
@@ -522,18 +527,26 @@ impl MySqlServer {
                                     }
 
                                     if value == "1" {
-                                        let _ = self.trans_fsm.reset_fsm_state(RouteInput::Statement(input)).await;
+                                        let _ = self
+                                            .trans_fsm
+                                            .reset_fsm_state(RouteInput::Statement(input))
+                                            .await;
                                     }
 
                                     self.client.autocommit = Some(value.clone());
                                     self.trans_fsm.set_autocommit(value.clone());
+                                    return;
                                 }
                                 _ => {}
                             },
                             ExprOrDefault::On => {
                                 self.client.autocommit = Some(String::from("ON"));
                                 self.trans_fsm.set_autocommit(String::from("ON"));
-                                let _ = self.trans_fsm.reset_fsm_state(RouteInput::Statement(input)).await;
+                                let _ = self
+                                    .trans_fsm
+                                    .reset_fsm_state(RouteInput::Statement(input))
+                                    .await;
+                                return;
                             }
 
                             _ => {}
@@ -545,6 +558,11 @@ impl MySqlServer {
 
             _ => {}
         }
+
+        self.trans_fsm
+            .trigger(TransEventName::SetSessionEvent, RouteInput::Statement(input))
+            .await
+            .unwrap();
     }
 
     pub async fn handle_query_resultset<'b>(

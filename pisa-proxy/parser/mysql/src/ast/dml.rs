@@ -3105,6 +3105,12 @@ pub struct ShowTableDb {
 }
 
 #[derive(Debug, Clone)]
+pub struct ShowCreateTable {
+    pub span: Span,
+    pub table: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct ShowIndexStmt {
     pub span: Span,
     pub opt_show_cmd_type: Option<ShowCmdType>,
