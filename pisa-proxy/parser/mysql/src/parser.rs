@@ -128,6 +128,7 @@ mod test {
             "select * from test.test limit 1",
             "select * from test.1test limit 1",
             "SHOW COLUMNS FROM t_order;",
+            "SHOW CREATE TABLE t_order;",
         ];
 
         let p = Parser::new();

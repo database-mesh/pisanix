@@ -3103,3 +3103,9 @@ pub struct ShowTableDb {
     pub from_or_in: FromOrIn,
     pub db: String,
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowCreateTable {
+    pub span: Span,
+    pub table: String,
+}
