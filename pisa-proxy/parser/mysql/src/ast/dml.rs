@@ -3105,7 +3105,20 @@ pub struct ShowTableDb {
 }
 
 #[derive(Debug, Clone)]
-pub struct ShowCreateTable {
+pub struct ShowCreateTableStmt {
     pub span: Span,
     pub table: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowVariablesStmt {
+    pub span: Span,
+    pub opt_session_cmd_type: Option<ShowSessionCmdType>,
+    pub opt_wild_or_where: Option<WildOrWhere>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ShowSessionCmdType {
+    Global,
+    Session,
 }

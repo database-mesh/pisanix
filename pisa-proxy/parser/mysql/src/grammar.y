@@ -108,7 +108,8 @@ sql_stmt -> SqlStmt:
   | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
   | show_columns_stmt   { SqlStmt::ShowColumnsStmt($1) }
-  | show_create_table_stmt  { SqlStmt::ShowCreateTable($1) }
+  | show_create_table_stmt  { SqlStmt::ShowCreateTableStmt($1) }
+  | show_variables_stmt     { SqlStmt::ShowVariablesStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -5978,14 +5979,31 @@ from_or_in -> FromOrIn:
     | 'IN'   { FromOrIn::In }
 ;
 
-show_create_table_stmt -> Box<ShowCreateTable>:
+show_create_table_stmt -> Box<ShowCreateTableStmt>:
     'SHOW' 'CREATE' 'TABLE' table_ident
     {
-        Box::new(ShowCreateTable {
+        Box::new(ShowCreateTableStmt {
            span: $span,
            table: $4,
         })
     }
+;
+
+show_variables_stmt -> Box<ShowVariablesStmt>:
+    'SHOW' opt_session_cmd_type 'VARIABLES' opt_wild_or_where
+    {
+        Box::new(ShowVariablesStmt {
+           span: $span,
+           opt_session_cmd_type: $2,
+           opt_wild_or_where: $4,
+        })
+    }
+;
+
+opt_session_cmd_type -> Option<ShowSessionCmdType>:
+       /* empty */          { None }
+     | GLOBAL               { Some(ShowSessionCmdType::Global) }
+     | SESSION              { Some(ShowSessionCmdType::Session) }
 ;
 
 start -> Start:
