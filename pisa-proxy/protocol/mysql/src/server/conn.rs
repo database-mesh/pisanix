@@ -147,7 +147,7 @@ impl Connection {
         data.put_u8((DEFAULT_CAPABILITY >> 8) as u8);
 
         //charset, utf-8 default
-        data.put_u8(CHARSET_NAME_ID_MYSQL5[&*self.charset]);
+        data.put_u8(COLLATION_NAME_ID_MYSQL5[&*self.charset]);
 
         //status
         data.put_u8(self.status as u8);

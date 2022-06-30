@@ -33,40 +33,40 @@ balance_type = "random"
 # 选择挂载后端节点
 nodes = ["ds001"]
 
-[proxy.config.read_write_splitting]
+# [proxy.config.read_write_splitting]
 
-[proxy.config.read_write_splitting.static]
-default_target = "read"
+# [proxy.config.read_write_splitting.static]
+# default_target = "read"
 
-[[proxy.config.read_write_splitting.static.rule]]
-name = "read-rule"
-type = "regex"
-regex = [".*"]
-target = "read"
-algorithm_name = "random"
+# [[proxy.config.read_write_splitting.static.rule]]
+# name = "read-rule"
+# type = "regex"
+# regex = [".*"]
+# target = "read"
+# algorithm_name = "random"
 
-[[proxy.config.read_write_splitting.static.rule]]
-name = "write-rule"
-type = "regex"
-regex = [".*"]
-target = "readwrite"
-algorithm_name = "roundrobin"
+# [[proxy.config.read_write_splitting.static.rule]]
+# name = "write-rule"
+# type = "regex"
+# regex = [".*"]
+# target = "readwrite"
+# algorithm_name = "roundrobin"
 
-[[proxy.config.plugin.concurrency_control]]
-regex = ["aaa"]
-max_concurrency = 5
-duration = 333
+# [[proxy.config.plugin.concurrency_control]]
+# regex = ["aaa"]
+# max_concurrency = 5
+# duration = 333
 
-[[proxy.config.plugin.concurrency_control]]
-regex = ["bbb"]
-max_concurrency = 5
-duration = 333
+# [[proxy.config.plugin.concurrency_control]]
+# regex = ["bbb"]
+# max_concurrency = 5
+# duration = 333
 
-[[proxy.config.plugin.circuit_break]]
-regex = ["111"]
+# [[proxy.config.plugin.circuit_break]]
+# regex = ["111"]
 
-[[proxy.config.plugin.circuit_break]]
-regex = ["222"]
+# [[proxy.config.plugin.circuit_break]]
+# regex = ["222"]
 
 # 后端数据源配置
 [mysql]
@@ -80,9 +80,9 @@ user = "root"
 # 数据库 password
 password = "12345678"
 # 数据库地址
-host = "127.0.0.1"
+host = "tidb.6ef5a0e.db0fc704.ap-southeast-1.prod.aws.tidbcloud.com"
 # 数据库端口
-port = 3308
+port = 4000
 # 负载均衡节点权重
 weight = 1
 role = "read"

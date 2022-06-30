@@ -162,8 +162,8 @@ impl ClientAuth {
         // self.charset = data[pos]
         let charset_id = data.get_u8();
         match self.server_version.major {
-            5 => self.charset = CHARSET_ID_NAME_MYSQL5[&charset_id].to_string(),
-            _ => self.charset = CHARSET_ID_NAME_MYSQL8[&charset_id].to_string(),
+            5 => self.charset = COLLATION_ID_NAME_MYSQL5[&charset_id].to_string(),
+            _ => self.charset = COLLATION_ID_NAME_MYSQL8[&charset_id].to_string(),
         }
 
         self.status = LittleEndian::read_u16(&data.split_to(2));
@@ -292,8 +292,8 @@ impl ClientAuth {
 
         //charset [1 byte]
         match self.server_version.major {
-            5 => data.put_u8(CHARSET_NAME_ID_MYSQL5[DEFAULT_CHARSET_NAME]),
-            _ => data.put_u8(CHARSET_NAME_ID_MYSQL8[DEFAULT_CHARSET_NAME]),
+            5 => data.put_u8(COLLATION_NAME_ID_MYSQL5[DEFAULT_CHARSET_NAME].try_into().unwrap()),
+            _ => data.put_u8(COLLATION_NAME_ID_MYSQL8[DEFAULT_CHARSET_NAME].try_into().unwrap()),
         }
 
         data.put_slice(&[0; 23]);
