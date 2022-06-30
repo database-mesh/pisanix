@@ -129,6 +129,7 @@ mod test {
             "select * from test.1test limit 1",
             "SHOW COLUMNS FROM t_order;",
             "SHOW CREATE TABLE t_order;",
+            "SHOW MASTER STATUS;",
         ];
 
         let p = Parser::new();

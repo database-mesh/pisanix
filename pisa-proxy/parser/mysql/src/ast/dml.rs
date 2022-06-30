@@ -3109,3 +3109,8 @@ pub struct ShowCreateTable {
     pub span: Span,
     pub table: String,
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowMasterStatusStmt {
+    pub span: Span,
+}

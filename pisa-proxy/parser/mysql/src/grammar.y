@@ -109,6 +109,7 @@ sql_stmt -> SqlStmt:
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
   | show_columns_stmt   { SqlStmt::ShowColumnsStmt($1) }
   | show_create_table_stmt  { SqlStmt::ShowCreateTable($1) }
+  | show_master_status_stmt { SqlStmt::ShowMasterStatusStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -5984,6 +5985,15 @@ show_create_table_stmt -> Box<ShowCreateTable>:
         Box::new(ShowCreateTable {
            span: $span,
            table: $4,
+        })
+    }
+;
+
+show_master_status_stmt -> Box<ShowMasterStatusStmt>:
+    'SHOW' 'MASTER' 'STATUS'
+    {
+        Box::new(ShowMasterStatusStmt {
+           span: $span,
         })
     }
 ;
