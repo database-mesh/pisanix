@@ -3111,6 +3111,23 @@ pub struct ShowCreateTableStmt {
 }
 
 #[derive(Debug, Clone)]
+pub struct ShowKeysStmt {
+    pub span: Span,
+    pub opt_extended: bool,
+    pub keys_or_index: KeysOrIndex,
+    pub from_table: ShowFromTable,
+    pub opt_db: Option<ShowTableDb>,
+    pub opt_where_clause: Option<WhereClause>,
+}
+
+#[derive(Debug, Clone)]
+pub enum KeysOrIndex {
+    Index,
+    Indexes,
+    Keys
+}
+
+#[derive(Debug, Clone)]
 pub struct ShowVariablesStmt {
     pub span: Span,
     pub opt_var_type: Option<ShowVariableType>,

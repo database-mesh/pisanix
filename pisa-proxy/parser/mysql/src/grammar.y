@@ -109,6 +109,7 @@ sql_stmt -> SqlStmt:
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
   | show_columns_stmt   { SqlStmt::ShowColumnsStmt($1) }
   | show_create_table_stmt  { SqlStmt::ShowCreateTableStmt($1) }
+  | show_keys_stmt     { SqlStmt::ShowKeysStmt($1) }
   | show_variables_stmt     { SqlStmt::ShowVariablesStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
@@ -5987,6 +5988,31 @@ show_create_table_stmt -> Box<ShowCreateTableStmt>:
            table: $4,
         })
     }
+;
+
+show_keys_stmt -> Box<ShowKeysStmt>:
+    'SHOW' opt_extended keys_or_index from_table opt_db opt_where_clause
+    {
+    	Box::new(ShowKeysStmt {
+    	   span: $span,
+    	   opt_extended: $2,
+    	   keys_or_index: $3,
+    	   from_table: $4,
+    	   opt_db: $5,
+    	   opt_where_clause: $6,
+    	})
+    }
+;
+
+keys_or_index -> KeysOrIndex:
+       'INDEX'              { KeysOrIndex::Index }
+     | 'INDEXES'            { KeysOrIndex::Indexes }
+     | 'KEYS'               { KeysOrIndex::Keys }
+;
+
+opt_extended -> bool:
+       /* empty */          { false }
+     | 'EXTENDED'           { true }
 ;
 
 show_variables_stmt -> Box<ShowVariablesStmt>:

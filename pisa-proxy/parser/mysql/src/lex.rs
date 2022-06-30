@@ -628,7 +628,7 @@ impl<'a> Scanner<'a> {
 
         let old_pos = self.pos;
 
-        self.scan_until(false,  |scanner| {
+        self.scan_until(false, |scanner| {
             let ch = scanner.peek();
             match ch {
                 ch if ch.is_alphanumeric() => false,
@@ -643,7 +643,7 @@ impl<'a> Scanner<'a> {
                         true => false,
                         false => true,
                     }
-                },
+                }
 
                 _ => true,
             }

@@ -245,7 +245,7 @@ impl MySqlServer {
         {
             error!("err:{:?}", err);
         }
-        let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
+        let mut client_conn = self.trans_fsm.get_conn().await?;
         collect_sql_processed_total!(
             self,
             "COM_INIT_DB",
@@ -298,7 +298,7 @@ impl MySqlServer {
             error!("err: {:?}", err);
         }
 
-        let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
+        let mut client_conn = self.trans_fsm.get_conn().await?;
         collect_sql_processed_total!(
             self,
             "COM_FIELD_LIST",
@@ -348,7 +348,7 @@ impl MySqlServer {
             error!("error: {:?}", err);
         };
 
-        let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
+        let mut client_conn = self.trans_fsm.get_conn().await?;
         collect_sql_processed_total!(
             self,
             "COM_PREPARE",
@@ -426,44 +426,44 @@ impl MySqlServer {
                 self.trans_fsm
                     .trigger(TransEventName::QueryEvent, RouteInput::Statement(sql))
                     .await?;
-                self.trans_fsm.get_conn().await.unwrap()
+                self.trans_fsm.get_conn().await?
             }
 
             Ok(stmt) => match &stmt[0] {
                 SqlStmt::Set(stmt) => {
                     self.handle_set_stmt(stmt, sql).await;
-                    self.trans_fsm.get_conn().await.unwrap()
+                    self.trans_fsm.get_conn().await?
                 }
                 //TODO: split sql stmt for sql audit
                 SqlStmt::BeginStmt(_stmt) => {
                     self.trans_fsm
                         .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
                         .await?;
-                    self.trans_fsm.get_conn().await.unwrap()
+                    self.trans_fsm.get_conn().await?
                 }
                 SqlStmt::Start(_stmt) => {
                     self.trans_fsm
                         .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
                         .await?;
-                    self.trans_fsm.get_conn().await.unwrap()
+                    self.trans_fsm.get_conn().await?
                 }
                 SqlStmt::Commit(_stmt) => {
                     self.trans_fsm
                         .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
                         .await?;
-                    self.trans_fsm.get_conn().await.unwrap()
+                    self.trans_fsm.get_conn().await?
                 }
                 SqlStmt::Rollback(_stmt) => {
                     self.trans_fsm
                         .trigger(TransEventName::StartEvent, RouteInput::Transaction(sql))
                         .await?;
-                    self.trans_fsm.get_conn().await.unwrap()
+                    self.trans_fsm.get_conn().await?
                 }
                 _ => {
                     self.trans_fsm
                         .trigger(TransEventName::QueryEvent, RouteInput::Statement(sql))
                         .await?;
-                    self.trans_fsm.get_conn().await.unwrap()
+                    self.trans_fsm.get_conn().await?
                 }
             },
         };
@@ -630,7 +630,7 @@ impl MySqlServer {
 
     pub async fn handle_execute(&mut self, payload: &[u8]) -> Result<(), Error> {
         let earlier = SystemTime::now();
-        let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
+        let mut client_conn = self.trans_fsm.get_conn().await?;
         collect_sql_processed_total!(
             self,
             "COM_EXECUTE",
