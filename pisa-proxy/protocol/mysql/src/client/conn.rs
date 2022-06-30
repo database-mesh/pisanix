@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 
 use async_trait::async_trait;
 use bytes::BytesMut;
-use conn_pool::{ConnAttr, ConnLike, ConnAttrMut};
+use conn_pool::{ConnAttr, ConnAttrMut, ConnLike};
 use futures::SinkExt;
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
@@ -317,18 +317,20 @@ impl ConnAttrMut for ClientConn {
                             let _ = self.send_use_db(db).await;
                         }
                     }
-                },
+                }
                 SessionAttr::Charset(val) => {
                     if Some(val) != self.get_charset().as_ref() {
                         self.set_charset(val);
                         let _ = self.send_query_discard_result(&format!("SET NAMES {}", val)).await;
                     }
-                },
+                }
                 SessionAttr::Autocommit(val) => {
                     if val != &self.get_autocommit() {
                         if let Some(val) = val {
                             self.set_autocommit(val);
-                            let _ = self.send_query_discard_result(&format!("SET AUTOCOMMIT = {}", val)).await;
+                            let _ = self
+                                .send_query_discard_result(&format!("SET AUTOCOMMIT = {}", val))
+                                .await;
                         }
                     }
                 }
