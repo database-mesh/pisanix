@@ -6009,9 +6009,9 @@ keys_or_index -> KeysOrIndex:
      | 'KEYS'               { KeysOrIndex::Keys }
 ;
 
-opt_extended -> Option<String>:
-       /* empty */          { None }
-     | 'EXTENDED'           { Some(String::from("EXTENDED")) }
+opt_extended -> bool:
+       /* empty */          { false }
+     | 'EXTENDED'           { true }
 ;
 
 start -> Start:
