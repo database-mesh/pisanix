@@ -3111,17 +3111,17 @@ pub struct ShowCreateTable {
 }
 
 #[derive(Debug, Clone)]
-pub struct ShowIndexStmt {
+pub struct ShowKeysStmt {
     pub span: Span,
-    pub opt_show_cmd_type: Option<ShowCmdType>,
-    pub index_cmd_type: ShowIndexCmdType,
+    pub opt_extended: Option<String>,
+    pub keys_or_index: KeysOrIndex,
     pub from_table: ShowFromTable,
     pub opt_db: Option<ShowTableDb>,
-    pub where_clause: Option<WhereClause>,
+    pub opt_where_clause: Option<WhereClause>,
 }
 
 #[derive(Debug, Clone)]
-pub enum ShowIndexCmdType {
+pub enum KeysOrIndex {
     Index,
     Indexes,
     Keys

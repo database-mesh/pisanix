@@ -109,7 +109,7 @@ sql_stmt -> SqlStmt:
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
   | show_columns_stmt   { SqlStmt::ShowColumnsStmt($1) }
   | show_create_table_stmt  { SqlStmt::ShowCreateTable($1) }
-  | show_index_stmt     { SqlStmt::ShowIndexStmt($1) }
+  | show_keys_stmt     { SqlStmt::ShowKeysStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -3738,7 +3738,6 @@ non_reserved_keyword -> &'input str:
   | 'JSON'                                             { "JSON" }
   | 'JSON_VALUE'                                       { "JSON_VALUE" }
   | 'KEYRING'                                          { "KEYRING" }
-  | 'KEYS'                                             { "KEYS" }
   | 'KEY_BLOCK_SIZE'                                   { "KEY_BLOCK_SIZE" }
   | 'LANGUAGE'                                         { "LANGUAGE" }
   | 'LAST'                                             { "LAST" }
@@ -5990,24 +5989,29 @@ show_create_table_stmt -> Box<ShowCreateTable>:
     }
 ;
 
-show_index_stmt -> Box<ShowIndexStmt>:
-    'SHOW' opt_show_cmd_type index_cmd_type from_table opt_db opt_where_clause
+show_keys_stmt -> Box<ShowKeysStmt>:
+    'SHOW' opt_extended keys_or_index from_table opt_db opt_where_clause
     {
-    	Box::new(ShowIndexStmt {
+    	Box::new(ShowKeysStmt {
     	   span: $span,
-    	   opt_show_cmd_type: $2,
-    	   index_cmd_type: $3,
+    	   opt_extended: $2,
+    	   keys_or_index: $3,
     	   from_table: $4,
     	   opt_db: $5,
-    	   where_clause: $6,
+    	   opt_where_clause: $6,
     	})
     }
 ;
 
-index_cmd_type -> ShowIndexCmdType:
-       INDEX              { ShowIndexCmdType::Index }
-     | INDEXES            { ShowIndexCmdType::Indexes }
-     | KEYS               { ShowIndexCmdType::Keys }
+keys_or_index -> KeysOrIndex:
+       'INDEX'              { KeysOrIndex::Index }
+     | 'INDEXES'            { KeysOrIndex::Indexes }
+     | 'KEYS'               { KeysOrIndex::Keys }
+;
+
+opt_extended -> Option<String>:
+       /* empty */          { None }
+     | 'EXTENDED'           { Some(String::from("EXTENDED")) }
 ;
 
 start -> Start:
