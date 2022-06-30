@@ -3113,12 +3113,12 @@ pub struct ShowCreateTableStmt {
 #[derive(Debug, Clone)]
 pub struct ShowVariablesStmt {
     pub span: Span,
-    pub opt_session_cmd_type: Option<ShowSessionCmdType>,
+    pub opt_var_type: Option<ShowVariableType>,
     pub opt_wild_or_where: Option<WildOrWhere>,
 }
 
 #[derive(Debug, Clone)]
-pub enum ShowSessionCmdType {
+pub enum ShowVariableType {
     Global,
     Session,
 }

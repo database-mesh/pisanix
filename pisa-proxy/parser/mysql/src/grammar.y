@@ -5990,20 +5990,21 @@ show_create_table_stmt -> Box<ShowCreateTableStmt>:
 ;
 
 show_variables_stmt -> Box<ShowVariablesStmt>:
-    'SHOW' opt_session_cmd_type 'VARIABLES' opt_wild_or_where
+    'SHOW' opt_var_type 'VARIABLES' opt_wild_or_where
     {
         Box::new(ShowVariablesStmt {
            span: $span,
-           opt_session_cmd_type: $2,
+           opt_var_type: $2,
            opt_wild_or_where: $4,
         })
     }
 ;
 
-opt_session_cmd_type -> Option<ShowSessionCmdType>:
+opt_var_type -> Option<ShowVariableType>:
        /* empty */          { None }
-     | GLOBAL               { Some(ShowSessionCmdType::Global) }
-     | SESSION              { Some(ShowSessionCmdType::Session) }
+     | GLOBAL               { Some(ShowVariableType::Global) }
+     | LOCAL                { Some(ShowVariableType::Session) }
+     | SESSION              { Some(ShowVariableType::Session) }
 ;
 
 start -> Start:
