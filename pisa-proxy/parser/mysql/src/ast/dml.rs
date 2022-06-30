@@ -3105,7 +3105,7 @@ pub struct ShowTableDb {
 }
 
 #[derive(Debug, Clone)]
-pub struct ShowCreateTable {
+pub struct ShowCreateTableStmt {
     pub span: Span,
     pub table: String,
 }
@@ -3125,4 +3125,17 @@ pub enum KeysOrIndex {
     Index,
     Indexes,
     Keys
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowVariablesStmt {
+    pub span: Span,
+    pub opt_var_type: Option<ShowVariableType>,
+    pub opt_wild_or_where: Option<WildOrWhere>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ShowVariableType {
+    Global,
+    Session,
 }

@@ -130,6 +130,9 @@ mod test {
             "SHOW COLUMNS FROM t_order;",
             "SHOW CREATE TABLE t_order;",
             "SHOW EXTENDED INDEX FROM t_order FROM db_order where column_name = 'order_id';",
+            "SHOW VARIABLES LIKE '%size%';",
+            "SHOW GLOBAL VARIABLES LIKE '%size%';",
+            "SHOW SESSION VARIABLES LIKE '%size%';",
         ];
 
         let p = Parser::new();
