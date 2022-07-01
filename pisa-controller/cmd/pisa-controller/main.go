@@ -16,17 +16,12 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"net/http"
-	"time"
 
-	cmdcore "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/core"
-	cmdproxy "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
-	cmdwebhook "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/core"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/factory"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -39,11 +34,6 @@ var (
 	branch    string
 )
 
-const (
-	DefaultReadTimeout  = 5 * time.Second
-	DefaultWriteTimeout = 10 * time.Second
-)
-
 func init() {
 	setVersion()
 	log.Infof("version: %s,gitcommit: %s,branch: %s", version, gitcommit, branch)
@@ -52,39 +42,24 @@ func main() {
 	flag.Parse()
 	kubernetes.GetClient()
 
-	//TODO: need refactor
-	eg.Go(func() error {
-		return newHttpServer(
-			cmdwebhook.Config.Port,
-			webhook.Handler(),
-		).ListenAndServeTLS(cmdwebhook.Config.TLSCertFile, cmdwebhook.Config.TLSKeyFile)
-	})
-	eg.Go(func() error {
-		return newHttpServer(
-			cmdproxy.Config.Port,
-			proxy.Handler(),
-		).ListenAndServe()
-	})
-	eg.Go(func() error {
-		return newHttpServer(
-			cmdcore.Config.Port,
-			core.Handler(),
-		).ListenAndServe()
-	})
+	proxyConf := http.NewHttpConfig().SetAddr(proxy.Config.Port)
+	webhookConf := http.NewHttpConfig().SetAddr(webhook.Config.Port)
+
+	f := factory.PisaFactory{}
+	proxy := f.NewHttpServer(factory.ServerKindProxy, proxyConf, handler)
+	eg.Go(
+		proxy.Run,
+	)
+	webhook := f.NewHttpServer(factory.ServerKindWebhook, webhookConf, handler)
+	eg.Go(
+		webhook.Run,
+	)
 
 	if err := eg.Wait(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func newHttpServer(port string, handler http.Handler) *http.Server {
-	return &http.Server{
-		Addr:         fmt.Sprintf(":%s", port),
-		Handler:      handler,
-		ReadTimeout:  DefaultReadTimeout,
-		WriteTimeout: DefaultWriteTimeout,
-	}
-}
 func setVersion() {
 	if version == "" {
 		version = branch + "-" + gitcommit
