@@ -108,7 +108,9 @@ sql_stmt -> SqlStmt:
   | show_databases_stmt { SqlStmt::ShowDatabasesStmt($1) }
   | show_tables_stmt    { SqlStmt::ShowTablesStmt($1) }
   | show_columns_stmt   { SqlStmt::ShowColumnsStmt($1) }
-  | show_create_table_stmt  { SqlStmt::ShowCreateTable($1) }
+  | show_create_table_stmt  { SqlStmt::ShowCreateTableStmt($1) }
+  | show_keys_stmt     { SqlStmt::ShowKeysStmt($1) }
+  | show_variables_stmt     { SqlStmt::ShowVariablesStmt($1) }
   | show_master_status_stmt { SqlStmt::ShowMasterStatusStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
@@ -5979,14 +5981,57 @@ from_or_in -> FromOrIn:
     | 'IN'   { FromOrIn::In }
 ;
 
-show_create_table_stmt -> Box<ShowCreateTable>:
+show_create_table_stmt -> Box<ShowCreateTableStmt>:
     'SHOW' 'CREATE' 'TABLE' table_ident
     {
-        Box::new(ShowCreateTable {
+        Box::new(ShowCreateTableStmt {
            span: $span,
            table: $4,
         })
     }
+;
+
+show_keys_stmt -> Box<ShowKeysStmt>:
+    'SHOW' opt_extended keys_or_index from_table opt_db opt_where_clause
+    {
+    	Box::new(ShowKeysStmt {
+    	   span: $span,
+    	   opt_extended: $2,
+    	   keys_or_index: $3,
+    	   from_table: $4,
+    	   opt_db: $5,
+    	   opt_where_clause: $6,
+    	})
+    }
+;
+
+keys_or_index -> KeysOrIndex:
+       'INDEX'              { KeysOrIndex::Index }
+     | 'INDEXES'            { KeysOrIndex::Indexes }
+     | 'KEYS'               { KeysOrIndex::Keys }
+;
+
+opt_extended -> bool:
+       /* empty */          { false }
+     | 'EXTENDED'           { true }
+;
+
+show_variables_stmt -> Box<ShowVariablesStmt>:
+    'SHOW' opt_var_type 'VARIABLES' opt_wild_or_where
+    {
+        Box::new(ShowVariablesStmt {
+           span: $span,
+           opt_var_type: $2,
+           opt_wild_or_where: $4,
+        })
+    }
+;
+
+opt_var_type -> Option<ShowVariableType>:
+       /* empty */          { None }
+     | GLOBAL               { Some(ShowVariableType::Global) }
+     | LOCAL                { Some(ShowVariableType::Session) }
+     | SESSION              { Some(ShowVariableType::Session) }
 ;
 
 show_master_status_stmt -> Box<ShowMasterStatusStmt>:

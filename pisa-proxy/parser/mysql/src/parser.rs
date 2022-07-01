@@ -129,6 +129,10 @@ mod test {
             "select * from test.1test limit 1",
             "SHOW COLUMNS FROM t_order;",
             "SHOW CREATE TABLE t_order;",
+            "SHOW EXTENDED INDEX FROM t_order FROM db_order where column_name = 'order_id';",
+            "SHOW VARIABLES LIKE '%size%';",
+            "SHOW GLOBAL VARIABLES LIKE '%size%';",
+            "SHOW SESSION VARIABLES LIKE '%size%';",
             "SHOW MASTER STATUS;",
         ];
 
@@ -141,7 +145,7 @@ mod test {
                     println!("sql={:?} {:?}", input, e)
                 }
                 Ok(_stmt) => {
-                    //println!("{:#?}", s)
+                    //println!("{:#?}", _stmt)
                 }
             }
         }

@@ -3105,9 +3105,39 @@ pub struct ShowTableDb {
 }
 
 #[derive(Debug, Clone)]
-pub struct ShowCreateTable {
+pub struct ShowCreateTableStmt {
     pub span: Span,
     pub table: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowKeysStmt {
+    pub span: Span,
+    pub opt_extended: bool,
+    pub keys_or_index: KeysOrIndex,
+    pub from_table: ShowFromTable,
+    pub opt_db: Option<ShowTableDb>,
+    pub opt_where_clause: Option<WhereClause>,
+}
+
+#[derive(Debug, Clone)]
+pub enum KeysOrIndex {
+    Index,
+    Indexes,
+    Keys
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowVariablesStmt {
+    pub span: Span,
+    pub opt_var_type: Option<ShowVariableType>,
+    pub opt_wild_or_where: Option<WildOrWhere>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ShowVariableType {
+    Global,
+    Session,
 }
 
 #[derive(Debug, Clone)]
