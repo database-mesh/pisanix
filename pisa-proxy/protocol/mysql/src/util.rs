@@ -185,14 +185,16 @@ pub fn length_encoded_string(data: &mut BytesMut) -> (Vec<u8>, bool) {
     (data.split_to(num as usize).to_vec(), false)
 }
 
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_eof_packet.html
 #[inline]
 pub fn is_eof(data: &[u8]) -> bool {
-    data.len() < 9 + 4 && *unsafe { data.get_unchecked(4) } == EOF_HEADER
+    data.len() < 9 && *unsafe { data.get_unchecked(4) } == EOF_HEADER
 }
 
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_ok_packet.html
 #[inline]
 pub fn is_ok(data: &[u8]) -> bool {
-    data.len() > 7 + 4 && *unsafe { data.get_unchecked(4) } == OK_HEADER
+    data.len() > 7 && *unsafe { data.get_unchecked(4) } == OK_HEADER
 }
 
 #[inline]
