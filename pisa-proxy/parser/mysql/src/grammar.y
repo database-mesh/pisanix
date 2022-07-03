@@ -31,6 +31,7 @@
 %token LOWER_THEN_INTERVAL
 %token LOWER_THEN_TEXT_STRING
 %token LOWER_THEN_SAVEPOINT
+%token LOWER_THEN_COMMA
 
 
 
@@ -64,6 +65,8 @@
 %nonassoc 'QUICK'
 %nonassoc LOWER_THEN_SAVEPOINT
 %nonassoc SAVEPOINT
+%nonassoc LOWER_THEN_COMMA
+%nonassoc ','
 
 
 %left 'EMPTY_FROM_CLAUSE'
@@ -2372,7 +2375,7 @@ opt_expr_list -> Vec<Expr>:
   ;
 
 expr_list -> Vec<Expr>:
-    expr
+    expr %prec LOWER_THEN_COMMA
     {
       vec![$1]
     }
@@ -6167,6 +6170,11 @@ create -> Create:
 			}
 		))
           }
+          | 'CREATE' view_or_trigger_or_sp_or_event
+          {
+		Create::CreateViewOrTriggerOrSpOrEvent(Box::new($2))
+          }
+          /* TODO */
         ;
 
 opt_if_not_exists -> bool:
@@ -6262,6 +6270,290 @@ default_encryption -> CreateDatabaseOption:
           }
         ;
 
+view_or_trigger_or_sp_or_event -> ViewOrTriggerOrSpOrEvent:
+          definer init_lex_create_info definer_tail
+          {
+          	ViewOrTriggerOrSpOrEvent{
+          		definer: $1,
+          		definer_tail: $3,
+          	}
+          }
+        /* TODO */
+        ;
+
+definer -> Definer:
+          'DEFINER' 'EQ' user
+          {
+		Definer{
+			user: $3,
+		}
+          }
+        ;
+
+user -> User:
+          user_ident_or_text
+          {
+            	User::UserIdentOrText($1)
+          }
+        | 'CURRENT_USER' optional_braces
+          {
+            	User::CurrentUser
+          }
+        ;
+
+user_ident_or_text -> String:
+          ident_or_text
+          {
+		$1
+          }
+        | ident_or_text '@' ident_or_text
+          {
+	    	$1.push('@');
+	    	$1.push_str(&$3);
+	    	$1
+          }
+        ;
+
+init_lex_create_info -> Option<String>:
+          /* empty */
+          {
+          	None
+          }
+        ;
+
+definer_tail -> DefinerTail:
+          view_tail { DefinerTail::ViewTail($1) }
+        | trigger_tail { DefinerTail::TriggerTail($1) }
+        | sp_tail { DefinerTail::SpTail($1) }
+        /* TODO */
+        ;
+
+view_tail -> ViewTail:
+          view_suid 'VIEW' table_ident opt_derived_column_list 'AS' view_query_block
+          {
+            	ViewTail{
+            		span: $span,
+            		view_suid: $1,
+            		view_name: $3,
+            		columns: $4,
+            		view_query_block: $6,
+            	}
+          }
+        ;
+
+view_suid -> ViewSuid:
+          /* empty */
+          { ViewSuid::ViewSuidDefault }
+        | 'SQL' 'SECURITY' 'DEFINER'
+          { ViewSuid::ViewSuidDefiner }
+        | 'SQL' 'SECURITY' 'INVOKER'
+          { ViewSuid::ViewSuidInvoker }
+        ;
+
+view_query_block -> ViewQueryBlock:
+          query_expression_or_parens view_check_option
+          {
+		ViewQueryBlock{
+			select_stmt:$1,
+			view_check_option:$2,
+		}
+          }
+          ;
+
+view_check_option -> ViewCheckOption:
+          /* empty */                     { ViewCheckOption::ViewCheckNone }
+        | 'WITH' 'CHECK' 'OPTION'           { ViewCheckOption::ViewCheckCascade }
+        | 'WITH' 'CASCADED' 'CHECK' 'OPTION'  { ViewCheckOption::ViewCheckCascade }
+        | 'WITH' 'LOCAL' 'CHECK' 'OPTION' { ViewCheckOption::ViewCheckLocal }
+        ;
+
+trigger_tail -> TriggerTail:
+          'TRIGGER'
+          sp_name
+          trg_action_time
+          trg_event
+          'ON'
+          table_ident
+          'FOR'
+          'EACH'
+          'ROW'
+          trigger_follows_precedes_clause
+          sp_proc_stmt
+          {
+          	TriggerTail{
+          		span: $span,
+			sp_name: $2,
+			trg_action_time: $3,
+			trg_event: $4,
+			table_name: $6,
+			trigger_follows_precedes_clause: $10,
+			sp_proc_stmt: $11,
+          	}
+          }
+        ;
+
+sp_name -> String:
+          ident '.' ident
+          {
+	      	let mut s = String::with_capacity($1.0.len()+1+$3.0.len());
+	      	s.push_str(&$1.0);
+	      	s.push('.');
+	      	s.push_str(&$3.0);
+	      	s
+          }
+        | ident
+          {
+          	$1.0
+          }
+        ;
+
+trg_action_time -> TrgActionTime:
+            'BEFORE'
+            { TrgActionTime::Before }
+          | 'AFTER'
+            { TrgActionTime::After }
+          ;
+
+trg_event -> TrgEvent:
+            'INSERT'
+            { TrgEvent::Insert }
+          | 'UPDATE'
+            { TrgEvent::Update }
+          | 'DELETE'
+            { TrgEvent::Delete }
+          ;
+
+trigger_follows_precedes_clause -> TriggerFollowsPrecedesClause:
+            /* empty */
+            {
+            	TriggerFollowsPrecedesClause{
+            		ordering_clause: TrgActionOrder::None,
+            		anchor_trigger_name: None,
+            	}
+            }
+          |
+            trigger_action_order ident_or_text
+            {
+              	TriggerFollowsPrecedesClause{
+                          		ordering_clause: $1,
+                          		anchor_trigger_name: Some($2),
+                          	}
+            }
+          ;
+
+trigger_action_order -> TrgActionOrder:
+            'FOLLOWS'
+            { TrgActionOrder::Follows }
+          | 'PRECEDES'
+            { TrgActionOrder::Precedes }
+          ;
+
+sp_proc_stmt -> Option<String>:
+         /* TODO */
+         { None }
+        ;
+
+sp_tail -> SpTail:
+          'PROCEDURE'
+          sp_name
+          '('
+          sp_pdparam_list
+          ')'
+          sp_c_chistics
+          sp_proc_stmt
+          {
+          	SpTail{
+          		span: $span,
+          		sp_name: $2,
+          		sp_pdparam_list: $4,
+          		sp_c_chistics: $6,
+          		sp_proc_stmt: $7,
+          	}
+          }
+        ;
+
+sp_pdparam_list -> Vec<SpPdparam>:
+          /* Empty */ { vec![] }
+        | sp_pdparams { $1 }
+        ;
+
+sp_pdparams -> Vec<SpPdparam>:
+          sp_pdparams ',' sp_pdparam
+          {
+          	$1.push($3);
+          	$1
+          }
+        | sp_pdparam
+        {
+        	vec![$1]
+        }
+        ;
+
+sp_pdparam -> SpPdparam:
+          sp_opt_inout ident type opt_collate
+          {
+            	SpPdparam{
+            		sp_opt_inout: $1,
+            		ident: $2.0,
+            		sp_type: $3,
+            		opt_collate: $4,
+            	}
+          }
+        ;
+
+sp_opt_inout -> SpOptInout:
+          /* Empty */ { SpOptInout::In }
+        | 'IN'      { SpOptInout::In }
+        | 'OUT'     { SpOptInout::Out }
+        | 'INOUT'   { SpOptInout::Inout }
+        ;
+
+sp_c_chistics -> Vec<String>:
+          /* Empty */ { vec![] }
+        | sp_c_chistics sp_c_chistic
+        {
+        	$1.push($2);
+        	$1
+        }
+        ;
+
+sp_c_chistic -> String:
+          sp_chistic            { $1 }
+        | 'DETERMINISTIC'     { String::from("DETERMINISTIC") }
+        | not 'DETERMINISTIC' { String::from("NOT DETERMINISTIC") }
+        ;
+
+sp_chistic -> String:
+          'COMMENT' 'TEXT_STRING'
+          {
+	      let mut s = String::from("COMMENT ");
+	      s.push_str($lexer.span_str($1.as_ref().unwrap().span()));
+	      s
+          }
+        | 'LANGUAGE' 'SQL'
+          { String::from("LANGUAGE SQL") }
+        | 'NO' 'SQL'
+          { String::from("NO SQL") }
+        | 'CONTAINS' 'SQL'
+          { String::from("CONTAINS SQL") }
+        | 'READS' 'SQL' 'DATA'
+          { String::from("READS SQL DATA") }
+        | 'MODIFIES' 'SQL' 'DATA'
+          { String::from("MODIFIES SQL DATA") }
+        | sp_suid
+          { $1 }
+        ;
+
+sp_suid -> String:
+          'SQL' 'SECURITY' 'DEFINER'
+          {
+            String::from("SQL SECURITY DEFINER")
+          }
+        | 'SQL' 'SECURITY' 'INVOKER'
+          {
+            String::from("SQL SECURITY INVOKER")
+          }
+        ;
 %%
 
 use lrpar::Span;
