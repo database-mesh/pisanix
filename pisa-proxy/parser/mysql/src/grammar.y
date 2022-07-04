@@ -6519,7 +6519,7 @@ sp_opt_inout -> SpOptInout:
         | 'INOUT'   { SpOptInout::Inout }
         ;
 
-sp_c_chistics -> Vec<String>:
+sp_c_chistics -> Vec<SpCChistic>:
           /* Empty */ { vec![] }
         | sp_c_chistics sp_c_chistic
         {
@@ -6528,41 +6528,39 @@ sp_c_chistics -> Vec<String>:
         }
         ;
 
-sp_c_chistic -> String:
-          sp_chistic            { $1 }
-        | 'DETERMINISTIC'     { String::from("DETERMINISTIC") }
-        | not 'DETERMINISTIC' { String::from("NOT DETERMINISTIC") }
+sp_c_chistic -> SpCChistic:
+          sp_chistic            { SpCChistic::SpChistic($1) }
+        | 'DETERMINISTIC'     { SpCChistic::Deterministic }
+        | not 'DETERMINISTIC' { SpCChistic::NotDeterministic }
         ;
 
-sp_chistic -> String:
+sp_chistic -> SpChistic:
           'COMMENT' 'TEXT_STRING'
           {
-	      let mut s = String::from("COMMENT ");
-	      s.push_str($lexer.span_str($1.as_ref().unwrap().span()));
-	      s
+	      SpChistic::Comment(String::from($lexer.span_str($1.as_ref().unwrap().span())))
           }
         | 'LANGUAGE' 'SQL'
-          { String::from("LANGUAGE SQL") }
+          { SpChistic::LanguageSql }
         | 'NO' 'SQL'
-          { String::from("NO SQL") }
+          { SpChistic::NoSql }
         | 'CONTAINS' 'SQL'
-          { String::from("CONTAINS SQL") }
+          { SpChistic::ContainsSql }
         | 'READS' 'SQL' 'DATA'
-          { String::from("READS SQL DATA") }
+          { SpChistic::ReadsSqlData }
         | 'MODIFIES' 'SQL' 'DATA'
-          { String::from("MODIFIES SQL DATA") }
+          { SpChistic::ModifiesSqlData }
         | sp_suid
-          { $1 }
+          { SpChistic::SpSuid($1) }
         ;
 
-sp_suid -> String:
+sp_suid -> SpSuid:
           'SQL' 'SECURITY' 'DEFINER'
           {
-            String::from("SQL SECURITY DEFINER")
+            SpSuid::SpIsSuid
           }
         | 'SQL' 'SECURITY' 'INVOKER'
           {
-            String::from("SQL SECURITY INVOKER")
+            SpSuid::SpIsNotSuid
           }
         ;
 %%

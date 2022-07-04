@@ -167,6 +167,30 @@ pub struct SpTail {
     pub span: Span,
     pub sp_name: String,
     pub sp_pdparam_list: Vec<SpPdparam>,
-    pub sp_c_chistics: Vec<String>,
+    pub sp_c_chistics: Vec<SpCChistic>,
     pub sp_proc_stmt: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SpSuid {
+    SpIsSuid,
+    SpIsNotSuid,
+}
+
+#[derive(Debug, Clone)]
+pub enum SpChistic {
+    Comment(String),
+    LanguageSql,
+    NoSql,
+    ContainsSql,
+    ReadsSqlData,
+    ModifiesSqlData,
+    SpSuid(SpSuid),
+}
+
+#[derive(Debug, Clone)]
+pub enum SpCChistic {
+    SpChistic(SpChistic),
+    Deterministic,
+    NotDeterministic,
 }
