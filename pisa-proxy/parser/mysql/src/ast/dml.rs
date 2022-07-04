@@ -3141,6 +3141,12 @@ pub enum ShowVariableType {
 }
 
 #[derive(Debug, Clone)]
+pub struct ShowCreateViewStmt {
+    pub span: Span,
+    pub view_name: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct ShowMasterStatusStmt {
     pub span: Span,
 }

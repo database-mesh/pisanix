@@ -138,7 +138,7 @@ annotations:
     database-mesh.io/role: read
 ```
 
-默认的角色属性为 read 和 readwrite 
+默认的角色属性为 `readwrite` 
 
 
 
