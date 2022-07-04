@@ -34,14 +34,12 @@ const (
 )
 
 type HttpServer interface {
-	// BuildWithConfig(conf HttpConfig) HttpServer
 	Build() HttpServer
 	Run() error
 }
 
 type HttpConfig struct {
-	Addr string
-	// Handler      http.Handler
+	Addr         string
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 }
@@ -54,19 +52,3 @@ func (c *HttpConfig) SetAddr(port string) *HttpConfig {
 	c.Addr = fmt.Sprintf(":%s", port)
 	return c
 }
-
-// type HttpBuilder interface {
-// 	Build() HttpServer
-// 	NewHttpServer(port string, handler http.Handler) HttpBuilder
-// }
-
-// type Builder struct{}
-
-// func (b *Builder) NewHttpServer(port string, handler http.Handler) *http.Server {
-// 	return &http.Server{
-// 		Addr:         fmt.Sprintf(":%s", port),
-// 		Handler:      handler,
-// 		ReadTimeout:  DefaultReadTimeout,
-// 		WriteTimeout: DefaultWriteTimeout,
-// 	}
-// }

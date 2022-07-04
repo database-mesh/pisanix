@@ -19,9 +19,11 @@ import (
 
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/factory"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
-	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
-	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
+	proxyconfig "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
+	webhookconfig "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
+	proxyserver "github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
+	webhookserver "github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -42,15 +44,18 @@ func main() {
 	flag.Parse()
 	kubernetes.GetClient()
 
-	proxyConf := http.NewHttpConfig().SetAddr(proxy.Config.Port)
-	webhookConf := http.NewHttpConfig().SetAddr(webhook.Config.Port)
+	proxyConf := http.NewHttpConfig().SetAddr(proxyconfig.Config.Port)
+	webhookConf := http.NewHttpConfig().SetAddr(webhookconfig.Config.Port)
+
+	proxyHandler := proxyserver.Handler()
+	webhookHandler := webhookserver.Handler()
 
 	f := factory.PisaFactory{}
-	proxy := f.NewHttpServer(factory.ServerKindProxy, proxyConf, handler)
+	proxy := f.NewHttpServer(factory.ServerKindProxy, proxyConf, proxyHandler)
 	eg.Go(
 		proxy.Run,
 	)
-	webhook := f.NewHttpServer(factory.ServerKindWebhook, webhookConf, handler)
+	webhook := f.NewHttpServer(factory.ServerKindWebhook, webhookConf, webhookHandler)
 	eg.Go(
 		webhook.Run,
 	)

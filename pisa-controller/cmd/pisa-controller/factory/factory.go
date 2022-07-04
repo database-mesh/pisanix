@@ -15,7 +15,9 @@
 package factory
 
 import (
-	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
+	"net/http"
+
+	pisahttp "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
 )
@@ -28,12 +30,12 @@ const (
 )
 
 type Factory interface {
-	NewHttpServer(kind ServerKind) http.HttpServer
+	NewHttpServer(kind ServerKind) pisahttp.HttpServer
 }
 
 type PisaFactory struct{}
 
-func (p PisaFactory) NewHttpServer(kind ServerKind, conf http.HttpConfig, handler http.Handler) http.HttpServer {
+func (p PisaFactory) NewHttpServer(kind ServerKind, conf *pisahttp.HttpConfig, handler http.Handler) pisahttp.HttpServer {
 	switch kind {
 	case ServerKindProxy:
 		{
@@ -41,7 +43,7 @@ func (p PisaFactory) NewHttpServer(kind ServerKind, conf http.HttpConfig, handle
 		}
 	case ServerKindWebhook:
 		{
-			return webhook.NewProxyServer(conf).WithHandler(handler).Build()
+			return webhook.NewWebhookServer(conf).WithHandler(handler).Build()
 		}
 	}
 	return nil

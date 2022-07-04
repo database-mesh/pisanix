@@ -16,7 +16,6 @@ package webhook
 
 import (
 	"flag"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -37,43 +36,12 @@ const (
 	DefaultWriteTimeout = 10 * time.Second
 )
 
-func newHttpServer(port string, handler http.Handler) *http.Server {
+func newHttpServer(addr string, handler http.Handler) *http.Server {
 	return &http.Server{
-		Addr:         fmt.Sprintf(":%s", port),
+		Addr:         addr,
 		Handler:      handler,
 		ReadTimeout:  DefaultReadTimeout,
 		WriteTimeout: DefaultWriteTimeout,
-	}
-}
-
-type WebhookServerBuilder struct {
-	Addr         string
-	Handler      http.Handler
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-}
-
-func NewWebhookServerBuilder() *WebhookServerBuilder {
-	return &WebhookServerBuilder{
-		ReadTimeout:  DefaultReadTimeout,
-		WriteTimeout: DefaultWriteTimeout,
-	}
-}
-
-// func (b *WebhookServerBuilder) SetPort(port string) *WebhookServerBuilder {
-// 	b.Addr = fmt.Sprintf(":%s", port)
-// 	return b
-// }
-
-// func (b *WebhookServerBuilder) SetHandler(handler http.Handler) *WebhookServerBuilder {
-// 	b.Handler = handler
-// 	return b
-// }
-
-func (b *WebhookServerBuilder) Build() pisahttp.HttpServer {
-	hs := newHttpServer(b.Addr, b.Handler)
-	return &WebhookServer{
-		core: hs,
 	}
 }
 
@@ -81,13 +49,22 @@ type WebhookServer struct {
 	core *http.Server
 }
 
-// func NewWebhookServer(port string, handler http.Handler) *WebhookServer {
-// 	hs := newHttpServer(port, handler)
-// 	return &WebhookServer{
-// 		core: hs,
-// 	}
-// }
+func NewWebhookServer(conf *pisahttp.HttpConfig) *WebhookServer {
+	hs := newHttpServer(conf.Addr, nil)
+	return &WebhookServer{
+		core: hs,
+	}
+}
 
 func (s WebhookServer) Run() error {
 	return s.core.ListenAndServe()
+}
+
+func (s *WebhookServer) WithHandler(handler http.Handler) *WebhookServer {
+	s.core.Handler = handler
+	return s
+}
+
+func (s *WebhookServer) Build() pisahttp.HttpServer {
+	return s
 }

@@ -16,7 +16,6 @@ package proxy
 
 import (
 	"flag"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -35,57 +34,21 @@ const (
 	DefaultWriteTimeout = 10 * time.Second
 )
 
-func newHttpServer(port string, handler http.Handler) *http.Server {
+func newHttpServer(addr string, handler http.Handler) *http.Server {
 	return &http.Server{
-		Addr:         fmt.Sprintf(":%s", port),
+		Addr:         addr,
 		Handler:      handler,
 		ReadTimeout:  DefaultReadTimeout,
 		WriteTimeout: DefaultWriteTimeout,
 	}
 }
 
-type ProxyServerBuilder struct {
-	Addr         string
-	Handler      http.Handler
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	Buider       pisahttp.Builder
-}
-
-func NewProxyServerBuilder() *ProxyServerBuilder {
-	return &ProxyServerBuilder{
-		ReadTimeout:  DefaultReadTimeout,
-		WriteTimeout: DefaultWriteTimeout,
-	}
-}
-
-// func (b *ProxyServerBuilder) SetPort(port string) *ProxyServerBuilder {
-// 	b.Addr = fmt.Sprintf(":%s", port)
-// 	return b
-// }
-
-// func (b *ProxyServerBuilder) SetHandler(handler http.Handler) *ProxyServerBuilder {
-// 	b.Handler = handler
-// 	return b
-// }
-
-func (b *ProxyServerBuilder) Build() pisahttp.HttpServer {
-	hs := newHttpServer(b.Addr, b.Handler)
-	return &ProxyServer{
-		core: hs,
-	}
-}
-
-func (b *ProxyServerBuilder) NewHttpServer(port string, handler http.Handler) *http.Server {
-	return b.Buider.NewHttpServer(port, handler)
-}
-
 type ProxyServer struct {
 	core *http.Server
 }
 
-func NewProxyServer(conf pisahttp.Config) *ProxyServer {
-	hs := newHttpServer(conf.Addr, conf.Handler)
+func NewProxyServer(conf *pisahttp.HttpConfig) *ProxyServer {
+	hs := newHttpServer(conf.Addr, nil)
 	return &ProxyServer{
 		core: hs,
 	}
