@@ -20,17 +20,16 @@ import (
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/factory"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
 	proxyconfig "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
 	webhookconfig "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 	proxyserver "github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
 	webhookserver "github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 )
 
 var (
-	eg        errgroup.Group
 	version   string
 	gitcommit string
 	branch    string
@@ -44,6 +43,8 @@ func main() {
 	flag.Parse()
 	kubernetes.GetClient()
 
+	mgr := task.TaskManager{}
+
 	proxyConf := http.NewHttpConfig().SetAddr(proxyconfig.Config.Port)
 	webhookConf := http.NewHttpConfig().SetAddr(webhookconfig.Config.Port)
 
@@ -52,17 +53,10 @@ func main() {
 
 	f := factory.PisaFactory{}
 	proxy := f.NewHttpServer(factory.ServerKindProxy, proxyConf, proxyHandler)
-	eg.Go(
-		proxy.Run,
-	)
 	webhook := f.NewHttpServer(factory.ServerKindWebhook, webhookConf, webhookHandler)
-	eg.Go(
-		webhook.Run,
-	)
 
-	if err := eg.Wait(); err != nil {
-		log.Fatal(err)
-	}
+	mgr.Register(proxy).Register(webhook)
+	mgr.Run()
 }
 
 func setVersion() {
