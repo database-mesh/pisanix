@@ -185,14 +185,16 @@ pub fn length_encoded_string(data: &mut BytesMut) -> (Vec<u8>, bool) {
     (data.split_to(num as usize).to_vec(), false)
 }
 
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_eof_packet.html
 #[inline]
 pub fn is_eof(data: &[u8]) -> bool {
-    data.len() < 9 + 4 && *unsafe { data.get_unchecked(4) } == EOF_HEADER
+    data.len() < 9 && *unsafe { data.get_unchecked(4) } == EOF_HEADER
 }
 
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_ok_packet.html
 #[inline]
 pub fn is_ok(data: &[u8]) -> bool {
-    data.len() > 7 + 4 && *unsafe { data.get_unchecked(4) } == OK_HEADER
+    data.len() > 7 && *unsafe { data.get_unchecked(4) } == OK_HEADER
 }
 
 #[inline]
@@ -208,8 +210,82 @@ pub fn get_length(buf: &[u8]) -> usize {
 #[cfg(test)]
 mod test {
     use bytes::BytesMut;
+    use crate::util::{calc_caching_sha2password, calc_password, compare, get_length, is_eof, is_ok, length_encode_int, random_buf};
 
     use super::{length_encoded_string, BufExt};
+
+    #[test]
+    fn test_random_buf() {
+        let result = random_buf(6);
+        assert_eq!(result.len(), 6);
+    }
+
+    #[test]
+    fn test_calc_password() {
+        let scramble = [0x70, 0x69, 0x73, 0x61, 0x6e, 0x69, 0x78];
+        let password = [0x31, 0x32, 0x33, 0x34, 0x35, 0x36];
+        let calc_password = calc_password(&scramble[..], &password[..]);
+        let result = [139, 87, 122, 170, 122, 110, 60, 78, 2, 63, 208, 152, 19, 86, 207, 190, 178, 51, 61, 127];
+        assert_eq!(calc_password, &result[..])
+    }
+
+    #[test]
+    fn test_calc_caching_sha2password() {
+        let scramble = [0x70, 0x69, 0x73, 0x61, 0x6e, 0x69, 0x78];
+        let password = [0x31, 0x32, 0x33, 0x34, 0x35, 0x36];
+        let calc_password = calc_caching_sha2password(&scramble[..], &password[..]);
+        let result = [97, 231, 153, 111, 85, 161, 188, 166, 190, 240, 239, 147, 138, 193, 141, 190, 194, 120, 170, 210, 235, 241, 79, 175, 198, 189, 36, 193, 105, 166, 179, 173];
+        assert_eq!(calc_password, &result[..])
+    }
+
+    #[test]
+    fn test_compare_success() {
+        let scramble = [0x31, 0x32, 0x33, 0x34, 0x35, 0x36];
+        let password = [0x31, 0x32, 0x33, 0x34, 0x35, 0x36];
+        let result = compare(&scramble[..], &password[..]);
+        assert_eq!(result, true)
+    }
+
+    #[test]
+    fn test_compare_fail() {
+        let scramble = [0x30, 0x32, 0x33, 0x34, 0x35, 0x36];
+        let password = [0x31, 0x32, 0x33, 0x34, 0x35, 0x36];
+        let result = compare(&scramble[..], &password[..]);
+        assert_eq!(result, false)
+    }
+
+    #[test]
+    fn test_length_encode_int() {
+        let data = [0xfb, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
+        let (a, b, c) = length_encode_int(&data[..]);
+        assert_eq!(a, 0);
+        assert_eq!(b, true);
+        assert_eq!(c, 1);
+
+        let data = [0xfc, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
+        let (a, b, c) = length_encode_int(&data[..]);
+        assert_eq!(a, 12796);
+        assert_eq!(b, false);
+        assert_eq!(c, 3);
+
+        let data = [0xfd, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
+        let (a, b, c) = length_encode_int(&data[..]);
+        assert_eq!(a, 3289597);
+        assert_eq!(b, false);
+        assert_eq!(c, 4);
+
+        let data = [0xfe, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
+        let (a, b, c) = length_encode_int(&data[..]);
+        assert_eq!(a, 3978425819141911038);
+        assert_eq!(b, false);
+        assert_eq!(c, 9);
+
+        let data = [0x00, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
+        let (a, b, c) = length_encode_int(&data[..]);
+        assert_eq!(a, 0);
+        assert_eq!(b, false);
+        assert_eq!(c, 1);
+    }
 
     #[test]
     fn test_length_enc_string() {
@@ -229,5 +305,54 @@ mod test {
         let (info, _is_null) = buf.get_lenc_str_bytes();
         let name = std::str::from_utf8(&info).unwrap();
         assert_eq!(name, "User");
+    }
+
+    #[test]
+    fn test_is_eof_success() {
+        let data = [0x05, 0x00, 0x00, 0x05, 0xfe, 0x00, 0x00];
+        let result = is_eof(&data[..]);
+        assert_eq!(result, true);
+    }
+
+    #[test]
+    fn test_is_eof_data_error() {
+        let data = [0x05, 0x00, 0x00, 0x05, 0xff, 0x00, 0x00, 0x02, 0x00];
+        let result = is_eof(&data[..]);
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_is_eof_length_error() {
+        let data = [0x05, 0x00, 0x00, 0x05, 0xfe, 0x00, 0x00, 0x02, 0x00];
+        let result = is_eof(&data[..]);
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_is_ok_success() {
+        let data = [0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00];
+        let result = is_ok(&data[..]);
+        assert_eq!(result, true);
+    }
+
+    #[test]
+    fn test_is_ok_data_error() {
+        let data = [0x05, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00];
+        let result = is_ok(&data[..]);
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_is_ok_length_error() {
+        let data = [0x05, 0x00, 0x00, 0x05, 0x00, 0x00];
+        let result = is_eof(&data[..]);
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_get_length() {
+        let data = [0x05, 0x00, 0x00, 0x05, 0x00, 0x00];
+        let result = get_length(&data[..]);
+        assert_eq!(result, 5);
     }
 }
