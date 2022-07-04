@@ -12,29 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package webhook
+package proxy
 
 import (
+	"flag"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
+var Conf Config
+
+func init() {
+	flag.StringVar(&Conf.Port, "proxyConfigsPort", "8080", "ProxyConfigsServer port.")
+}
+
 type Config struct {
-	TLSCertFile string
-	TLSKeyFile  string
-	Port        string
+	Port string
 }
 
 func Handler() http.Handler {
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
-	g := r.Group("/apis/admission.database-mesh.io/v1alpha1")
+	g := r.Group("/apis/configs.database-mesh.io/v1alpha1")
 
-	// NOTE: there is not API path in this request
-	// TODO: test trailing slash
-	g.GET("", ApiCheck)
-	g.POST("/mutate", InjectSidecar)
-
+	g.GET("/namespaces/:namespace/proxyconfigs/:appname", GetConfig)
 	return r
 }

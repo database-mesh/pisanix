@@ -15,13 +15,33 @@
 package proxy
 
 import (
-	"flag"
+	"time"
 
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
 )
 
-var Config proxy.Config
+const (
+	DefaultReadTimeout  = 5 * time.Second
+	DefaultWriteTimeout = 10 * time.Second
+)
 
-func init() {
-	flag.StringVar(&Config.Port, "proxyConfigsPort", "8080", "ProxyConfigsServer port.")
+type ProxyServer struct {
+	core *http.HttpServer
+}
+
+func (s *ProxyServer) Run() error {
+	return s.core.ListenAndServe()
+}
+
+func NewTask() task.Task {
+	conf := http.NewHttpConfig().SetAddr(proxy.Conf.Port)
+	handler := proxy.Handler()
+	hs := http.NewHttpServer(conf).WithHandler(handler).Build()
+	p := &ProxyServer{
+		core: hs,
+	}
+
+	return p
 }

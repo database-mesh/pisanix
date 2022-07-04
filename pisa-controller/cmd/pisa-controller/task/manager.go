@@ -12,23 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package proxy
+package task
 
-import (
-	"net/http"
+import "golang.org/x/sync/errgroup"
 
-	"github.com/gin-gonic/gin"
-)
-
-type Config struct {
-	Port string
+type TaskManager struct {
+	//TODO: consider to be a FIFO queue
+	TaskGroups []Task
+	eg         errgroup.Group
 }
 
-func Handler() http.Handler {
-	r := gin.New()
-	r.Use(gin.Recovery(), gin.Logger())
-	g := r.Group("/apis/configs.database-mesh.io/v1alpha1")
+type Task interface {
+	Run() error
+}
 
-	g.GET("/namespaces/:namespace/proxyconfigs/:appname", GetConfig)
-	return r
+func (m *TaskManager) Register(t Task) *TaskManager {
+	m.TaskGroups = append(m.TaskGroups, t)
+	return m
+}
+
+func (m *TaskManager) Run() error {
+	for idx, _ := range m.TaskGroups {
+		m.eg.Go(m.TaskGroups[idx].Run)
+	}
+	return m.eg.Wait()
 }

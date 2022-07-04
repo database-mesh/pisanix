@@ -16,75 +16,37 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"net/http"
-	"time"
 
-	cmdcore "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/core"
-	cmdproxy "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
-	cmdwebhook "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/core"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 )
 
 var (
-	eg        errgroup.Group
 	version   string
 	gitcommit string
 	branch    string
 )
 
-const (
-	DefaultReadTimeout  = 5 * time.Second
-	DefaultWriteTimeout = 10 * time.Second
-)
-
 func init() {
 	setVersion()
-	log.Infof("version: %s,gitcommit: %s,branch: %s", version, gitcommit, branch)
-}
-func main() {
+	log.Infof("version: %s, gitcommit: %s, branch: %s", version, gitcommit, branch)
 	flag.Parse()
 	kubernetes.GetClient()
-
-	//TODO: need refactor
-	eg.Go(func() error {
-		return newHttpServer(
-			cmdwebhook.Config.Port,
-			webhook.Handler(),
-		).ListenAndServeTLS(cmdwebhook.Config.TLSCertFile, cmdwebhook.Config.TLSKeyFile)
-	})
-	eg.Go(func() error {
-		return newHttpServer(
-			cmdproxy.Config.Port,
-			proxy.Handler(),
-		).ListenAndServe()
-	})
-	eg.Go(func() error {
-		return newHttpServer(
-			cmdcore.Config.Port,
-			core.Handler(),
-		).ListenAndServe()
-	})
-
-	if err := eg.Wait(); err != nil {
-		log.Fatal(err)
-	}
 }
 
-func newHttpServer(port string, handler http.Handler) *http.Server {
-	return &http.Server{
-		Addr:         fmt.Sprintf(":%s", port),
-		Handler:      handler,
-		ReadTimeout:  DefaultReadTimeout,
-		WriteTimeout: DefaultWriteTimeout,
-	}
+func main() {
+	mgr := task.TaskManager{}
+
+	p := proxy.NewTask()
+	w := webhook.NewTask()
+
+	mgr.Register(p).Register(w).Run()
 }
+
 func setVersion() {
 	if version == "" {
 		version = branch + "-" + gitcommit
