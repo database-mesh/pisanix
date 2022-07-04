@@ -15,10 +15,17 @@
 package proxy
 
 import (
+	"flag"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
+
+var Conf Config
+
+func init() {
+	flag.StringVar(&Conf.Port, "proxyConfigsPort", "8080", "ProxyConfigsServer port.")
+}
 
 type Config struct {
 	Port string

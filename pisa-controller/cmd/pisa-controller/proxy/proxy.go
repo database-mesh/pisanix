@@ -15,19 +15,13 @@
 package proxy
 
 import (
-	"flag"
 	"net/http"
 	"time"
 
 	pisahttp "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
+	proxyserver "github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
 )
-
-var Config proxy.Config
-
-func init() {
-	flag.StringVar(&Config.Port, "proxyConfigsPort", "8080", "ProxyConfigsServer port.")
-}
 
 const (
 	DefaultReadTimeout  = 5 * time.Second
@@ -65,4 +59,11 @@ func (s *ProxyServer) WithHandler(handler http.Handler) *ProxyServer {
 
 func (s *ProxyServer) Build() pisahttp.HttpServer {
 	return s
+}
+
+func NewTask() task.Task {
+	conf := pisahttp.NewHttpConfig().SetAddr(proxyserver.Conf.Port)
+	handler := proxyserver.Handler()
+	proxy := NewProxyServer(conf).WithHandler(handler).Build()
+	return proxy
 }

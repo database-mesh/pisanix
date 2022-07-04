@@ -17,14 +17,10 @@ package main
 import (
 	"flag"
 
-	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/factory"
-	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
-	proxyconfig "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
-	webhookconfig "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
-	proxyserver "github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
-	webhookserver "github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -38,25 +34,17 @@ var (
 func init() {
 	setVersion()
 	log.Infof("version: %s,gitcommit: %s,branch: %s", version, gitcommit, branch)
-}
-func main() {
 	flag.Parse()
 	kubernetes.GetClient()
+}
 
+func main() {
 	mgr := task.TaskManager{}
 
-	proxyConf := http.NewHttpConfig().SetAddr(proxyconfig.Config.Port)
-	webhookConf := http.NewHttpConfig().SetAddr(webhookconfig.Config.Port)
+	p := proxy.NewTask()
+	w := webhook.NewTask()
 
-	proxyHandler := proxyserver.Handler()
-	webhookHandler := webhookserver.Handler()
-
-	f := factory.PisaFactory{}
-	proxy := f.NewHttpServer(factory.ServerKindProxy, proxyConf, proxyHandler)
-	webhook := f.NewHttpServer(factory.ServerKindWebhook, webhookConf, webhookHandler)
-
-	mgr.Register(proxy).Register(webhook)
-	mgr.Run()
+	mgr.Register(p).Register(w).Run()
 }
 
 func setVersion() {

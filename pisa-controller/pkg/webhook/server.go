@@ -15,16 +15,25 @@
 package webhook
 
 import (
+	"flag"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
+
+func init() {
+	flag.StringVar(&Conf.Port, "webhookPort", "6443", "WebhookServer port.")
+	flag.StringVar(&Conf.TLSCertFile, "webhookTLSCertFile", "/etc/webhook/certs/tls.crt", "File containing the x509 certificate to --webhookTLSCertFile.")
+	flag.StringVar(&Conf.TLSKeyFile, "webhookTLSKeyFile", "/etc/webhook/certs/tls.key", "File containing the x509 private key to --webhookTLSKeyFile.")
+}
 
 type Config struct {
 	TLSCertFile string
 	TLSKeyFile  string
 	Port        string
 }
+
+var Conf Config
 
 func Handler() http.Handler {
 	r := gin.New()

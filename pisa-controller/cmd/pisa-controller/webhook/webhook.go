@@ -15,21 +15,13 @@
 package webhook
 
 import (
-	"flag"
 	"net/http"
 	"time"
 
 	pisahttp "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
+	webhookserver "github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 )
-
-var Config webhook.Config
-
-func init() {
-	flag.StringVar(&Config.Port, "webhookPort", "6443", "WebhookServer port.")
-	flag.StringVar(&Config.TLSCertFile, "webhookTLSCertFile", "/etc/webhook/certs/tls.crt", "File containing the x509 certificate to --webhookTLSCertFile.")
-	flag.StringVar(&Config.TLSKeyFile, "webhookTLSKeyFile", "/etc/webhook/certs/tls.key", "File containing the x509 private key to --webhookTLSKeyFile.")
-}
 
 const (
 	DefaultReadTimeout  = 5 * time.Second
@@ -67,4 +59,11 @@ func (s *WebhookServer) WithHandler(handler http.Handler) *WebhookServer {
 
 func (s *WebhookServer) Build() pisahttp.HttpServer {
 	return s
+}
+
+func NewTask() task.Task {
+	conf := pisahttp.NewHttpConfig().SetAddr(webhookserver.Conf.Port)
+	handler := webhookserver.Handler()
+	webhook := NewWebhookServer(conf).WithHandler(handler).Build()
+	return webhook
 }
