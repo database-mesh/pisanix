@@ -3139,3 +3139,9 @@ pub enum ShowVariableType {
     Global,
     Session,
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowCreateViewStmt {
+    pub span: Span,
+    pub view_name: String,
+}

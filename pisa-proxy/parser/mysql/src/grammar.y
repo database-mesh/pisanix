@@ -111,6 +111,7 @@ sql_stmt -> SqlStmt:
   | show_create_table_stmt  { SqlStmt::ShowCreateTableStmt($1) }
   | show_keys_stmt     { SqlStmt::ShowKeysStmt($1) }
   | show_variables_stmt     { SqlStmt::ShowVariablesStmt($1) }
+  | show_create_view_stmt     { SqlStmt::ShowCreateViewStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -6031,6 +6032,16 @@ opt_var_type -> Option<ShowVariableType>:
      | GLOBAL               { Some(ShowVariableType::Global) }
      | LOCAL                { Some(ShowVariableType::Session) }
      | SESSION              { Some(ShowVariableType::Session) }
+;
+
+show_create_view_stmt -> Box<ShowCreateViewStmt>:
+    'SHOW' 'CREATE' 'VIEW' table_ident
+    {
+        Box::new(ShowCreateViewStmt {
+           span: $span,
+           view_name: $4,
+        })
+    }
 ;
 
 start -> Start:
