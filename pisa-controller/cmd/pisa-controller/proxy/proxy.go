@@ -15,12 +15,11 @@
 package proxy
 
 import (
-	"net/http"
 	"time"
 
-	pisahttp "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
-	proxyserver "github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/proxy"
 )
 
 const (
@@ -28,42 +27,21 @@ const (
 	DefaultWriteTimeout = 10 * time.Second
 )
 
-func newHttpServer(addr string, handler http.Handler) *http.Server {
-	return &http.Server{
-		Addr:         addr,
-		Handler:      handler,
-		ReadTimeout:  DefaultReadTimeout,
-		WriteTimeout: DefaultWriteTimeout,
-	}
-}
-
 type ProxyServer struct {
-	core *http.Server
-}
-
-func NewProxyServer(conf *pisahttp.HttpConfig) *ProxyServer {
-	hs := newHttpServer(conf.Addr, nil)
-	return &ProxyServer{
-		core: hs,
-	}
+	core *http.HttpServer
 }
 
 func (s *ProxyServer) Run() error {
 	return s.core.ListenAndServe()
 }
 
-func (s *ProxyServer) WithHandler(handler http.Handler) *ProxyServer {
-	s.core.Handler = handler
-	return s
-}
-
-func (s *ProxyServer) Build() pisahttp.HttpServer {
-	return s
-}
-
 func NewTask() task.Task {
-	conf := pisahttp.NewHttpConfig().SetAddr(proxyserver.Conf.Port)
-	handler := proxyserver.Handler()
-	proxy := NewProxyServer(conf).WithHandler(handler).Build()
-	return proxy
+	conf := http.NewHttpConfig().SetAddr(proxy.Conf.Port)
+	handler := proxy.Handler()
+	hs := http.NewHttpServer(conf).WithHandler(handler).Build()
+	p := &ProxyServer{
+		core: hs,
+	}
+
+	return p
 }

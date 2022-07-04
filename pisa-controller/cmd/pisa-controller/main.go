@@ -33,7 +33,7 @@ var (
 
 func init() {
 	setVersion()
-	log.Infof("version: %s,gitcommit: %s,branch: %s", version, gitcommit, branch)
+	log.Infof("version: %s, gitcommit: %s, branch: %s", version, gitcommit, branch)
 	flag.Parse()
 	kubernetes.GetClient()
 }

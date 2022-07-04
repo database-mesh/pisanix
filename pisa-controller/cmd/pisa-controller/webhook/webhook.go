@@ -15,12 +15,11 @@
 package webhook
 
 import (
-	"net/http"
 	"time"
 
-	pisahttp "github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
-	webhookserver "github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 )
 
 const (
@@ -28,42 +27,21 @@ const (
 	DefaultWriteTimeout = 10 * time.Second
 )
 
-func newHttpServer(addr string, handler http.Handler) *http.Server {
-	return &http.Server{
-		Addr:         addr,
-		Handler:      handler,
-		ReadTimeout:  DefaultReadTimeout,
-		WriteTimeout: DefaultWriteTimeout,
-	}
-}
-
 type WebhookServer struct {
-	core *http.Server
-}
-
-func NewWebhookServer(conf *pisahttp.HttpConfig) *WebhookServer {
-	hs := newHttpServer(conf.Addr, nil)
-	return &WebhookServer{
-		core: hs,
-	}
+	core *http.HttpServer
 }
 
 func (s WebhookServer) Run() error {
 	return s.core.ListenAndServe()
 }
 
-func (s *WebhookServer) WithHandler(handler http.Handler) *WebhookServer {
-	s.core.Handler = handler
-	return s
-}
-
-func (s *WebhookServer) Build() pisahttp.HttpServer {
-	return s
-}
-
 func NewTask() task.Task {
-	conf := pisahttp.NewHttpConfig().SetAddr(webhookserver.Conf.Port)
-	handler := webhookserver.Handler()
-	webhook := NewWebhookServer(conf).WithHandler(handler).Build()
-	return webhook
+	conf := http.NewHttpConfig().SetAddr(webhook.Conf.Port)
+	handler := webhook.Handler()
+	hs := http.NewHttpServer(conf).WithHandler(handler).Build()
+	w := &WebhookServer{
+		core: hs,
+	}
+
+	return w
 }

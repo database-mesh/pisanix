@@ -17,6 +17,7 @@ package http
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/core"
@@ -33,11 +34,6 @@ const (
 	DefaultWriteTimeout = 10 * time.Second
 )
 
-type HttpServer interface {
-	Build() HttpServer
-	Run() error
-}
-
 type HttpConfig struct {
 	Addr         string
 	ReadTimeout  time.Duration
@@ -51,4 +47,41 @@ func NewHttpConfig() *HttpConfig {
 func (c *HttpConfig) SetAddr(port string) *HttpConfig {
 	c.Addr = fmt.Sprintf(":%s", port)
 	return c
+}
+
+func (c *HttpConfig) SetReadTimetout(t time.Duration) *HttpConfig {
+	c.ReadTimeout = t
+	return c
+}
+
+func (c *HttpConfig) SetWriteTimeout(t time.Duration) *HttpConfig {
+	c.WriteTimeout = t
+	return c
+}
+
+type HttpServer struct {
+	core *http.Server
+}
+
+func (s *HttpServer) WithHandler(handler http.Handler) *HttpServer {
+	s.core.Handler = handler
+	return s
+}
+
+func (s *HttpServer) Build() *HttpServer {
+	return s
+}
+
+func (s *HttpServer) ListenAndServe() error {
+	return s.core.ListenAndServe()
+}
+
+func NewHttpServer(conf *HttpConfig) *HttpServer {
+	return &HttpServer{
+		core: &http.Server{
+			Addr:         conf.Addr,
+			ReadTimeout:  DefaultReadTimeout,
+			WriteTimeout: DefaultWriteTimeout,
+		},
+	}
 }
