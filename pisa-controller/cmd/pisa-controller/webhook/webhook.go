@@ -15,15 +15,33 @@
 package webhook
 
 import (
-	"flag"
+	"time"
 
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/http"
+	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/webhook"
 )
 
-var Config webhook.Config
+const (
+	DefaultReadTimeout  = 5 * time.Second
+	DefaultWriteTimeout = 10 * time.Second
+)
 
-func init() {
-	flag.StringVar(&Config.Port, "webhookPort", "6443", "WebhookServer port.")
-	flag.StringVar(&Config.TLSCertFile, "webhookTLSCertFile", "/etc/webhook/certs/tls.crt", "File containing the x509 certificate to --webhookTLSCertFile.")
-	flag.StringVar(&Config.TLSKeyFile, "webhookTLSKeyFile", "/etc/webhook/certs/tls.key", "File containing the x509 private key to --webhookTLSKeyFile.")
+type WebhookServer struct {
+	core *http.HttpServer
+}
+
+func (s WebhookServer) Run() error {
+	return s.core.ListenAndServe()
+}
+
+func NewTask() task.Task {
+	conf := http.NewHttpConfig().SetAddr(webhook.Conf.Port)
+	handler := webhook.Handler()
+	hs := http.NewHttpServer(conf).WithHandler(handler).Build()
+	w := &WebhookServer{
+		core: hs,
+	}
+
+	return w
 }

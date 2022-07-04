@@ -45,6 +45,7 @@ pub enum SqlStmt {
     ShowCreateTableStmt(Box<ShowCreateTableStmt>),
     ShowKeysStmt(Box<ShowKeysStmt>),
     ShowVariablesStmt(Box<ShowVariablesStmt>),
+    ShowCreateViewStmt(Box<ShowCreateViewStmt>),
     Start(Start),
     Commit(Commit),
     Rollback(Rollback),
