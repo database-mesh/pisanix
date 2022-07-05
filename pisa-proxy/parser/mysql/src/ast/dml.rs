@@ -3156,3 +3156,9 @@ pub struct ShowCreateSpStmt {
     pub span: Span,
     pub sp_name: String,
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowCreateUserStmt {
+    pub span: Span,
+    pub user: User,
+}

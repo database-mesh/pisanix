@@ -120,6 +120,7 @@ sql_stmt -> SqlStmt:
   | show_create_function_stmt { SqlStmt::ShowCreateFunctionStmt($1) }
   | show_create_trigger_stmt { SqlStmt::ShowCreateTriggerStmt($1) }
   | show_create_event_stmt { SqlStmt::ShowCreateEventStmt($1) }
+  | show_create_user_stmt { SqlStmt::ShowCreateUserStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -6097,6 +6098,16 @@ show_create_event_stmt -> Box<ShowCreateSpStmt>:
         Box::new(ShowCreateSpStmt {
            span: $span,
            sp_name: $4,
+        })
+    }
+;
+
+show_create_user_stmt -> Box<ShowCreateUserStmt>:
+    'SHOW' 'CREATE' 'USER' user
+    {
+        Box::new(ShowCreateUserStmt {
+           span: $span,
+           user: $4,
         })
     }
 ;

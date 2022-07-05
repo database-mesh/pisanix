@@ -1514,3 +1514,9 @@ mod test {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum User {
+    CurrentUser,
+    UserIdentOrText(String),
+}

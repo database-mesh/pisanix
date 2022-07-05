@@ -51,6 +51,7 @@ pub enum SqlStmt {
     ShowCreateFunctionStmt(Box<ShowCreateSpStmt>),
     ShowCreateTriggerStmt(Box<ShowCreateSpStmt>),
     ShowCreateEventStmt(Box<ShowCreateSpStmt>),
+    ShowCreateUserStmt(Box<ShowCreateUserStmt>),
     Start(Start),
     Commit(Commit),
     Rollback(Rollback),

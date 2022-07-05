@@ -139,6 +139,8 @@ mod test {
             "SHOW CREATE FUNCTION fn_name;",
             "SHOW CREATE TRIGGER trigger_name;",
             "SHOW CREATE EVENT event_name;",
+            "SHOW CREATE USER root;",
+            "SHOW CREATE USER current_user;",
         ];
 
         let p = Parser::new();
