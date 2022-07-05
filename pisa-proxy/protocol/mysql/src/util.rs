@@ -188,7 +188,7 @@ pub fn length_encoded_string(data: &mut BytesMut) -> (Vec<u8>, bool) {
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_eof_packet.html
 #[inline]
 pub fn is_eof(data: &[u8]) -> bool {
-    data.len() < 9 && *unsafe { data.get_unchecked(4) } == EOF_HEADER
+    data.len() <= 9 && *unsafe { data.get_unchecked(4) } == EOF_HEADER
 }
 
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_ok_packet.html
@@ -323,7 +323,7 @@ mod test {
 
     #[test]
     fn test_is_eof_length_error() {
-        let data = [0x05, 0x00, 0x00, 0x05, 0xfe, 0x00, 0x00, 0x02, 0x00];
+        let data = [0x05, 0x00, 0x00, 0x05, 0xfe, 0x00, 0x00, 0x02, 0x00, 0x00];
         let result = is_eof(&data[..]);
         assert_eq!(result, false);
     }
