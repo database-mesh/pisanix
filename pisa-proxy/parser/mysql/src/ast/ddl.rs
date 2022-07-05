@@ -14,11 +14,12 @@
 
 use lrpar::Span;
 
-use crate::ast::{api::*, base::*};
+use crate::ast::{base::*, FieldType, SelectStmt};
 
 #[derive(Debug, Clone)]
 pub enum Create {
     CreateDatabase(Box<CreateDatabase>),
+    CreateViewOrTriggerOrSpOrEvent(Box<ViewOrTriggerOrSpOrEvent>),
 }
 
 #[derive(Debug, Clone)]
@@ -54,4 +55,142 @@ pub struct DefaultEncryption {
     pub is_default: bool,
     pub is_equal: bool,
     pub encryption: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum User {
+    CurrentUser,
+    UserIdentOrText(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct Definer {
+    pub user: User,
+}
+
+#[derive(Debug, Clone)]
+pub enum ViewSuid {
+    ViewSuidDefault,
+    ViewSuidDefiner,
+    ViewSuidInvoker,
+}
+
+#[derive(Debug, Clone)]
+pub enum ViewCheckOption {
+    ViewCheckNone,
+    ViewCheckCascade,
+    ViewCheckLocal,
+}
+
+#[derive(Debug, Clone)]
+pub struct ViewQueryBlock {
+    pub select_stmt: SelectStmt,
+    pub view_check_option: ViewCheckOption,
+}
+
+#[derive(Debug, Clone)]
+pub struct ViewTail {
+    pub span: Span,
+    pub view_suid: ViewSuid,
+    pub view_name: String,
+    pub columns: Vec<Value>,
+    pub view_query_block: ViewQueryBlock,
+}
+
+#[derive(Debug, Clone)]
+pub enum DefinerTail {
+    ViewTail(ViewTail),
+    TriggerTail(TriggerTail),
+    SpTail(SpTail),
+}
+
+#[derive(Debug, Clone)]
+pub struct ViewOrTriggerOrSpOrEvent {
+    pub definer: Definer,
+    pub definer_tail: DefinerTail,
+}
+
+#[derive(Debug, Clone)]
+pub enum TrgActionTime {
+    Before,
+    After,
+}
+
+#[derive(Debug, Clone)]
+pub enum TrgEvent {
+    Insert,
+    Update,
+    Delete,
+}
+
+#[derive(Debug, Clone)]
+pub enum TrgActionOrder {
+    None,
+    Follows,
+    Precedes,
+}
+
+#[derive(Debug, Clone)]
+pub struct TriggerFollowsPrecedesClause {
+    pub ordering_clause: TrgActionOrder,
+    pub anchor_trigger_name: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TriggerTail {
+    pub span: Span,
+    pub sp_name: String,
+    pub trg_action_time: TrgActionTime,
+    pub trg_event: TrgEvent,
+    pub table_name: String,
+    pub trigger_follows_precedes_clause: TriggerFollowsPrecedesClause,
+    pub sp_proc_stmt: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SpOptInout {
+    In,
+    Out,
+    Inout,
+}
+
+#[derive(Debug, Clone)]
+pub struct SpPdparam {
+    pub sp_opt_inout: SpOptInout,
+    pub ident: String,
+    pub sp_type: FieldType,
+    pub opt_collate: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SpTail {
+    pub span: Span,
+    pub sp_name: String,
+    pub sp_pdparam_list: Vec<SpPdparam>,
+    pub sp_c_chistics: Vec<SpCChistic>,
+    pub sp_proc_stmt: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SpSuid {
+    SpIsSuid,
+    SpIsNotSuid,
+}
+
+#[derive(Debug, Clone)]
+pub enum SpChistic {
+    Comment(String),
+    LanguageSql,
+    NoSql,
+    ContainsSql,
+    ReadsSqlData,
+    ModifiesSqlData,
+    SpSuid(SpSuid),
+}
+
+#[derive(Debug, Clone)]
+pub enum SpCChistic {
+    SpChistic(SpChistic),
+    Deterministic,
+    NotDeterministic,
 }
