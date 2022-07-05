@@ -116,6 +116,10 @@ sql_stmt -> SqlStmt:
   | show_variables_stmt     { SqlStmt::ShowVariablesStmt($1) }
   | show_create_view_stmt     { SqlStmt::ShowCreateViewStmt($1) }
   | show_master_status_stmt { SqlStmt::ShowMasterStatusStmt($1) }
+  | show_create_procedure_stmt { SqlStmt::ShowCreateProcedureStmt($1) }
+  | show_create_function_stmt { SqlStmt::ShowCreateFunctionStmt($1) }
+  | show_create_trigger_stmt { SqlStmt::ShowCreateTriggerStmt($1) }
+  | show_create_event_stmt { SqlStmt::ShowCreateEventStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -6053,6 +6057,46 @@ show_master_status_stmt -> Box<ShowMasterStatusStmt>:
     {
         Box::new(ShowMasterStatusStmt {
            span: $span,
+        })
+    }
+;
+
+show_create_procedure_stmt -> Box<ShowCreateSpStmt>:
+    'SHOW' 'CREATE' 'PROCEDURE' sp_name
+    {
+        Box::new(ShowCreateSpStmt {
+           span: $span,
+           sp_name: $4,
+        })
+    }
+;
+
+show_create_function_stmt -> Box<ShowCreateSpStmt>:
+    'SHOW' 'CREATE' 'FUNCTION' sp_name
+    {
+        Box::new(ShowCreateSpStmt {
+           span: $span,
+           sp_name: $4,
+        })
+    }
+;
+
+show_create_trigger_stmt -> Box<ShowCreateSpStmt>:
+    'SHOW' 'CREATE' 'TRIGGER' sp_name
+    {
+        Box::new(ShowCreateSpStmt {
+           span: $span,
+           sp_name: $4,
+        })
+    }
+;
+
+show_create_event_stmt -> Box<ShowCreateSpStmt>:
+    'SHOW' 'CREATE' 'EVENT' sp_name
+    {
+        Box::new(ShowCreateSpStmt {
+           span: $span,
+           sp_name: $4,
         })
     }
 ;

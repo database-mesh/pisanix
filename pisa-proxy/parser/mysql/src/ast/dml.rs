@@ -3150,3 +3150,9 @@ pub struct ShowCreateViewStmt {
 pub struct ShowMasterStatusStmt {
     pub span: Span,
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowCreateSpStmt {
+    pub span: Span,
+    pub sp_name: String,
+}
