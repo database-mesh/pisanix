@@ -24,6 +24,7 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -159,41 +160,52 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 			log.Errorf("%v", err)
 			return nil, err
 		}
-		for _, dbep := range dbeps.Items {
-			metadata := &metav1.ObjectMeta{}
-			dbepm, _ := json.Marshal(dbep.Object["metadata"])
 
-			_ = json.Unmarshal(dbepm, metadata)
-			spec := &kubernetes.DatabaseEndpointSpec{}
-			dbeps, _ := json.Marshal(dbep.Object["spec"])
-			_ = json.Unmarshal(dbeps, spec)
+		proxyconfig.Mysql.Nodes = BuildMySQLNodesFromDatabaseEndpoints(dbeps)
 
-
-			if spec.Database.MySQL != nil {
-				proxyconfig.Mysql.Nodes = append(proxyconfig.Mysql.Nodes, Node{
-					Name:     dbep.GetName(),
-					Db:       spec.Database.MySQL.DB,
-					User:     spec.Database.MySQL.User,
-					Password: spec.Database.MySQL.Password,
-					Host:     spec.Database.MySQL.Host,
-					Port:     spec.Database.MySQL.Port,
-					Weight:   1,
-					Role:     getDbEpRole(metadata.Annotations),
-				})
-			}
-			if tsSpec.LoadBalance.SimpleLoadBalance != nil {
-				proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, dbep.GetName())
+		if tsSpec.LoadBalance.SimpleLoadBalance != nil {
+			for _, node := range proxyconfig.Mysql.Nodes {
+				proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
 			}
 		}
+
 		proxyconfig.Proxy.Configs = append(proxyconfig.Proxy.Configs, proxy)
 	}
 	return proxyconfig, nil
 }
 
+func BuildMySQLNodesFromDatabaseEndpoints(dbeps *unstructured.UnstructuredList) []Node {
+	nodes := []Node{}
+	for _, dbep := range dbeps.Items {
+		spec := &kubernetes.DatabaseEndpointSpec{}
+		dbeps, _ := json.Marshal(dbep.Object["spec"])
+		_ = json.Unmarshal(dbeps, spec)
+
+		if spec.Database.MySQL != nil {
+			nodes = append(nodes, Node{
+				Name:     dbep.GetName(),
+				Db:       spec.Database.MySQL.DB,
+				User:     spec.Database.MySQL.User,
+				Password: spec.Database.MySQL.Password,
+				Host:     spec.Database.MySQL.Host,
+				Port:     spec.Database.MySQL.Port,
+				Weight:   1,
+				Role:     getDbEpRole(dbep.GetAnnotations()),
+			})
+		}
+	}
+	return nodes
+}
+
+const (
+	ReadWriteSplittingRoleReadWrite = "readwrite"
+	ReadWriteSplittingRoleRead      = "read"
+)
+
 func getDbEpRole(annotations map[string]string) (role string) {
 	role = annotations[DatabaseEndpointRoleKey]
-	if role == ""  {
-		role = "readwrite"
+	if role == "" {
+		role = ReadWriteSplittingRoleReadWrite
 	}
 
 	return
