@@ -210,9 +210,12 @@ pub fn get_length(buf: &[u8]) -> usize {
 #[cfg(test)]
 mod test {
     use bytes::BytesMut;
-    use crate::util::{calc_caching_sha2password, calc_password, compare, get_length, is_eof, is_ok, length_encode_int, random_buf};
 
     use super::{length_encoded_string, BufExt};
+    use crate::util::{
+        calc_caching_sha2password, calc_password, compare, get_length, is_eof, is_ok,
+        length_encode_int, random_buf,
+    };
 
     #[test]
     fn test_random_buf() {
@@ -225,7 +228,10 @@ mod test {
         let scramble = [0x70, 0x69, 0x73, 0x61, 0x6e, 0x69, 0x78];
         let password = [0x31, 0x32, 0x33, 0x34, 0x35, 0x36];
         let calc_password = calc_password(&scramble[..], &password[..]);
-        let result = [139, 87, 122, 170, 122, 110, 60, 78, 2, 63, 208, 152, 19, 86, 207, 190, 178, 51, 61, 127];
+        let result = [
+            139, 87, 122, 170, 122, 110, 60, 78, 2, 63, 208, 152, 19, 86, 207, 190, 178, 51, 61,
+            127,
+        ];
         assert_eq!(calc_password, &result[..])
     }
 
@@ -234,7 +240,10 @@ mod test {
         let scramble = [0x70, 0x69, 0x73, 0x61, 0x6e, 0x69, 0x78];
         let password = [0x31, 0x32, 0x33, 0x34, 0x35, 0x36];
         let calc_password = calc_caching_sha2password(&scramble[..], &password[..]);
-        let result = [97, 231, 153, 111, 85, 161, 188, 166, 190, 240, 239, 147, 138, 193, 141, 190, 194, 120, 170, 210, 235, 241, 79, 175, 198, 189, 36, 193, 105, 166, 179, 173];
+        let result = [
+            97, 231, 153, 111, 85, 161, 188, 166, 190, 240, 239, 147, 138, 193, 141, 190, 194, 120,
+            170, 210, 235, 241, 79, 175, 198, 189, 36, 193, 105, 166, 179, 173,
+        ];
         assert_eq!(calc_password, &result[..])
     }
 

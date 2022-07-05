@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use conn_pool::{ConnAttr, ConnAttrMut, Pool, PoolConn};
+use conn_pool::{ConnAttrMut, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
 use mysql_protocol::client::conn::{ClientConn, SessionAttr};
 use pisa_error::error::{Error, ErrorKind};
@@ -95,7 +95,7 @@ impl ConnDriver for Driver {
 
         pool.set_factory(factory);
 
-        match pool.get_conn_with_opts(endpoint.addr.as_ref()).await {
+        match pool.get_conn_with_endpoint(endpoint.addr.as_ref()).await {
             Ok(client_conn) => Ok((client_conn, Some(endpoint.clone()))),
             Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
         }
@@ -344,7 +344,7 @@ impl TransFsm {
         let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
         match conn {
             Some(client_conn) => Ok(client_conn),
-            None => match self.pool.get_conn_with_opts(addr).await {
+            None => match self.pool.get_conn_with_endpoint(addr).await {
                 Ok(mut client_conn) => {
                     client_conn.init(self.build_conn_attrs()).await;
                     Ok(client_conn)

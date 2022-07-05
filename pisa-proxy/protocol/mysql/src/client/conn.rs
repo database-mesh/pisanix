@@ -352,22 +352,22 @@ mod test {
         let password = "123456".to_string();
         let addr = "127.0.0.1:13306".to_string();
 
-        let conn = ClientConn::with_opts(user, password, addr);
+        let conn = ClientConn::with_opts(user, password, addr.clone());
 
         let mut pool = Pool::new(3);
         pool.set_factory(conn);
 
-        assert_eq!(0, pool.len());
+        assert_eq!(0, pool.len(&addr));
 
         {
-            let mut conn = pool.get_conn().await.unwrap();
+            let mut conn = pool.get_conn_with_endpoint(&addr).await.unwrap();
             let res = conn.send_query("show databases".as_bytes()).await;
             let mut res = res.unwrap();
             loop {
                 match res.next().await {
                     Some(data) => match data {
                         Ok(data) => {
-                            println!("{:?}", data);
+                            println!("data {:?}", data);
                         }
 
                         Err(e) => {
@@ -386,6 +386,6 @@ mod test {
             assert_eq!("root", &conn.get_user());
         }
 
-        assert_eq!(1, pool.len());
+        assert_eq!(1, pool.len(&addr));
     }
 }

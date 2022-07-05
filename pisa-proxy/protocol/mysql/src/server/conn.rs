@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::{
-    io::Error,
     str,
     sync::atomic::{AtomicU32, Ordering},
 };
@@ -23,7 +22,7 @@ use tokio::{io::BufStream, net::TcpStream};
 use tracing::debug;
 
 use super::{err::MySQLError, stream::LocalStream};
-use crate::{charset::*, err, err::ProtocolError, mysql_const::*, server::packet::Packet, util::*};
+use crate::{charset::*, err::ProtocolError, mysql_const::*, server::packet::Packet, util::*};
 
 lazy_static! {
     static ref CONNECTION_ID: AtomicU32 = AtomicU32::new(0);
