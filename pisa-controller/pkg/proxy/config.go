@@ -16,7 +16,6 @@ package proxy
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
@@ -95,81 +94,40 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	}
 
 	for _, service := range vdbSpec.Services {
+		builder := NewProxyBuilder().SetVirtualDatabaseService(service)
+
 		ts, err := client.Resource(trafficstrategies).Namespace(namespace).Get(ctx, service.TrafficStrategy, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
-		tsSpec := &kubernetes.TrafficStrategySpec{}
-		tsj, _ := json.Marshal(ts.Object["spec"])
-		_ = json.Unmarshal(tsj, tsSpec)
-		proxy := Proxy{}
-		if service.DatabaseService.DatabaseMySQL != nil {
-			proxy.BackendType = "mysql"
-			proxy.DB = service.DatabaseService.DatabaseMySQL.DB
-			proxy.Name = service.Name
-			proxy.User = service.DatabaseService.DatabaseMySQL.User
-			proxy.Password = service.DatabaseService.DatabaseMySQL.Password
-			proxy.PoolSize = service.DatabaseService.DatabaseMySQL.PoolSize
-			if service.DatabaseMySQL.Host == "" {
-				service.DatabaseMySQL.Host = "0.0.0.0"
-			}
-			if service.DatabaseMySQL.Port == 0 {
-				service.DatabaseMySQL.Port = 3306
-			}
-			proxy.ListenAddr = fmt.Sprintf("%s:%d", service.DatabaseService.DatabaseMySQL.Host, service.DatabaseService.DatabaseMySQL.Port)
-			proxy.ServerVersion = service.DatabaseService.DatabaseMySQL.ServerVersion
-			switch {
-			case tsSpec.LoadBalance.ReadWriteSplitting != nil:
-				{
-					proxy.ReadWriteSplitting = &ReadWriteSplitting{
-						Static: &ReadWriteSplittingStatic{},
-					}
-					if tsSpec.LoadBalance.ReadWriteSplitting.Static != nil {
-						proxy.ReadWriteSplitting.Static.DefaultTarget = tsSpec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
-						proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingStaticRule, len(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules))
-						for i := range tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules {
-							proxy.ReadWriteSplitting.Static.Rules[i].Name = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
-							proxy.ReadWriteSplitting.Static.Rules[i].Type = string(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
-							proxy.ReadWriteSplitting.Static.Rules[i].Target = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
-							proxy.ReadWriteSplitting.Static.Rules[i].Regex = tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
-							proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(tsSpec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
-						}
-					}
-				}
-			case tsSpec.LoadBalance.SimpleLoadBalance != nil:
-				{
-					proxy.SimpleLoadBalance = &SimpleLoadBalance{
-						BalancerType: string(tsSpec.LoadBalance.SimpleLoadBalance.Kind),
-					}
-				}
-			}
+		tsobj := &kubernetes.TrafficStrategy{}
+		tsdata, _ := json.Marshal(ts)
+		_ = json.Unmarshal(tsdata, tsobj)
 
-			if len(tsSpec.CircuitBreaks) != 0 {
-				proxy.Plugin.CircuitBreaks = tsSpec.CircuitBreaks
-			}
-			if len(tsSpec.ConcurrencyControls) != 0 {
-				for _, control := range tsSpec.ConcurrencyControls {
-					// TODO: Convert CRD to configuration file json format.Need a better implementation
-					// Ref: https://stackoverflow.com/questions/24613271/golang-is-conversion-between-different-struct-types-possible
-					proxy.Plugin.ConcurrencyControls = append(proxy.Plugin.ConcurrencyControls, *(*ConcurrencyControl)(&control))
-				}
-			}
-		}
-		dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(tsSpec.Selector.MatchLabels)})
+		builder.SetTrafficStrategy(*tsobj)
+
+		dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(tsobj.Spec.Selector.MatchLabels)})
 		if err != nil {
 			log.Errorf("%v", err)
 			return nil, err
 		}
 
+		dbepsobj := &kubernetes.DatabaseEndpointList{}
+		dbepsdata, _ := json.Marshal(dbeps)
+		_ = json.Unmarshal(dbepsdata, dbepsobj)
+
+		builder.SetDatabaseEndpoints(dbepsobj.Items)
+		proxy := builder.Build()
+
 		proxyconfig.Mysql.Nodes = BuildMySQLNodesFromDatabaseEndpoints(dbeps)
 
-		if tsSpec.LoadBalance.SimpleLoadBalance != nil {
+		if tsobj.Spec.LoadBalance.SimpleLoadBalance != nil {
 			for _, node := range proxyconfig.Mysql.Nodes {
 				proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
 			}
 		}
 
-		proxyconfig.Proxy.Configs = append(proxyconfig.Proxy.Configs, proxy)
+		proxyconfig.Proxy.Configs = append(proxyconfig.Proxy.Configs, *proxy)
 	}
 	return proxyconfig, nil
 }

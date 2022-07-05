@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
@@ -32,6 +33,90 @@ type PisaProxyConfig struct {
 	Proxy struct {
 		Configs []Proxy `json:"config"`
 	} `json:"proxy"`
+}
+
+// How about the name
+type ProxyBuilder struct {
+	// VirtualDatabase   kubernetes.VirtualDatabase
+	VirtualDatabaseService kubernetes.VirtualDatabaseService
+	TrafficStrategy        kubernetes.TrafficStrategy
+	DatabaseEndpoints      []kubernetes.DatabaseEndpoint
+}
+
+func NewProxyBuilder() *ProxyBuilder {
+	return &ProxyBuilder{}
+}
+
+func (b *ProxyBuilder) SetVirtualDatabaseService(svc kubernetes.VirtualDatabaseService) *ProxyBuilder {
+	b.VirtualDatabaseService = svc
+	return b
+}
+
+func (b *ProxyBuilder) SetTrafficStrategy(ts kubernetes.TrafficStrategy) *ProxyBuilder {
+	b.TrafficStrategy = ts
+	return b
+}
+
+func (b *ProxyBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) *ProxyBuilder {
+	b.DatabaseEndpoints = dbeps
+	return b
+}
+
+func (b *ProxyBuilder) Build() *Proxy {
+	proxy := &Proxy{}
+	proxy.BackendType = "mysql"
+	proxy.DB = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.DB
+	proxy.Name = b.VirtualDatabaseService.Name
+	proxy.User = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.User
+	proxy.Password = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Password
+	proxy.PoolSize = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.PoolSize
+	if b.VirtualDatabaseService.DatabaseMySQL.Host == "" {
+		b.VirtualDatabaseService.DatabaseMySQL.Host = "0.0.0.0"
+	}
+	if b.VirtualDatabaseService.DatabaseMySQL.Port == 0 {
+		b.VirtualDatabaseService.DatabaseMySQL.Port = 3306
+	}
+	proxy.ListenAddr = fmt.Sprintf("%s:%d", b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Host, b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Port)
+	proxy.ServerVersion = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.ServerVersion
+
+	switch {
+	case b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting != nil:
+		{
+			proxy.ReadWriteSplitting = &ReadWriteSplitting{
+				Static: &ReadWriteSplittingStatic{},
+			}
+			if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static != nil {
+				proxy.ReadWriteSplitting.Static.DefaultTarget = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
+				proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingStaticRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules))
+				for i := range b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules {
+					proxy.ReadWriteSplitting.Static.Rules[i].Name = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
+					proxy.ReadWriteSplitting.Static.Rules[i].Type = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
+					proxy.ReadWriteSplitting.Static.Rules[i].Target = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
+					proxy.ReadWriteSplitting.Static.Rules[i].Regex = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
+					proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
+				}
+			}
+		}
+	case b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil:
+		{
+			proxy.SimpleLoadBalance = &SimpleLoadBalance{
+				BalancerType: string(b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance.Kind),
+			}
+		}
+	}
+
+	if len(b.TrafficStrategy.Spec.CircuitBreaks) != 0 {
+		proxy.Plugin.CircuitBreaks = b.TrafficStrategy.Spec.CircuitBreaks
+	}
+	if len(b.TrafficStrategy.Spec.ConcurrencyControls) != 0 {
+		for _, control := range b.TrafficStrategy.Spec.ConcurrencyControls {
+			// TODO: Convert CRD to configuration file json format.Need a better implementation
+			// Ref: https://stackoverflow.com/questions/24613271/golang-is-conversion-between-different-struct-types-possible
+			proxy.Plugin.ConcurrencyControls = append(proxy.Plugin.ConcurrencyControls, *(*ConcurrencyControl)(&control))
+		}
+	}
+
+	return proxy
 }
 
 type Proxy struct {
