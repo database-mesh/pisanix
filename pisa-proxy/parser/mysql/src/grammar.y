@@ -115,6 +115,7 @@ sql_stmt -> SqlStmt:
   | show_keys_stmt     { SqlStmt::ShowKeysStmt($1) }
   | show_variables_stmt     { SqlStmt::ShowVariablesStmt($1) }
   | show_create_view_stmt     { SqlStmt::ShowCreateViewStmt($1) }
+  | show_master_status_stmt { SqlStmt::ShowMasterStatusStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   
@@ -6043,6 +6044,15 @@ show_create_view_stmt -> Box<ShowCreateViewStmt>:
         Box::new(ShowCreateViewStmt {
            span: $span,
            view_name: $4,
+        })
+    }
+;
+
+show_master_status_stmt -> Box<ShowMasterStatusStmt>:
+    'SHOW' 'MASTER' 'STATUS'
+    {
+        Box::new(ShowMasterStatusStmt {
+           span: $span,
         })
     }
 ;

@@ -134,6 +134,7 @@ mod test {
             "SHOW GLOBAL VARIABLES LIKE '%size%';",
             "SHOW SESSION VARIABLES LIKE '%size%';",
             "SHOW CREATE VIEW view_name;",
+            "SHOW MASTER STATUS;",
         ];
 
         let p = Parser::new();
