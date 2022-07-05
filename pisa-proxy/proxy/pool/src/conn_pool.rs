@@ -19,6 +19,7 @@ use std::{
 
 use async_trait::async_trait;
 use crossbeam_queue::ArrayQueue;
+use dashmap::DashMap;
 use tracing::debug;
 
 /// In order to be managed by the connection pool, Both the `ConnLike` and `ConnAttr` trait
@@ -73,18 +74,22 @@ impl<T: ConnLike + ConnAttr + ConnAttrMut> PoolInner<T> {
 }
 
 #[derive(Debug)]
-pub struct PoolConn<T: ConnLike + ConnAttr + ConnAttrMut>
+pub struct PoolConn<T>
 where
-    T: ConnLike,
+    T: ConnLike + ConnAttr + ConnAttrMut,
 {
-    pub pool: Arc<PoolInner<T>>,
+    pub pool: Arc<DashMap<String, PoolInner<T>>>,
     pub conn: Option<T>,
 }
 
 #[derive(Clone)]
-pub struct Pool<T: ConnLike + ConnAttr + ConnAttrMut> {
+pub struct Pool<T>
+where
+    T: ConnLike + ConnAttr + ConnAttrMut,
+{
     factory: Option<T>,
-    pool: Arc<PoolInner<T>>,
+    size: usize,
+    pool: Arc<DashMap<String, PoolInner<T>>>,
 }
 
 impl<T> Pool<T>
@@ -92,9 +97,9 @@ where
     T: ConnLike + ConnAttr + ConnAttrMut + std::default::Default,
 {
     pub fn new(size: usize) -> Pool<T> {
-        let pool_inner = PoolInner::new(size);
+        //let pool_inner = PoolInner::new(size);
 
-        Pool { factory: None, pool: Arc::new(pool_inner) }
+        Pool { factory: None, size, pool: Arc::new(DashMap::<String, PoolInner<T>>::new()) }
     }
 
     pub fn set_factory(&mut self, factory: T) {
@@ -102,50 +107,39 @@ where
     }
 
     // Get connection by endpoint attribute
-    pub async fn get_conn_with_opts(&self, endpoint: &str) -> Result<PoolConn<T>, T::Error> {
-        let pool_length = self.pool.inner.len();
-        let mut conn: Option<T> = None;
+    pub async fn get_conn_with_endpoint(&self, endpoint: &str) -> Result<PoolConn<T>, T::Error> {
+        let conn = self.pool.get(endpoint);
+        let conn = match conn {
+            Some(val) => val.get_conn(),
+            None => None,
+        };
 
-        for _ in 0..pool_length {
-            let curr_conn = self.pool.get_conn();
-            match curr_conn {
-                Some(curr_conn) => {
-                    if endpoint == curr_conn.get_endpoint() {
-                        conn = Some(curr_conn);
-                        break;
-                    } else {
-                        self.pool.put_conn(curr_conn);
-                        continue;
-                    }
+        let conn = match conn {
+            Some(conn) => conn,
+            None => {
+                if !self.pool.contains_key(endpoint) {
+                    self.pool.insert(endpoint.to_string(), PoolInner::new(self.size));
                 }
-                None => break,
+
+                self.factory.as_ref().unwrap().build_conn().await?
             }
+        };
+
+        Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
+    }
+
+    pub fn len(&self, endpoint: &str) -> usize {
+        match self.pool.get(endpoint) {
+            Some(inner) => inner.inner.len(),
+            None => 0,
         }
-
-        let conn = match conn {
-            Some(conn) => conn,
-            None => self.factory.as_ref().unwrap().build_conn().await?,
-        };
-        Ok(PoolConn { pool: self.pool.clone(), conn: Some(conn) })
-    }
-
-    pub async fn get_conn(&self) -> Result<PoolConn<T>, T::Error> {
-        let conn = self.pool.get_conn();
-
-        let conn = match conn {
-            Some(conn) => conn,
-            None => self.factory.as_ref().unwrap().build_conn().await?,
-        };
-
-        Ok(PoolConn { pool: self.pool.clone(), conn: Some(conn) })
-    }
-
-    pub fn len(&self) -> usize {
-        self.pool.inner.len()
     }
 }
 
-impl<T: ConnLike + ConnAttr + ConnAttrMut> Deref for PoolConn<T> {
+impl<T> Deref for PoolConn<T>
+where
+    T: ConnLike + ConnAttr + ConnAttrMut,
+{
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -153,19 +147,25 @@ impl<T: ConnLike + ConnAttr + ConnAttrMut> Deref for PoolConn<T> {
     }
 }
 
-impl<T: ConnLike + ConnAttr + ConnAttrMut> DerefMut for PoolConn<T> {
+impl<T> DerefMut for PoolConn<T>
+where
+    T: ConnLike + ConnAttr + ConnAttrMut,
+{
     fn deref_mut(&mut self) -> &mut T {
         self.conn.as_mut().unwrap()
     }
 }
 
-impl<T: ConnLike + ConnAttr + ConnAttrMut> Drop for PoolConn<T> {
+impl<T> Drop for PoolConn<T>
+where
+    T: ConnLike + ConnAttr + ConnAttrMut,
+{
     fn drop(&mut self) {
-        futures::executor::block_on(async {
-            if self.conn.is_some() {
-                debug!("put conn {:?}", &self.conn);
-                self.pool.put_conn(self.conn.take().unwrap())
-            }
-        })
+        if self.conn.is_some() {
+            debug!("put conn {:?}", &self.conn);
+            let conn = self.conn.take().unwrap();
+            let endpoint = conn.get_endpoint();
+            self.pool.get_mut(&endpoint).unwrap().put_conn(conn);
+        }
     }
 }

@@ -17,7 +17,7 @@ use std::{str, sync::Arc, time::SystemTime};
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Buf, BufMut, BytesMut};
 use common::ast_cache::ParserAstCache;
-use conn_pool::{Pool, PoolConn};
+use conn_pool::Pool;
 use futures::StreamExt;
 use mysql_parser::{
     ast::{Expr, ExprOrDefault, SetOptValues, SetOpts, SqlStmt, Value},
