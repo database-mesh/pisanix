@@ -58,12 +58,6 @@ pub struct DefaultEncryption {
 }
 
 #[derive(Debug, Clone)]
-pub enum User {
-    CurrentUser,
-    UserIdentOrText(String),
-}
-
-#[derive(Debug, Clone)]
 pub struct Definer {
     pub user: User,
 }

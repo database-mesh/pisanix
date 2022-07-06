@@ -135,6 +135,12 @@ mod test {
             "SHOW SESSION VARIABLES LIKE '%size%';",
             "SHOW CREATE VIEW view_name;",
             "SHOW MASTER STATUS;",
+            "SHOW CREATE PROCEDURE proc_name;",
+            "SHOW CREATE FUNCTION fn_name;",
+            "SHOW CREATE TRIGGER trigger_name;",
+            "SHOW CREATE EVENT event_name;",
+            "SHOW CREATE USER root;",
+            "SHOW CREATE USER current_user;",
         ];
 
         let p = Parser::new();
