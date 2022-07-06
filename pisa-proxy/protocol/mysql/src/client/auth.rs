@@ -317,14 +317,14 @@ impl ClientAuth {
     fn decode_handshake_result(
         &mut self,
         data: &mut BytesMut,
-    ) -> Result<Option<(String, BytesMut)>, ProtocolError> {
+    ) -> Result<Option<BytesMut>, ProtocolError> {
         let length = get_length(data) as usize;
         let _ = data.split_to(4);
 
         match data[0] {
             OK_HEADER => Ok(None),
 
-            MORE_DATA_HEADER => Ok(Some(("".to_string(), data.split_to(length).split_off(1)))),
+            MORE_DATA_HEADER => Ok(Some(data.split_to(length).split_off(1))),
 
             EOF_HEADER => {
                 if data.is_empty() {
@@ -339,8 +339,14 @@ impl ClientAuth {
                     Some(pos) => {
                         let auth_plugin_name =
                             str::from_utf8(&data.split_to(pos)).unwrap().to_string();
-                        let auth_data = data.split();
-                        Ok(Some((auth_plugin_name, auth_data)))
+                        self.auth_plugin_name = auth_plugin_name;
+                        // Eat the 0x00 by split_off.
+                        let auth_data = data.split_off(1).split_to(20);
+                        // Update salt info
+                        self.salt = auth_data.to_vec();
+                        // Eat the terminator 0x00 of auth_data at the end by split.
+                        let _ = data.split();
+                        Ok(Some(auth_data))
                     }
 
                     None => Err(ProtocolError::InvalidPacket {
@@ -402,6 +408,11 @@ impl ClientAuth {
                 Ok(Some((HandshakeState::WriteAuthPassword, BytesMut::from(&enc_data[..]))))
             }
 
+            AUTH_NATIVE_PASSWORD => {
+                let auth_data = calc_password(&data, self.password.as_bytes());
+                Ok(Some((HandshakeState::WriteAuthPassword, BytesMut::from(&auth_data[..]))))
+            }
+
             x => Err(ProtocolError::AuthPluginUnsupport(x.to_string())),
         }
     }
@@ -413,7 +424,7 @@ pub enum HandshakeDecoderReturn {
     InitialHandshake(BytesMut),
     WriteSslRequest(BytesMut),
     WriteClearAuth(BytesMut),
-    AuthSwitch(Option<(String, BytesMut)>),
+    AuthSwitch(Option<BytesMut>),
     AuthSuccess,
     RequestPublicKey(BytesMut),
     EncryptPassword(BytesMut),
@@ -456,7 +467,7 @@ impl Decoder for ClientAuth {
             HandshakeState::HandshakeAutoSwitch => {
                 let res = self.decode_handshake_result(data)?;
                 match res {
-                    Some((auth_plugin_name, auth_data)) => {
+                    Some(auth_data) => {
                         let handle_res = self.handle_auth_data(&auth_data)?;
 
                         match handle_res {
@@ -480,10 +491,9 @@ impl Decoder for ClientAuth {
 
                             None => {
                                 self.next_state = HandshakeState::HandshakeResult;
-                                Ok(Some(HandshakeDecoderReturn::AuthSwitch(Some((
-                                    auth_plugin_name,
-                                    auth_data,
-                                )))))
+                                Ok(Some(HandshakeDecoderReturn::AuthSwitch(Some(
+                                    auth_data
+                                ))))
                             }
                         }
                     }
@@ -506,8 +516,7 @@ impl Decoder for ClientAuth {
             }
 
             HandshakeState::HandshakeResult => {
-                let _ = data.split_to(4);
-                if data[0] == OK_HEADER && data.len() <= 7 {
+                if is_ok(data) {
                     let _ = data.split();
                     return Ok(Some(HandshakeDecoderReturn::AuthSuccess));
                 }
