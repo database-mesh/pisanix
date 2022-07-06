@@ -319,12 +319,12 @@ impl ClientAuth {
         data: &mut BytesMut,
     ) -> Result<Option<BytesMut>, ProtocolError> {
         let length = get_length(data) as usize;
-        let _ = data.split_to(4);
 
-        match data[0] {
+        match data[4] {
             OK_HEADER => Ok(None),
 
-            MORE_DATA_HEADER => Ok(Some(data.split_to(length).split_off(1))),
+            // Exclude header 4 byte and 1 type byte, return remain data
+            MORE_DATA_HEADER => Ok(Some(data.split_to(4 + length).split_off(4 + 1))),
 
             EOF_HEADER => {
                 if data.is_empty() {
@@ -333,7 +333,8 @@ impl ClientAuth {
                     ));
                 }
 
-                let _ = data.split_to(1);
+                // Exclude header and 1 type byte
+                let _ = data.split_to(4 + 1);
                 let is_pos = data.iter().position(|&x| x == 0x00);
                 match is_pos {
                     Some(pos) => {
