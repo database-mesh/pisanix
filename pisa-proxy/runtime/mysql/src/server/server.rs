@@ -503,10 +503,10 @@ impl MySqlServer {
                     if let Some(name) = &name.charset_name {
                         self.client.charset = name.clone();
                         self.trans_fsm.set_charset(name.clone());
-                        self.trans_fsm
-                            .trigger(TransEventName::SetSessionEvent, RouteInput::Statement(input))
-                            .await
-                            .unwrap();
+                        let _ = self
+                            .trans_fsm
+                            .reset_fsm_state(RouteInput::Statement(input))
+                            .await;
                         return;
                     }
                 }
