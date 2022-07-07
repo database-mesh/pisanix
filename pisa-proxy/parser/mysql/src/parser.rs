@@ -141,6 +141,7 @@ mod test {
             "SHOW CREATE EVENT event_name;",
             "SHOW CREATE USER root;",
             "SHOW CREATE USER current_user;",
+            "set session transaction isolation level read committed;",
         ];
 
         let p = Parser::new();
