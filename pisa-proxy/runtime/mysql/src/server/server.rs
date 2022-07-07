@@ -40,10 +40,10 @@ use tracing::{debug, error};
 
 use crate::{server::metrics::*, transaction_fsm::*};
 
-pub struct MySqlServer {
+pub struct MySQLServer {
     // TODO: this should be a common property of proxy runtime
     pub name: String,
-    pub metrics_collector: MySqlServerMetricsCollector,
+    pub metrics_collector: MySQLServerMetricsCollector,
     pub client: Connection,
     pub buf: BytesMut,
 
@@ -58,7 +58,7 @@ pub struct MySqlServer {
     server_version: String,
 }
 
-pub struct MySqlServerBuilder {
+pub struct MySQLServerBuilder {
     _name: String,
     _socket: TcpStream,
     _pcfg: ProxyConfig,
@@ -67,20 +67,20 @@ pub struct MySqlServerBuilder {
     _ast_cache: Arc<plMutex<ParserAstCache>>,
     _is_quit: bool,
     _concurrency_control_rule_idx: Option<usize>,
-    _metrics_collector: MySqlServerMetricsCollector,
+    _metrics_collector: MySQLServerMetricsCollector,
     _route_strategy: Arc<Mutex<RouteStrategy>>,
     _pool: Pool<ClientConn>,
     _plugin: Option<PluginPhase>,
     _pisa_version: String,
 }
 
-impl MySqlServerBuilder {
+impl MySQLServerBuilder {
     pub fn new(
         socket: TcpStream,
         route_strategy: Arc<Mutex<RouteStrategy>>,
         plugin: Option<PluginPhase>,
-    ) -> MySqlServerBuilder {
-        MySqlServerBuilder {
+    ) -> MySQLServerBuilder {
+        MySQLServerBuilder {
             _name: String::new(),
             _pcfg: ProxyConfig::default(),
             _socket: socket,
@@ -89,7 +89,7 @@ impl MySqlServerBuilder {
             _ast_cache: Arc::new(plMutex::new(ParserAstCache::new())),
             _is_quit: false,
             _concurrency_control_rule_idx: None,
-            _metrics_collector: MySqlServerMetricsCollector::new(),
+            _metrics_collector: MySQLServerMetricsCollector::new(),
             _route_strategy: route_strategy,
             _plugin: plugin,
             _pool: Pool::new(1),
@@ -97,56 +97,56 @@ impl MySqlServerBuilder {
         }
     }
 
-    pub fn with_pool(mut self, pool: Pool<ClientConn>) -> MySqlServerBuilder {
+    pub fn with_pool(mut self, pool: Pool<ClientConn>) -> MySQLServerBuilder {
         self._pool = pool;
         self
     }
 
-    pub fn with_pcfg(mut self, pcfg: ProxyConfig) -> MySqlServerBuilder {
+    pub fn with_pcfg(mut self, pcfg: ProxyConfig) -> MySQLServerBuilder {
         self._pcfg = pcfg;
         self
     }
 
-    pub fn with_buf(mut self, buf: BytesMut) -> MySqlServerBuilder {
+    pub fn with_buf(mut self, buf: BytesMut) -> MySQLServerBuilder {
         self._buf = buf;
         self
     }
 
-    pub fn with_mysql_parser(mut self, parser: Arc<Parser>) -> MySqlServerBuilder {
+    pub fn with_mysql_parser(mut self, parser: Arc<Parser>) -> MySQLServerBuilder {
         self._mysql_parser = parser;
         self
     }
 
-    pub fn with_ast_cache(mut self, cache: Arc<plMutex<ParserAstCache>>) -> MySqlServerBuilder {
+    pub fn with_ast_cache(mut self, cache: Arc<plMutex<ParserAstCache>>) -> MySQLServerBuilder {
         self._ast_cache = cache;
         self
     }
 
-    pub fn is_quit(mut self, quit: bool) -> MySqlServerBuilder {
+    pub fn is_quit(mut self, quit: bool) -> MySQLServerBuilder {
         self._is_quit = quit;
         self
     }
 
-    pub fn with_concurrency_control_rule_idx(mut self, idx: Option<usize>) -> MySqlServerBuilder {
+    pub fn with_concurrency_control_rule_idx(mut self, idx: Option<usize>) -> MySQLServerBuilder {
         self._concurrency_control_rule_idx = idx;
         self
     }
 
-    pub fn with_pisa_version(mut self, version: String) -> MySqlServerBuilder {
+    pub fn with_pisa_version(mut self, version: String) -> MySQLServerBuilder {
         self._pisa_version = version;
         self
     }
 
     pub fn with_metrics_collector(
         mut self,
-        collector: MySqlServerMetricsCollector,
-    ) -> MySqlServerBuilder {
+        collector: MySQLServerMetricsCollector,
+    ) -> MySQLServerBuilder {
         self._metrics_collector = collector;
         self
     }
 
-    pub fn build(self) -> MySqlServer {
-        MySqlServer {
+    pub fn build(self) -> MySQLServer {
+        MySQLServer {
             client: Connection::new(
                 self._socket,
                 self._pcfg.user,
@@ -168,7 +168,7 @@ impl MySqlServerBuilder {
     }
 }
 
-impl MySqlServer {
+impl MySQLServer {
     pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
         if let Err(err) = self.client.handshake().await {
             if let ProtocolError::AuthFailed(err) = err {

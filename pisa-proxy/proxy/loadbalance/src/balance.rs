@@ -16,7 +16,7 @@
 use endpoint::endpoint::Endpoint;
 use serde::{Deserialize, Serialize};
 
-use crate::{random_weighted::RandomWeighted, roundrobin_weighted::RoundRobinWeightd};
+use crate::{random_weighted::RandomWeighted, roundrobin_weighted::RoundRobinWeighted};
 pub struct Balance;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -43,7 +43,7 @@ pub trait LoadBalance {
 
 pub enum BalanceType {
     Random(RandomWeighted),
-    RoundRobin(RoundRobinWeightd),
+    RoundRobin(RoundRobinWeighted),
 }
 
 impl LoadBalance for BalanceType {
@@ -93,7 +93,7 @@ impl Balance {
     pub fn build_balance(&mut self, algorithm_name: AlgorithmName) -> BalanceType {
         match algorithm_name {
             AlgorithmName::Random => BalanceType::Random(RandomWeighted::default()),
-            AlgorithmName::RoundRobin => BalanceType::RoundRobin(RoundRobinWeightd::default()),
+            AlgorithmName::RoundRobin => BalanceType::RoundRobin(RoundRobinWeighted::default()),
         }
     }
 }
