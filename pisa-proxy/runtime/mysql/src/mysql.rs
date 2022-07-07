@@ -31,7 +31,7 @@ use proxy::{
 use strategy::{config::TargetRole, readwritesplitting::ReadWriteEndpoint, route::RouteStrategy};
 use tracing::error;
 
-use crate::server::{metrics::MySqlServerMetricsCollector, server::MySqlServerBuilder};
+use crate::server::{metrics::MySQLServerMetricsCollector, server::MySQLServerBuilder};
 
 #[derive(Default)]
 pub struct MySQLProxy {
@@ -108,7 +108,7 @@ impl proxy::factory::Proxy for MySQLProxy {
         };
 
         let parser = Arc::new(Parser::new());
-        let metrics_collector = MySqlServerMetricsCollector::new();
+        let metrics_collector = MySQLServerMetricsCollector::new();
 
         loop {
             // TODO: need refactor
@@ -120,7 +120,7 @@ impl proxy::factory::Proxy for MySQLProxy {
             let ast_cache = ast_cache.clone();
             let pool = pool.clone();
 
-            let mut mysql_server = MySqlServerBuilder::new(socket, lb, plugin)
+            let mut mysql_server = MySQLServerBuilder::new(socket, lb, plugin)
                 .with_pcfg(pcfg)
                 .with_pool(pool)
                 .with_buf(BytesMut::with_capacity(8192))

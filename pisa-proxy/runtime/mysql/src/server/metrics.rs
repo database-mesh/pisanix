@@ -48,11 +48,11 @@ pub static SQL_UNDER_PROCESSING: Lazy<GaugeVec> = Lazy::new(|| {
 });
 
 #[derive(Clone, Copy)]
-pub struct MySqlServerMetricsCollector;
+pub struct MySQLServerMetricsCollector;
 
-impl MySqlServerMetricsCollector {
+impl MySQLServerMetricsCollector {
     pub fn new() -> Self {
-        MySqlServerMetricsCollector {}
+        MySQLServerMetricsCollector {}
     }
     pub fn set_sql_processed_total(&self, labels: &[&str]) {
         SQL_PROCESSED_TOTAL.with_label_values(labels).inc();
