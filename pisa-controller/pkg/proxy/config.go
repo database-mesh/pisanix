@@ -18,13 +18,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/dynamic"
@@ -107,10 +107,21 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		return nil, err
 	}
 
+	dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.Errorf("%v", err)
+		return nil, err
+	}
+
+	dbepsobj := &kubernetes.DatabaseEndpointList{}
+	dbepsdata, _ := json.Marshal(dbeps)
+	_ = json.Unmarshal(dbepsdata, dbepsobj)
+
 	builders := []*ProxyBuilder{}
 	for _, service := range vdbSpec.Services {
 		builder := NewProxyBuilder().SetVirtualDatabaseService(service)
 
+		//TODO: need refactor
 		ts, err := client.Resource(trafficstrategies).Namespace(namespace).Get(ctx, service.TrafficStrategy, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
@@ -123,29 +134,24 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 
 		builder.SetTrafficStrategy(*tsobj)
 
-		dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(tsobj.Spec.Selector.MatchLabels)})
-		if err != nil {
-			log.Errorf("%v", err)
-			return nil, err
-		}
-
-		dbepsobj := &kubernetes.DatabaseEndpointList{}
-		dbepsdata, _ := json.Marshal(dbeps)
-		_ = json.Unmarshal(dbepsdata, dbepsobj)
-
-		builder.SetDatabaseEndpoints(dbepsobj.Items)
-		// proxy := builder.Build()
-
-		// proxyconfig.MySQL.Nodes = BuildMySQLNodesFromDatabaseEndpoints(dbeps)
-
-		// if tsobj.Spec.LoadBalance.SimpleLoadBalance != nil {
-		// 	for _, node := range proxyconfig.MySQL.Nodes {
-		// 		proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
-		// 	}
+		// dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(tsobj.Spec.Selector.MatchLabels)})
+		// if err != nil {
+		// 	log.Errorf("%v", err)
+		// 	return nil, err
 		// }
 
-		// proxyconfig.Proxy.Config = append(proxyconfig.Proxy.Config, *proxy)
-		// mysqlConfigBuilder.SetDatabaseEndpoints(dbepsobj.Items)
+		// dbepsobj := &kubernetes.DatabaseEndpointList{}
+		// dbepsdata, _ := json.Marshal(dbeps)
+		// _ = json.Unmarshal(dbepsdata, dbepsobj)
+
+		dbeps := &kubernetes.DatabaseEndpointList{Items: []kubernetes.DatabaseEndpoint{}}
+		for _, dbep := range dbepsobj.Items {
+			if reflect.DeepEqual(dbep.Labels, tsobj.Spec.Selector.MatchLabels) {
+				dbeps.Items = append(dbeps.Items, dbep)
+			}
+		}
+
+		builder.SetDatabaseEndpoints(dbepsobj.Items)
 
 		fmt.Printf("--build: %+v\n", builder)
 
@@ -155,15 +161,6 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	fmt.Printf("--builder: %+v\n", len(builders))
 	fmt.Printf("build: %+v\n", builders[0].Build())
 
-	dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		log.Errorf("%v", err)
-		return nil, err
-	}
-
-	dbepsobj := &kubernetes.DatabaseEndpointList{}
-	dbepsdata, _ := json.Marshal(dbeps)
-	_ = json.Unmarshal(dbepsdata, dbepsobj)
 	mysqlConfigBuilder.SetDatabaseEndpoints(dbepsobj.Items)
 
 	proxyConfigBuilder.SetProxyBuilders(builders)
