@@ -42,13 +42,6 @@ type ProxyConfig struct {
 }
 
 type PisaProxyConfigBuilder struct {
-	// Admin AdminConfig
-	// AdminHost     string
-	// AdminPort     string
-	// AdminLoglevel string
-	// VirtualDatabases  []kubernetes.VirtualDatabase
-	// TrafficStrategies []kubernetes.TrafficStrategy
-	// DatabaseEndpoints []kubernetes.DatabaseEndpoint
 	AdminConfigBuilder *AdminConfigBuilder
 	MySQLConfigBuilder *MySQLConfigBuilder
 	ProxyConfigBuilder *ProxyConfigBuilder
@@ -120,20 +113,6 @@ func (b *PisaProxyConfigBuilder) Build() *PisaProxyConfig {
 	return config
 }
 
-// func (b *PisaProxyConfigBuilder) SetVirtualDatabases(vdbs []kubernetes.VirtualDatabase) *PisaProxyConfigBuilder {
-// 	b.ProxyConfigBuilder.SetVirtualDatabases(vdbs)
-// 	return b
-// }
-
-// func (b *PisaProxyConfigBuilder) SetTrafficStrategies(tses []kubernetes.TrafficStrategy) *PisaProxyConfigBuilder {
-// 	return b
-// }
-
-// func (b *PisaProxyConfigBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) *PisaProxyConfigBuilder {
-// 	// b.DatabaseEndpoints = dbeps
-// 	return b
-// }
-
 type ProxyConfigBuilder struct {
 	ProxyBuilders []*ProxyBuilder
 }
@@ -149,19 +128,6 @@ func (b *ProxyConfigBuilder) SetProxyBuilders(builders []*ProxyBuilder) *ProxyCo
 	return b
 }
 
-// func (b *ProxyConfigBuilder) SetVirtualDatabaseService(services []kubernetes.VirtualDatabaseService) *ProxyConfigBuilder {
-// 	for _, svc := range services {
-// 		b.ProxyBuilder = append(b.ProxyBuilder, NewProxyBuilder().SetVirtualDatabaseService(svc))
-// 	}
-// 	return b
-// }
-
-// func (b *ProxyConfigBuilder) SetTrafficStrategies(tses []kubernetes.TrafficStrategy) *ProxyConfigBuilder {
-// 	// for _, ts := range tses {
-
-// 	// }
-// }
-
 func (b *ProxyConfigBuilder) Build() *ProxyConfig {
 	config := &ProxyConfig{
 		Config: []Proxy{},
@@ -176,15 +142,7 @@ func (b *ProxyConfigBuilder) Build() *ProxyConfig {
 	return config
 }
 
-// func (b *PisaProxyConfigBuilder) Build() *PisaProxyConfig {
-// 	config := &PisaProxyConfig{}
-
-// 	return config
-// }
-
-// How about the name
 type ProxyBuilder struct {
-	// VirtualDatabase   kubernetes.VirtualDatabase
 	VirtualDatabaseService kubernetes.VirtualDatabaseService
 	TrafficStrategy        kubernetes.TrafficStrategy
 	DatabaseEndpoints      []kubernetes.DatabaseEndpoint
@@ -275,8 +233,6 @@ func (b *ProxyBuilder) Build() *Proxy {
 }
 
 type MySQLConfigBuilder struct {
-	// DatabaseEndpoints []kubernetes.DatabaseEndpoint
-	// Selectors         *metav1.LabelSelector
 	VirtualDatabaseService kubernetes.VirtualDatabaseService
 	TrafficStrategy        kubernetes.TrafficStrategy
 	DatabaseEndpoints      []kubernetes.DatabaseEndpoint
@@ -286,36 +242,10 @@ func NewMySQLConfigBuilder() *MySQLConfigBuilder {
 	return &MySQLConfigBuilder{}
 }
 
-// func (b *MySQLConfigBuilder) SetVirtualDatabaseService(svc kubernetes.VirtualDatabaseService) *ProxyBuilder {
-// 	b.VirtualDatabaseService = svc
-// 	return b
-// }
-
-// func (b *MySQLConfigBuilder) SetTrafficStrategy(ts kubernetes.TrafficStrategy) *ProxyBuilder {
-// 	b.TrafficStrategy = ts
-// 	return b
-// }
-
 func (b *MySQLConfigBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) *MySQLConfigBuilder {
 	b.DatabaseEndpoints = dbeps
 	return b
 }
-
-// func (b *MySQLConfigBuilder) Build() *MySQLConfig {
-// 	config := &MySQLConfig{}
-
-// 	return config
-// }
-
-// func (b *MySQLConfigBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) *MySQLConfigBuilder {
-// 	b.DatabaseEndpoints = dbeps
-// 	return b
-// }
-
-// func (b *MySQLConfigBuilder) SetSelectors(selectors metav1.LabelSelector) *MySQLConfigBuilder {
-// 	b.Selectors = &selectors
-// 	return b
-// }
 
 func (b *MySQLConfigBuilder) Build() *MySQLConfig {
 	config := &MySQLConfig{
@@ -323,7 +253,6 @@ func (b *MySQLConfigBuilder) Build() *MySQLConfig {
 	}
 
 	for _, dbep := range b.DatabaseEndpoints {
-		// if reflect.DeepEqual(dbep.Labels, b.Selectors.MatchLabels) {
 		config.Nodes = append(config.Nodes, MySQLNode{
 			Name:     dbep.GetName(),
 			Db:       dbep.Spec.Database.MySQL.DB,
@@ -334,7 +263,6 @@ func (b *MySQLConfigBuilder) Build() *MySQLConfig {
 			Weight:   1,
 			Role:     getDbEpRole(dbep.GetAnnotations()),
 		})
-		// }
 	}
 
 	return config

@@ -52,24 +52,8 @@ func GetConfig(ctx *gin.Context) {
 func getConfig(client dynamic.Interface, namespace, appname string) (interface{}, error) {
 	ctx := context.Background()
 
-	// proxyconfig := PisaProxyConfig{Admin: struct {
-	// 	Host     string `json:"host,omitempty"`
-	// 	Port     uint32 `json:"port,omitempty"`
-	// 	LogLevel string `json:"log_level"`
-	// }(struct {
-	// 	Host     string
-	// 	Port     uint32
-	// 	LogLevel string
-	// }{LogLevel: "INFO"})}
-
-	// proxyconfig := PisaProxyConfig{
-	// 	Admin: AdminConfig{},
-	// 	Proxy: ProxyConfig{},
-	// 	MySQL: MySQLConfig{},
-	// }
-
 	builder := NewPisaProxyConfigBuilder()
-	adminConfigBuilder := NewAdminConfigBuilder().SetHost("0.0.0.0").SetPort(0).SetLoglevel("INFO")
+	adminConfigBuilder := NewAdminConfigBuilder().SetLoglevel("INFO")
 	builder.SetAdminConfigBuilder(adminConfigBuilder)
 	proxyConfigBuilder := NewProxyConfigBuilder()
 	mysqlConfigBuilder := NewMySQLConfigBuilder()
@@ -129,14 +113,6 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	for _, service := range vdbSpec.Services {
 		builder := NewProxyBuilder().SetVirtualDatabaseService(service)
 
-		//TODO: need refactor
-		// ts, err := client.Resource(trafficstrategies).Namespace(namespace).Get(ctx, service.TrafficStrategy, metav1.GetOptions{})
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// tsobj := &kubernetes.TrafficStrategy{}
-		// tsdata, _ := json.Marshal(ts)
-		// _ = json.Unmarshal(tsdata, tsobj)
 		var tsobj kubernetes.TrafficStrategy
 		for _, ts := range tsesobj.Items {
 			if ts.Name == service.TrafficStrategy {
@@ -144,18 +120,6 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 				builder.SetTrafficStrategy(ts)
 			}
 		}
-
-		// fmt.Printf("ts: %+v\n", *tsobj)
-
-		// dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(tsobj.Spec.Selector.MatchLabels)})
-		// if err != nil {
-		// 	log.Errorf("%v", err)
-		// 	return nil, err
-		// }
-
-		// dbepsobj := &kubernetes.DatabaseEndpointList{}
-		// dbepsdata, _ := json.Marshal(dbeps)
-		// _ = json.Unmarshal(dbepsdata, dbepsobj)
 
 		dbeps := &kubernetes.DatabaseEndpointList{Items: []kubernetes.DatabaseEndpoint{}}
 		for _, dbep := range dbepsobj.Items {
@@ -165,14 +129,8 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		}
 
 		builder.SetDatabaseEndpoints(dbepsobj.Items)
-
-		fmt.Printf("--build: %+v\n", builder)
-
 		builders = append(builders, builder)
 	}
-
-	fmt.Printf("--builder: %+v\n", len(builders))
-	fmt.Printf("build: %+v\n", builders[0].Build())
 
 	mysqlConfigBuilder.SetDatabaseEndpoints(dbepsobj.Items)
 
@@ -184,15 +142,9 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	return proxyconfig, nil
 }
 
-// func BuildMySQLNodesFromDatabaseEndpoints(dbeps *unstructured.UnstructuredList) []MySQLNode {
 func BuildMySQLNodesFromDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) []MySQLNode {
 	nodes := []MySQLNode{}
-	// for _, dbep := range dbeps.Items {
 	for _, dbep := range dbeps {
-		// spec := &kubernetes.DatabaseEndpointSpec{}
-		// dbeps, _ := json.Marshal(dbep.Object["spec"])
-		// _ = json.Unmarshal(dbeps, spec)
-
 		if dbep.Spec.Database.MySQL != nil {
 			nodes = append(nodes, MySQLNode{
 				Name:     dbep.GetName(),
