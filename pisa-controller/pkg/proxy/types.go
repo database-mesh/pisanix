@@ -22,18 +22,165 @@ import (
 )
 
 type PisaProxyConfig struct {
-	Admin struct {
-		Host     string `json:"host,omitempty"`
-		Port     uint32 `json:"port,omitempty"`
-		LogLevel string `json:"log_level"`
-	} `json:"admin"`
-	Mysql struct {
-		Nodes []Node `json:"node"`
-	} `json:"mysql"`
-	Proxy struct {
-		Configs []Proxy `json:"config"`
-	} `json:"proxy"`
+	Admin AdminConfig `json:"admin"`
+	MySQL MySQLConfig `json:"mysql"`
+	Proxy ProxyConfig `json:"proxy"`
 }
+
+type AdminConfig struct {
+	Host     string `json:"host,omitempty"`
+	Port     uint32 `json:"port,omitempty"`
+	LogLevel string `json:"log_level"`
+}
+
+type MySQLConfig struct {
+	Nodes []MySQLNode `json:"node"`
+}
+
+type ProxyConfig struct {
+	Config []Proxy `json:"config"`
+}
+
+type PisaProxyConfigBuilder struct {
+	// Admin AdminConfig
+	// AdminHost     string
+	// AdminPort     string
+	// AdminLoglevel string
+	// VirtualDatabases  []kubernetes.VirtualDatabase
+	// TrafficStrategies []kubernetes.TrafficStrategy
+	// DatabaseEndpoints []kubernetes.DatabaseEndpoint
+	AdminConfigBuilder *AdminConfigBuilder
+	MySQLConfigBuilder *MySQLConfigBuilder
+	ProxyConfigBuilder *ProxyConfigBuilder
+}
+
+type AdminConfigBuilder struct {
+	host     string
+	port     uint32
+	logLevel string
+}
+
+func NewAdminConfigBuilder() *AdminConfigBuilder {
+	return &AdminConfigBuilder{}
+}
+
+func (b *AdminConfigBuilder) SetHost(host string) *AdminConfigBuilder {
+	b.host = host
+	return b
+}
+
+func (b *AdminConfigBuilder) SetPort(port uint32) *AdminConfigBuilder {
+	b.port = port
+	return b
+}
+
+// Need to add loglevel to env ?
+func (b *AdminConfigBuilder) SetLoglevel(loglevel string) *AdminConfigBuilder {
+	b.logLevel = loglevel
+	return b
+}
+
+func (b *AdminConfigBuilder) Build() *AdminConfig {
+	return &AdminConfig{
+		Host:     b.host,
+		Port:     b.port,
+		LogLevel: b.logLevel,
+	}
+}
+
+func NewPisaProxyConfigBuilder() *PisaProxyConfigBuilder {
+	return &PisaProxyConfigBuilder{
+		AdminConfigBuilder: NewAdminConfigBuilder(),
+		MySQLConfigBuilder: NewMySQLConfigBuilder(),
+		ProxyConfigBuilder: NewProxyConfigBuilder(),
+	}
+}
+
+func (b *PisaProxyConfigBuilder) SetAdminConfigBuilder(builder *AdminConfigBuilder) *PisaProxyConfigBuilder {
+	b.AdminConfigBuilder = builder
+	return b
+}
+
+func (b *PisaProxyConfigBuilder) SetMySQLConfigBuilder(builder *MySQLConfigBuilder) *PisaProxyConfigBuilder {
+	b.MySQLConfigBuilder = builder
+	return b
+}
+
+func (b *PisaProxyConfigBuilder) SetProxyConfigBuilder(builder *ProxyConfigBuilder) *PisaProxyConfigBuilder {
+	b.ProxyConfigBuilder = builder
+	return b
+}
+
+func (b *PisaProxyConfigBuilder) Build() *PisaProxyConfig {
+	config := &PisaProxyConfig{}
+	config.Admin = *b.AdminConfigBuilder.Build()
+	config.MySQL = *b.MySQLConfigBuilder.Build()
+	config.Proxy = *b.ProxyConfigBuilder.Build()
+
+	return config
+}
+
+// func (b *PisaProxyConfigBuilder) SetVirtualDatabases(vdbs []kubernetes.VirtualDatabase) *PisaProxyConfigBuilder {
+// 	b.ProxyConfigBuilder.SetVirtualDatabases(vdbs)
+// 	return b
+// }
+
+// func (b *PisaProxyConfigBuilder) SetTrafficStrategies(tses []kubernetes.TrafficStrategy) *PisaProxyConfigBuilder {
+// 	return b
+// }
+
+// func (b *PisaProxyConfigBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) *PisaProxyConfigBuilder {
+// 	// b.DatabaseEndpoints = dbeps
+// 	return b
+// }
+
+type ProxyConfigBuilder struct {
+	ProxyBuilders []*ProxyBuilder
+}
+
+func NewProxyConfigBuilder() *ProxyConfigBuilder {
+	return &ProxyConfigBuilder{
+		ProxyBuilders: []*ProxyBuilder{},
+	}
+}
+
+func (b *ProxyConfigBuilder) SetProxyBuilders(builders []*ProxyBuilder) *ProxyConfigBuilder {
+	b.ProxyBuilders = builders
+	return b
+}
+
+// func (b *ProxyConfigBuilder) SetVirtualDatabaseService(services []kubernetes.VirtualDatabaseService) *ProxyConfigBuilder {
+// 	for _, svc := range services {
+// 		b.ProxyBuilder = append(b.ProxyBuilder, NewProxyBuilder().SetVirtualDatabaseService(svc))
+// 	}
+// 	return b
+// }
+
+// func (b *ProxyConfigBuilder) SetTrafficStrategies(tses []kubernetes.TrafficStrategy) *ProxyConfigBuilder {
+// 	// for _, ts := range tses {
+
+// 	// }
+// }
+
+func (b *ProxyConfigBuilder) Build() *ProxyConfig {
+	config := &ProxyConfig{
+		Config: []Proxy{},
+	}
+
+	for _, builder := range b.ProxyBuilders {
+		conf := builder.Build()
+		fmt.Printf("-- %+v", conf)
+		config.Config = append(config.Config, *conf)
+	}
+
+	return config
+}
+
+// func (b *PisaProxyConfigBuilder) Build() *PisaProxyConfig {
+// 	config := &PisaProxyConfig{}
+
+// 	return config
+// }
 
 // How about the name
 type ProxyBuilder struct {
@@ -116,7 +263,81 @@ func (b *ProxyBuilder) Build() *Proxy {
 		}
 	}
 
+	nodes := BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
+
+	if b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil {
+		for _, node := range nodes {
+			proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
+		}
+	}
+
 	return proxy
+}
+
+type MySQLConfigBuilder struct {
+	// DatabaseEndpoints []kubernetes.DatabaseEndpoint
+	// Selectors         *metav1.LabelSelector
+	VirtualDatabaseService kubernetes.VirtualDatabaseService
+	TrafficStrategy        kubernetes.TrafficStrategy
+	DatabaseEndpoints      []kubernetes.DatabaseEndpoint
+}
+
+func NewMySQLConfigBuilder() *MySQLConfigBuilder {
+	return &MySQLConfigBuilder{}
+}
+
+// func (b *MySQLConfigBuilder) SetVirtualDatabaseService(svc kubernetes.VirtualDatabaseService) *ProxyBuilder {
+// 	b.VirtualDatabaseService = svc
+// 	return b
+// }
+
+// func (b *MySQLConfigBuilder) SetTrafficStrategy(ts kubernetes.TrafficStrategy) *ProxyBuilder {
+// 	b.TrafficStrategy = ts
+// 	return b
+// }
+
+func (b *MySQLConfigBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) *MySQLConfigBuilder {
+	b.DatabaseEndpoints = dbeps
+	return b
+}
+
+// func (b *MySQLConfigBuilder) Build() *MySQLConfig {
+// 	config := &MySQLConfig{}
+
+// 	return config
+// }
+
+// func (b *MySQLConfigBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) *MySQLConfigBuilder {
+// 	b.DatabaseEndpoints = dbeps
+// 	return b
+// }
+
+// func (b *MySQLConfigBuilder) SetSelectors(selectors metav1.LabelSelector) *MySQLConfigBuilder {
+// 	b.Selectors = &selectors
+// 	return b
+// }
+
+func (b *MySQLConfigBuilder) Build() *MySQLConfig {
+	config := &MySQLConfig{
+		Nodes: []MySQLNode{},
+	}
+
+	for _, dbep := range b.DatabaseEndpoints {
+		// if reflect.DeepEqual(dbep.Labels, b.Selectors.MatchLabels) {
+		config.Nodes = append(config.Nodes, MySQLNode{
+			Name:     dbep.GetName(),
+			Db:       dbep.Spec.Database.MySQL.DB,
+			User:     dbep.Spec.Database.MySQL.User,
+			Password: dbep.Spec.Database.MySQL.Password,
+			Host:     dbep.Spec.Database.MySQL.Host,
+			Port:     dbep.Spec.Database.MySQL.Port,
+			Weight:   1,
+			Role:     getDbEpRole(dbep.GetAnnotations()),
+		})
+		// }
+	}
+
+	return config
 }
 
 type Proxy struct {
@@ -171,7 +392,7 @@ type ConcurrencyControl struct {
 }
 
 // Node describe mysql node
-type Node struct {
+type MySQLNode struct {
 	Name     string `json:"name"`
 	Db       string `json:"db"`
 	User     string `json:"user"`

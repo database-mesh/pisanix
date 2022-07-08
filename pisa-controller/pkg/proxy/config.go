@@ -16,6 +16,7 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
@@ -23,7 +24,6 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -44,21 +44,35 @@ func GetConfig(ctx *gin.Context) {
 		return
 	}
 
+	fmt.Printf("Config: %+v", proxyConfig)
+
 	ctx.JSON(http.StatusOK, proxyConfig)
 }
 
 func getConfig(client dynamic.Interface, namespace, appname string) (interface{}, error) {
 	ctx := context.Background()
 
-	proxyconfig := PisaProxyConfig{Admin: struct {
-		Host     string `json:"host,omitempty"`
-		Port     uint32 `json:"port,omitempty"`
-		LogLevel string `json:"log_level"`
-	}(struct {
-		Host     string
-		Port     uint32
-		LogLevel string
-	}{LogLevel: "INFO"})}
+	// proxyconfig := PisaProxyConfig{Admin: struct {
+	// 	Host     string `json:"host,omitempty"`
+	// 	Port     uint32 `json:"port,omitempty"`
+	// 	LogLevel string `json:"log_level"`
+	// }(struct {
+	// 	Host     string
+	// 	Port     uint32
+	// 	LogLevel string
+	// }{LogLevel: "INFO"})}
+
+	// proxyconfig := PisaProxyConfig{
+	// 	Admin: AdminConfig{},
+	// 	Proxy: ProxyConfig{},
+	// 	MySQL: MySQLConfig{},
+	// }
+
+	builder := NewPisaProxyConfigBuilder()
+	adminConfigBuilder := NewAdminConfigBuilder().SetHost("0.0.0.0").SetPort(0).SetLoglevel("INFO")
+	builder.SetAdminConfigBuilder(adminConfigBuilder)
+	proxyConfigBuilder := NewProxyConfigBuilder()
+	mysqlConfigBuilder := NewMySQLConfigBuilder()
 
 	virtualdatabases := schema.GroupVersionResource{
 		Group:    "core.database-mesh.io",
@@ -93,6 +107,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		return nil, err
 	}
 
+	builders := []*ProxyBuilder{}
 	for _, service := range vdbSpec.Services {
 		builder := NewProxyBuilder().SetVirtualDatabaseService(service)
 
@@ -103,6 +118,8 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		tsobj := &kubernetes.TrafficStrategy{}
 		tsdata, _ := json.Marshal(ts)
 		_ = json.Unmarshal(tsdata, tsobj)
+
+		fmt.Printf("ts: %+v\n", *tsobj)
 
 		builder.SetTrafficStrategy(*tsobj)
 
@@ -117,36 +134,63 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		_ = json.Unmarshal(dbepsdata, dbepsobj)
 
 		builder.SetDatabaseEndpoints(dbepsobj.Items)
-		proxy := builder.Build()
+		// proxy := builder.Build()
 
-		proxyconfig.Mysql.Nodes = BuildMySQLNodesFromDatabaseEndpoints(dbeps)
+		// proxyconfig.MySQL.Nodes = BuildMySQLNodesFromDatabaseEndpoints(dbeps)
 
-		if tsobj.Spec.LoadBalance.SimpleLoadBalance != nil {
-			for _, node := range proxyconfig.Mysql.Nodes {
-				proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
-			}
-		}
+		// if tsobj.Spec.LoadBalance.SimpleLoadBalance != nil {
+		// 	for _, node := range proxyconfig.MySQL.Nodes {
+		// 		proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
+		// 	}
+		// }
 
-		proxyconfig.Proxy.Configs = append(proxyconfig.Proxy.Configs, *proxy)
+		// proxyconfig.Proxy.Config = append(proxyconfig.Proxy.Config, *proxy)
+		// mysqlConfigBuilder.SetDatabaseEndpoints(dbepsobj.Items)
+
+		fmt.Printf("--build: %+v\n", builder)
+
+		builders = append(builders, builder)
 	}
+
+	fmt.Printf("--builder: %+v\n", len(builders))
+	fmt.Printf("build: %+v\n", builders[0].Build())
+
+	dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.Errorf("%v", err)
+		return nil, err
+	}
+
+	dbepsobj := &kubernetes.DatabaseEndpointList{}
+	dbepsdata, _ := json.Marshal(dbeps)
+	_ = json.Unmarshal(dbepsdata, dbepsobj)
+	mysqlConfigBuilder.SetDatabaseEndpoints(dbepsobj.Items)
+
+	proxyConfigBuilder.SetProxyBuilders(builders)
+	builder.SetProxyConfigBuilder(proxyConfigBuilder)
+	builder.SetMySQLConfigBuilder(mysqlConfigBuilder)
+	proxyconfig := builder.Build()
+
 	return proxyconfig, nil
 }
 
-func BuildMySQLNodesFromDatabaseEndpoints(dbeps *unstructured.UnstructuredList) []Node {
-	nodes := []Node{}
-	for _, dbep := range dbeps.Items {
-		spec := &kubernetes.DatabaseEndpointSpec{}
-		dbeps, _ := json.Marshal(dbep.Object["spec"])
-		_ = json.Unmarshal(dbeps, spec)
+// func BuildMySQLNodesFromDatabaseEndpoints(dbeps *unstructured.UnstructuredList) []MySQLNode {
+func BuildMySQLNodesFromDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) []MySQLNode {
+	nodes := []MySQLNode{}
+	// for _, dbep := range dbeps.Items {
+	for _, dbep := range dbeps {
+		// spec := &kubernetes.DatabaseEndpointSpec{}
+		// dbeps, _ := json.Marshal(dbep.Object["spec"])
+		// _ = json.Unmarshal(dbeps, spec)
 
-		if spec.Database.MySQL != nil {
-			nodes = append(nodes, Node{
+		if dbep.Spec.Database.MySQL != nil {
+			nodes = append(nodes, MySQLNode{
 				Name:     dbep.GetName(),
-				Db:       spec.Database.MySQL.DB,
-				User:     spec.Database.MySQL.User,
-				Password: spec.Database.MySQL.Password,
-				Host:     spec.Database.MySQL.Host,
-				Port:     spec.Database.MySQL.Port,
+				Db:       dbep.Spec.Database.MySQL.DB,
+				User:     dbep.Spec.Database.MySQL.User,
+				Password: dbep.Spec.Database.MySQL.Password,
+				Host:     dbep.Spec.Database.MySQL.Host,
+				Port:     dbep.Spec.Database.MySQL.Port,
 				Weight:   1,
 				Role:     getDbEpRole(dbep.GetAnnotations()),
 			})

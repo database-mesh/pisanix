@@ -136,7 +136,7 @@ type CircuitBreak struct {
 // SQL statements that meet the regular conditions will be blown after the maximum concurrency limit is exceeded.
 type ConcurrencyControl struct {
 	Regex          []string      `json:"regex"`
-	Duration       time.Duration `json:"duration"`
+	Duration       time.Duration `json:"duration"` // Issue: Duration:1ns in fmt.Print
 	MaxConcurrency int           `json:"maxConcurrency"`
 }
 
