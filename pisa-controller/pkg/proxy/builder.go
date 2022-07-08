@@ -287,18 +287,7 @@ func (b *MySQLConfigBuilder) Build() *MySQLConfig {
 		Nodes: []MySQLNode{},
 	}
 
-	for _, dbep := range b.DatabaseEndpoints {
-		config.Nodes = append(config.Nodes, MySQLNode{
-			Name:     dbep.GetName(),
-			Db:       dbep.Spec.Database.MySQL.DB,
-			User:     dbep.Spec.Database.MySQL.User,
-			Password: dbep.Spec.Database.MySQL.Password,
-			Host:     dbep.Spec.Database.MySQL.Host,
-			Port:     dbep.Spec.Database.MySQL.Port,
-			Weight:   1,
-			Role:     getDbEpRole(dbep.GetAnnotations()),
-		})
-	}
+	config.Nodes = BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
 
 	return config
 }
