@@ -22,13 +22,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type VirtualDatabase struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              VirtualDatabaseSpec   `json:"spec,omitempty"`
+	Status            VirtualDatabaseStatus `json:"status,omitempty"`
+}
+
 // VirtualDatabaseSpec defines the desired state of VirtualDatabase
 type VirtualDatabaseSpec struct {
-	Services []Service `json:"services"`
+	Services []VirtualDatabaseService `json:"services"`
 }
 
 // Service Defines the content of a VirtualDatabase
-type Service struct {
+type VirtualDatabaseService struct {
 	DatabaseService `json:",inline"`
 
 	Name            string `json:"name"`
@@ -57,6 +64,18 @@ type DatabaseMySQL struct {
 // TODO: Implement dynamic updates
 type VirtualDatabaseStatus struct {
 	Endpoints []string `json:"endpoints"`
+}
+
+type TrafficStrategyList struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []TrafficStrategy `json:"items"`
+}
+
+type TrafficStrategy struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              TrafficStrategySpec `json:"spec,omitempty"`
 }
 
 // TrafficStrategySpec defines the desired state of TrafficStrategy
@@ -123,8 +142,20 @@ type CircuitBreak struct {
 // SQL statements that meet the regular conditions will be blown after the maximum concurrency limit is exceeded.
 type ConcurrencyControl struct {
 	Regex          []string      `json:"regex"`
-	Duration       time.Duration `json:"duration"`
+	Duration       time.Duration `json:"duration"` // Issue: Duration:1ns in fmt.Print
 	MaxConcurrency int           `json:"maxConcurrency"`
+}
+
+type DatabaseEndpointList struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []DatabaseEndpoint `json:"items"`
+}
+
+type DatabaseEndpoint struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              DatabaseEndpointSpec `json:"spec,omitempty"`
 }
 
 // DatabaseEndpointSpec defines the desired state of DatabaseEndpoint

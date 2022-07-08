@@ -20,20 +20,6 @@ import (
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 )
 
-type PisaProxyConfig struct {
-	Admin struct {
-		Host     string `json:"host,omitempty"`
-		Port     uint32 `json:"port,omitempty"`
-		LogLevel string `json:"log_level"`
-	} `json:"admin"`
-	Mysql struct {
-		Nodes []Node `json:"node"`
-	} `json:"mysql"`
-	Proxy struct {
-		Configs []Proxy `json:"config"`
-	} `json:"proxy"`
-}
-
 type Proxy struct {
 	BackendType        string              `json:"backend_type"`
 	DB                 string              `json:"db"`
@@ -86,7 +72,7 @@ type ConcurrencyControl struct {
 }
 
 // Node describe mysql node
-type Node struct {
+type MySQLNode struct {
 	Name     string `json:"name"`
 	Db       string `json:"db"`
 	User     string `json:"user"`
