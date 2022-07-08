@@ -107,12 +107,20 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		return nil, err
 	}
 
+	tses, err := client.Resource(trafficstrategies).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.Errorf("%v", err)
+		return nil, err
+	}
+	tsesobj := &kubernetes.TrafficStrategyList{}
+	tsesdata, _ := json.Marshal(tses)
+	_ = json.Unmarshal(tsesdata, tsesobj)
+
 	dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		log.Errorf("%v", err)
 		return nil, err
 	}
-
 	dbepsobj := &kubernetes.DatabaseEndpointList{}
 	dbepsdata, _ := json.Marshal(dbeps)
 	_ = json.Unmarshal(dbepsdata, dbepsobj)
@@ -122,17 +130,22 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		builder := NewProxyBuilder().SetVirtualDatabaseService(service)
 
 		//TODO: need refactor
-		ts, err := client.Resource(trafficstrategies).Namespace(namespace).Get(ctx, service.TrafficStrategy, metav1.GetOptions{})
-		if err != nil {
-			return nil, err
+		// ts, err := client.Resource(trafficstrategies).Namespace(namespace).Get(ctx, service.TrafficStrategy, metav1.GetOptions{})
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// tsobj := &kubernetes.TrafficStrategy{}
+		// tsdata, _ := json.Marshal(ts)
+		// _ = json.Unmarshal(tsdata, tsobj)
+		var tsobj kubernetes.TrafficStrategy
+		for _, ts := range tsesobj.Items {
+			if ts.Name == service.TrafficStrategy {
+				tsobj = ts
+				builder.SetTrafficStrategy(ts)
+			}
 		}
-		tsobj := &kubernetes.TrafficStrategy{}
-		tsdata, _ := json.Marshal(ts)
-		_ = json.Unmarshal(tsdata, tsobj)
 
-		fmt.Printf("ts: %+v\n", *tsobj)
-
-		builder.SetTrafficStrategy(*tsobj)
+		// fmt.Printf("ts: %+v\n", *tsobj)
 
 		// dbeps, err := client.Resource(databaseendpoints).Namespace(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(tsobj.Spec.Selector.MatchLabels)})
 		// if err != nil {

@@ -66,6 +66,12 @@ type VirtualDatabaseStatus struct {
 	Endpoints []string `json:"endpoints"`
 }
 
+type TrafficStrategyList struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Items             []TrafficStrategy `json:"items"`
+}
+
 type TrafficStrategy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
