@@ -82,7 +82,6 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	}
 
 	adminConfigBuilder := NewAdminConfigBuilder()
-	adminConfigBuilder.SetLoglevel("INFO")
 	builder.SetAdminConfigBuilder(adminConfigBuilder)
 
 	proxyConfigBuilder := NewProxyConfigBuilder()
@@ -90,7 +89,7 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	builder.SetProxyConfigBuilder(proxyConfigBuilder)
 
 	mysqlConfigBuilder := NewMySQLConfigBuilder()
-	mysqlConfigBuilder.SetDatabaseEndpoints(dbepsobj.Items)
+	mysqlConfigBuilder.SetDatabaseEndpoints(dbeplist.Items)
 	builder.SetMySQLConfigBuilder(mysqlConfigBuilder)
 
 	proxyconfig := builder.Build()

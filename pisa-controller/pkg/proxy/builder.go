@@ -28,7 +28,7 @@ type PisaProxyConfig struct {
 type AdminConfig struct {
 	Host     string `json:"host,omitempty"`
 	Port     uint32 `json:"port,omitempty"`
-	LogLevel string `json:"log_level"`
+	LogLevel string `json:"log_level,omitempty"`
 }
 
 type MySQLConfig struct {
@@ -166,64 +166,67 @@ func (b *ProxyBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint)
 
 func (b *ProxyBuilder) Build() *Proxy {
 	proxy := &Proxy{}
-	proxy.BackendType = "mysql"
-	proxy.DB = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.DB
 	proxy.Name = b.VirtualDatabaseService.Name
-	proxy.User = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.User
-	proxy.Password = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Password
-	proxy.PoolSize = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.PoolSize
-	if b.VirtualDatabaseService.DatabaseMySQL.Host == "" {
-		b.VirtualDatabaseService.DatabaseMySQL.Host = "0.0.0.0"
-	}
-	if b.VirtualDatabaseService.DatabaseMySQL.Port == 0 {
-		b.VirtualDatabaseService.DatabaseMySQL.Port = 3306
-	}
-	proxy.ListenAddr = fmt.Sprintf("%s:%d", b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Host, b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Port)
-	proxy.ServerVersion = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.ServerVersion
+	if b.VirtualDatabaseService.DatabaseService.DatabaseMySQL != nil {
+		proxy.BackendType = "mysql"
+		proxy.DB = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.DB
+		proxy.User = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.User
+		proxy.Password = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Password
+		proxy.PoolSize = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.PoolSize
+		if b.VirtualDatabaseService.DatabaseMySQL.Host == "" {
+			b.VirtualDatabaseService.DatabaseMySQL.Host = "0.0.0.0"
+		}
+		if b.VirtualDatabaseService.DatabaseMySQL.Port == 0 {
+			b.VirtualDatabaseService.DatabaseMySQL.Port = 3306
+		}
+		proxy.ListenAddr = fmt.Sprintf("%s:%d", b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Host, b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Port)
+		proxy.ServerVersion = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.ServerVersion
 
-	switch {
-	case b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting != nil:
-		{
-			proxy.ReadWriteSplitting = &ReadWriteSplitting{
-				Static: &ReadWriteSplittingStatic{},
+		switch {
+		case b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting != nil:
+			{
+				proxy.ReadWriteSplitting = &ReadWriteSplitting{
+					Static: &ReadWriteSplittingStatic{},
+				}
+				if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static != nil {
+					proxy.ReadWriteSplitting.Static.DefaultTarget = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
+					proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingStaticRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules))
+					for i := range b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules {
+						proxy.ReadWriteSplitting.Static.Rules[i].Name = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
+						proxy.ReadWriteSplitting.Static.Rules[i].Type = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
+						proxy.ReadWriteSplitting.Static.Rules[i].Target = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
+						proxy.ReadWriteSplitting.Static.Rules[i].Regex = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
+						proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
+					}
+				}
 			}
-			if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static != nil {
-				proxy.ReadWriteSplitting.Static.DefaultTarget = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
-				proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingStaticRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules))
-				for i := range b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules {
-					proxy.ReadWriteSplitting.Static.Rules[i].Name = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
-					proxy.ReadWriteSplitting.Static.Rules[i].Type = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
-					proxy.ReadWriteSplitting.Static.Rules[i].Target = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
-					proxy.ReadWriteSplitting.Static.Rules[i].Regex = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
-					proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
+		case b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil:
+			{
+				proxy.SimpleLoadBalance = &SimpleLoadBalance{
+					BalancerType: string(b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance.Kind),
 				}
 			}
 		}
-	case b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil:
-		{
-			proxy.SimpleLoadBalance = &SimpleLoadBalance{
-				BalancerType: string(b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance.Kind),
+
+		if len(b.TrafficStrategy.Spec.CircuitBreaks) != 0 {
+			proxy.Plugin.CircuitBreaks = b.TrafficStrategy.Spec.CircuitBreaks
+		}
+		if len(b.TrafficStrategy.Spec.ConcurrencyControls) != 0 {
+			for _, control := range b.TrafficStrategy.Spec.ConcurrencyControls {
+				// TODO: Convert CRD to configuration file json format.Need a better implementation
+				// Ref: https://stackoverflow.com/questions/24613271/golang-is-conversion-between-different-struct-types-possible
+				proxy.Plugin.ConcurrencyControls = append(proxy.Plugin.ConcurrencyControls, *(*ConcurrencyControl)(&control))
 			}
 		}
-	}
 
-	if len(b.TrafficStrategy.Spec.CircuitBreaks) != 0 {
-		proxy.Plugin.CircuitBreaks = b.TrafficStrategy.Spec.CircuitBreaks
-	}
-	if len(b.TrafficStrategy.Spec.ConcurrencyControls) != 0 {
-		for _, control := range b.TrafficStrategy.Spec.ConcurrencyControls {
-			// TODO: Convert CRD to configuration file json format.Need a better implementation
-			// Ref: https://stackoverflow.com/questions/24613271/golang-is-conversion-between-different-struct-types-possible
-			proxy.Plugin.ConcurrencyControls = append(proxy.Plugin.ConcurrencyControls, *(*ConcurrencyControl)(&control))
+		nodes := BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
+
+		if b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil {
+			for _, node := range nodes {
+				proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
+			}
 		}
-	}
 
-	nodes := BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
-
-	if b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil {
-		for _, node := range nodes {
-			proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
-		}
 	}
 
 	return proxy
@@ -284,18 +287,7 @@ func (b *MySQLConfigBuilder) Build() *MySQLConfig {
 		Nodes: []MySQLNode{},
 	}
 
-	for _, dbep := range b.DatabaseEndpoints {
-		config.Nodes = append(config.Nodes, MySQLNode{
-			Name:     dbep.GetName(),
-			Db:       dbep.Spec.Database.MySQL.DB,
-			User:     dbep.Spec.Database.MySQL.User,
-			Password: dbep.Spec.Database.MySQL.Password,
-			Host:     dbep.Spec.Database.MySQL.Host,
-			Port:     dbep.Spec.Database.MySQL.Port,
-			Weight:   1,
-			Role:     getDbEpRole(dbep.GetAnnotations()),
-		})
-	}
+	config.Nodes = BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
 
 	return config
 }
