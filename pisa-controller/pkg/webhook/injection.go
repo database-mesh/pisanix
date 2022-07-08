@@ -32,16 +32,18 @@ import (
 )
 
 var (
-	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost string
-	pisaProxyAdminListenPort                                                                 uint32
+	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost, pisaProxyLoglevel string
+	pisaProxyAdminListenPort                                                                                    uint32
 )
 
 const (
 	SidecarNamePisaProxy            = "pisa-proxy"
 	EnvPisaProxyAdminListenHost     = "PISA_PROXY_ADMIN_LISTEN_HOST"
 	EnvPisaProxyAdminListenPort     = "PISA_PROXY_ADMIN_LISTEN_PORT"
+	EnvPisaProxyLoglevel            = "PISA_PROXY_ADMIN_LOG_LEVEL"
 	DefaultPisaProxyAdminListenHost = "0.0.0.0"
 	DefaultPisaProxyAdminListenPort = 5591
+	DefaultPisaProxyLoglevel        = "INFO"
 )
 
 func init() {
@@ -61,7 +63,11 @@ func init() {
 	} else {
 		pisaProxyAdminListenPort = uint32(port)
 	}
-
+	if lv := os.Getenv(EnvPisaProxyLoglevel); lv == "" {
+		pisaProxyLoglevel = DefaultPisaProxyLoglevel
+	} else {
+		pisaProxyLoglevel = lv
+	}
 }
 
 const (
@@ -99,8 +105,10 @@ const (
 					},{
 						"name": "PISA_PROXY_ADMIN_LISTEN_PORT",
 						"value": "%d"
+					},{
+						"name": "PISA_PROXY_ADMIN_LOG_LEVEL",
+						"value": "%s"
 					}
-
 				]
 			}
 		}
@@ -153,7 +161,9 @@ func InjectSidecar(ctx *gin.Context) {
 		ar.Request.Namespace,
 		strings.Join(podSlice, "-"),
 		pisaProxyAdminListenHost,
-		pisaProxyAdminListenPort)
+		pisaProxyAdminListenPort,
+		pisaProxyLoglevel,
+	)
 	ar.Response = applyPodPatch(ar, shouldPatchPod, patch)
 	log.Infof("mutating Success %v", patch)
 

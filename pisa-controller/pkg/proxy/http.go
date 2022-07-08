@@ -82,7 +82,6 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 	}
 
 	adminConfigBuilder := NewAdminConfigBuilder()
-	adminConfigBuilder.SetLoglevel("INFO")
 	builder.SetAdminConfigBuilder(adminConfigBuilder)
 
 	proxyConfigBuilder := NewProxyConfigBuilder()
