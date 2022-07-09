@@ -3147,7 +3147,7 @@ pub struct ShowCreateViewStmt {
 }
 
 #[derive(Debug, Clone)]
-pub struct ShowMasterStatusStmt {
+pub struct ShowDetailsStmt {
     pub span: Span,
 }
 

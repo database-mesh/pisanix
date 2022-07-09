@@ -116,6 +116,9 @@ sql_stmt -> SqlStmt:
   | show_variables_stmt     { SqlStmt::ShowVariablesStmt($1) }
   | show_create_view_stmt     { SqlStmt::ShowCreateViewStmt($1) }
   | show_master_status_stmt { SqlStmt::ShowMasterStatusStmt($1) }
+  | show_engines_stmt { SqlStmt::ShowEnginesStmt($1) }
+  | show_plugins_stmt { SqlStmt::ShowPluginsStmt($1) }
+  | show_privileges_stmt { SqlStmt::ShowPrivilegesStmt($1) }
   | show_create_procedure_stmt { SqlStmt::ShowCreateProcedureStmt($1) }
   | show_create_function_stmt { SqlStmt::ShowCreateFunctionStmt($1) }
   | show_create_trigger_stmt { SqlStmt::ShowCreateTriggerStmt($1) }
@@ -6053,10 +6056,42 @@ show_create_view_stmt -> Box<ShowCreateViewStmt>:
     }
 ;
 
-show_master_status_stmt -> Box<ShowMasterStatusStmt>:
+show_master_status_stmt -> Box<ShowDetailsStmt>:
     'SHOW' 'MASTER' 'STATUS'
     {
-        Box::new(ShowMasterStatusStmt {
+        Box::new(ShowDetailsStmt {
+           span: $span,
+        })
+    }
+;
+
+show_engines_stmt -> Box<ShowDetailsStmt>:
+    'SHOW' opt_storage 'ENGINES'
+    {
+        Box::new(ShowDetailsStmt {
+           span: $span,
+        })
+    }
+;
+
+opt_storage -> bool:
+       /* empty */          { false }
+     | 'STORAGE'           { true }
+;
+
+show_plugins_stmt -> Box<ShowDetailsStmt>:
+    'SHOW' 'PLUGINS'
+    {
+        Box::new(ShowDetailsStmt {
+           span: $span,
+        })
+    }
+;
+
+show_privileges_stmt -> Box<ShowDetailsStmt>:
+    'SHOW' 'PRIVILEGES'
+    {
+        Box::new(ShowDetailsStmt {
            span: $span,
         })
     }

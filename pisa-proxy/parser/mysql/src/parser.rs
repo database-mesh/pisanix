@@ -142,6 +142,10 @@ mod test {
             "SHOW CREATE USER root;",
             "SHOW CREATE USER current_user;",
             "set session transaction isolation level read committed;",
+            "SHOW ENGINES;",
+            "SHOW STORAGE ENGINES;",
+            "SHOW PLUGINS;",
+            "SHOW PRIVILEGES;",
         ];
 
         let p = Parser::new();
