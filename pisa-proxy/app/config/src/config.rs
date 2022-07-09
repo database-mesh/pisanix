@@ -22,19 +22,20 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, trace};
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ProtocolConfig {
-    pub admin: Admin,
-    pub mysql: Option<MySQLNodes>,
-    pub proxy: Option<ProxiesConfig>,
-}
+// pub struct ProtocolConfig {
+//     pub admin: Admin,
+//     pub mysql: Option<MySQLNodes>,
+//     pub proxy: Option<ProxiesConfig>,
+// }
 
-#[derive(Debug, Clone)]
-pub enum Node {
-    MySQL(Vec<MySQLNode>),
-    ShardingSphereProxy(Vec<MySQLNode>),
-}
+// #[derive(Debug, Clone)]
+// pub enum Node {
+//     MySQL(Vec<MySQLNode>),
+//     ShardingSphereProxy(Vec<MySQLNode>),
+// }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+// #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Default)]
 // pub struct PisaConfig {
 //     pub admin: Admin,
 //     pub proxies: Vec<ProxyConfig>,
