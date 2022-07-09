@@ -47,7 +47,7 @@ pub struct PisaProxyConfig {
     pub proxy: Option<ProxiesConfig>,
     pub mysql: Option<MySQLNodes>,
     pub shardingsphere_proxy: Option<MySQLNodes>,
-    pub version: String,
+    pub version: Option<String>,
 }
 
 const PISA_CONTROLLER_DEFAULT_SERVICE: &str = "pisa-controller";
@@ -79,7 +79,8 @@ impl PisaProxyConfig {
         &self.admin
     }
 
-    pub fn load_http() -> Result<ProtocolConfig, Box<dyn std::error::Error>> {
+    // pub fn load_http() -> Result<ProtocolConfig, Box<dyn std::error::Error>> {
+    pub fn load_http() -> Result<PisaProxyConfig, Box<dyn std::error::Error>> {
         let deployed_ns = env::var("PISA_DEPLOYED_NAMESPACE")
             .unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
         let deployed_name =
@@ -100,7 +101,8 @@ impl PisaProxyConfig {
             "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
             pisa_host, deployed_ns, deployed_name
         ))?
-        .json::<ProtocolConfig>()?;
+        // .json::<ProtocolConfig>()?;
+        .json::<PisaProxyConfig>()?;
         Ok(resp)
     }
 
@@ -112,7 +114,8 @@ impl PisaProxyConfig {
             .arg(Arg::new("config").short('c').long("config").help("Config path").takes_value(true))
             .arg(Arg::new("loglevel").long("log-level").help("Log level").takes_value(true))
             .get_matches();
-        let config: ProtocolConfig;
+        // let config: ProtocolConfig;
+        let config: PisaProxyConfig;
 
         let local = match env::var(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG) {
             Ok(local) => local,
@@ -156,11 +159,11 @@ impl PisaProxyConfig {
             shardingsphere_proxy: Some(MySQLNodes{
                 node: Some(Vec::<MySQLNode>::new()),
             }),
-            version: String::default(),
+            version: Some(String::default()),
         };
 
         //TODO: need refactor
-        pisa_config.version = PisaProxyConfig::get_version();
+        pisa_config.version = Some(PisaProxyConfig::get_version());
 
         if let Ok(env_host) = env::var(PISA_PROXY_CONFIG_ENV_HOST) {
             pisa_config.admin.host = env_host;
