@@ -40,6 +40,7 @@ pub struct PisaProxyConfigBuilder {
 
     pub _local: String,
     pub _config_path: String,
+    pub _http_path: String,
     pub _log_level: String,
     pub _port: String,
 
@@ -88,6 +89,10 @@ impl PisaProxyConfigBuilder {
             env::var(PISA_PROXY_VERSION_ENV_GIT_COMMIT).unwrap_or("".to_string());
         self._git_branch =     
             env::var(PISA_PROXY_VERSION_ENV_GIT_BRANCH).unwrap_or("".to_string());
+        self._http_path = format!(
+                "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+                self._pisa_host, self._deployed_ns, self._deployed_name
+            );
 
         self
     }
@@ -108,15 +113,12 @@ impl PisaProxyConfigBuilder {
         config
     }
 
-    pub fn build_from_http(self) -> Result<PisaProxyConfig, Box<dyn std::error::Error>> {
-        info!(
+    pub fn build_from_http(self, path: String) -> Result<PisaProxyConfig, Box<dyn std::error::Error>> {
+        print!(
             "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
                 self._pisa_host, self._deployed_ns, self._deployed_name
         ); 
-        let resp = reqwest::blocking::get(format!(
-            "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-            self._pisa_host, self._deployed_ns, self._deployed_name
-        ))?
+        let resp = reqwest::blocking::get(path)?
         .json::<PisaProxyConfig>()?;
 
         Ok(resp)
@@ -160,13 +162,14 @@ impl PisaProxyConfigBuilder {
 
         let env_builder = PisaProxyConfigBuilder::default().build_from_env();
         let is_local_config = env_builder._local.clone();
+        let http_path = env_builder._http_path.clone();
         let env_config = env_builder.build_version().build();
 
         let mut config = PisaProxyConfig::new();
         if is_local_config.eq("true") {
             config = self.build_from_file(config_path);
         } else {
-            config = self.build_from_http().unwrap();
+            config = self.build_from_http(http_path).unwrap();
         }
 
         if cmd_config.admin.log_level.len() != 0 {
