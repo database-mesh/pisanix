@@ -31,12 +31,12 @@ use server::{
 };
 
 fn main() {
-    let config = PisaProxyConfigBuilder::New().load_config();
+    let config = PisaProxyConfigBuilder::new().load_config();
     tracing_subscriber::fmt()
         .with_max_level(Level::from_str(config.admin.log_level.as_str()).ok())
         .init();
 
-    // info!("Pisa-Proxy {}", &*PisaProxyConfig::get_version());
+    info!("Pisa-Proxy {}", config.clone().version.unwrap());
 
     let mut servers = Vec::with_capacity(config.get_proxies().len());
     let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
