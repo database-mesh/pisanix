@@ -21,7 +21,7 @@ use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info, warn, Level};
 extern crate tokio;
 
-use config::config::PisaConfig;
+use config::config::PisaProxyConfig;
 use http::http::{new_http_server, HttpFactory, HttpServerKind, PisaHttpServerFactory};
 use pisa_metrics::metrics::MetricsManager;
 use proxy::factory::{ProxyFactory, ProxyKind};
@@ -31,12 +31,12 @@ use server::{
 };
 
 fn main() {
-    let config = PisaConfig::load_config();
+    let config = PisaProxyConfig::load_config();
     tracing_subscriber::fmt()
         .with_max_level(Level::from_str(config.admin.log_level.as_str()).ok())
         .init();
 
-    info!("Pisa-Proxy {}", &*PisaConfig::get_version());
+    info!("Pisa-Proxy {}", &*PisaProxyConfig::get_version());
 
     let mut servers = Vec::with_capacity(config.get_proxies().len());
     let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())

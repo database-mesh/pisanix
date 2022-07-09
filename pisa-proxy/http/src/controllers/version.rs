@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use config::config::PisaConfig;
+use config::config::PisaProxyConfig;
 
 #[get("/version")]
 pub fn version() -> String {
-    PisaConfig::get_version()
+    PisaProxyConfig::get_version()
 }

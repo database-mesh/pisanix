@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, trace};
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Config {
+pub struct ProtocolConfig {
     pub admin: Admin,
     pub mysql: Option<MySQLNodes>,
     pub proxy: Option<ProxiesConfig>,
@@ -35,11 +35,18 @@ pub enum Node {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct PisaConfig {
+// pub struct PisaConfig {
+//     pub admin: Admin,
+//     pub proxies: Vec<ProxyConfig>,
+//     pub mysql_nodes: Vec<MySQLNode>,
+//     pub shardingsphere_proxy_nodes: Vec<MySQLNode>,
+//     pub version: String,
+// }
+pub struct PisaProxyConfig {
     pub admin: Admin,
-    pub proxies: Vec<ProxyConfig>,
-    pub mysql_nodes: Vec<MySQLNode>,
-    pub shardingsphere_proxy_nodes: Vec<MySQLNode>,
+    pub proxy: Option<ProxiesConfig>,
+    pub mysql: Option<MySQLNodes>,
+    pub shardingsphere_proxy: Option<MySQLNodes>,
     pub version: String,
 }
 
@@ -59,20 +66,20 @@ const PISA_PROXY_VERSION_ENV_GIT_TAG: &str = "GIT_TAG";
 const PISA_PROXY_VERSION_ENV_GIT_BRANCH: &str = "GIT_BRANCH";
 const PISA_PROXY_VERSION_ENV_GIT_COMMIT: &str = "GIT_COMMIT";
 
-impl PisaConfig {
+impl PisaProxyConfig {
     pub fn get_proxies(&self) -> &Vec<ProxyConfig> {
-        &self.proxies
+        &self.proxy.as_ref().unwrap().config.as_ref().unwrap()
     }
 
     pub fn get_mysql_nodes(&self) -> &Vec<MySQLNode> {
-        &self.mysql_nodes
+        &self.mysql.as_ref().unwrap().node.as_ref().unwrap()
     }
 
     pub fn get_admin(&self) -> &Admin {
         &self.admin
     }
 
-    pub fn load_http() -> Result<Config, Box<dyn std::error::Error>> {
+    pub fn load_http() -> Result<ProtocolConfig, Box<dyn std::error::Error>> {
         let deployed_ns = env::var("PISA_DEPLOYED_NAMESPACE")
             .unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
         let deployed_name =
@@ -93,19 +100,19 @@ impl PisaConfig {
             "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
             pisa_host, deployed_ns, deployed_name
         ))?
-        .json::<Config>()?;
+        .json::<ProtocolConfig>()?;
         Ok(resp)
     }
 
     #[tracing::instrument]
     pub fn load_config() -> Self {
         let matches = Command::new("Pisa-Proxy")
-            .version(&*PisaConfig::get_version())
+            .version(&*PisaProxyConfig::get_version())
             .arg(Arg::new("port").short('p').long("port").help("Http port").takes_value(true))
             .arg(Arg::new("config").short('c').long("config").help("Config path").takes_value(true))
             .arg(Arg::new("loglevel").long("log-level").help("Log level").takes_value(true))
             .get_matches();
-        let config: Config;
+        let config: ProtocolConfig;
 
         let local = match env::var(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG) {
             Ok(local) => local,
@@ -131,20 +138,29 @@ impl PisaConfig {
             file.read_to_string(&mut config_str).unwrap();
             config = toml::from_str(&config_str).unwrap();
         } else {
-            config = PisaConfig::load_http().unwrap();
+            config = PisaProxyConfig::load_http().unwrap();
         }
         trace!("configs: {:#?}", config);
 
-        let mut pisa_config = PisaConfig {
+        let mut pisa_config = PisaProxyConfig {
             admin: config.admin,
-            proxies: vec![],
-            mysql_nodes: vec![],
-            shardingsphere_proxy_nodes: vec![],
+            // proxies: vec![],
+            // mysql_nodes: vec![],
+            // shardingsphere_proxy_nodes: vec![],
+            proxy: Some(ProxiesConfig{
+                config: Some(Vec::<ProxyConfig>::new()),
+            }),
+            mysql: Some(MySQLNodes{
+                node: Some(Vec::<MySQLNode>::new()),
+            }),
+            shardingsphere_proxy: Some(MySQLNodes{
+                node: Some(Vec::<MySQLNode>::new()),
+            }),
             version: String::default(),
         };
 
         //TODO: need refactor
-        pisa_config.version = PisaConfig::get_version();
+        pisa_config.version = PisaProxyConfig::get_version();
 
         if let Ok(env_host) = env::var(PISA_PROXY_CONFIG_ENV_HOST) {
             pisa_config.admin.host = env_host;
@@ -159,19 +175,21 @@ impl PisaConfig {
             pisa_config.admin.log_level = log_level;
         }
 
-        if let Some(config) = config.proxy {
-            if let Some(app_config) = config.config {
-                for app in app_config {
-                    pisa_config.proxies.push(app);
-                }
-            }
-        }
+        pisa_config.proxy = config.proxy;
+        // if let Some(config) = config.proxy {
+        //     if let Some(app_config) = config.config {
+        //         for app in app_config {
+        //             pisa_config.proxies.push(app);
+        //         }
+        //     }
+        // }
 
-        if let Some(mysql) = config.mysql {
-            if let Some(mysql_nodes) = mysql.node {
-                pisa_config.mysql_nodes = mysql_nodes;
-            }
-        }
+        pisa_config.mysql = config.mysql;
+        // if let Some(mysql) = config.mysql {
+        //     if let Some(mysql_nodes) = mysql.node {
+        //         pisa_config.mysql_nodes = mysql_nodes;
+        //     }
+        // }
 
         trace!("{}", serde_json::to_string(&pisa_config).unwrap());
 
