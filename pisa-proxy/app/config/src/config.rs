@@ -114,10 +114,6 @@ impl PisaProxyConfigBuilder {
     }
 
     pub fn build_from_http(self, path: String) -> Result<PisaProxyConfig, Box<dyn std::error::Error>> {
-        print!(
-            "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-                self._pisa_host, self._deployed_ns, self._deployed_name
-        ); 
         let resp = reqwest::blocking::get(path)?
         .json::<PisaProxyConfig>()?;
 
@@ -157,12 +153,15 @@ impl PisaProxyConfigBuilder {
 
     pub fn load_config(mut self) -> PisaProxyConfig {
         let cmd_builder = PisaProxyConfigBuilder::default().build_from_cmd();
-        let config_path = cmd_builder._config_path.clone();
+        // let config_path = cmd_builder._config_path.clone();
+        let config_path = cmd_builder._config_path;
         let cmd_config = cmd_builder.build();
 
         let env_builder = PisaProxyConfigBuilder::default().build_from_env();
-        let is_local_config = env_builder._local.clone();
-        let http_path = env_builder._http_path.clone();
+        // let is_local_config = env_builder._local.clone();
+        let is_local_config = env_builder._local;
+        // let http_path = env_builder._http_path.clone();
+        let http_path = env_builder._http_path;
         let env_config = env_builder.build_version().build();
 
         let mut config = PisaProxyConfig::new();
