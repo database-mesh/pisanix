@@ -56,7 +56,7 @@ Pisanix 支持多种插件机制，如 Lua 和 Wasm，工程师们有机会重�
 |||
 |:-|:-|
 | 邮件列表| https://groups.google.com/g/database-mesh |
-| 英文社区会议(开始于 2022-02-27), 周三 9:00AM PST|https://meet.google.com/yhv-zrby-pyt |
+| 英文社区会议(开始于 2022-02-16), 周三 9:00AM PST|https://meet.google.com/yhv-zrby-pyt |
 | 中文社区会议 (开始于 2022-04-27), 周三 9:00PM GMT+8|https://meeting.tencent.com/dm/6UXDMNsHBVQO |
 | Slack | https://join.slack.com/t/databasemesh/shared_invite/zt-19rhvnxkz-USjZ~am~ghd_Q0q~8bAJXA |
 | 会议记录 |https://bit.ly/39Fqt3x |

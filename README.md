@@ -47,7 +47,7 @@ Please follows [Contributing Guide](./CONTRIBUTING.md)
 | | |
 |:-|:-|
 | Mailing List| https://groups.google.com/g/database-mesh |
-| Dev Meetings (Starting Feb 27th, 2022), Bi-weekly Wednesday 9:00AM PST|https://meet.google.com/yhv-zrby-pyt |
+| Dev Meetings (Starting Feb 16th, 2022), Bi-weekly Wednesday 9:00AM PST|https://meet.google.com/yhv-zrby-pyt |
 | Dev Meetings APAC Friendly (Starting April 27th, 2022), Bi-weekly APAC Wednesday 9:00PM GMT+8|https://meeting.tencent.com/dm/6UXDMNsHBVQO |
 | Wechat Broker|pisanix|
 | Slack |https://join.slack.com/t/databasemesh/shared_invite/zt-19rhvnxkz-USjZ~am~ghd_Q0q~8bAJXA  |
