@@ -50,6 +50,8 @@ pub enum SqlStmt {
     ShowEnginesStmt(Box<ShowDetailsStmt>),
     ShowPluginsStmt(Box<ShowDetailsStmt>),
     ShowPrivilegesStmt(Box<ShowDetailsStmt>),
+    ShowProcesslistStmt(Box<ShowDetailsStmt>),
+    ShowReplicasStmt(Box<ShowDetailsStmt>),
     ShowCreateProcedureStmt(Box<ShowCreateSpStmt>),
     ShowCreateFunctionStmt(Box<ShowCreateSpStmt>),
     ShowCreateTriggerStmt(Box<ShowCreateSpStmt>),
