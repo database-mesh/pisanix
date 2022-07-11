@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use config::config::PisaConfig;
+use config::config::PisaProxyConfig;
 use proxy::{
     factory::{Proxy, ProxyFactory, ProxyKind},
     proxy::ProxyConfig,
@@ -20,11 +20,11 @@ use proxy::{
 
 pub struct PisaProxyFactory {
     pub proxy_config: ProxyConfig,
-    pub pisa_config: PisaConfig,
+    pub pisa_config: PisaProxyConfig,
 }
 
 impl PisaProxyFactory {
-    pub fn new(proxy_config: ProxyConfig, pisa_config: PisaConfig) -> Self {
+    pub fn new(proxy_config: ProxyConfig, pisa_config: PisaProxyConfig) -> Self {
         Self { proxy_config, pisa_config }
     }
 }
@@ -35,14 +35,16 @@ impl ProxyFactory for PisaProxyFactory {
         match kind {
             ProxyKind::MySQL => Box::new(runtime_mysql::mysql::MySQLProxy {
                 proxy_config: config,
-                mysql_nodes: self.pisa_config.mysql_nodes.clone(),
-                pisa_version: self.pisa_config.version.clone(),
+                // mysql_nodes: self.pisa_config.mysql_nodes.clone(),
+                mysql_nodes: self.pisa_config.mysql.as_ref().unwrap().node.as_ref().unwrap().to_vec(),
+                pisa_version: self.pisa_config.version.as_ref().unwrap().to_string(),
             }),
             ProxyKind::ShardingSphereProxy => {
                 Box::new(runtime_shardingsphereproxy::shardingsphereproxy::ShardingSphereProxy {
                     proxy_config: config,
-                    shardingsphereproxy_nodes: self.pisa_config.shardingsphere_proxy_nodes.clone(),
-                    pisa_version: self.pisa_config.version.clone(),
+                    // shardingsphereproxy_nodes: self.pisa_config.shardingsphere_proxy_nodes.clone(),
+                    shardingsphereproxy_nodes: self.pisa_config.shardingsphere_proxy.as_ref().unwrap().node.as_ref().unwrap().to_vec(),
+                    pisa_version: self.pisa_config.version.as_ref().unwrap().to_string(),
                 })
             }
         }

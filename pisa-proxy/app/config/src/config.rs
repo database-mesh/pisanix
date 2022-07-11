@@ -21,26 +21,173 @@ use proxy::proxy::{MySQLNode, MySQLNodes, ProxiesConfig, ProxyConfig};
 use serde::{Deserialize, Serialize};
 use tracing::{info, trace};
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Config {
-    pub admin: Admin,
-    pub mysql: Option<MySQLNodes>,
-    pub proxy: Option<ProxiesConfig>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Node {
-    MySQL(Vec<MySQLNode>),
-    ShardingSphereProxy(Vec<MySQLNode>),
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct PisaConfig {
+pub struct PisaProxyConfig {
     pub admin: Admin,
-    pub proxies: Vec<ProxyConfig>,
-    pub mysql_nodes: Vec<MySQLNode>,
-    pub shardingsphere_proxy_nodes: Vec<MySQLNode>,
-    pub version: String,
+    pub proxy: Option<ProxiesConfig>,
+    pub mysql: Option<MySQLNodes>,
+    pub shardingsphere_proxy: Option<MySQLNodes>,
+    pub version: Option<String>,
+}
+
+#[derive(Default, Clone)]
+pub struct PisaProxyConfigBuilder {
+    pub _admin: Admin,
+    pub _proxy: Option<ProxiesConfig>,
+    pub _mysql: Option<MySQLNodes>,
+    pub _shardingsphere_proxy: Option<MySQLNodes>,
+    pub _version: Option<String>, 
+
+    pub _local: String,
+    pub _config_path: String,
+    pub _http_path: String,
+    pub _log_level: String,
+    pub _port: String,
+
+    pub _deployed_ns: String,
+    pub _deployed_name: String,
+    pub _pisa_svc: String,
+    pub _pisa_ns: String,
+    pub _pisa_host: String,
+
+    pub _git_tag: String,
+    pub _git_commit: String,
+    pub _git_branch: String,
+}
+
+impl PisaProxyConfigBuilder {
+    pub fn new() -> Self{
+        PisaProxyConfigBuilder::default()
+    }
+
+    pub fn build(mut self) -> PisaProxyConfig {
+        PisaProxyConfig{
+            admin: self._admin, 
+            proxy: self._proxy,
+            mysql: self._mysql,
+            shardingsphere_proxy: self._shardingsphere_proxy,
+            version: self._version,
+        }
+    }
+
+    pub fn build_from_env(mut self) -> Self {
+        self._deployed_ns = 
+            env::var("PISA_DEPLOYED_NAMESPACE").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
+        self._deployed_name =
+            env::var("PISA_DEPLOYED_NAME").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAME.to_string());
+        self._pisa_svc = 
+            env::var("PISA_CONTROLLER_SERVICE").unwrap_or(PISA_CONTROLLER_DEFAULT_SERVICE.to_string());
+        self._pisa_ns = 
+            env::var("PISA_CONTROLLER_NAMESPACE").unwrap_or(PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
+        self._pisa_host  =
+            env::var("PISA_CONTROLLER_HOST").unwrap_or(format!("{}.{}:8080", self._pisa_svc, self._pisa_ns));
+        self._local =     
+            env::var(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG).unwrap_or("false".to_string());
+        self._git_tag =     
+            env::var(PISA_PROXY_VERSION_ENV_GIT_TAG).unwrap_or("".to_string());
+        self._git_commit =     
+            env::var(PISA_PROXY_VERSION_ENV_GIT_COMMIT).unwrap_or("".to_string());
+        self._git_branch =     
+            env::var(PISA_PROXY_VERSION_ENV_GIT_BRANCH).unwrap_or("".to_string());
+        self._http_path = format!(
+                "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+                self._pisa_host, self._deployed_ns, self._deployed_name
+            );
+
+        self
+    }
+
+    pub fn build_from_file(self, path: String) -> PisaProxyConfig {
+        let mut config = PisaProxyConfig::new();
+        let mut file = match File::open(path) {
+            Err(e) => {
+                eprintln!("{:?}", e);
+                std::process::exit(-1);
+            }
+            Ok(file) => file,
+        };
+
+        let mut config_str = String::new();
+        file.read_to_string(&mut config_str).unwrap();
+        config = toml::from_str(&config_str).unwrap();
+        config
+    }
+
+    pub fn build_from_http(self, path: String) -> Result<PisaProxyConfig, Box<dyn std::error::Error>> {
+        let resp = reqwest::blocking::get(path)?
+        .json::<PisaProxyConfig>()?;
+
+        Ok(resp)
+    }
+
+    pub fn build_from_cmd(self) -> Self {
+        let mut builder = PisaProxyConfigBuilder::default();
+        
+        let matches = Command::new("Pisa-Proxy")
+        .version(PisaProxyConfigBuilder::default().build_from_env().build_version()._version.unwrap().as_str())
+        .arg(Arg::new("port").short('p').long("port").help("Http port").takes_value(true))
+        .arg(Arg::new("config").short('c').long("config").help("Config path").takes_value(true))
+        .arg(Arg::new("loglevel").long("log-level").help("Log level").takes_value(true))
+        .get_matches();
+
+        if let Some(port) = matches.value_of("port") {
+            builder._port = port.to_string();
+        }
+        if let Some(path) = matches.value_of("config") {
+            builder._config_path = path.to_string();
+        }
+        if let Some(loglevel) = matches.value_of("loglevel") {
+            builder._log_level = loglevel.to_string();
+        }
+        builder
+    }
+
+    pub fn build_version(mut self) -> Self {
+        if !self._git_tag.is_empty() {
+            self._version = Some(format!("{}", self._git_tag));
+        } else {
+            self._version = Some(format!("{}-{}", self._git_branch, self._git_commit));
+        }
+        self
+    }
+
+    pub fn load_config(mut self) -> PisaProxyConfig {
+        let cmd_builder = PisaProxyConfigBuilder::default().build_from_cmd();
+        let config_path = cmd_builder._config_path.clone();
+        let cmd_config = cmd_builder.build();
+
+        let env_builder = PisaProxyConfigBuilder::default().build_from_env();
+        let is_local_config = env_builder._local.clone();
+        let http_path = env_builder._http_path.clone();
+        let env_config = env_builder.build_version().build();
+
+        let mut config = PisaProxyConfig::new();
+        if is_local_config.eq("true") {
+            config = self.build_from_file(config_path);
+        } else {
+            config = self.build_from_http(http_path).unwrap();
+        }
+
+        if cmd_config.admin.log_level.len() != 0 {
+            config.admin.log_level = cmd_config.admin.log_level;
+        }
+        if cmd_config.admin.port != 0 {
+            config.admin.port = cmd_config.admin.port;
+        }
+
+        if env_config.admin.log_level.len() != 0 {
+            config.admin.log_level = env_config.admin.log_level;
+        }
+        if env_config.admin.port != 0 {
+            config.admin.port = env_config.admin.port;
+        }
+
+        config.version = env_config.version; 
+
+        // TODO: need fix the log level
+        trace!("configs: {:#?}", config);
+        config
+    }
 }
 
 const PISA_CONTROLLER_DEFAULT_SERVICE: &str = "pisa-controller";
@@ -59,147 +206,19 @@ const PISA_PROXY_VERSION_ENV_GIT_TAG: &str = "GIT_TAG";
 const PISA_PROXY_VERSION_ENV_GIT_BRANCH: &str = "GIT_BRANCH";
 const PISA_PROXY_VERSION_ENV_GIT_COMMIT: &str = "GIT_COMMIT";
 
-impl PisaConfig {
+impl PisaProxyConfig {
+    pub fn new() -> Self {
+        PisaProxyConfig::default()
+    }
     pub fn get_proxies(&self) -> &Vec<ProxyConfig> {
-        &self.proxies
+        &self.proxy.as_ref().unwrap().config.as_ref().unwrap()
     }
 
     pub fn get_mysql_nodes(&self) -> &Vec<MySQLNode> {
-        &self.mysql_nodes
+        &self.mysql.as_ref().unwrap().node.as_ref().unwrap()
     }
 
     pub fn get_admin(&self) -> &Admin {
         &self.admin
-    }
-
-    pub fn load_http() -> Result<Config, Box<dyn std::error::Error>> {
-        let deployed_ns = env::var("PISA_DEPLOYED_NAMESPACE")
-            .unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
-        let deployed_name =
-            env::var("PISA_DEPLOYED_NAME").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAME.to_string());
-        let pisa_svc = env::var("PISA_CONTROLLER_SERVICE")
-            .unwrap_or(PISA_CONTROLLER_DEFAULT_SERVICE.to_string());
-        let pisa_ns = env::var("PISA_CONTROLLER_NAMESPACE")
-            .unwrap_or(PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
-        let pisa_host =
-            env::var("PISA_CONTROLLER_HOST").unwrap_or(format!("{}.{}:8080", pisa_svc, pisa_ns));
-
-        info!(
-            "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-            pisa_host, deployed_ns, deployed_name
-        );
-
-        let resp = reqwest::blocking::get(format!(
-            "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-            pisa_host, deployed_ns, deployed_name
-        ))?
-        .json::<Config>()?;
-        Ok(resp)
-    }
-
-    #[tracing::instrument]
-    pub fn load_config() -> Self {
-        let matches = Command::new("Pisa-Proxy")
-            .version(&*PisaConfig::get_version())
-            .arg(Arg::new("port").short('p').long("port").help("Http port").takes_value(true))
-            .arg(Arg::new("config").short('c').long("config").help("Config path").takes_value(true))
-            .arg(Arg::new("loglevel").long("log-level").help("Log level").takes_value(true))
-            .get_matches();
-        let config: Config;
-
-        let local = match env::var(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG) {
-            Ok(local) => local,
-            Err(_) => "false".to_string(),
-        };
-
-        if local.eq("true") {
-            let mut config_path = PISA_PROXY_DEFAULT_CONFIG_PATH;
-
-            if let Some(path) = matches.value_of("config") {
-                config_path = path;
-            }
-
-            let mut file = match File::open(config_path) {
-                Err(e) => {
-                    eprintln!("{:?}", e);
-                    std::process::exit(-1);
-                }
-                Ok(file) => file,
-            };
-
-            let mut config_str = String::new();
-            file.read_to_string(&mut config_str).unwrap();
-            config = toml::from_str(&config_str).unwrap();
-        } else {
-            config = PisaConfig::load_http().unwrap();
-        }
-        trace!("configs: {:#?}", config);
-
-        let mut pisa_config = PisaConfig {
-            admin: config.admin,
-            proxies: vec![],
-            mysql_nodes: vec![],
-            shardingsphere_proxy_nodes: vec![],
-            version: String::default(),
-        };
-
-        //TODO: need refactor
-        pisa_config.version = PisaConfig::get_version();
-
-        if let Ok(env_host) = env::var(PISA_PROXY_CONFIG_ENV_HOST) {
-            pisa_config.admin.host = env_host;
-        }
-
-        if let Ok(env_port) = env::var(PISA_PROXY_CONFIG_ENV_PORT) {
-            let port = env_port.to_string();
-            pisa_config.admin.port = port.parse::<u32>().unwrap();
-        }
-
-        if let Ok(log_level) = env::var(PISA_PROXY_CONFIG_ENV_LOG_LEVEL) {
-            pisa_config.admin.log_level = log_level;
-        }
-
-        if let Some(config) = config.proxy {
-            if let Some(app_config) = config.config {
-                for app in app_config {
-                    pisa_config.proxies.push(app);
-                }
-            }
-        }
-
-        if let Some(mysql) = config.mysql {
-            if let Some(mysql_nodes) = mysql.node {
-                pisa_config.mysql_nodes = mysql_nodes;
-            }
-        }
-
-        trace!("{}", serde_json::to_string(&pisa_config).unwrap());
-
-        pisa_config
-    }
-
-    #[tracing::instrument]
-    pub fn get_version() -> String {
-        let mut git_tag: String = "".to_string();
-        let mut git_commit: String = "".to_string();
-        let mut git_branch: String = "".to_string();
-
-        if let Ok(tag) = env::var(PISA_PROXY_VERSION_ENV_GIT_TAG) {
-            git_tag = tag;
-        };
-
-        if let Ok(commit) = env::var(PISA_PROXY_VERSION_ENV_GIT_COMMIT) {
-            git_commit = commit;
-        };
-
-        if let Ok(branch) = env::var(PISA_PROXY_VERSION_ENV_GIT_BRANCH) {
-            git_branch = branch;
-        };
-
-        if !git_tag.is_empty() {
-            format!("{}", git_tag)
-        } else {
-            format!("{}-{}", git_branch, git_commit)
-        }
     }
 }

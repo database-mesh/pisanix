@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use config::config::PisaConfig;
+use config::config::PisaProxyConfig;
 use pisa_error::error::*;
 use pisa_metrics::metrics::MetricsManager;
 
@@ -32,11 +32,11 @@ pub enum HttpServerKind {
 }
 
 pub struct PisaHttpServerFactory {
-    pisa_config: PisaConfig,
+    pisa_config: PisaProxyConfig,
     metrics_manager: MetricsManager,
 }
 impl PisaHttpServerFactory {
-    pub fn new(pcfg: PisaConfig, mgr: MetricsManager) -> PisaHttpServerFactory {
+    pub fn new(pcfg: PisaProxyConfig, mgr: MetricsManager) -> PisaHttpServerFactory {
         PisaHttpServerFactory { pisa_config: pcfg, metrics_manager: mgr }
     }
 }
@@ -54,7 +54,7 @@ impl HttpFactory for PisaHttpServerFactory {
 
 #[derive(Default)]
 pub struct RocketServer {
-    pisa_config: PisaConfig,
+    pisa_config: PisaProxyConfig,
     metrics_manager: MetricsManager,
 }
 

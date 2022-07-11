@@ -25,7 +25,7 @@ use tokio::{
 
 use crate::listener::Listener;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ProxiesConfig {
     pub config: Option<Vec<ProxyConfig>>,
 }
