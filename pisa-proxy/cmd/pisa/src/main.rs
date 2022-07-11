@@ -21,7 +21,7 @@ use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info, warn, Level};
 extern crate tokio;
 
-use config::config::{PisaProxyConfig, PisaProxyConfigBuilder};
+use config::config::PisaProxyConfigBuilder;
 use http::http::{new_http_server, HttpFactory, HttpServerKind, PisaHttpServerFactory};
 use pisa_metrics::metrics::MetricsManager;
 use proxy::factory::{ProxyFactory, ProxyKind};

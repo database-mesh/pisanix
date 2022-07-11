@@ -36,7 +36,7 @@ pub struct PisaProxyConfigBuilder {
     pub _proxy: Option<ProxiesConfig>,
     pub _mysql: Option<MySQLNodes>,
     pub _shardingsphere_proxy: Option<MySQLNodes>,
-    pub _version: Option<String>, 
+    pub _version: Option<String>,
 
     pub _local: String,
     pub _config_path: String,
@@ -56,13 +56,13 @@ pub struct PisaProxyConfigBuilder {
 }
 
 impl PisaProxyConfigBuilder {
-    pub fn new() -> Self{
+    pub fn new() -> Self {
         PisaProxyConfigBuilder::default()
     }
 
-    pub fn build(mut self) -> PisaProxyConfig {
-        PisaProxyConfig{
-            admin: self._admin, 
+    pub fn build(self) -> PisaProxyConfig {
+        PisaProxyConfig {
+            admin: self._admin,
             proxy: self._proxy,
             mysql: self._mysql,
             shardingsphere_proxy: self._shardingsphere_proxy,
@@ -71,34 +71,30 @@ impl PisaProxyConfigBuilder {
     }
 
     pub fn build_from_env(mut self) -> Self {
-        self._deployed_ns = 
-            env::var("PISA_DEPLOYED_NAMESPACE").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
+        self._deployed_ns = env::var("PISA_DEPLOYED_NAMESPACE")
+            .unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
         self._deployed_name =
             env::var("PISA_DEPLOYED_NAME").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAME.to_string());
-        self._pisa_svc = 
-            env::var("PISA_CONTROLLER_SERVICE").unwrap_or(PISA_CONTROLLER_DEFAULT_SERVICE.to_string());
-        self._pisa_ns = 
-            env::var("PISA_CONTROLLER_NAMESPACE").unwrap_or(PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
-        self._pisa_host  =
-            env::var("PISA_CONTROLLER_HOST").unwrap_or(format!("{}.{}:8080", self._pisa_svc, self._pisa_ns));
-        self._local =     
-            env::var(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG).unwrap_or("false".to_string());
-        self._git_tag =     
-            env::var(PISA_PROXY_VERSION_ENV_GIT_TAG).unwrap_or("".to_string());
-        self._git_commit =     
-            env::var(PISA_PROXY_VERSION_ENV_GIT_COMMIT).unwrap_or("".to_string());
-        self._git_branch =     
-            env::var(PISA_PROXY_VERSION_ENV_GIT_BRANCH).unwrap_or("".to_string());
+        self._pisa_svc = env::var("PISA_CONTROLLER_SERVICE")
+            .unwrap_or(PISA_CONTROLLER_DEFAULT_SERVICE.to_string());
+        self._pisa_ns = env::var("PISA_CONTROLLER_NAMESPACE")
+            .unwrap_or(PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
+        self._pisa_host = env::var("PISA_CONTROLLER_HOST")
+            .unwrap_or(format!("{}.{}:8080", self._pisa_svc, self._pisa_ns));
+        self._local = env::var(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG).unwrap_or("false".to_string());
+        self._git_tag = env::var(PISA_PROXY_VERSION_ENV_GIT_TAG).unwrap_or("".to_string());
+        self._git_commit = env::var(PISA_PROXY_VERSION_ENV_GIT_COMMIT).unwrap_or("".to_string());
+        self._git_branch = env::var(PISA_PROXY_VERSION_ENV_GIT_BRANCH).unwrap_or("".to_string());
         self._http_path = format!(
-                "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-                self._pisa_host, self._deployed_ns, self._deployed_name
-            );
+            "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+            self._pisa_host, self._deployed_ns, self._deployed_name
+        );
 
         self
     }
 
     pub fn build_from_file(self, path: String) -> PisaProxyConfig {
-        let mut config = PisaProxyConfig::new();
+        let config: PisaProxyConfig;
         let mut file = match File::open(path) {
             Err(e) => {
                 eprintln!("{:?}", e);
@@ -113,22 +109,31 @@ impl PisaProxyConfigBuilder {
         config
     }
 
-    pub fn build_from_http(self, path: String) -> Result<PisaProxyConfig, Box<dyn std::error::Error>> {
-        let resp = reqwest::blocking::get(path)?
-        .json::<PisaProxyConfig>()?;
+    pub fn build_from_http(
+        self,
+        path: String,
+    ) -> Result<PisaProxyConfig, Box<dyn std::error::Error>> {
+        let resp = reqwest::blocking::get(path)?.json::<PisaProxyConfig>()?;
 
         Ok(resp)
     }
 
     pub fn build_from_cmd(self) -> Self {
         let mut builder = PisaProxyConfigBuilder::default();
-        
+
         let matches = Command::new("Pisa-Proxy")
-        .version(PisaProxyConfigBuilder::default().build_from_env().build_version()._version.unwrap().as_str())
-        .arg(Arg::new("port").short('p').long("port").help("Http port").takes_value(true))
-        .arg(Arg::new("config").short('c').long("config").help("Config path").takes_value(true))
-        .arg(Arg::new("loglevel").long("log-level").help("Log level").takes_value(true))
-        .get_matches();
+            .version(
+                PisaProxyConfigBuilder::default()
+                    .build_from_env()
+                    .build_version()
+                    ._version
+                    .unwrap()
+                    .as_str(),
+            )
+            .arg(Arg::new("port").short('p').long("port").help("Http port").takes_value(true))
+            .arg(Arg::new("config").short('c').long("config").help("Config path").takes_value(true))
+            .arg(Arg::new("loglevel").long("log-level").help("Log level").takes_value(true))
+            .get_matches();
 
         if let Some(port) = matches.value_of("port") {
             builder._port = port.to_string();
@@ -151,7 +156,7 @@ impl PisaProxyConfigBuilder {
         self
     }
 
-    pub fn load_config(mut self) -> PisaProxyConfig {
+    pub fn load_config(self) -> PisaProxyConfig {
         let cmd_builder = PisaProxyConfigBuilder::default().build_from_cmd();
         let config_path = cmd_builder._config_path.clone();
         let cmd_config = cmd_builder.build();
@@ -161,7 +166,7 @@ impl PisaProxyConfigBuilder {
         let http_path = env_builder._http_path.clone();
         let env_config = env_builder.build_version().build();
 
-        let mut config = PisaProxyConfig::new();
+        let mut config: PisaProxyConfig;
         if is_local_config.eq("true") {
             config = self.build_from_file(config_path);
         } else {
@@ -182,7 +187,7 @@ impl PisaProxyConfigBuilder {
             config.admin.port = env_config.admin.port;
         }
 
-        config.version = env_config.version; 
+        config.version = env_config.version;
 
         // TODO: need fix the log level
         trace!("configs: {:#?}", config);
