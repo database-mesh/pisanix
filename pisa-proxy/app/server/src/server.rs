@@ -36,15 +36,22 @@ impl ProxyFactory for PisaProxyFactory {
             ProxyKind::MySQL => Box::new(runtime_mysql::mysql::MySQLProxy {
                 proxy_config: config,
                 // mysql_nodes: self.pisa_config.mysql_nodes.clone(),
-                mysql_nodes: self.pisa_config.mysql.as_ref().unwrap().node.as_ref().unwrap().to_vec(),
-                pisa_version: self.pisa_config.version.as_ref().unwrap().to_string(),
+                mysql_nodes: self.pisa_config.get_mysql().to_vec(),
+                pisa_version: self.pisa_config.get_version().to_string(),
+                // mysql_nodes: self.pisa_config.mysql.as_ref().unwrap().node.as_ref().unwrap().to_vec(),
+                // pisa_version: self.pisa_config.version.as_ref().unwrap().to_string(),
             }),
             ProxyKind::ShardingSphereProxy => {
                 Box::new(runtime_shardingsphereproxy::shardingsphereproxy::ShardingSphereProxy {
                     proxy_config: config,
-                    // shardingsphereproxy_nodes: self.pisa_config.shardingsphere_proxy_nodes.clone(),
-                    shardingsphereproxy_nodes: self.pisa_config.shardingsphere_proxy.as_ref().unwrap().node.as_ref().unwrap().to_vec(),
-                    pisa_version: self.pisa_config.version.as_ref().unwrap().to_string(),
+                    shardingsphereproxy_nodes: self.pisa_config.get_shardingsphere_proxy().to_vec(),
+                    // shardingsphereproxy_nodes: self.pisa_config.clone().get_shardingsphere_proxy(),
+                    // shardingsphereproxy_nodes: self.pisa_config.get_shardingsphere_proxy(),
+                    // pisa_version: self.pisa_config.clone().get_version(),
+                    // pisa_version: self.pisa_config.get_version(),
+                    pisa_version: self.pisa_config.get_version().to_string(),
+                    // shardingsphereproxy_nodes: self.pisa_config.shardingsphere_proxy.as_ref().unwrap().node.as_ref().unwrap().to_vec(),
+                    // pisa_version: self.pisa_config.version.as_ref().unwrap().to_string(),
                 })
             }
         }

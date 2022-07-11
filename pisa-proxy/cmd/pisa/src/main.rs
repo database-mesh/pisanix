@@ -33,19 +33,19 @@ use server::{
 fn main() {
     let config = PisaProxyConfigBuilder::new().load_config();
     tracing_subscriber::fmt()
-        .with_max_level(Level::from_str(config.admin.log_level.as_str()).ok())
+        .with_max_level(Level::from_str(config.get_admin().log_level.as_str()).ok())
         .init();
 
-    info!("Pisa-Proxy {}", config.clone().version.unwrap());
+    info!("Pisa-Proxy {}", config.get_version());
 
-    let mut servers = Vec::with_capacity(config.get_proxies().len());
+    let mut servers = Vec::with_capacity(config.get_proxy().len());
     let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
         .build_http_server(HttpServerKind::Rocket);
 
     build_runtime().block_on(async move {
-        for proxy_config in config.get_proxies() {
-            let cfg = proxy_config.clone();
-            let factory = PisaProxyFactory::new(cfg, config.clone());
+        for proxy_config in config.get_proxy() {
+            let cfg = proxy_config;
+            let factory = PisaProxyFactory::new(cfg.to_owned(), config.clone());
             match proxy_config.backend_type.as_str() {
                 BACKEND_TYPE_MYSQL => servers
                     .push(tokio::spawn(new_proxy_server(factory.build_proxy(ProxyKind::MySQL)))),

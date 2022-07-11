@@ -16,5 +16,5 @@ use config::config::PisaProxyConfigBuilder;
 
 #[get("/version")]
 pub fn version() -> String {
-    PisaProxyConfigBuilder::new().build_from_env().build_version()._version.unwrap()
+    PisaProxyConfigBuilder::new().build_from_env().build_version()._version
 }
