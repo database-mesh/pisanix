@@ -3162,3 +3162,22 @@ pub struct ShowCreateUserStmt {
     pub span: Span,
     pub user: User,
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowReplicaStatusStmt {
+    pub span: Span,
+    pub replica: Replica,
+    pub opt_channel: Option<Channel>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Replica {
+    Slave,
+    Replica,
+}
+
+#[derive(Debug, Clone)]
+pub struct Channel {
+    pub span: Span,
+    pub channel: String,
+}
