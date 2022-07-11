@@ -55,7 +55,6 @@ pub struct MySQLServer {
     // `concurrency_control_rule_idx` is index of concurrency_control rules
     // `concurrency_control_rule_idx` is required to add permits when the concurrency_control layer service is enabled
     concurrency_control_rule_idx: Option<usize>,
-    server_version: String,
 }
 
 pub struct MySQLServerBuilder {
@@ -163,7 +162,6 @@ impl MySQLServerBuilder {
             concurrency_control_rule_idx: self._concurrency_control_rule_idx,
             metrics_collector: self._metrics_collector,
             name: self._pcfg.name,
-            server_version: self._pcfg.server_version.clone(),
         }
     }
 }
@@ -503,10 +501,7 @@ impl MySQLServer {
                     if let Some(name) = &name.charset_name {
                         self.client.charset = name.clone();
                         self.trans_fsm.set_charset(name.clone());
-                        let _ = self
-                            .trans_fsm
-                            .reset_fsm_state(RouteInput::Statement(input))
-                            .await;
+                        let _ = self.trans_fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                         return;
                     }
                 }
