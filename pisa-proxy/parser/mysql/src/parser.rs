@@ -146,6 +146,10 @@ mod test {
             "SHOW STORAGE ENGINES;",
             "SHOW PLUGINS;",
             "SHOW PRIVILEGES;",
+            "SHOW SLAVE HOSTS;",
+            "SHOW REPLICAS;",
+            "SHOW PROCESSLIST;",
+            "SHOW FULL PROCESSLIST;",
         ];
 
         let p = Parser::new();

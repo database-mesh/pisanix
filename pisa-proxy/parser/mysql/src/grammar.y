@@ -119,6 +119,8 @@ sql_stmt -> SqlStmt:
   | show_engines_stmt { SqlStmt::ShowEnginesStmt($1) }
   | show_plugins_stmt { SqlStmt::ShowPluginsStmt($1) }
   | show_privileges_stmt { SqlStmt::ShowPrivilegesStmt($1) }
+  | show_processlist_stmt { SqlStmt::ShowProcesslistStmt($1) }
+  | show_replicas_stmt { SqlStmt::ShowReplicasStmt($1) }
   | show_create_procedure_stmt { SqlStmt::ShowCreateProcedureStmt($1) }
   | show_create_function_stmt { SqlStmt::ShowCreateFunctionStmt($1) }
   | show_create_trigger_stmt { SqlStmt::ShowCreateTriggerStmt($1) }
@@ -6143,6 +6145,36 @@ show_create_user_stmt -> Box<ShowCreateUserStmt>:
         Box::new(ShowCreateUserStmt {
            span: $span,
            user: $4,
+        })
+    }
+;
+
+show_processlist_stmt -> Box<ShowDetailsStmt>:
+    'SHOW' opt_full 'PROCESSLIST'
+    {
+        Box::new(ShowDetailsStmt {
+           span: $span,
+        })
+    }
+;
+
+opt_full -> bool:
+       /* empty */          { false }
+     | 'FULL'               { true }
+;
+
+show_replicas_stmt -> Box<ShowDetailsStmt>:
+    'SHOW' 'SLAVE' 'HOSTS'
+    {
+        Box::new(ShowDetailsStmt {
+           span: $span,
+        })
+    }
+   |
+    'SHOW' 'REPLICAS'
+    {
+        Box::new(ShowDetailsStmt {
+           span: $span,
         })
     }
 ;
