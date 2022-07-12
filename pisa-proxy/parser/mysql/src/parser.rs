@@ -151,7 +151,7 @@ mod test {
             "SHOW PROCESSLIST;",
             "SHOW FULL PROCESSLIST;",
             "SHOW SLAVE STATUS;",
-            "SHOW REPLICA STATUS FOR CHANNEL channel_name;",
+            "SHOW REPLICA STATUS FOR CHANNEL 'channel_name';",
         ];
 
         let p = Parser::new();
