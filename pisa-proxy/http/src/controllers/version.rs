@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use config::config::{PisaProxyConfig, PisaProxyConfigBuilder};
+use config::config::PisaProxyConfigBuilder;
 
 #[get("/version")]
 pub fn version() -> String {
-    PisaProxyConfigBuilder::new().build_from_env().build_version()._version.unwrap()
+    PisaProxyConfigBuilder::new().build_from_env().build_version()._version
 }
