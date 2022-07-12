@@ -100,6 +100,32 @@ impl PisaProxyConfigBuilder {
 
     pub fn build_from_cmd(mut self) -> Self {
         let matches = Command::new("Pisa-Proxy")
+            .subcommand(Command::new("sidecar").about("used for sidecar mode").arg(
+                Arg::new("pisa-controller-host")
+                    .long("pisa-controller-host")
+                    .help("Pisa Controller Host")
+                    .default_value("localhost:8080")
+                    .takes_value(true),
+            ).arg(
+                Arg::new("namespace")
+                    .long("pisa-proxy-namespace")
+                    .help("Namespace")
+                    .default_value("default")
+                    .takes_value(true),
+            ).arg(
+                Arg::new("name")
+                    .long("pisa-proxy-name")
+                    .help("Name")
+                    .takes_value(true),
+            ))
+            .subcommand(Command::new("daemon").about("used for standalone mode").arg(
+                Arg::new("config")
+                    .short('c')
+                    .long("config")
+                    .help("Config path")
+                    .default_value(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG)
+                    .takes_value(true),
+            ))
             .version(
                 PisaProxyConfigBuilder::default()
                     .build_from_env()
@@ -115,14 +141,7 @@ impl PisaProxyConfigBuilder {
                     .default_value("5591")
                     .takes_value(true),
             )
-            .arg(
-                Arg::new("config")
-                    .short('c')
-                    .long("config")
-                    .help("Config path")
-                    .default_value(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG)
-                    .takes_value(true),
-            )
+          
             .arg(
                 Arg::new("loglevel")
                     .long("log-level")
