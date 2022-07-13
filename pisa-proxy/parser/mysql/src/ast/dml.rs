@@ -3162,3 +3162,10 @@ pub struct ShowCreateUserStmt {
     pub span: Span,
     pub user: User,
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowGrantsStmt {
+    pub span: Span,
+    pub user: Option<User>,
+    pub user_list: Option<Vec<User>>,
+}

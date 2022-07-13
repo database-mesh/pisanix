@@ -121,6 +121,7 @@ sql_stmt -> SqlStmt:
   | show_privileges_stmt { SqlStmt::ShowPrivilegesStmt($1) }
   | show_processlist_stmt { SqlStmt::ShowProcesslistStmt($1) }
   | show_replicas_stmt { SqlStmt::ShowReplicasStmt($1) }
+  | show_grants_stmt { SqlStmt::ShowGrantsStmt($1) }
   | show_create_procedure_stmt { SqlStmt::ShowCreateProcedureStmt($1) }
   | show_create_function_stmt { SqlStmt::ShowCreateFunctionStmt($1) }
   | show_create_trigger_stmt { SqlStmt::ShowCreateTriggerStmt($1) }
@@ -6179,6 +6180,35 @@ show_replicas_stmt -> Box<ShowDetailsStmt>:
     }
 ;
 
+show_grants_stmt -> Box<ShowGrantsStmt>:
+    'SHOW' 'GRANTS'
+    {
+        Box::new(ShowGrantsStmt {
+           span: $span,
+           user: None,
+           user_list: None,
+        })
+    }
+   |
+    'SHOW' 'GRANTS' 'FOR' user
+    {
+        Box::new(ShowGrantsStmt {
+           span: $span,
+           user: Some($4),
+           user_list: None,
+        })
+    }
+   |
+    'SHOW' 'GRANTS' 'FOR' user 'USING' user_list
+    {
+        Box::new(ShowGrantsStmt {
+           span: $span,
+           user: Some($4),
+           user_list: Some($6),
+        })
+    }
+;
+
 start -> Start:
   START TRANSACTION opt_start_transaction_option_list
   {
@@ -6456,6 +6486,18 @@ user_ident_or_text -> String:
 	    	$1
           }
         ;
+
+user_list -> Vec<User>:
+    user
+    {
+       vec![$1]
+    }
+   | user_list ',' user
+    {
+       $1.push($3);
+       $1
+    }
+;
 
 init_lex_create_info -> Option<String>:
           /* empty */
