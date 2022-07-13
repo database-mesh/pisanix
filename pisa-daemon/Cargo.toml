@@ -9,3 +9,6 @@ members = [
   "app/config",
   "tc"
 ]
+
+
+default-members = ["tc"]

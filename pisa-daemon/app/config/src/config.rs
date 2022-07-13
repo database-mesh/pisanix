@@ -35,7 +35,7 @@ pub struct App {
 #[derive(Debug, Deserialize, Default)]
 pub struct Service {
     pub name: String,
-    pub qos_class: QosClass,
+    pub qos_class: Option<QosClass>,
     pub qos_group: Vec<QosGroup>,
 }
 
@@ -89,6 +89,6 @@ ceil = "1MB"
         let config: Config = toml::from_str(toml_str).unwrap();
         println!("{:?}", config) ;
         assert_eq!(config.app[0].name, "testapp");
-        assert_eq!(config.app[0].service[0].qos_class, QosClass::Guaranteed);
+        assert_eq!(config.app[0].service[0].qos_class, Some(QosClass::Guaranteed));
     }
 }
