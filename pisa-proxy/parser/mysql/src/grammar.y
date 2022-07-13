@@ -121,6 +121,7 @@ sql_stmt -> SqlStmt:
   | show_privileges_stmt { SqlStmt::ShowPrivilegesStmt($1) }
   | show_processlist_stmt { SqlStmt::ShowProcesslistStmt($1) }
   | show_replicas_stmt { SqlStmt::ShowReplicasStmt($1) }
+  | show_replica_status_stmt { SqlStmt::ShowReplicaStatusStmt($1) }
   | show_create_procedure_stmt { SqlStmt::ShowCreateProcedureStmt($1) }
   | show_create_function_stmt { SqlStmt::ShowCreateFunctionStmt($1) }
   | show_create_trigger_stmt { SqlStmt::ShowCreateTriggerStmt($1) }
@@ -6176,6 +6177,40 @@ show_replicas_stmt -> Box<ShowDetailsStmt>:
         Box::new(ShowDetailsStmt {
            span: $span,
         })
+    }
+;
+
+show_replica_status_stmt -> Box<ShowReplicaStatusStmt>:
+    'SHOW' replica 'STATUS' opt_channel
+    {
+        Box::new(ShowReplicaStatusStmt {
+           span: $span,
+           replica: $2,
+           opt_channel: $4,
+        })
+    }
+;
+
+replica -> Replica:
+       SLAVE       { Replica::Slave }
+     | REPLICA     { Replica::Replica }
+;
+
+opt_channel -> Option<Channel>:
+     /* empty */ { None }
+    | 'FOR' 'CHANNEL' TEXT_STRING_sys_nonewline
+    {
+        Some(Channel {
+            span: $span,
+            channel: $3,
+        })
+    }
+;
+
+TEXT_STRING_sys_nonewline -> String:
+    'TEXT_STRING'
+    {
+      String::from($lexer.span_str($1.as_ref().unwrap().span()))
     }
 ;
 
