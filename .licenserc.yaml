@@ -35,6 +35,7 @@ header:
     - 'pisa-proxy/Cargo.lock'
     - 'pisa-daemon/rust-toolchain'
     - 'pisa-daemon/Cargo.lock'
+    - 'pisa-daemon/bpf/headers/bpf_*.h'
     - '**/*.template'
 
   comment: on-failure
