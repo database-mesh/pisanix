@@ -33,6 +33,8 @@ header:
     - 'pisa-controller/go.sum'
     - 'pisa-proxy/rust-toolchain'
     - 'pisa-proxy/Cargo.lock'
+    - 'pisa-daemon/rust-toolchain'
+    - 'pisa-daemon/Cargo.lock'
     - '**/*.template'
 
   comment: on-failure
