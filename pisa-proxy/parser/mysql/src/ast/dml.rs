@@ -3124,7 +3124,7 @@ pub struct ShowKeysStmt {
 pub enum KeysOrIndex {
     Index,
     Indexes,
-    Keys
+    Keys,
 }
 
 #[derive(Debug, Clone)]

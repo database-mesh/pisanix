@@ -28,7 +28,13 @@ use proxy::{
     listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
-use strategy::{config::TargetRole, readwritesplitting::ReadWriteEndpoint, route::RouteStrategy};
+use strategy::{
+    config::TargetRole,
+    discovery::monitor_reconcile::MonitorReconcile,
+    readwritesplitting::{rule_match::RulesMatch, ReadWriteEndpoint},
+    route::RouteStrategy,
+};
+use tokio::sync::RwLock;
 use tracing::error;
 
 use crate::server::{metrics::MySQLServerMetricsCollector, server::MySQLServerBuilder};
@@ -94,14 +100,11 @@ impl proxy::factory::Proxy for MySQLProxy {
         let pool = Pool::<ClientConn>::new(self.proxy_config.pool_size as usize);
 
         let ast_cache = Arc::new(Mutex::new(ParserAstCache::new()));
+
         // TODO: using a loadbalancer factory for different load balance strategy.
         // Currently simple_loadbalancer purely provide a list of nodes without any strategy.
-        //let lb = proxy
-        //    .build_loadbalance(self.proxy_config.simple_loadbalance.clone().unwrap().nodes)
-        //    .unwrap();
-
         let lb = Arc::new(tokio::sync::Mutex::new(self.build_route()));
-
+        
         let mut plugin: Option<PluginPhase> = None;
         if let Some(config) = &self.proxy_config.plugin {
             plugin = Some(PluginPhase::new(config.clone()))

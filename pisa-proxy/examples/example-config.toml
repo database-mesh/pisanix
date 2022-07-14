@@ -27,46 +27,85 @@ pool_size = 3
 server_version = "5.7.37"
 
 # 后端负载均衡配置
-[proxy.config.simple_loadbalance]
-# 负载均衡算法：[random/roundrobin], 默认值: random 算法
-balance_type = "random"
-# 选择挂载后端节点
-nodes = ["ds001"]
+# [proxy.config.simple_loadbalance]
+# # 负载均衡算法：[random/roundrobin], 默认值: random 算法
+# balance_type = "random"
+# # 选择挂载后端节点
+# nodes = ["ds001"]
 
+# 动态读写分离配置
 [proxy.config.read_write_splitting]
 
-[proxy.config.read_write_splitting.static]
-default_target = "read"
+[proxy.config.read_write_splitting.dynamic]
+default_target = "readwrite"
 
-[[proxy.config.read_write_splitting.static.rule]]
-name = "read-rule"
-type = "regex"
-regex = [".*"]
-target = "read"
-algorithm_name = "random"
+[proxy.config.read_write_splitting.dynamic.discovery]
+type = "mha"
+user = "monitor"
+password = "monitor"
+monitor_interval = 10
+connect_interval = 200
+connect_timeout = 200
+connect_max_failures = 3
+ping_interval = 100
+ping_timeout = 100
+ping_max_failures = 3
+replication_lag_interval = 3
+replication_lag_timeout = 3
+replication_lag_max_failures = 3
+max_replication_lag = 3
+read_only_interval = 300
+read_only_timeout = 3
+read_only_max_failures = 3
 
-[[proxy.config.read_write_splitting.static.rule]]
+[[proxy.config.read_write_splitting.dynamic.rule]]
 name = "write-rule"
 type = "regex"
-regex = [".*"]
+regex = ["^insert"]
 target = "readwrite"
 algorithm_name = "roundrobin"
 
-[[proxy.config.plugin.concurrency_control]]
-regex = ["aaa"]
-max_concurrency = 5
-duration = 333
+[[proxy.config.read_write_splitting.dynamic.rule]]
+name = "read-rule"
+type = "regex"
+regex = ["^select"]
+target = "read"
+algorithm_name = "roundrobin"
 
-[[proxy.config.plugin.concurrency_control]]
-regex = ["bbb"]
-max_concurrency = 5
-duration = 333
+# [proxy.config.read_write_splitting]
 
-[[proxy.config.plugin.circuit_break]]
-regex = ["111"]
+# [proxy.config.read_write_splitting.static]
+# default_target = "read"
 
-[[proxy.config.plugin.circuit_break]]
-regex = ["222"]
+# [[proxy.config.read_write_splitting.static.rule]]
+# name = "read-rule"
+# type = "regex"
+# regex = [".*"]
+# target = "read"
+# algorithm_name = "random"
+
+# [[proxy.config.read_write_splitting.static.rule]]
+# name = "write-rule"
+# type = "regex"
+# regex = [".*"]
+# target = "readwrite"
+# algorithm_name = "roundrobin"
+
+# [[proxy.config.plugin.concurrency_control]]
+# regex = ["aaa"]
+# max_concurrency = 5
+# duration = 333
+
+# [[proxy.config.plugin.concurrency_control]]
+# regex = ["bbb"]
+# max_concurrency = 5
+# duration = 333
+
+# [[proxy.config.plugin.circuit_break]]
+# regex = ["111"]
+
+# [[proxy.config.plugin.circuit_break]]
+# regex = ["222"]
 
 # 后端数据源配置
 [mysql]
@@ -79,6 +118,23 @@ db = "socksdb"
 user = "root"
 # 数据库 password
 password = "12345678"
+# 数据库地址
+host = "127.0.0.1"
+# 数据库端口
+port = 3306
+# 负载均衡节点权重
+weight = 1
+role = "readwrite"
+
+[[mysql.node]]
+# 数据源 name
+name = "ds001"
+# database name
+db = "socksdb"
+# 数据库 user
+user = "root"
+# 数据库 password
+password = "roott"
 # 数据库地址
 host = "127.0.0.1"
 # 数据库端口

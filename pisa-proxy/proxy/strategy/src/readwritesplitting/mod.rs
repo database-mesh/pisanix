@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod dynamic_rw;
 pub mod rule_match;
 pub mod static_rw;
+pub use dynamic_rw::*;
 use endpoint::endpoint::Endpoint;
 pub use static_rw::*;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ReadWriteEndpoint {
     pub read: Vec<Endpoint>,
     pub readwrite: Vec<Endpoint>,
