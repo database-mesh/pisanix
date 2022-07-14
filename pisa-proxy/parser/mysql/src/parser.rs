@@ -152,6 +152,11 @@ mod test {
             "SHOW FULL PROCESSLIST;",
             "SHOW SLAVE STATUS;",
             "SHOW REPLICA STATUS FOR CHANNEL 'channel_name';",
+            "SHOW GRANTS;",
+            "SHOW GRANTS FOR 'root';",
+            "SHOW GRANTS FOR 'u1'@'localhost';",
+            "SHOW GRANTS FOR 'u1'@'localhost' USING 'r1';",
+            "SHOW GRANTS FOR 'u1'@'localhost' USING 'r1', 'r2';",
         ];
 
         let p = Parser::new();

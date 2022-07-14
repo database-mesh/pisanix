@@ -3181,3 +3181,10 @@ pub struct Channel {
     pub span: Span,
     pub channel: String,
 }
+
+#[derive(Debug, Clone)]
+pub struct ShowGrantsStmt {
+    pub span: Span,
+    pub user: Option<User>,
+    pub user_list: Option<Vec<User>>,
+}
