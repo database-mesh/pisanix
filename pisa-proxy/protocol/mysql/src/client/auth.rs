@@ -492,9 +492,7 @@ impl Decoder for ClientAuth {
 
                             None => {
                                 self.next_state = HandshakeState::HandshakeResult;
-                                Ok(Some(HandshakeDecoderReturn::AuthSwitch(Some(
-                                    auth_data
-                                ))))
+                                Ok(Some(HandshakeDecoderReturn::AuthSwitch(Some(auth_data))))
                             }
                         }
                     }

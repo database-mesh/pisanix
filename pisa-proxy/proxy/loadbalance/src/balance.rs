@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use std::io::{Error, ErrorKind};
 use endpoint::endpoint::Endpoint;
 use serde::{Deserialize, Serialize};
 
@@ -33,7 +32,7 @@ impl Default for AlgorithmName {
 }
 
 pub trait LoadBalance {
-    fn next(&mut self) -> Option<&Endpoint>;
+    fn next(&mut self) -> Option<Endpoint>;
     fn add(&mut self, endpoint: Endpoint);
     fn item_exists(&self, endpoint: &Endpoint) -> bool;
     fn get_all(&mut self) -> &Vec<Endpoint>;
@@ -47,7 +46,7 @@ pub enum BalanceType {
 }
 
 impl LoadBalance for BalanceType {
-    fn next(&mut self) -> Option<&Endpoint> {
+    fn next(&mut self) -> Option<Endpoint> {
         match self {
             BalanceType::Random(inner_random) => inner_random.next(),
             BalanceType::RoundRobin(inner_roundrobin) => inner_roundrobin.next(),
@@ -95,5 +94,36 @@ impl Balance {
             AlgorithmName::Random => BalanceType::Random(RandomWeighted::default()),
             AlgorithmName::RoundRobin => BalanceType::RoundRobin(RoundRobinWeighted::default()),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn load_balancer() {
+        // let mut balance = Balance.build_balance(AlgorithmName::Random);
+        let mut balance = Balance.build_balance(AlgorithmName::RoundRobin);
+        let ep1 = Endpoint {
+            weight: 1,
+            name: String::from("dasheng001"),
+            db: String::from("db001"),
+            user: String::from("root"),
+            password: String::from("root"),
+            addr: String::from("127.0.0.1:3306"),
+        };
+        let ep2 = Endpoint {
+            weight: 1,
+            name: String::from("dasheng002"),
+            db: String::from("db002"),
+            user: String::from("root"),
+            password: String::from("root"),
+            addr: String::from("127.0.0.1:3307"),
+        };
+        balance.add(ep1);
+        balance.add(ep2);
+        assert_eq!(balance.next().unwrap().name, String::from("dasheng001"));
+        assert_eq!(balance.next().unwrap().name, String::from("dasheng002"));
     }
 }

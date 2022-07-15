@@ -46,10 +46,10 @@ pub struct ReadWriteSplittingStatic {
 
 impl Route for ReadWriteSplittingStatic {
     type Error = BoxError;
-    fn dispatch<'a>(
-        &'a mut self,
+    fn dispatch(
+        &mut self,
         input: &RouteInput,
-    ) -> Result<(Option<&'a Endpoint>, TargetRole), Self::Error> {
+    ) -> Result<(Option<Endpoint>, TargetRole), Self::Error> {
         let b = self.rules_match.get(input);
         Ok((b.0.next(), b.1))
     }
