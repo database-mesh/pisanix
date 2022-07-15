@@ -106,7 +106,7 @@ mod test {
         // let mut balance = Balance.build_balance(AlgorithmName::Random);
         let mut balance = Balance.build_balance(AlgorithmName::RoundRobin);
         let ep1 = Endpoint {
-            weight: 2,
+            weight: 1,
             name: String::from("dasheng001"),
             db: String::from("db001"),
             user: String::from("root"),
@@ -121,11 +121,9 @@ mod test {
             password: String::from("root"),
             addr: String::from("127.0.0.1:3307"),
         };
-        balance.add(ep1.clone());
-        balance.add(ep2.clone());
-        for _i in 0..10 {
-            println!("{:#?}", balance.next());
-        }
-        
+        balance.add(ep1);
+        balance.add(ep2);
+        assert_eq!(balance.next().unwrap().name, String::from("dasheng001"));
+        assert_eq!(balance.next().unwrap().name, String::from("dasheng002"));
     }
 }
