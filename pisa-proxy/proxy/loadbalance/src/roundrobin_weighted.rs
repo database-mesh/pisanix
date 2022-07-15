@@ -50,13 +50,15 @@ impl LoadBalance for RoundRobinWeighted {
         self.n += 1;
     }
 
-    fn next(&mut self) -> Option<&Endpoint> {
+    fn next(&mut self) -> Option<Endpoint> {
         if self.n == 0 {
             return None;
         }
 
+        // self.items.get(self.items.len() - 1).map(|endpoint| endpoint.clone())
         if self.n == 1 {
-            return Some(&self.items[0]);
+            return self.items.get(0).map(|endpoint| endpoint.clone());
+            // return Some(&self.items[0]);
         }
 
         loop {
@@ -72,7 +74,8 @@ impl LoadBalance for RoundRobinWeighted {
             }
 
             if self.items[self.i as usize].weight >= self.cw {
-                return Some(&self.items[self.i as usize]);
+                return self.items.get(self.i as usize).map(|endpoint| endpoint.clone());
+                // return Some(&self.items[self.i as usize]);
             }
         }
     }
