@@ -107,15 +107,16 @@ impl PisaProxyConfigBuilder {
                     .default_value("localhost:8080")
                     .takes_value(true),
             ).arg(
-                Arg::new("namespace")
-                    .long("pisa-proxy-namespace")
+                Arg::new("pisa-proxy-target-namespace")
+                    .long("pisa-proxy-target-namespace")
                     .help("Namespace")
                     .default_value("default")
                     .takes_value(true),
             ).arg(
-                Arg::new("name")
-                    .long("pisa-proxy-name")
+                Arg::new("pisa-proxy-target-name")
+                    .long("pisa-proxy-target-name")
                     .help("Name")
+                    .default_value("default")
                     .takes_value(true),
             ))
             .subcommand(Command::new("daemon").about("used for standalone mode").arg(
@@ -141,7 +142,6 @@ impl PisaProxyConfigBuilder {
                     .default_value("5591")
                     .takes_value(true),
             )
-          
             .arg(
                 Arg::new("loglevel")
                     .long("log-level")
@@ -154,12 +154,31 @@ impl PisaProxyConfigBuilder {
         if let Some(port) = matches.value_of("port") {
             self._port = port.to_string();
         }
-        if let Some(path) = matches.value_of("config") {
-            self._config_path = path.to_string();
-        }
         if let Some(loglevel) = matches.value_of("loglevel") {
             self._log_level = loglevel.to_string();
         }
+
+        match matches.subcommand_matches("daemon") {
+            Some(cmd) => {
+                self._config_path = cmd.value_of("config").unwrap().to_string();
+                self._local = "true".to_string();
+            }
+            None => {}
+        }
+
+        match matches.subcommand_matches("sidecar") {
+            Some(cmd) => {
+                self._pisa_host = cmd.value_of("pisa-controller-host").unwrap().to_string(); 
+                self._deployed_ns = cmd.value_of("pisa-proxy-target-namespace").unwrap().to_string(); 
+                self._deployed_name = cmd.value_of("pisa-proxy-target-name").unwrap().to_string();
+                self._http_path = format!(
+                    "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+                    self._pisa_host, self._deployed_ns, self._deployed_name
+                );
+            }
+            None => {}
+        }
+
         self
     }
 
@@ -201,15 +220,19 @@ impl PisaProxyConfigBuilder {
     pub fn load_config(self) -> PisaProxyConfig {
         let cmd_builder = PisaProxyConfigBuilder::default().build_from_cmd();
         let config_path = cmd_builder._config_path.clone();
+        let local = cmd_builder._local.clone();
+        let http_path = cmd_builder._http_path.clone();
+
         let cmd_config = cmd_builder.build();
 
         let env_builder = PisaProxyConfigBuilder::default().build_from_env();
-        let is_local_config = env_builder._local.clone();
-        let http_path = env_builder._http_path.clone();
+        // let is_local_config = env_builder._local.clone();
+        // let http_path = env_builder._http_path.clone();
         let env_config = env_builder.build_version().build();
 
         let mut config: PisaProxyConfig;
-        if is_local_config.eq("true") {
+        // if is_local_config.eq("true") {
+        if local.eq("true") {
             config = self.build_from_file(config_path);
         } else {
             config = self.build_from_http(http_path).unwrap();
