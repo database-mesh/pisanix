@@ -171,10 +171,10 @@ impl PisaProxyConfigBuilder {
                 self._pisa_host = cmd.value_of("pisa-controller-host").unwrap().to_string(); 
                 self._deployed_ns = cmd.value_of("pisa-proxy-target-namespace").unwrap().to_string(); 
                 self._deployed_name = cmd.value_of("pisa-proxy-target-name").unwrap().to_string();
-                self._http_path = format!(
-                    "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-                    self._pisa_host, self._deployed_ns, self._deployed_name
-                );
+                // self._http_path = format!(
+                //     "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+                //     self._pisa_host, self._deployed_ns, self._deployed_name
+                // );
             }
             None => {}
         }
@@ -193,17 +193,16 @@ impl PisaProxyConfigBuilder {
             .unwrap_or(PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
         self._pisa_host = env::var("PISA_CONTROLLER_HOST")
             .unwrap_or(format!("{}.{}:8080", self._pisa_svc, self._pisa_ns));
-        self._local = env::var(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG).unwrap_or("false".to_string());
         self._host = env::var(PISA_PROXY_CONFIG_ENV_HOST).unwrap_or("0.0.0.0".to_string());
         self._port = env::var(PISA_PROXY_CONFIG_ENV_PORT).unwrap_or("5591".to_string());
         self._log_level = env::var(PISA_PROXY_CONFIG_ENV_LOG_LEVEL).unwrap_or("".to_string());
         self._git_tag = env::var(PISA_PROXY_VERSION_ENV_GIT_TAG).unwrap_or("".to_string());
         self._git_commit = env::var(PISA_PROXY_VERSION_ENV_GIT_COMMIT).unwrap_or("".to_string());
         self._git_branch = env::var(PISA_PROXY_VERSION_ENV_GIT_BRANCH).unwrap_or("".to_string());
-        self._http_path = format!(
-            "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-            self._pisa_host, self._deployed_ns, self._deployed_name
-        );
+        // self._http_path = format!(
+        //     "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+        //     self._pisa_host, self._deployed_ns, self._deployed_name
+        // );
 
         self
     }
@@ -217,24 +216,37 @@ impl PisaProxyConfigBuilder {
         self
     }
 
-    pub fn load_config(self) -> PisaProxyConfig {
+    pub fn load_config(mut self) -> PisaProxyConfig {
         let cmd_builder = PisaProxyConfigBuilder::default().build_from_cmd();
         let config_path = cmd_builder._config_path.clone();
-        let local = cmd_builder._local.clone();
-        let http_path = cmd_builder._http_path.clone();
-
+        self._local = cmd_builder._local.clone();
+        self._pisa_host = cmd_builder._pisa_host.clone();
+        self._deployed_ns = cmd_builder._deployed_ns.clone();
+        self._deployed_name = cmd_builder._deployed_name.clone();
         let cmd_config = cmd_builder.build();
 
         let env_builder = PisaProxyConfigBuilder::default().build_from_env();
-        // let is_local_config = env_builder._local.clone();
-        // let http_path = env_builder._http_path.clone();
+        if env_builder._pisa_host.len() != 0 {
+            self._pisa_host = env_builder._pisa_host.clone();
+        }
+
+        if env_builder._deployed_name.len() != 0 {
+            self._deployed_name = env_builder._deployed_name.clone();
+        }
+
+        if env_builder._deployed_ns.len() != 0 {
+            self._deployed_ns = env_builder._deployed_ns.clone();
+        }
         let env_config = env_builder.build_version().build();
 
         let mut config: PisaProxyConfig;
-        // if is_local_config.eq("true") {
-        if local.eq("true") {
+        if self._local.eq("true") {
             config = self.build_from_file(config_path);
         } else {
+            let http_path = format!(
+                "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+                self._pisa_host, self._deployed_ns, self._deployed_name
+            );
             config = self.build_from_http(http_path).unwrap();
         }
 
@@ -243,13 +255,6 @@ impl PisaProxyConfigBuilder {
         }
         if cmd_config.admin.port != 0 {
             config.admin.port = cmd_config.admin.port;
-        }
-
-        if env_config.admin.log_level.len() != 0 {
-            config.admin.log_level = env_config.admin.log_level;
-        }
-        if env_config.admin.port != 0 {
-            config.admin.port = env_config.admin.port;
         }
 
         config.version = env_config.version;
