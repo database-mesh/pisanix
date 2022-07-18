@@ -38,7 +38,7 @@ impl Default for RandomWeighted {
 
 impl LoadBalance for RandomWeighted {
     // next: get next endpoint
-    fn next(&mut self) -> Option<&Endpoint> {
+    fn next(&mut self) -> Option<Endpoint> {
         if self.n == 0 {
             return None;
         }
@@ -50,11 +50,11 @@ impl LoadBalance for RandomWeighted {
         for i in &self.items {
             random_weight -= i.weight;
             if random_weight <= 0 {
-                return Some(i);
+                return Some(i.clone());
             }
         }
-        let item = &self.items[self.items.len() - 1];
-        Some(item)
+
+        self.items.get(self.items.len() - 1).map(|endpoint| endpoint.clone())
     }
 
     // add: add endpoint

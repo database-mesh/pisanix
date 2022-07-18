@@ -40,10 +40,10 @@ pub trait Route {
     type Error;
 
     // The dispatch function, return a endpoint and role.
-    fn dispatch<'a>(
-        &'a mut self,
+    fn dispatch(
+        &mut self,
         input: &RouteInput,
-    ) -> Result<(Option<&'a Endpoint>, TargetRole), Self::Error>;
+    ) -> Result<(Option<Endpoint>, TargetRole), Self::Error>;
 }
 
 /// Route rule, Currrently support `Regex` only.
@@ -85,10 +85,10 @@ impl RouteStrategy {
 impl Route for RouteStrategy {
     type Error = BoxError;
 
-    fn dispatch<'a>(
-        &'a mut self,
+    fn dispatch(
+        &mut self,
         input: &RouteInput,
-    ) -> Result<(Option<&'a Endpoint>, TargetRole), Self::Error> {
+    ) -> Result<(Option<Endpoint>, TargetRole), Self::Error> {
         match self {
             Self::Static(ins) => ins.dispatch(input),
 
