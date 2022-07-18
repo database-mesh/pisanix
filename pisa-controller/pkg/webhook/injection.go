@@ -78,6 +78,7 @@ const (
 			"value":{
 				"image":"%v",
 				"name":"%s",
+				"args": ["sidecar"],
 				"ports": [
 					{
 						"containerPort": %d,
