@@ -70,6 +70,7 @@ pub fn show_qdisc(device: String) -> bool {
 pub struct ClassAttr<'a> {
     netns: Option<&'a str>,
     device: &'a str,
+    parent: Option<&'a str>,
     class_id: &'a str,
     rate: &'a str,
     ceil: Option<&'a str>,
@@ -82,14 +83,13 @@ pub fn add_class<'a>(attr: &ClassAttr<'a>) -> bool {
         "dev",
         &attr.device,
         "parent",
-        "1:",
+        &attr.parent.unwrap_or("1:"),
         "classid",
         &attr.class_id,
         "htb",
         "rate",
         &attr.rate,
     ];
-
 
     if let Some(ceil) = &attr.ceil {
         args.push("ceil");
@@ -127,19 +127,79 @@ pub fn delete_class<'a>(attr: &ClassAttr<'a>) -> bool {
 
 }
 
-pub fn show_class(device: String) -> bool {
+pub fn show_class(netns: Option<&str>, device: &str) -> (Vec<ClassResult>, bool) {
+    let mut args = vec!["class", "show", "dev", &device];
+
+    if let Some(ns) = netns {
+        args.insert(0, "-n");
+        args.insert(1, ns);
+    }
+    
     let out = Command::new("tc")
-        .args(["class", "show", "dev", &device])
+        .args(&args)
         .output()
         .expect("faild to show class");
 
     if !out.status.success() {
         println!("Failed to show class to device {}: {:?}", device, out);
 
-        return false;
+        return (vec![], false);
     }
 
-    true
+   let lines  = std::str::from_utf8(&out.stdout).unwrap().lines();
+
+   let mut res = vec![];
+   for line in lines {
+        let arr = line.split(" ").map(|x| x.to_string()).collect::<Vec<_>>();
+       res.push(ClassResult::from(arr));
+
+   }
+
+    (res, true)
+}
+
+#[derive(Debug)]
+pub enum ClassResult {
+    Htb(Htb)
+}
+
+#[derive(Debug)]
+pub struct Htb {
+    pub parent: String,
+    pub class_id: String,
+    pub rate: String,
+    pub ceil: String,
+}
+
+impl  From<&[String]> for Htb {
+    fn from(input: &[String]) -> Self {
+        let parent = if &input[1] == "root" {
+            "root"
+        } else {
+           &input[2]
+        };
+
+        let rate_idx = input.iter().position(|x| x == "rate").unwrap();
+        let ceil_idx = input.iter().position(|x| x == "ceil").unwrap();
+
+        Htb { 
+            parent: parent.to_string(), 
+            class_id: input[0].clone(), 
+            rate: input[rate_idx+1].clone(), 
+            ceil: input[ceil_idx+1].clone(),
+        }
+    }
+}
+
+impl From<Vec<String>> for ClassResult {
+    fn from(input: Vec<String>) -> ClassResult {
+        match input[1].as_str() {
+           "htb" => {
+                ClassResult::Htb(Htb::from(&input[2..]))
+           },
+           _ => unreachable!()
+        }
+    }
 }
 
 
@@ -193,11 +253,38 @@ mod test {
             class_id: "1:10",
             rate: "1mbps",
             ceil: None,
+            parent: None,
         };
 
         assert_eq!(add_class(&attr), true);
         assert_eq!(delete_class(&attr), true);
 
         delete_test_ns("footest2");
+    }
+
+    #[test]
+    fn test_show_class() {
+        create_test_ns("footest");
+        create_root_qdisc("footest");
+
+        let attr = ClassAttr {
+            netns: Some("footest"),
+            device: "lo",
+            class_id: "1:10",
+            rate: "1mbps",
+            ceil: None,
+            parent: Some("1:1"),
+        };
+
+        add_class(&attr);
+
+        let (res, _ ) = show_class(Some("footest"), "lo");
+
+        let ClassResult::Htb(htb) = &res[0];
+        {
+            assert_eq!(htb.class_id, "1:10");
+        }
+        
+        delete_test_ns("footest");
     }
 }
