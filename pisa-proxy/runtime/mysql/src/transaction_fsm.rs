@@ -367,3 +367,36 @@ impl TransFsm {
         ]
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_trigger() {
+        let lb = Arc::new(tokio::sync::Mutex::new(RouteStrategy::None));
+        let mut tsm = TransFsm::new_trans_fsm(lb,Pool::new(1));
+        tsm.current_state = TransState::TransUseState;
+        tsm.trigger(TransEventName::QueryEvent, RouteInput::None).await;
+        assert_eq!(tsm.current_state, TransState::TransUseState);
+        assert_eq!(tsm.current_event, TransEventName::QueryEvent);
+        tsm.trigger(TransEventName::SetSessionEvent, RouteInput::None).await;
+        assert_eq!(tsm.current_state, TransState::TransSetSessionState);
+        assert_eq!(tsm.current_event, TransEventName::SetSessionEvent);
+        tsm.trigger(TransEventName::StartEvent, RouteInput::None).await;
+        assert_eq!(tsm.current_state, TransState::TransStartState);
+        assert_eq!(tsm.current_event, TransEventName::StartEvent);
+        tsm.trigger(TransEventName::PrepareEvent, RouteInput::None).await;
+        assert_eq!(tsm.current_state, TransState::TransPrepareState);
+        assert_eq!(tsm.current_event, TransEventName::PrepareEvent);
+        tsm.trigger(TransEventName::SendLongDataEvent, RouteInput::None).await;
+        assert_eq!(tsm.current_state, TransState::TransPrepareState);
+        assert_eq!(tsm.current_event, TransEventName::SendLongDataEvent);
+        tsm.trigger(TransEventName::ExecuteEvent, RouteInput::None).await;
+        assert_eq!(tsm.current_state, TransState::TransPrepareState);
+        assert_eq!(tsm.current_event, TransEventName::ExecuteEvent);
+        tsm.trigger(TransEventName::CommitRollBackEvent, RouteInput::None).await;
+        assert_eq!(tsm.current_state, TransState::TransDummyState);
+        assert_eq!(tsm.current_event, TransEventName::CommitRollBackEvent);
+    }
+}
