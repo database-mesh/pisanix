@@ -16,14 +16,14 @@
 use std::{env, fs::File, io::prelude::*};
 
 use api::config::Admin;
-use clap::{Arg, Command};
+use clap::{value_parser, Arg, Command};
 use proxy::proxy::{MySQLNode, MySQLNodes, ProxiesConfig, ProxyConfig};
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
 #[derive(Default, Clone)]
 pub struct PisaProxyConfigBuilder {
-    pub _local: String,
+    pub _local: bool,
     pub _config_path: String,
     pub _http_path: String,
 
@@ -43,25 +43,32 @@ pub struct PisaProxyConfigBuilder {
     pub _git_branch: String,
 }
 
-const PISA_CONTROLLER_DEFAULT_SERVICE: &str = "pisa-controller";
-const PISA_CONTROLLER_DEFAULT_NAMESPACE: &str = "pisa-system";
+const DEFAULT_LOCAL_CONFIG: &str = "etc/config.toml";
+const DEFAULT_PISA_PROXY_ADMIN_LISTEN_HOST: &str = "0.0.0.0";
+const DEFAULT_PISA_PROXY_ADMIN_LISTEN_PORT: &str = "5591";
+const DEFAULT_PISA_PROXY_ADMIN_LOG_LEVEL: &str = "WARN";
+const DEFAULT_PISA_CONTROLLER_HOST: &str = "localhost:8080";
+const DEFAULT_PISA_CONTROLLER_NAMESPACE: &str = "pisa-system";
+const DEFAULT_PISA_CONTROLLER_SERVICE: &str = "pisa-controller";
+const DEFAULT_PISA_DEPLOYED_NAMESPACE: &str = "default";
+const DEFAULT_PISA_DEPLOYED_NAME: &str = "default";
 
-const PISA_PROXY_DEFAULT_DEPLOYED_NAME: &str = "default";
-const PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE: &str = "default";
-const PISA_PROXY_DEFAULT_CONFIG_PATH: &str = "etc/config.toml";
+const ENV_PISA_PROXY_ADMIN_LISTEN_HOST: &str = "PISA_PROXY_ADMIN_LISTEN_HOST";
+const ENV_PISA_PROXY_ADMIN_LISTEN_PORT: &str = "PISA_PROXY_ADMIN_LISTEN_PORT";
+const ENV_PISA_PROXY_ADMIN_LOG_LEVEL: &str = "PISA_PROXY_ADMIN_LOG_LEVEL";
+const ENV_PISA_CONTROLLER_HOST: &str = "PISA_CONTROLLER_HOST";
+const ENV_PISA_CONTROLLER_NAMESPACE: &str = "PISA_CONTROLLER_NAMESPACE";
+const ENV_PISA_CONTROLLER_SERVICE: &str = "PISA_CONTROLLER_SERVICE";
+const ENV_PISA_DEPLOYED_NAMESPACE: &str = "PISA_DEPLOYED_NAMESPACE";
+const ENV_PISA_DEPLOYED_NAME: &str = "PISA_DEPLOYED_NAME";
 
-const PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG: &str = "LOCAL_CONFIG";
-const PISA_PROXY_CONFIG_ENV_HOST: &str = "PISA_PROXY_ADMIN_LISTEN_HOST";
-const PISA_PROXY_CONFIG_ENV_PORT: &str = "PISA_PROXY_ADMIN_LISTEN_PORT";
-const PISA_PROXY_CONFIG_ENV_LOG_LEVEL: &str = "PISA_PROXY_ADMIN_LOG_LEVEL";
-
-const PISA_PROXY_VERSION_ENV_GIT_TAG: &str = "GIT_TAG";
-const PISA_PROXY_VERSION_ENV_GIT_BRANCH: &str = "GIT_BRANCH";
-const PISA_PROXY_VERSION_ENV_GIT_COMMIT: &str = "GIT_COMMIT";
+const ENV_GIT_TAG: &str = "GIT_TAG";
+const ENV_GIT_BRANCH: &str = "GIT_BRANCH";
+const ENV_GIT_COMMIT: &str = "GIT_COMMIT";
 
 impl PisaProxyConfigBuilder {
     pub fn new() -> Self {
-        PisaProxyConfigBuilder::default()
+        PisaProxyConfigBuilder::default().build_from_cmd()
     }
 
     pub fn build(self) -> PisaProxyConfig {
@@ -99,115 +106,106 @@ impl PisaProxyConfigBuilder {
     }
 
     pub fn build_from_cmd(mut self) -> Self {
-        let matches = Command::new("Pisa-Proxy")
-            .subcommand(Command::new("sidecar").about("used for sidecar mode").arg(
-                Arg::new("pisa-controller-host")
-                    .long("pisa-controller-host")
-                    .help("Pisa Controller Host")
-                    .default_value("localhost:8080")
+        let mut matches = Command::new("Pisa-Proxy")
+            .subcommand(
+                Command::new("sidecar")
+                    .about("used for sidecar mode")
+                    .arg(
+                        Arg::new("pisa-controller-host")
+                            .long("pisa-controller-host")
+                            .help("Pisa Controller Host")
+                            .default_value(DEFAULT_PISA_CONTROLLER_HOST)
+                            .env(ENV_PISA_CONTROLLER_HOST)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::new("pisa-deployed-namespace")
+                            .long("pisa-deployed-namespace")
+                            .help("Namespace")
+                            .default_value(DEFAULT_PISA_DEPLOYED_NAMESPACE)
+                            .env(ENV_PISA_DEPLOYED_NAMESPACE)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::new("pisa-deployed-name")
+                            .long("pisa-deployed-name")
+                            .help("Name")
+                            .default_value(DEFAULT_PISA_DEPLOYED_NAME)
+                            .env(ENV_PISA_DEPLOYED_NAME)
+                            .takes_value(true),
+                    ),
+            )
+            .subcommand(
+                Command::new("daemon").about("used for standalone mode").arg(
+                    Arg::new("config")
+                        .short('c')
+                        .long("config")
+                        .help("Config path")
+                        .default_value(DEFAULT_LOCAL_CONFIG)
+                        .takes_value(true),
+                ),
+            )
+            .version(PisaProxyConfigBuilder::default().build_version()._version.as_str())
+            .arg(
+                Arg::new("host")
+                    .short('h')
+                    .long("host")
+                    .help("Http host")
+                    .default_value(DEFAULT_PISA_PROXY_ADMIN_LISTEN_HOST)
+                    .value_parser(value_parser!(String))
+                    .env(ENV_PISA_PROXY_ADMIN_LISTEN_HOST)
                     .takes_value(true),
-            ).arg(
-                Arg::new("pisa-proxy-target-namespace")
-                    .long("pisa-proxy-target-namespace")
-                    .help("Namespace")
-                    .default_value("default")
-                    .takes_value(true),
-            ).arg(
-                Arg::new("pisa-proxy-target-name")
-                    .long("pisa-proxy-target-name")
-                    .help("Name")
-                    .default_value("default")
-                    .takes_value(true),
-            ))
-            .subcommand(Command::new("daemon").about("used for standalone mode").arg(
-                Arg::new("config")
-                    .short('c')
-                    .long("config")
-                    .help("Config path")
-                    .default_value(PISA_PROXY_CONFIG_ENV_LOCAL_CONFIG)
-                    .takes_value(true),
-            ))
-            .version(
-                PisaProxyConfigBuilder::default()
-                    .build_from_env()
-                    .build_version()
-                    ._version
-                    .as_str(),
             )
             .arg(
                 Arg::new("port")
                     .short('p')
                     .long("port")
                     .help("Http port")
-                    .default_value("5591")
+                    .default_value(DEFAULT_PISA_PROXY_ADMIN_LISTEN_PORT)
+                    .value_parser(value_parser!(String))
+                    .env(ENV_PISA_PROXY_ADMIN_LISTEN_PORT)
                     .takes_value(true),
             )
             .arg(
                 Arg::new("loglevel")
                     .long("log-level")
                     .help("Log level")
-                    .default_value("INFO")
+                    .default_value(DEFAULT_PISA_PROXY_ADMIN_LOG_LEVEL)
+                    .value_parser(value_parser!(String))
+                    .env(ENV_PISA_PROXY_ADMIN_LOG_LEVEL)
                     .takes_value(true),
             )
+            .subcommand_required(true)
             .get_matches();
 
-        if let Some(port) = matches.value_of("port") {
-            self._port = port.to_string();
-        }
-        if let Some(loglevel) = matches.value_of("loglevel") {
-            self._log_level = loglevel.to_string();
-        }
+        self._host = matches.get_one::<String>("host").unwrap().to_string();
+        self._port = matches.get_one::<String>("port").unwrap().to_string();
+        self._log_level = matches.get_one::<String>("loglevel").unwrap().to_string();
 
-        match matches.subcommand_matches("daemon") {
-            Some(cmd) => {
+        let (name, cmd) = matches.remove_subcommand().expect("required");
+        match (name.as_str(), cmd) {
+            ("daemon", cmd) => {
                 self._config_path = cmd.value_of("config").unwrap().to_string();
-                self._local = "true".to_string();
+                self._local = true;
             }
-            None => {}
-        }
-
-        match matches.subcommand_matches("sidecar") {
-            Some(cmd) => {
-                self._pisa_host = cmd.value_of("pisa-controller-host").unwrap().to_string(); 
-                self._deployed_ns = cmd.value_of("pisa-proxy-target-namespace").unwrap().to_string(); 
-                self._deployed_name = cmd.value_of("pisa-proxy-target-name").unwrap().to_string();
-                // self._http_path = format!(
-                //     "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-                //     self._pisa_host, self._deployed_ns, self._deployed_name
-                // );
+            ("sidecar", cmd) => {
+                self._pisa_host = cmd.value_of("pisa-controller-host").unwrap().to_string();
+                self._deployed_ns = cmd.value_of("pisa-deployed-namespace").unwrap().to_string();
+                self._deployed_name = cmd.value_of("pisa-deployed-name").unwrap().to_string();
             }
-            None => {}
+            (name, _) => {
+                unimplemented!("this command '{}' is not supported", name);
+            }
         }
-
-        self
-    }
-
-    pub fn build_from_env(mut self) -> Self {
-        self._deployed_ns = env::var("PISA_DEPLOYED_NAMESPACE")
-            .unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAMESPACE.to_string());
-        self._deployed_name =
-            env::var("PISA_DEPLOYED_NAME").unwrap_or(PISA_PROXY_DEFAULT_DEPLOYED_NAME.to_string());
-        self._pisa_svc = env::var("PISA_CONTROLLER_SERVICE")
-            .unwrap_or(PISA_CONTROLLER_DEFAULT_SERVICE.to_string());
-        self._pisa_ns = env::var("PISA_CONTROLLER_NAMESPACE")
-            .unwrap_or(PISA_CONTROLLER_DEFAULT_NAMESPACE.to_string());
-        self._pisa_host = env::var("PISA_CONTROLLER_HOST")
-            .unwrap_or(format!("{}.{}:8080", self._pisa_svc, self._pisa_ns));
-        self._host = env::var(PISA_PROXY_CONFIG_ENV_HOST).unwrap_or("0.0.0.0".to_string());
-        self._port = env::var(PISA_PROXY_CONFIG_ENV_PORT).unwrap_or("5591".to_string());
-        self._log_level = env::var(PISA_PROXY_CONFIG_ENV_LOG_LEVEL).unwrap_or("".to_string());
-        self._git_tag = env::var(PISA_PROXY_VERSION_ENV_GIT_TAG).unwrap_or("".to_string());
-        self._git_commit = env::var(PISA_PROXY_VERSION_ENV_GIT_COMMIT).unwrap_or("".to_string());
-        self._git_branch = env::var(PISA_PROXY_VERSION_ENV_GIT_BRANCH).unwrap_or("".to_string());
-        // self._http_path = format!(
-        //     "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-        //     self._pisa_host, self._deployed_ns, self._deployed_name
-        // );
 
         self
     }
 
     pub fn build_version(mut self) -> Self {
+        self._git_tag = env::var(ENV_GIT_TAG).unwrap_or("".to_string());
+        self._git_commit = env::var(ENV_GIT_COMMIT).unwrap_or("".to_string());
+        self._git_branch = env::var(ENV_GIT_BRANCH).unwrap_or("".to_string());
+
         if !self._git_tag.is_empty() {
             self._version = format!("{}", self._git_tag);
         } else {
@@ -223,24 +221,11 @@ impl PisaProxyConfigBuilder {
         self._pisa_host = cmd_builder._pisa_host.clone();
         self._deployed_ns = cmd_builder._deployed_ns.clone();
         self._deployed_name = cmd_builder._deployed_name.clone();
+
         let cmd_config = cmd_builder.build();
 
-        let env_builder = PisaProxyConfigBuilder::default().build_from_env();
-        if env_builder._pisa_host.len() != 0 {
-            self._pisa_host = env_builder._pisa_host.clone();
-        }
-
-        if env_builder._deployed_name.len() != 0 {
-            self._deployed_name = env_builder._deployed_name.clone();
-        }
-
-        if env_builder._deployed_ns.len() != 0 {
-            self._deployed_ns = env_builder._deployed_ns.clone();
-        }
-        let env_config = env_builder.build_version().build();
-
         let mut config: PisaProxyConfig;
-        if self._local.eq("true") {
+        if self._local {
             config = self.build_from_file(config_path);
         } else {
             let http_path = format!(
@@ -256,8 +241,11 @@ impl PisaProxyConfigBuilder {
         if cmd_config.admin.port != 0 {
             config.admin.port = cmd_config.admin.port;
         }
+        if cmd_config.admin.host != "" {
+            config.admin.host = cmd_config.admin.host;
+        }
 
-        config.version = env_config.version;
+        config.version = cmd_config.version;
 
         trace!("configs: {:#?}", config);
         config
