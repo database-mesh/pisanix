@@ -31,7 +31,8 @@ use server::{
 };
 
 fn main() {
-    let config = PisaProxyConfigBuilder::new().load_config();
+    // let config = PisaProxyConfigBuilder::new().load_config();
+    let config = PisaProxyConfigBuilder::new().collect_from_cmd().build();
     tracing_subscriber::fmt()
         .with_max_level(Level::from_str(config.get_admin().log_level.as_str()).ok())
         .init();
