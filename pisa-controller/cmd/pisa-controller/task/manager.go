@@ -32,7 +32,7 @@ func (m *TaskManager) Register(t Task) *TaskManager {
 }
 
 func (m *TaskManager) Run() error {
-	for idx, _ := range m.TaskGroups {
+	for idx := range m.TaskGroups {
 		m.eg.Go(m.TaskGroups[idx].Run)
 	}
 	return m.eg.Wait()
