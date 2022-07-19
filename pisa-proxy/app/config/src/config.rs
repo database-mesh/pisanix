@@ -252,23 +252,25 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_new_cmd_config() {
-        let config = PisaProxyConfigBuilder::new().load_config();
-        assert_eq!(config.admin.host, "0.0.0.0")
+    fn test_build_from_http() {
+        let mut builder = PisaProxyConfigBuilder::new();
+        builder._pisa_host = "localhost:8080".to_string();
+        builder._deployed_ns = "demotest".to_string();
+        builder._deployed_name = "catalogue".to_string();
+        let http_path = format!(
+            "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
+            builder._pisa_host, builder._deployed_ns, builder._deployed_name
+        );
+        let config: PisaProxyConfig = builder.build_from_http(http_path).unwrap();
+        assert_eq!(config.admin.host, "0.0.0.0");
     }
 
-    // fn test_env_config() {
-    //     // env::set_var(ENV_PISA_CONTROLLER_HOST, "expected.host:8080");
-    //     // let env_config = PisaProxyConfigBuilder::new().load_config();
-    //     // assert_eq!(env_config.admin.host, "expected.host:8080");
-    //     // env::set_var(ENV_PISA_CONTROLLER_NAMESPACE, "expected-namespace");
-    //     // env::set_var(ENV_PISA_CONTROLLER_SERVICE, "expected-service");
-    //     env::set_var(ENV_PISA_PROXY_ADMIN_LISTEN_HOST, "expected-admin-listen-host");
-    //     env::set_var(ENV_PISA_PROXY_ADMIN_LISTEN_PORT, "8888");
-    //     env::set_var(ENV_PISA_PROXY_ADMIN_LOG_LEVEL, "ERROR");
-    //     let config = PisaProxyConfigBuilder::new().load_config();
-    //     assert_eq!(config.admin.host, "expected-admin-listen-host");
-    //     assert_eq!(config.admin.port, 8888);
-    //     assert_eq!(config.admin.log_level, "ERROR");
-    // }
+    #[test]
+    fn test_build_from_file() {
+        let mut builder = PisaProxyConfigBuilder::new();
+        builder._config_path = "absolute_path".to_string();
+        let path = builder._config_path.clone();
+        let config: PisaProxyConfig = builder.build_from_file(path);
+        assert_eq!(config.admin.host, "0.0.0.0");
+    }
 }
