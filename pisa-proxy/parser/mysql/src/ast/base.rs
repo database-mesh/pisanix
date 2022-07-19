@@ -1520,3 +1520,10 @@ pub enum User {
     CurrentUser,
     UserIdentOrText(String),
 }
+
+#[derive(Debug, Clone)]
+pub struct OrderExpr {
+    pub span: Span,
+    pub expr: Expr,
+    pub direction: Option<String>,
+}

@@ -1355,13 +1355,6 @@ impl Visitor for WindowSpec {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct OrderExpr {
-    pub span: Span,
-    pub expr: Expr,
-    pub direction: Option<String>,
-}
-
 impl OrderExpr {
     pub fn format(&self) -> String {
         let mut order = Vec::with_capacity(2);
