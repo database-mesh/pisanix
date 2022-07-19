@@ -63,7 +63,7 @@ pub enum SqlStmt {
     Commit(Commit),
     Rollback(Rollback),
     Create(Create),
-    CreateIndexStmt(Box<CreateIndexStmt>),
+    CreateIndexStmt(CreateIndexStmt),
     None,
 }
 

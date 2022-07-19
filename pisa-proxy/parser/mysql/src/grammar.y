@@ -6781,11 +6781,11 @@ sp_suid -> SpSuid:
           }
         ;
 
-create_index_stmt -> Box<CreateIndexStmt>:
+create_index_stmt -> CreateIndexStmt:
       'CREATE' opt_unique 'INDEX' ident opt_index_type_clause 'ON' table_ident '(' key_list_with_expression ')'
       opt_index_options opt_index_lock_and_algorithm
       {
-           Box::new(CreateIndexStmt{
+           CreateIndexStmt::CommonIndex(CreateCommonIndexStmt{
                span: $span,
                opt_unique: $2,
                index_name: $4.0,
@@ -6793,8 +6793,6 @@ create_index_stmt -> Box<CreateIndexStmt>:
                table_name: $7,
                key_list_with_expression: $9,
                opt_index_options: Some($11),
-               opt_fulltext_index_options: None,
-               opt_spatial_index_options: None,
                opt_index_lock_and_algorithm: $12,
            })
       }
@@ -6802,16 +6800,12 @@ create_index_stmt -> Box<CreateIndexStmt>:
       'CREATE' 'FULLTEXT' 'INDEX' ident 'ON' table_ident '(' key_list_with_expression ')'
       opt_fulltext_index_options opt_index_lock_and_algorithm
       {
-           Box::new(CreateIndexStmt{
+           CreateIndexStmt::FullTextIndex(CreateFullTextIndexStmt{
                span: $span,
-               opt_unique: false,
                index_name: $4.0,
-               opt_index_type_clause: None,
                table_name: $6,
                key_list_with_expression: $8,
-               opt_index_options: None,
                opt_fulltext_index_options: Some($10),
-               opt_spatial_index_options: None,
                opt_index_lock_and_algorithm: $11,
            })
       }
@@ -6819,15 +6813,11 @@ create_index_stmt -> Box<CreateIndexStmt>:
       'CREATE' 'SPATIAL' 'INDEX' ident 'ON' table_ident '(' key_list_with_expression ')'
       opt_spatial_index_options opt_index_lock_and_algorithm
       {
-          Box::new(CreateIndexStmt{
+          CreateIndexStmt::SpatialIndex(CreateSpatialIndexStmt{
                span: $span,
-               opt_unique: false,
                index_name: $4.0,
-               opt_index_type_clause: None,
                table_name: $6,
                key_list_with_expression: $8,
-               opt_index_options: None,
-               opt_fulltext_index_options: None,
                opt_spatial_index_options: Some($10),
                opt_index_lock_and_algorithm: $11,
           })

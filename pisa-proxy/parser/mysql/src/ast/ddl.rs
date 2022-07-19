@@ -190,7 +190,14 @@ pub enum SpCChistic {
 }
 
 #[derive(Debug, Clone)]
-pub struct CreateIndexStmt {
+pub enum CreateIndexStmt {
+    CommonIndex(CreateCommonIndexStmt),
+    FullTextIndex(CreateFullTextIndexStmt),
+    SpatialIndex(CreateSpatialIndexStmt),
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateCommonIndexStmt {
     pub span: Span,
     pub opt_unique: bool,
     pub index_name: String,
@@ -198,7 +205,25 @@ pub struct CreateIndexStmt {
     pub table_name: String,
     pub key_list_with_expression: Vec<KeyPartWithExpression>,
     pub opt_index_options: Option<Vec<IndexOption>>,
+    pub opt_index_lock_and_algorithm: Option<IndexLockAndAlgorithm>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateFullTextIndexStmt {
+    pub span: Span,
+    pub index_name: String,
+    pub table_name: String,
+    pub key_list_with_expression: Vec<KeyPartWithExpression>,
     pub opt_fulltext_index_options: Option<Vec<FullTextIndexOption>>,
+    pub opt_index_lock_and_algorithm: Option<IndexLockAndAlgorithm>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateSpatialIndexStmt {
+    pub span: Span,
+    pub index_name: String,
+    pub table_name: String,
+    pub key_list_with_expression: Vec<KeyPartWithExpression>,
     pub opt_spatial_index_options: Option<Vec<SpatialIndexOption>>,
     pub opt_index_lock_and_algorithm: Option<IndexLockAndAlgorithm>,
 }
