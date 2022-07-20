@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{cmp::Ordering, ptr::copy_nonoverlapping};
+use std::{cmp::Ordering, io::Read, ptr::copy_nonoverlapping};
 
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Buf, BufMut, BytesMut};
@@ -130,25 +130,30 @@ pub trait BufExt: Buf {
         }
     }
 
-    fn get_lenc_str_bytes(&mut self) -> (Vec<u8>, bool);
-}
-
-// Implemet BufExt
-impl BufExt for BytesMut {
     fn get_lenc_str_bytes(&mut self) -> (Vec<u8>, bool) {
-        let (num, is_null, _) = self.get_lenc_int();
+        let (length, is_null, _) = self.get_lenc_int();
 
-        if num < 1 {
-            return (vec![num as u8], is_null);
+        if length < 1 {
+            return (vec![0], is_null);
         }
 
         if !self.has_remaining() {
             return (vec![], false);
         }
 
-        (self.split_to(num as usize).to_vec(), is_null)
+        let mut data = vec![0; length as usize];
+        let _ = self.reader().read(&mut data).unwrap();
+
+        (data, is_null)
+    }
+
+    fn skip_lenc_length(&mut self) {
+        let (length, ..) = self.get_lenc_int();
+        self.advance(length as usize)
     }
 }
+
+impl<T: AsRef<[u8]> + Buf> BufExt for T {}
 
 pub trait BufMutExt: BufMut {
     fn put_lenc_int(&mut self, n: u64) {

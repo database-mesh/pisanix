@@ -140,6 +140,12 @@ pub enum ColumnType {
     MYSQL_TYPE_GEOMETRY,
 }
 
+impl Default for ColumnType {
+   fn default() -> Self {
+       Self::MYSQL_TYPE_LONG_BLOB
+   } 
+}
+
 impl From<u8> for ColumnType {
     #[inline]
     fn from(t: u8) -> ColumnType {

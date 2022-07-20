@@ -17,7 +17,6 @@ pub mod err;
 pub mod stmt;
 
 pub mod codec;
-mod column;
 pub mod conn;
 pub mod resultset;
 pub mod stream;
