@@ -59,3 +59,12 @@ pub enum ProtocolError {
     #[error("stmt id not found: {0}")]
     StmtIdNotFound(u32),
 }
+
+#[derive(Debug, Error)]
+pub enum DecodeRowError {
+    #[error("{0:?}")]
+    ColumnNotFound(String),
+
+    #[error("{0:?}")]
+    ColumnAlreadyConsumed(String),
+}
