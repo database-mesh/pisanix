@@ -25,7 +25,7 @@ use crate::{
 
 pub trait Row: BufExt {
     fn decode_row_with_idx<T: Value>(&mut self, idx: usize) -> value::Result<T> {
-        for _ in 1..idx {
+        for _ in 0..idx {
             let (length, ..) = self.get_lenc_int();
             self.advance(length as usize)
         }
@@ -93,8 +93,7 @@ impl<T: Row> RowData<T> {
         // The corrent idx should be minus lt_idx_count when `lt_idx_count > 0`.
         let lt_idx_count = self.consumed_idx.iter().filter(|x| *x < &idx).count();
 
-        // Because idx start from 0, so `+1` is requird.
-        self.buf.decode_row_with_idx::<V>(idx - lt_idx_count + 1)
+        self.buf.decode_row_with_idx::<V>(idx - lt_idx_count)
     }
 }
 

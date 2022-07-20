@@ -13,11 +13,12 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use bytes::BytesMut;
-use conn_pool::{ConnAttr, ConnAttrMut, ConnLike};
 use futures::SinkExt;
+use conn_pool::{ConnAttr, ConnAttrMut, ConnLike};
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use tokio_util::codec::Framed;
@@ -29,7 +30,7 @@ use super::{
     stmt::Stmt,
     stream::{LocalStream, StreamWrapper},
 };
-use crate::{err::ProtocolError, mysql_const::*};
+use crate::{err::ProtocolError, mysql_const::*, util::length_encode_int, column::{Column, ColumnInfo}};
 
 #[derive(Debug, Default)]
 pub struct ClientConn {
@@ -202,6 +203,44 @@ impl ClientConn {
         Ok(CommonStream::new(self.framed.as_mut()))
     }
 
+    pub async fn query_result<'a>(&'a mut self, val: &'a [u8]) -> Result<Option<(Arc<[ColumnInfo]>, ResultsetStream<'a>)>, ProtocolError> {
+        let mut stream = self.send_query(val).await?;
+
+        let header = match stream.next().await {
+            Some(Ok(data)) => data,
+            Some(Err(e)) => return Err(e),
+            None => return Ok(None),
+        };
+
+        if header[4] == OK_HEADER || header[4] == ERR_HEADER {
+            return Ok(None);
+        }
+
+        let (cols, ..) = length_encode_int(&header[4..]);
+
+        let mut col_buf = vec![];
+        for _ in 0..cols {
+            let data = stream.next().await;
+            let data = match data {
+                Some(Ok(data)) => data,
+                Some(Err(e)) => return Err(e),
+                None => break,
+            };
+
+            col_buf.extend_from_slice(&data)
+        }
+
+        // read eof
+        let _ = stream.next().await;
+
+        let col_info = col_buf.as_slice().decode_columns();
+
+        let arc_col_info: Arc<[ColumnInfo]> = col_info.into_boxed_slice().into();
+
+
+        Ok(Some((arc_col_info, stream)))
+    }
+
     // Send query, but discard result
     pub async fn send_query_discard_result(&mut self, val: &str) -> Result<(), ProtocolError> {
         let mut stream = self.send_common_command(COM_QUERY, val.as_bytes()).await?;
@@ -344,7 +383,7 @@ mod test {
     use conn_pool::*;
     use tokio_stream::StreamExt;
 
-    use crate::{client::conn::ClientConn, err::ProtocolError};
+    use crate::{client::conn::ClientConn, err::ProtocolError, util::is_eof, row::RowData};
 
     #[tokio::test]
     async fn pool() {
@@ -387,5 +426,37 @@ mod test {
         }
 
         assert_eq!(1, pool.len(&addr));
+    }
+
+    #[tokio::test]
+    async fn test_query_result() {
+        let mut driver = ClientConn::test_conn(
+            "root".to_string(),
+            "123456".to_string(),
+            "127.0.0.1:13307".to_string(),
+        )
+        .await
+        .unwrap();
+
+        let query = "select user,host from mysql.user".as_bytes();
+        let mut res = driver.query_result(query).await.unwrap().unwrap();
+
+        while let Some(mut data) = res.1.next().await {
+            if is_eof(&data.as_ref().unwrap()) {
+                break;
+            }
+
+            //let mut data = &data.as_mut().unwrap()[4..];
+            //let user = data.decode_row_with_idx::<String>(0);
+            
+            //let host = data.decode_row_with_idx::<String>(0);
+
+            let mut row = RowData::new(res.0.clone(), &data.as_mut().unwrap()[4..]);
+            let user = row.decode_with_name::<String>("user");
+            let host = row.decode_with_name::<String>("host");
+
+            assert!(user.is_ok());
+            assert!(host.is_ok());
+        }
     }
 }
