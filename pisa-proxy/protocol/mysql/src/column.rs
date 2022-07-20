@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bytes::{Buf, BytesMut};
+use bytes::Buf;
 
 use crate::{mysql_const::ColumnType, util::BufExt};
 
@@ -28,22 +28,28 @@ pub struct ColumnInfo {
 }
 
 /// ColumnBuf trait， Inherit BufExt
-pub trait ColumnBuf: BufExt {
-    fn parse_column_info(&mut self) -> ColumnInfo;
-}
-
-/// Implements ColumnBuf for BytesMut.
 /// For example:
 /// let mut buf = BytesMut::new(&[0x01,0x02]);
-/// buf.parse_column_info();
-impl ColumnBuf for BytesMut {
-    // Parse column info, see https://dev.mysql.com/doc/internals/en/com-query-response.html#packet-Protocol::ColumnDefinition41
-    fn parse_column_info(&mut self) -> ColumnInfo {
+/// buf.decode_column();
+pub trait Column: BufExt {
+    fn decode_columns(&mut self) -> Vec<ColumnInfo> {
+        let mut columns = vec![];
+
+        while self.has_remaining() {
+            self.advance(4);
+            columns.push(self.decode_column())
+        }
+
+        columns
+    }
+
+    // Decode column , see https://dev.mysql.com/doc/internals/en/com-query-response.html#packet-Protocol::ColumnDefinition41
+    fn decode_column(&mut self) -> ColumnInfo {
         //Catalog
-        self.get_lenc_str_bytes();
+        self.skip_lenc_length();
 
         //Schema
-        self.get_lenc_str_bytes();
+        self.skip_lenc_length();
 
         //Table -- virtual table-name
         let mut table_name: Option<String> = None;
@@ -54,14 +60,14 @@ impl ColumnBuf for BytesMut {
         }
 
         //Org table -- physical table-name
-        self.get_lenc_str_bytes();
+        self.skip_lenc_length();
 
         //Name -- virtual column name
         let (str_bytes, _) = self.get_lenc_str_bytes();
         let column_name = String::from_utf8(str_bytes).unwrap();
 
         //Org name -- physical column name
-        self.get_lenc_str_bytes();
+        self.skip_lenc_length();
 
         //Next length  -- length of the following fields (always 0x0c)
         self.get_u8();
@@ -82,6 +88,9 @@ impl ColumnBuf for BytesMut {
         //decimals -- max shown decimal digits
         let decimals = self.get_u8();
 
+        //filter - [00] [00]
+        self.get_u16_le();
+
         ColumnInfo {
             table_name,
             column_name,
@@ -94,21 +103,24 @@ impl ColumnBuf for BytesMut {
     }
 }
 
+/// Implements Column for T.
+impl<T: AsRef<[u8]> + Buf> Column for T {}
+
 #[cfg(test)]
 mod test {
     use bytes::BytesMut;
 
-    use crate::{client::column::ColumnBuf, mysql_const::ColumnType};
+    use crate::{column::Column, mysql_const::ColumnType};
 
     #[test]
-    fn test_parse_column_info() {
+    fn test_decode_column_info() {
         let data = [
             0x03, 0x64, 0x65, 0x66, 0x00, 0x00, 0x00, 0x01, 0x3f, 0x00, 0x0c, 0x3f, 0x00, 0x00,
             0x00, 0x00, 0x00, 0xfd, 0x80, 0x00, 0x00, 0x00, 0x00,
         ];
 
         let mut buf = BytesMut::from(&data[..]);
-        let info = buf.parse_column_info();
+        let info = buf.decode_column();
         assert_eq!(info.charset, 0x3f);
         assert_eq!(info.column_type, ColumnType::MYSQL_TYPE_VAR_STRING);
         assert_eq!(info.column_flag, 0x80);
