@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::convert::{TryFrom, TryInto};
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Error};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use aya::programs::{SocketFilter, tc, SchedClassifier, TcAttachType};
-use aya::maps::{ProgramArray, HashMap};
+use aya::maps::{ProgramArray, HashMap, MapRefMut};
 use aya::{Bpf, Pod, BpfLoader};
 
 use socket2::{Socket, Domain, Type, Protocol};
@@ -43,7 +43,6 @@ impl LoadSockFilter {
         prog.attach(socket.as_raw_fd())?;
 
         let mut app_endpoints = HashMap::try_from(bpf.map_mut("app_endpoints")?)?;
-        app_endpoints.insert(111111, 1, 0)?;
 
         Ok(())
     }
@@ -57,9 +56,10 @@ struct Endpoint {
     port: u16,
 }
 
+// Implements `Pod` to `Endpoint` as Map Key.
 unsafe impl Pod for Endpoint { }
 
-pub enum LoadTc {
+pub enum TrafficTyp {
     App,
     SQL,
 }
@@ -67,19 +67,30 @@ pub enum LoadTc {
 pub const APP_ENDPOINTS_CLASSID_PIN_PATH: &str = "/sys/fs/bpf/pisa-daemon/app-endpoints-classid";
 pub const APP_ENDPOINTS_CLASSID_MAP_NAME: &str = "app_endpoints_classid";
 
-impl LoadTc {
-    fn app<P: AsRef<Path>>(&self, path: P, device: &str) ->  Result<Bpf, Box<dyn std::error::Error>> {
+impl TrafficTyp {
+    fn add_clsact(&self, device: &str) -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = tc::qdisc_add_clsact(&device) {
             if e.kind() != ErrorKind::AlreadyExists {
                 return Err(Box::new(e))
             }
         }
+        Ok(())
+    }
 
+    pub fn load<P: AsRef<Path>>(&self, path: P, device: &str) -> Result<Bpf, Box<dyn std::error::Error>> {
+        match self {
+            Self::App => {
+                self.app(path, device)
+            },
 
+            Self::SQL => todo!()
+        }
+    }
+
+    fn app<P: AsRef<Path>>(&self, path: P, device: &str) ->  Result<Bpf, Box<dyn std::error::Error>> {
         if !Path::new(APP_ENDPOINTS_CLASSID_PIN_PATH).exists() {
             let _ = std::fs::create_dir_all(APP_ENDPOINTS_CLASSID_PIN_PATH);
         }
-        
 
         let mut bpf = BpfLoader::new().map_pin_path(APP_ENDPOINTS_CLASSID_PIN_PATH).load_file(path)?;
         let prog: &mut SchedClassifier = bpf.program_mut("classifier").unwrap().try_into()?;
@@ -89,12 +100,10 @@ impl LoadTc {
         Ok(bpf)
     }
 
-    fn load_app_config(&self, bpf: &mut Bpf) -> Result<(), Box<dyn std::error::Error>> {
-        let mut map = HashMap::<_, Endpoint, u32>::try_from(bpf.map_mut(APP_ENDPOINTS_CLASSID_MAP_NAME)?)?;
-
-        map.insert(Endpoint{ ip: 1, port: 1 }, 1, 0)?;
-
-        Ok(())
+    // Todo, need to add config parameter
+    pub fn load_app_config(&self, bpf: &mut Bpf) -> Result<MapRefMut, Box<(dyn std::error::Error + 'static)>> {
+        bpf.map_mut(APP_ENDPOINTS_CLASSID_MAP_NAME).map_err(|e| e.into())
+        //map.insert(Endpoint{ ip: 1, port: 1 }, 1, 0)?;
     }
 }
 
@@ -104,14 +113,13 @@ mod test {
 
     use aya::maps::HashMap;
 
-    use crate::load::Endpoint;
-
-    use super::LoadTc;
+    use crate::load::{Endpoint, TrafficTyp};
 
     #[test]
     fn test_load_app_config() {
         let _ = Command::new("clang").args("-O2 -target bpf -g -c tc/app.c -o tc/app.o -I ./".split(" ")).spawn();
-        let load = LoadTc::App;
+        let load = TrafficTyp::App;
+        load.add_clsact("lo");
         let try_bpf = load.app("tc/app.o", "lo");
         assert_eq!(try_bpf.is_err(), false);
         let bpf = try_bpf.unwrap();

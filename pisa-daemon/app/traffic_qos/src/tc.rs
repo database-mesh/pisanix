@@ -14,6 +14,7 @@
 
 use config::{Config, Service, QosGroup};
 use tc_command::tc::{QdiscRootAttr, add_root_qdisc, ClassAttr, add_class};
+use bpf::load;
 
 const DEFAULT_CLASSIFIER: &str = "htb";
 
@@ -23,6 +24,19 @@ impl TrafficQos {
     pub fn new(mut config: Config) -> Self {
         sort_app_serivce(&mut config);
         TrafficQos(config)
+    }
+
+    fn load_tc(&self, traffic: load::TrafficTyp) -> Result<(), Box<dyn std::error::Error>> {
+        //FIX path
+        let path = "app.o";
+        let mut bridge_bpf = traffic.load(path, &self.0.global.bridge_device)?;
+        let mut egress_bpf = traffic.load(path, &self.0.global.egress_device)?;
+
+        //FIX add config parameter
+        traffic.load_app_config(&mut bridge_bpf);
+        traffic.load_app_config(&mut egress_bpf);
+
+        Ok(())
     }
 
     pub fn add_root_qdisc(&self) -> bool {
