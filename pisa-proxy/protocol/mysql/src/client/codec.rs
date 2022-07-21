@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::{
+    convert::From,
     ops::{Deref, DerefMut},
     pin::Pin,
     sync::Arc,
@@ -143,7 +144,7 @@ impl<'a, T: Row> QueryResultStream<'a, T> {
     }
 }
 
-impl<'a, T: Row + Clone + std::convert::From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
+impl<'a, T: Row + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
     type Item = Result<RowDataTyp<T>, ProtocolError>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
