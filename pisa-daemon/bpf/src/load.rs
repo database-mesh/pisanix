@@ -13,19 +13,11 @@
 // limitations under the License.
 
 use std::convert::{TryFrom, TryInto};
-<<<<<<< HEAD
 use std::io::{ErrorKind, Error};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use aya::programs::{SocketFilter, tc, SchedClassifier, TcAttachType};
 use aya::maps::{ProgramArray, HashMap, MapRefMut};
-=======
-use std::io::ErrorKind;
-use std::os::unix::io::AsRawFd;
-use std::path::Path;
-use aya::programs::{SocketFilter, tc, SchedClassifier, TcAttachType};
-use aya::maps::{ProgramArray, HashMap};
->>>>>>> 2020ac6b009243e5cbc5281f54f9dc2a3eabdbcd
 use aya::{Bpf, Pod, BpfLoader};
 
 use socket2::{Socket, Domain, Type, Protocol};
@@ -50,11 +42,7 @@ impl LoadSockFilter {
         let socket = Self::open_device(device)?;
         prog.attach(socket.as_raw_fd())?;
 
-        let mut app_endpoints = HashMap::try_from(bpf.map_mut("app_endpoints")?)?;
-<<<<<<< HEAD
-=======
-        app_endpoints.insert(111111, 1, 0)?;
->>>>>>> 2020ac6b009243e5cbc5281f54f9dc2a3eabdbcd
+        //let mut app_endpoints = HashMap::try_from(bpf.map_mut("app_endpoints")?)?;
 
         Ok(())
     }

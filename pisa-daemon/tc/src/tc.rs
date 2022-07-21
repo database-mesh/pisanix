@@ -38,7 +38,7 @@ pub fn add_root_qdisc<'a>(attr: &QdiscRootAttr<'a>) -> bool {
 }
 
 pub fn delete_root_qdisc<'a>(device: &str) -> bool {
-    let mut args = vec![
+    let args = vec![
         "qdisc",
         "delete",
         "dev",
