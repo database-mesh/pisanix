@@ -26,19 +26,6 @@ impl TrafficQos {
         TrafficQos(config)
     }
 
-    fn load_tc(&self, traffic: load::TrafficTyp) -> Result<(), Box<dyn std::error::Error>> {
-        //FIX path
-        let path = "app.o";
-        let mut bridge_bpf = traffic.load(path, &self.0.global.bridge_device)?;
-        let mut egress_bpf = traffic.load(path, &self.0.global.egress_device)?;
-
-        //FIX add config parameter
-        traffic.load_app_config(&mut bridge_bpf);
-        traffic.load_app_config(&mut egress_bpf);
-
-        Ok(())
-    }
-
     pub fn add_root_qdisc(&self) -> bool {
         let attr = QdiscRootAttr {
             netns: None,
@@ -166,8 +153,8 @@ ceil = "2mbps"
     fn test_add_qdsic_class() {
         let config: Config = toml::from_str(config_str).unwrap();
 
-        delete_root_qdisc(&config.global.bridge_device, "htb");
-        delete_root_qdisc(&config.global.egress_device, "htb");
+        delete_root_qdisc(&config.global.bridge_device);
+        delete_root_qdisc(&config.global.egress_device);
 
         let tq = TrafficQos::new(config);
         let res = tq.add_root_qdisc();

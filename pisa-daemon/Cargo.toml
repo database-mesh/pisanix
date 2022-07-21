@@ -7,7 +7,10 @@ edition = "2021"
 resolver = "2"
 members = [
   "app/config",
+<<<<<<< HEAD
   "app/traffic_qos",
   "bpf",
+=======
+>>>>>>> 2020ac6b009243e5cbc5281f54f9dc2a3eabdbcd
   "tc"
 ]
