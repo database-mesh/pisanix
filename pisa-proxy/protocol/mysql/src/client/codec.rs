@@ -15,6 +15,7 @@
 use std::{
     ops::{Deref, DerefMut},
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -33,11 +34,13 @@ use super::{
     stream::LocalStream,
 };
 use crate::{
+    column::ColumnInfo,
     err::ProtocolError,
     mysql_const::{
         CLIENT_PROTOCOL_41, CLIENT_SESSION_TRACK, CLIENT_TRANSACTIONS, SERVER_SESSION_STATE_CHANGED,
     },
-    util::{get_length, length_encode_int, length_encoded_string},
+    row::{Row, RowDataTyp},
+    util::{get_length, is_eof, length_encode_int, length_encoded_string},
 };
 
 pub type SendCommand<'a> = (u8, &'a str);
@@ -90,6 +93,10 @@ impl<'a> ResultsetStream<'a> {
 
         ResultsetStream { framed }
     }
+
+    pub fn is_binary(&self) -> bool {
+        self.framed.codec().is_binary
+    }
 }
 
 impl<'a> Stream for ResultsetStream<'a> {
@@ -114,6 +121,51 @@ impl<'a> Stream for ResultsetStream<'a> {
                     Poll::Pending
                 }
             }
+        }
+    }
+}
+
+#[pin_project]
+pub struct QueryResultStream<'a, T: Row> {
+    column_info: Arc<[ColumnInfo]>,
+    #[pin]
+    rs: ResultsetStream<'a>,
+    row_data: RowDataTyp<T>,
+}
+
+impl<'a, T: Row> QueryResultStream<'a, T> {
+    pub fn new(
+        column_info: Arc<[ColumnInfo]>,
+        rs: ResultsetStream<'a>,
+        row_data: RowDataTyp<T>,
+    ) -> Self {
+        QueryResultStream { column_info, rs, row_data }
+    }
+}
+
+impl<'a, T: Row + Clone + std::convert::From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
+    type Item = Result<RowDataTyp<T>, ProtocolError>;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let me = self.project();
+
+        match me.rs.poll_next(cx) {
+            Poll::Ready(Some(Ok(mut data))) => {
+                if is_eof(&data) {
+                    return Poll::Ready(None);
+                }
+
+                let mut row_data = me.row_data.clone();
+                data.advance(4);
+                row_data.with_buf(data.into());
+                Poll::Ready(Some(Ok(row_data)))
+                //Poll::Ready(Some(Ok(me.row_data)))
+            }
+
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+
+            Poll::Ready(None) => Poll::Ready(None),
+
+            Poll::Pending => Poll::Pending,
         }
     }
 }

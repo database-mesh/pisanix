@@ -14,7 +14,7 @@
 
 use std::{ops::Range, sync::Arc};
 
-use bytes::Buf;
+use bytes::BytesMut;
 
 use crate::{
     column::ColumnInfo,
@@ -56,25 +56,55 @@ pub trait Row: BufExt {
     }
 }
 
-/// Implements Row for T
-impl<T: AsRef<[u8]> + Buf> Row for T {}
+impl Row for BytesMut {}
+impl Row for &[u8] {}
 
-#[derive(Debug)]
-pub struct RowData<T> {
+pub trait RowData {
+    fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V>;
+}
+
+#[derive(Clone)]
+pub enum RowDataTyp<T: Row> {
+    Text(RowDataText<T>),
+}
+
+macro_rules! gen_row_data {
+    ($name:ident, $($var:ident($ty:ty)),*) => {
+        impl<T: Row>  $name<T> {
+            pub fn with_buf(&mut self, buf: T)  {
+                match self {
+                    $($name::$var(x) => x.with_buf(buf),)*
+                }
+            }
+        }
+
+        impl<T: Row> RowData for RowDataTyp<T> {
+
+            fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
+                match self {
+                    $($name::$var(x) => x.decode_with_name(name),)*
+                }
+            }
+        }
+    }
+}
+
+gen_row_data!(RowDataTyp, Text(RowDataText));
+
+#[derive(Debug, Clone)]
+pub struct RowDataCommon {
     columns: Arc<[ColumnInfo]>,
-    buf: T,
     // Save consumed column idx, when call decode, buf data will removed,
     // so th data index will drift.
     consumed_idx: Vec<usize>,
 }
 
-impl<T: Row> RowData<T> {
-    pub fn new(columns: Arc<[ColumnInfo]>, buf: T) -> RowData<T> {
-        RowData { columns, buf, consumed_idx: vec![] }
+impl RowDataCommon {
+    fn new(columns: Arc<[ColumnInfo]>) -> RowDataCommon {
+        RowDataCommon { columns, consumed_idx: vec![] }
     }
 
-    // The method must be called in column order
-    pub fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
+    fn get_idx(&mut self, name: &str) -> value::Result<usize> {
         let try_idx = self.columns.iter().position(|x| x.column_name == name);
         if try_idx.is_none() {
             return Err(DecodeRowError::ColumnNotFound(name.to_string()).into());
@@ -93,7 +123,50 @@ impl<T: Row> RowData<T> {
         // The corrent idx should be minus lt_idx_count when `lt_idx_count > 0`.
         let lt_idx_count = self.consumed_idx.iter().filter(|x| *x < &idx).count();
 
-        self.buf.decode_row_with_idx::<V>(idx - lt_idx_count)
+        Ok(idx - lt_idx_count)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RowDataText<T: Row> {
+    common: RowDataCommon,
+    buf: T,
+}
+
+impl<T: Row> RowDataText<T> {
+    pub fn new(columns: Arc<[ColumnInfo]>, buf: T) -> RowDataText<T> {
+        let common = RowDataCommon::new(columns);
+        RowDataText { common, buf }
+    }
+
+    fn with_buf(&mut self, buf: T) {
+        self.buf = buf;
+    }
+}
+
+impl<T: Row> RowData for RowDataText<T> {
+    // The method must be called in column order
+    fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
+        //let try_idx = self.columns.iter().position(|x| x.column_name == name);
+        //if try_idx.is_none() {
+        //    return Err(DecodeRowError::ColumnNotFound(name.to_string()).into());
+        //}
+
+        //let idx = try_idx.unwrap();
+
+        //if self.consumed_idx.contains(&idx) {
+        //    return Err(DecodeRowError::ColumnAlreadyConsumed(name.to_string()).into());
+        //}
+
+        //self.consumed_idx.push(idx);
+        //self.consumed_idx.sort_unstable();
+
+        //// Find all data less then idx in consumed_idx and save count.
+        //// The corrent idx should be minus lt_idx_count when `lt_idx_count > 0`.
+        //let lt_idx_count = self.consumed_idx.iter().filter(|x| *x < &idx).count();
+
+        //self.buf.unwrap().decode_row_with_idx::<V>(idx - lt_idx_count)
+        self.buf.decode_row_with_idx::<V>(self.common.get_idx(name)?)
     }
 }
 
@@ -102,7 +175,10 @@ mod test {
     use bytes::BytesMut;
 
     use super::Row;
-    use crate::{column::Column, row::RowData};
+    use crate::{
+        column::Column,
+        row::{RowData, RowDataText},
+    };
 
     fn get_test_column_data() -> Vec<u8> {
         vec![
@@ -174,11 +250,11 @@ mod test {
         ];
 
         let mut buf = BytesMut::from(&data[..]);
-        let res = buf.decode_row_with_idx::<String>(34).unwrap();
+        let res = buf.decode_row_with_idx::<String>(33).unwrap();
         assert_eq!(res, "No");
 
         let mut buf: &[u8] = &data;
-        let res = buf.decode_row_with_idx::<String>(34).unwrap();
+        let res = buf.decode_row_with_idx::<String>(33).unwrap();
         assert_eq!(res, "No");
     }
 
@@ -192,7 +268,7 @@ mod test {
 
         let row_buf = &get_test_row_data()[..];
 
-        let mut row = RowData::new(columns.into_boxed_slice().into(), row_buf);
+        let mut row = RowDataText::new(columns.into_boxed_slice().into(), row_buf);
 
         let res = row.decode_with_name::<String>("Id");
         assert_eq!(res.unwrap(), "186630");
