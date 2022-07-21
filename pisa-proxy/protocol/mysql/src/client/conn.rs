@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::BytesMut;
-use futures::SinkExt;
 use conn_pool::{ConnAttr, ConnAttrMut, ConnLike};
+use futures::SinkExt;
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use tokio_util::codec::Framed;
@@ -30,7 +29,12 @@ use super::{
     stmt::Stmt,
     stream::{LocalStream, StreamWrapper},
 };
-use crate::{err::ProtocolError, mysql_const::*, util::length_encode_int, column::{Column, ColumnInfo}};
+use crate::{
+    column::{Column, ColumnInfo},
+    err::ProtocolError,
+    mysql_const::*,
+    util::length_encode_int,
+};
 
 #[derive(Debug, Default)]
 pub struct ClientConn {
@@ -187,6 +191,28 @@ impl ClientConn {
         res
     }
 
+    pub async fn send_ping(&mut self) -> Result<(BytesMut, bool), ProtocolError> {
+        let framed = self.framed.take().unwrap();
+        let mut common_codec = framed.into_common();
+
+        common_codec.send((COM_PING, &[])).await?;
+
+        let res = match common_codec.next().await {
+            Some(Ok(data)) => {
+                if data.0[4] == OK_HEADER {
+                    Ok((data.0, true))
+                } else {
+                    Ok((data.0, false))
+                }
+            }
+            Some(Err(e)) => Err(e),
+
+            _ => unreachable!(),
+        };
+        self.framed = Some(Box::new(ClientCodec::Common(common_codec)));
+        res
+    }
+
     // Send PING, QUIT,etc... command
     pub async fn send_common_command<'a>(
         &'a mut self,
@@ -203,7 +229,10 @@ impl ClientConn {
         Ok(CommonStream::new(self.framed.as_mut()))
     }
 
-    pub async fn query_result<'a>(&'a mut self, val: &'a [u8]) -> Result<Option<(Arc<[ColumnInfo]>, ResultsetStream<'a>)>, ProtocolError> {
+    pub async fn query_result<'a>(
+        &'a mut self,
+        val: &'a [u8],
+    ) -> Result<Option<(Arc<[ColumnInfo]>, ResultsetStream<'a>)>, ProtocolError> {
         let mut stream = self.send_query(val).await?;
 
         let header = match stream.next().await {
@@ -236,7 +265,6 @@ impl ClientConn {
         let col_info = col_buf.as_slice().decode_columns();
 
         let arc_col_info: Arc<[ColumnInfo]> = col_info.into_boxed_slice().into();
-
 
         Ok(Some((arc_col_info, stream)))
     }
@@ -383,7 +411,7 @@ mod test {
     use conn_pool::*;
     use tokio_stream::StreamExt;
 
-    use crate::{client::conn::ClientConn, err::ProtocolError, util::is_eof, row::RowData};
+    use crate::{client::conn::ClientConn, err::ProtocolError, row::RowData, util::is_eof};
 
     #[tokio::test]
     async fn pool() {
@@ -448,7 +476,7 @@ mod test {
 
             //let mut data = &data.as_mut().unwrap()[4..];
             //let user = data.decode_row_with_idx::<String>(0);
-            
+
             //let host = data.decode_row_with_idx::<String>(0);
 
             let mut row = RowData::new(res.0.clone(), &data.as_mut().unwrap()[4..]);

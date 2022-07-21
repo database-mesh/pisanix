@@ -82,7 +82,7 @@ where
     pub conn: Option<T>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Pool<T>
 where
     T: ConnLike + ConnAttr + ConnAttrMut,

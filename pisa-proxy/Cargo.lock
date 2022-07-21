@@ -3173,10 +3173,13 @@ name = "strategy"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
+ "conn_pool",
  "crossbeam-channel",
  "endpoint",
  "futures",
  "loadbalance",
+ "mysql_protocol",
  "regex",
  "serde",
  "serde_derive",

@@ -12,79 +12,118 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use tokio::sync::Mutex;
+// use std::sync::Arc;
+// use tokio::sync::Mutex;
 use std::{thread, time};
 
 use crossbeam_channel::unbounded;
 use endpoint::endpoint::Endpoint;
 
-use crate::{config::ReadWriteSplittingDynamic, readwritesplitting::ReadWriteEndpoint};
+use crate::{
+    config::ReadWriteSplittingDynamic,
+    discovery::discovery::{Discovery, DiscoveryKind, DiscoveryMasterHighAvailability},
+    readwritesplitting::ReadWriteEndpoint,
+};
 
 pub struct MonitorReconcile {
-    config: ReadWriteSplittingDynamic,
-
-    monitors: Vec<String>,
+    config: crate::config::Discovery,
 }
-
-async fn report(s: crossbeam_channel::Sender<ReadWriteEndpoint>) {
-    tokio::task::spawn_blocking(move || loop {
-        let ten_millis = time::Duration::from_millis(1000);
-
-        thread::sleep(ten_millis);
-        let send_msg = ReadWriteEndpoint {
-            read: vec![Endpoint {
-                weight: 2,
-                name: String::from("dasheng001"),
-                db: String::from("test"),
-                user: String::from("root"),
-                password: String::from("12345678"),
-                addr: String::from("127.0.0.1:3306"),
-            }],
-            readwrite: vec![Endpoint {
-                weight: 2,
-                name: String::from("dasheng002"),
-                db: String::from("test"),
-                user: String::from("root"),
-                password: String::from("12345678"),
-                addr: String::from("127.0.0.1:3306"),
-            }],
-        };
-        if let Err(err) = s.try_send(send_msg) {
-            println!("err >>> {:#?}", err);
-        }
-    });
-}
-
-use crate::readwritesplitting::rule_match::{RulesMatch,RulesMatchBuilder};
 
 impl MonitorReconcile {
-    pub fn new(config: ReadWriteSplittingDynamic) -> Self {
-        match config.discovery {
-            crate::config::Discovery::Mha(config) => {
-                DiscoveryKind::MasterHighAvailability(DiscoveryMasterHighAvailability::new(&config))
-            }
-        };
-
-        MonitorReconcile {config, monitors: vec![] }
+    pub fn new(config: ReadWriteSplittingDynamic, rw_endpoint: ReadWriteEndpoint) -> Self {
+        MonitorReconcile { config: config.discovery }
     }
 
-    pub fn start_monitor_reconcile(&mut self) {// rules_match: Arc<Mutex<RulesMatch>>) {
-
+    pub fn start_monitor_reconcile(
+        &mut self,
+        monitor_interval: u64,
+        monitor_channel: crate::readwritesplitting::MonitorChannel,
+    ) -> crossbeam_channel::Receiver<ReadWriteEndpoint> {
         let (send, recv) = unbounded();
-        let s = send.clone();
-        let r = recv.clone();
-
-
-        tokio::spawn(async move {
-            RulesMatch::change(r).await;
-            // self.rules_match.start_rules_match_reconcile(r, self.config.clone().rules, self.config.clone().default_target).await;
-        });
+        let tx = send.clone();
+        let rx = recv.clone();
 
         tokio::spawn(async move {
-            report(s).await;
+            MonitorReconcile::report(tx, monitor_interval, monitor_channel).await;
         });
+
+        rx
     }
 
-    fn register_monitor(&mut self) {}
+    async fn report(
+        s: crossbeam_channel::Sender<ReadWriteEndpoint>,
+        monitor_interval: u64,
+        monitor_channel: crate::readwritesplitting::MonitorChannel,
+    ) {
+        tokio::task::spawn_blocking(move || loop {
+            //TODO compute from 4 monitors
+            loop {
+                let connect_monitor_response = monitor_channel.connect_rx.recv().unwrap();
+                // println!("connect monitor channel : {:#?}", aa);
+
+                // let send_msg = match connect_monitor_response.read.get("127.0.0.1:3306").unwrap() {
+                //     crate::discovery::discovery::ConnectStatus::Disconnected => ReadWriteEndpoint {
+                //         read: vec![Endpoint {
+                //             weight: 2,
+                //             name: String::from("dasheng001"),
+                //             db: String::from("test"),
+                //             user: String::from("root"),
+                //             password: String::from("12345678"),
+                //             addr: String::from("127.0.0.1:3308"),
+                //         }],
+                //         readwrite: vec![Endpoint {
+                //             weight: 2,
+                //             name: String::from("dasheng002"),
+                //             db: String::from("test"),
+                //             user: String::from("root"),
+                //             password: String::from("12345678"),
+                //             addr: String::from("127.0.0.1:3308"),
+                //         }],
+                //     },
+                //     crate::discovery::discovery::ConnectStatus::Connected => ReadWriteEndpoint {
+                //         read: vec![Endpoint {
+                //             weight: 2,
+                //             name: String::from("dasheng001"),
+                //             db: String::from("test"),
+                //             user: String::from("root"),
+                //             password: String::from("12345678"),
+                //             addr: String::from("127.0.0.1:3306"),
+                //         }],
+                //         readwrite: vec![Endpoint {
+                //             weight: 2,
+                //             name: String::from("dasheng002"),
+                //             db: String::from("test"),
+                //             user: String::from("root"),
+                //             password: String::from("12345678"),
+                //             addr: String::from("127.0.0.1:3306"),
+                //         }],
+                //     },
+                // };
+                // final data
+                let send_msg = ReadWriteEndpoint {
+                    read: vec![Endpoint {
+                        weight: 2,
+                        name: String::from("dasheng001"),
+                        db: String::from("test"),
+                        user: String::from("root"),
+                        password: String::from("12345678"),
+                        addr: String::from("127.0.0.1:3306"),
+                    }],
+                    readwrite: vec![Endpoint {
+                        weight: 2,
+                        name: String::from("dasheng002"),
+                        db: String::from("test"),
+                        user: String::from("root"),
+                        password: String::from("12345678"),
+                        addr: String::from("127.0.0.1:3306"),
+                    }],
+                };
+                if let Err(err) = s.try_send(send_msg) {
+                    println!("err >>> {:#?}", err);
+                }
+                let ten_millis = time::Duration::from_millis(1000);
+                thread::sleep(ten_millis);
+            }
+        });
+    }
 }

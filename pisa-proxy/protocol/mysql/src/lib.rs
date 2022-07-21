@@ -17,10 +17,10 @@ pub mod client;
 mod column;
 pub mod err;
 pub mod mysql_const;
-mod row;
+pub mod row;
 pub mod server;
 pub mod util;
-mod value;
+pub mod value;
 
 #[macro_use]
 extern crate lazy_static;

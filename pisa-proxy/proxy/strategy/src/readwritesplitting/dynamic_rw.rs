@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
+use crossbeam_channel::unbounded;
 use endpoint::endpoint::Endpoint;
+use futures::executor::block_on;
 use loadbalance::balance::LoadBalance;
 use tokio::sync::{Mutex, RwLock};
-use crossbeam_channel::unbounded;
 
 use super::{
     rule_match::{RulesMatch, RulesMatchBuilder},
@@ -35,38 +37,115 @@ use crate::{
 
 pub struct ReadWriteSplittingDynamicBuilder;
 
+// define monitor channel
+#[derive(Debug, Clone)]
+pub struct MonitorChannel {
+    pub connect_tx: crossbeam_channel::Sender<crate::discovery::discovery::ConnectMonitorResponse>,
+    pub connect_rx:
+        crossbeam_channel::Receiver<crate::discovery::discovery::ConnectMonitorResponse>,
+
+    pub ping_tx: crossbeam_channel::Sender<crate::discovery::discovery::PingMonitorResponse>,
+    pub ping_rx: crossbeam_channel::Receiver<crate::discovery::discovery::PingMonitorResponse>,
+
+    pub replication_lag_tx:
+        crossbeam_channel::Sender<crate::discovery::discovery::ReplicationLagMonitorResponse>,
+    pub replication_lag_rx:
+        crossbeam_channel::Receiver<crate::discovery::discovery::ReplicationLagMonitorResponse>,
+
+    pub read_only_tx:
+        crossbeam_channel::Sender<crate::discovery::discovery::ReadOnlyMonitorResponse>,
+    pub read_only_rx:
+        crossbeam_channel::Receiver<crate::discovery::discovery::ReadOnlyMonitorResponse>,
+}
+
+impl MonitorChannel {
+    fn build() -> Self {
+        let (connect_tx, connect_rx) = crossbeam_channel::unbounded();
+        let (ping_tx, ping_rx) = crossbeam_channel::unbounded();
+        let (replication_lag_tx, replication_lag_rx) = crossbeam_channel::unbounded();
+        let (read_only_tx, read_only_rx) = crossbeam_channel::unbounded();
+
+        MonitorChannel {
+            connect_tx,
+            connect_rx,
+            ping_tx,
+            ping_rx,
+            replication_lag_tx,
+            replication_lag_rx,
+            read_only_tx,
+            read_only_rx,
+        }
+    }
+}
+
 impl ReadWriteSplittingDynamicBuilder {
     pub fn build(
         config: config::ReadWriteSplittingDynamic,
         rw_endpoint: ReadWriteEndpoint,
     ) -> ReadWriteSplittingDynamic {
-
-        let mut mc = MonitorReconcile::new(config.clone());
-
         let rules_match = RulesMatchBuilder::build(
             config.clone().rules,
             config.clone().default_target,
-            rw_endpoint,
+            rw_endpoint.clone(),
         );
 
-        mc.start_monitor_reconcile();
+        let monitor_channel = MonitorChannel::build();
 
-        ReadWriteSplittingDynamic {rules_match}
+        let mut reciver: Option<crossbeam_channel::Receiver<ReadWriteEndpoint>> = None;
+        // Match discovery type
+        match config.clone().discovery {
+            // Use Master High Availability Discovery
+            crate::config::Discovery::Mha(cc) => {
+                let discovery_mha =
+                    DiscoveryMasterHighAvailability::build(cc.clone(), rw_endpoint.clone());
+                // discovery_mha.register_monitor();
+
+                tokio_scoped::scope(|scope| {
+                    scope.spawn(async {
+                        discovery_mha.run(monitor_channel.clone()).await;
+                    });
+                });
+
+                // discovery_mha.run();
+                let mut monitor_reconcile =
+                    MonitorReconcile::new(config.clone(), rw_endpoint.clone());
+                reciver = Some(
+                    monitor_reconcile.start_monitor_reconcile(cc.monitor_interval, monitor_channel),
+                );
+
+                // DiscoveryKind::MasterHighAvailability(discovery_mha);
+            }
+        };
+
+        let rules_match_wrapper = Arc::new(Mutex::new(rules_match));
+        let rm = rules_match_wrapper.clone();
+        tokio::spawn(async move {
+            RulesMatch::start_rules_match_reconcile(
+                reciver.unwrap().clone(),
+                rm,
+                config.clone().rules,
+                config.clone().default_target,
+            )
+            .await;
+        });
+        ReadWriteSplittingDynamic { rules_match: rules_match_wrapper.clone() }
     }
 }
 
 pub struct ReadWriteSplittingDynamic {
-    rules_match: RulesMatch,
+    rules_match: Arc<Mutex<RulesMatch>>,
 }
 
 impl Route for ReadWriteSplittingDynamic {
     type Error = BoxError;
 
-    fn dispatch<'a>(
-        &'a mut self,
+    fn dispatch(
+        &mut self,
         input: &RouteInput,
-    ) -> Result<(Option<&'a Endpoint>, TargetRole), Self::Error> {
-        let b = self.rules_match.get(input);
+    ) -> Result<(Option<Endpoint>, TargetRole), Self::Error> {
+        let rules_match_wrapper = self.rules_match.clone();
+        let mut rules_match = block_on(async move { rules_match_wrapper.lock_owned().await });
+        let b = rules_match.get(input);
         Ok((b.0.next(), b.1))
     }
 }
