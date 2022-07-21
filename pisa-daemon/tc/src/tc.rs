@@ -37,19 +37,29 @@ pub fn add_root_qdisc<'a>(attr: &QdiscRootAttr<'a>) -> bool {
 
 }
 
-pub fn delete_root_qdisc<'a>(attr: QdiscRootAttr<'a>) -> bool {
+pub fn delete_root_qdisc<'a>(device: &str) -> bool {
     let mut args = vec![
         "qdisc",
         "delete",
         "dev",
-        &attr.device,
+        device,
         "root",
         "handle",
         "1:",
-        &attr.typ,
     ];
 
-    execute_tc_command!( attr, args, "delete root qdisc")
+    let out = Command::new("tc")
+        .args(&args)
+        .output()
+        .expect("faild to delete root qdisc");
+
+
+    if !out.status.success() {
+        println!("Failed to delete root qdisc to device {}: {:?}", device, out);
+        return false;
+    }
+
+    true
 }
 
 pub fn show_qdisc(device: String) -> bool {
