@@ -38,7 +38,7 @@ use crate::{
     mysql_const::{
         CLIENT_PROTOCOL_41, CLIENT_SESSION_TRACK, CLIENT_TRANSACTIONS, SERVER_SESSION_STATE_CHANGED,
     },
-    row::{Row, RowDataTyp},
+    row::{Row, RowData, RowDataTyp},
     util::{get_length, is_eof, length_encode_int, length_encoded_string},
 };
 

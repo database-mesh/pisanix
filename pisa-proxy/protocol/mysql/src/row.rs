@@ -59,7 +59,8 @@ pub trait Row: BufExt {
 impl Row for BytesMut {}
 impl Row for &[u8] {}
 
-pub trait RowData {
+pub trait RowData<T: Row> {
+    fn with_buf(&mut self, buf: T);
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V>;
 }
 
@@ -118,13 +119,12 @@ impl<T: Row> RowDataText<T> {
         let common = RowDataCommon::new(columns);
         RowDataText { common, buf }
     }
+}
 
+impl<T: Row> RowData<T> for RowDataText<T> {
     fn with_buf(&mut self, buf: T) {
         self.buf = buf;
     }
-}
-
-impl<T: Row> RowData for RowDataText<T> {
     // The method must be called in column order
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
         self.buf.decode_row_with_idx::<V>(self.common.get_idx(name)?)
