@@ -248,9 +248,9 @@ impl ClientConn {
         let is_binary = stream.is_binary();
         match is_binary {
             false => {
-                let row_data_text = RowDataText::new(arc_col_info.clone(), BytesMut::new());
+                let row_data_text = RowDataText::new(arc_col_info, BytesMut::new());
                 let row_data = RowDataTyp::Text(row_data_text);
-                Ok(Some(QueryResultStream::new(arc_col_info.clone(), stream, row_data)))
+                Ok(Some(QueryResultStream::new(stream, row_data)))
             }
             true => todo!(),
         }

@@ -21,6 +21,7 @@ mod row;
 pub mod server;
 pub mod util;
 mod value;
+mod macros;
 
 #[macro_use]
 extern crate lazy_static;

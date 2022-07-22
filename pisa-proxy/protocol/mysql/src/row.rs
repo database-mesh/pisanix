@@ -68,28 +68,8 @@ pub enum RowDataTyp<T: Row> {
     Text(RowDataText<T>),
 }
 
-macro_rules! gen_row_data {
-    ($name:ident, $($var:ident($ty:ty)),*) => {
-        impl<T: Row>  $name<T> {
-            pub fn with_buf(&mut self, buf: T)  {
-                match self {
-                    $($name::$var(x) => x.with_buf(buf),)*
-                }
-            }
-        }
 
-        impl<T: Row> RowData for RowDataTyp<T> {
-
-            fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
-                match self {
-                    $($name::$var(x) => x.decode_with_name(name),)*
-                }
-            }
-        }
-    }
-}
-
-gen_row_data!(RowDataTyp, Text(RowDataText));
+crate::gen_row_data!(RowDataTyp, Text(RowDataText));
 
 #[derive(Debug, Clone)]
 pub struct RowDataCommon {
@@ -147,25 +127,6 @@ impl<T: Row> RowDataText<T> {
 impl<T: Row> RowData for RowDataText<T> {
     // The method must be called in column order
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
-        //let try_idx = self.columns.iter().position(|x| x.column_name == name);
-        //if try_idx.is_none() {
-        //    return Err(DecodeRowError::ColumnNotFound(name.to_string()).into());
-        //}
-
-        //let idx = try_idx.unwrap();
-
-        //if self.consumed_idx.contains(&idx) {
-        //    return Err(DecodeRowError::ColumnAlreadyConsumed(name.to_string()).into());
-        //}
-
-        //self.consumed_idx.push(idx);
-        //self.consumed_idx.sort_unstable();
-
-        //// Find all data less then idx in consumed_idx and save count.
-        //// The corrent idx should be minus lt_idx_count when `lt_idx_count > 0`.
-        //let lt_idx_count = self.consumed_idx.iter().filter(|x| *x < &idx).count();
-
-        //self.buf.unwrap().decode_row_with_idx::<V>(idx - lt_idx_count)
         self.buf.decode_row_with_idx::<V>(self.common.get_idx(name)?)
     }
 }

@@ -16,7 +16,6 @@ use std::{
     convert::From,
     ops::{Deref, DerefMut},
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -35,7 +34,6 @@ use super::{
     stream::LocalStream,
 };
 use crate::{
-    column::ColumnInfo,
     err::ProtocolError,
     mysql_const::{
         CLIENT_PROTOCOL_41, CLIENT_SESSION_TRACK, CLIENT_TRANSACTIONS, SERVER_SESSION_STATE_CHANGED,
@@ -128,7 +126,6 @@ impl<'a> Stream for ResultsetStream<'a> {
 
 #[pin_project]
 pub struct QueryResultStream<'a, T: Row> {
-    column_info: Arc<[ColumnInfo]>,
     #[pin]
     rs: ResultsetStream<'a>,
     row_data: RowDataTyp<T>,
@@ -136,15 +133,14 @@ pub struct QueryResultStream<'a, T: Row> {
 
 impl<'a, T: Row> QueryResultStream<'a, T> {
     pub fn new(
-        column_info: Arc<[ColumnInfo]>,
         rs: ResultsetStream<'a>,
         row_data: RowDataTyp<T>,
     ) -> Self {
-        QueryResultStream { column_info, rs, row_data }
+        QueryResultStream { rs, row_data }
     }
 }
 
-impl<'a, T: Row + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
+impl<'a,  T: Row + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
     type Item = Result<RowDataTyp<T>, ProtocolError>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
@@ -156,10 +152,10 @@ impl<'a, T: Row + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a
                 }
 
                 let mut row_data = me.row_data.clone();
+                // Exclude header 4 bytes
                 data.advance(4);
                 row_data.with_buf(data.into());
                 Poll::Ready(Some(Ok(row_data)))
-                //Poll::Ready(Some(Ok(me.row_data)))
             }
 
             Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
