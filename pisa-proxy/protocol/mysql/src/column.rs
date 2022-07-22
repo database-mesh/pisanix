@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bytes::Buf;
+use bytes::{Buf, BytesMut};
 
 use crate::{mysql_const::ColumnType, util::BufExt};
 
@@ -104,7 +104,8 @@ pub trait Column: BufExt {
 }
 
 /// Implements Column for T.
-impl<T: AsRef<[u8]> + Buf> Column for T {}
+impl Column for &[u8] {}
+impl Column for BytesMut {}
 
 #[cfg(test)]
 mod test {

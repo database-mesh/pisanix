@@ -157,6 +157,12 @@ mod test {
             "SHOW GRANTS FOR 'u1'@'localhost';",
             "SHOW GRANTS FOR 'u1'@'localhost' USING 'r1';",
             "SHOW GRANTS FOR 'u1'@'localhost' USING 'r1', 'r2';",
+            "CREATE INDEX idx_order_id ON t_order (order_id);",
+            "CREATE UNIQUE INDEX idx_order_compose USING BTREE ON t_order (name(10) DESC, (col1 + col2) ASC);",
+            "CREATE FULLTEXT INDEX idx_order_name ON t_order (name) WITH PARSER parser_name;",
+            "CREATE SPATIAL INDEX idx_order_name ON t_order (name) INVISIBLE;",
+            "CREATE FULLTEXT INDEX idx_order_name ON t_order (name) WITH PARSER parser_name ALGORITHM DEFAULT;",
+            "CREATE FULLTEXT INDEX idx_order_name ON t_order (name) WITH PARSER parser_name LOCK = EXCLUSIVE;",
             "CREATE LOGFILE GROUP logfile_group ADD UNDOFILE 'undo_file' INITIAL_SIZE = 1M UNDO_BUFFER_SIZE = 2M REDO_BUFFER_SIZE = 3M;",
             "CREATE LOGFILE GROUP logfile_group ADD UNDOFILE 'undo_file' NODEGROUP 1234, WAIT, COMMENT 'logfile_group_comment', ENGINE  = 'logfile_group_engine';",
         ];

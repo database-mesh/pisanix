@@ -130,6 +130,7 @@ sql_stmt -> SqlStmt:
   | show_create_user_stmt { SqlStmt::ShowCreateUserStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
+  | create_index_stmt  { SqlStmt::CreateIndexStmt($1) }
   
   ;
 
@@ -6215,6 +6216,13 @@ TEXT_STRING_sys_nonewline -> String:
     }
 ;
 
+TEXT_STRING_sys -> String:
+    'TEXT_STRING'
+    {
+      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+    }
+;
+
 show_grants_stmt -> Box<ShowGrantsStmt>:
     'SHOW' 'GRANTS'
     {
@@ -6939,6 +6947,359 @@ sp_suid -> SpSuid:
             SpSuid::SpIsNotSuid
           }
         ;
+
+create_index_stmt -> CreateIndexStmt:
+      'CREATE' opt_unique 'INDEX' ident opt_index_type_clause 'ON' table_ident '(' key_list_with_expression ')'
+      opt_index_options opt_index_lock_and_algorithm
+      {
+           CreateIndexStmt::CommonIndex(CreateCommonIndexStmt{
+               span: $span,
+               opt_unique: $2,
+               index_name: $4.0,
+               opt_index_type_clause: $5,
+               table_name: $7,
+               key_list_with_expression: $9,
+               opt_index_options: Some($11),
+               opt_index_lock_and_algorithm: $12,
+           })
+      }
+    |
+      'CREATE' 'FULLTEXT' 'INDEX' ident 'ON' table_ident '(' key_list_with_expression ')'
+      opt_fulltext_index_options opt_index_lock_and_algorithm
+      {
+           CreateIndexStmt::FullTextIndex(CreateFullTextIndexStmt{
+               span: $span,
+               index_name: $4.0,
+               table_name: $6,
+               key_list_with_expression: $8,
+               opt_fulltext_index_options: Some($10),
+               opt_index_lock_and_algorithm: $11,
+           })
+      }
+    |
+      'CREATE' 'SPATIAL' 'INDEX' ident 'ON' table_ident '(' key_list_with_expression ')'
+      opt_spatial_index_options opt_index_lock_and_algorithm
+      {
+          CreateIndexStmt::SpatialIndex(CreateSpatialIndexStmt{
+               span: $span,
+               index_name: $4.0,
+               table_name: $6,
+               key_list_with_expression: $8,
+               opt_spatial_index_options: Some($10),
+               opt_index_lock_and_algorithm: $11,
+          })
+      }
+;
+
+opt_unique -> bool:
+       /* empty */          { false }
+     | 'UNIQUE'             { true }
+;
+
+opt_index_options -> Vec<IndexOption>:
+      /* empty */         { vec![] }
+    | index_options       { $1 }
+;
+
+index_options -> Vec<IndexOption>:
+      index_option
+      {
+            vec![$1]
+      }
+    | index_options index_option
+      {
+            $1.push($2);
+            $1
+      }
+;
+
+index_option -> IndexOption:
+      common_index_option
+      {
+           IndexOption::CommonIndexOption($1)
+      }
+    | index_type_clause
+      {
+           IndexOption::IndexTypeClause($1)
+      }
+;
+
+opt_fulltext_index_options -> Vec<FullTextIndexOption>:
+      /* empty */                  { vec![] }
+    | fulltext_index_options       { $1 }
+;
+
+fulltext_index_options -> Vec<FullTextIndexOption>:
+      fulltext_index_option
+      {
+           vec![$1]
+      }
+    | fulltext_index_options fulltext_index_option
+      {
+           $1.push($2);
+           $1
+      }
+;
+
+fulltext_index_option -> FullTextIndexOption:
+      common_index_option
+      {
+          FullTextIndexOption::CommonIndexOption($1)
+      }
+    | 'WITH' 'PARSER' IDENT_sys
+      {
+          FullTextIndexOption::WithParserIdent($3.0)
+      }
+;
+
+opt_index_type_clause -> Option<IndexTypeClause>:
+      /* empty */          { None }
+    | index_type_clause    { Some($1) }
+;
+
+index_type_clause -> IndexTypeClause:
+      'USING' index_type
+      {
+          IndexTypeClause {
+              span: $span,
+              index_type: $2,
+          }
+      }
+    | 'TYPE' index_type
+      {
+          IndexTypeClause {
+              span: $span,
+              index_type: $2,
+          }
+      }
+;
+
+index_type -> IndexType:
+      'BTREE'       { IndexType::Btree }
+    | 'RTREE'       { IndexType::Rtree }
+    | 'HASH'        { IndexType::Hash }
+;
+
+key_list_with_expression -> Vec<KeyPartWithExpression>:
+      key_list_with_expression ',' key_part_with_expression
+      {
+          $1.push($3);
+          $1
+      }
+    | key_part_with_expression
+      {
+          vec![$1]
+      }
+;
+
+key_part_with_expression -> KeyPartWithExpression:
+      key_part
+      {
+           KeyPartWithExpression::KeyPart($1)
+      }
+    | '(' expr ')' opt_ordering_direction
+      {
+           KeyPartWithExpression::OrderingDirection(OrderExpr {
+               span: $span,
+               expr: $2,
+               direction: $4
+           })
+      }
+;
+
+key_part -> KeyPart:
+      ident opt_ordering_direction
+      {
+           KeyPart {
+               span: $span,
+               ident: $1.0,
+               length: None,
+               direction: $2
+           }
+      }
+    | ident '(' NUM ')' opt_ordering_direction
+      {
+           let length = String::from($lexer.span_str($3.as_ref().unwrap().span()));
+           let length = length.parse::<u32>().unwrap();
+           KeyPart {
+               span: $span,
+               ident: $1.0,
+               length: Some(length),
+               direction: $5
+           }
+      }
+;
+
+opt_spatial_index_options -> Vec<SpatialIndexOption>:
+      /* empty */                  { vec![] }
+    | spatial_index_options        { $1 }
+;
+
+spatial_index_options -> Vec<SpatialIndexOption>:
+      spatial_index_option
+      {
+           vec![$1]
+      }
+    | spatial_index_options spatial_index_option
+      {
+           $1.push($2);
+           $1
+      }
+;
+
+spatial_index_option -> SpatialIndexOption:
+    common_index_option
+    {
+        SpatialIndexOption::CommonIndexOption($1)
+    }
+;
+
+common_index_option -> CommonIndexOption:
+      'KEY_BLOCK_SIZE' opt_equal ulong_num
+      {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          CommonIndexOption::KeyBlockSizeOption(KeyBlockSizeOption{
+              span: $span,
+              is_equal: is_equal,
+              ulong_num: $3,
+          })
+      }
+    | 'COMMENT' TEXT_STRING_sys
+      {
+          CommonIndexOption::CommentOption(CommentOption{
+              span: $span,
+              comment: $2,
+          })
+      }
+    | visibility
+      {
+          CommonIndexOption::Visibility($1)
+      }
+    | 'ENGINE_ATTRIBUTE' opt_equal json_attribute
+      {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          CommonIndexOption::AttributeOption(AttributeOption{
+              span: $span,
+              is_equal: is_equal,
+              attribute: $3,
+          })
+      }
+    | 'SECONDARY_ENGINE_ATTRIBUTE' opt_equal json_attribute
+      {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          CommonIndexOption::AttributeOption(AttributeOption{
+              span: $span,
+              is_equal: is_equal,
+              attribute: $3,
+          })
+      }
+;
+
+visibility -> Visibility:
+      'VISIBLE'       { Visibility::Visible }
+    | 'INVISIBLE'     { Visibility::Invisible }
+;
+
+json_attribute -> String:
+    TEXT_STRING_sys
+    {
+        $1
+    }
+;
+
+opt_index_lock_and_algorithm -> Option<IndexLockAndAlgorithm>:
+      /* empty */     { None }
+    | alter_lock_option
+      {
+          Some(IndexLockAndAlgorithm{
+              alter_lock_option: Some($1),
+              alter_algorithm_option: None,
+          })
+      }
+    | alter_algorithm_option
+      {
+          Some(IndexLockAndAlgorithm{
+               alter_lock_option: None,
+               alter_algorithm_option: Some($1),
+          })
+      }
+    | alter_lock_option alter_algorithm_option
+      {
+          Some(IndexLockAndAlgorithm{
+               alter_lock_option: Some($1),
+               alter_algorithm_option: Some($2),
+          })
+      }
+    | alter_algorithm_option alter_lock_option
+      {
+          Some(IndexLockAndAlgorithm{
+               alter_lock_option: Some($2),
+               alter_algorithm_option: Some($1),
+          })
+      }
+;
+
+alter_algorithm_option -> AlterAlgorithmOption:
+    'ALGORITHM' opt_equal alter_algorithm_option_value
+    {
+        let is_equal = match $2 {
+            Some(_) => true,
+            None => false,
+        };
+        AlterAlgorithmOption {
+            span: $span,
+            is_equal: is_equal,
+            alter_algorithm_option_value: $3,
+        }
+    }
+;
+
+alter_algorithm_option_value -> String:
+      'DEFAULT'
+      {
+          String::from("DEFAULT")
+      }
+    | ident
+      {
+          $1.0
+      }
+;
+
+alter_lock_option -> AlterLockOption:
+    'LOCK' opt_equal alter_lock_option_value
+    {
+        let is_equal = match $2 {
+            Some(_) => true,
+            None => false,
+        };
+        AlterLockOption {
+            span: $span,
+            is_equal: is_equal,
+            alter_lock_option_value: $3,
+        }
+    }
+;
+
+alter_lock_option_value -> String:
+      'DEFAULT'
+      {
+          String::from("DEFAULT")
+      }
+    | ident
+      {
+          $1.0
+      }
+;
+
 %%
 
 use lrpar::Span;
