@@ -108,6 +108,7 @@ impl RowDataCommon {
     }
 }
 
+// For ProtocolText::ResultsetRow
 #[derive(Debug, Clone)]
 pub struct RowDataText<T: Row> {
     common: RowDataCommon,
