@@ -153,7 +153,10 @@ pub trait BufExt: Buf {
     }
 }
 
-impl<T: AsRef<[u8]> + Buf> BufExt for T {}
+//impl<T: AsRef<[u8]> + Buf> BufExt for T {}
+impl BufExt for &[u8] {}
+
+impl BufExt for BytesMut {}
 
 pub trait BufMutExt: BufMut {
     fn put_lenc_int(&mut self, n: u64) {

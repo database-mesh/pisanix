@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::{
+    convert::From,
     ops::{Deref, DerefMut},
     pin::Pin,
     task::{Context, Poll},
@@ -37,7 +38,8 @@ use crate::{
     mysql_const::{
         CLIENT_PROTOCOL_41, CLIENT_SESSION_TRACK, CLIENT_TRANSACTIONS, SERVER_SESSION_STATE_CHANGED,
     },
-    util::{get_length, length_encode_int, length_encoded_string},
+    row::{Row, RowData, RowDataTyp},
+    util::{get_length, is_eof, length_encode_int, length_encoded_string},
 };
 
 pub type SendCommand<'a> = (u8, &'a str);
@@ -90,6 +92,10 @@ impl<'a> ResultsetStream<'a> {
 
         ResultsetStream { framed }
     }
+
+    pub fn is_binary(&self) -> bool {
+        self.framed.codec().is_binary
+    }
 }
 
 impl<'a> Stream for ResultsetStream<'a> {
@@ -114,6 +120,49 @@ impl<'a> Stream for ResultsetStream<'a> {
                     Poll::Pending
                 }
             }
+        }
+    }
+}
+
+#[pin_project]
+pub struct QueryResultStream<'a, T: Row> {
+    #[pin]
+    rs: ResultsetStream<'a>,
+    row_data: RowDataTyp<T>,
+}
+
+impl<'a, T: Row> QueryResultStream<'a, T> {
+    pub fn new(
+        rs: ResultsetStream<'a>,
+        row_data: RowDataTyp<T>,
+    ) -> Self {
+        QueryResultStream { rs, row_data }
+    }
+}
+
+impl<'a,  T: Row + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
+    type Item = Result<RowDataTyp<T>, ProtocolError>;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let me = self.project();
+
+        match me.rs.poll_next(cx) {
+            Poll::Ready(Some(Ok(mut data))) => {
+                if is_eof(&data) {
+                    return Poll::Ready(None);
+                }
+
+                let mut row_data = me.row_data.clone();
+                // Exclude header 4 bytes
+                data.advance(4);
+                row_data.with_buf(data.into());
+                Poll::Ready(Some(Ok(row_data)))
+            }
+
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+
+            Poll::Ready(None) => Poll::Ready(None),
+
+            Poll::Pending => Poll::Pending,
         }
     }
 }
