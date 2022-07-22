@@ -7169,7 +7169,7 @@ common_index_option -> CommonIndexOption:
       }
     | 'COMMENT' TEXT_STRING_sys
       {
-          CommonIndexOption::CommentOption(CommentOption{
+          CommonIndexOption::CommentOption(IndexCommentOption{
               span: $span,
               comment: $2,
           })

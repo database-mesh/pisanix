@@ -262,7 +262,7 @@ pub enum SpatialIndexOption {
 #[derive(Debug, Clone)]
 pub enum CommonIndexOption {
     KeyBlockSizeOption(KeyBlockSizeOption),
-    CommentOption(CommentOption),
+    CommentOption(IndexCommentOption),
     Visibility(Visibility),
     AttributeOption(AttributeOption),
 }
@@ -275,7 +275,7 @@ pub struct KeyBlockSizeOption {
 }
 
 #[derive(Debug, Clone)]
-pub struct CommentOption {
+pub struct IndexCommentOption {
     pub span: Span,
     pub comment: String,
 }
