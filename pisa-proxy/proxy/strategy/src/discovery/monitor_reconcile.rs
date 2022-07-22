@@ -12,26 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use std::sync::Arc;
-// use tokio::sync::Mutex;
-use std::{thread, time};
-
 use crossbeam_channel::unbounded;
 use endpoint::endpoint::Endpoint;
 
 use crate::{
     config::ReadWriteSplittingDynamic,
-    discovery::discovery::{Discovery, DiscoveryKind, DiscoveryMasterHighAvailability},
     readwritesplitting::ReadWriteEndpoint,
 };
 
 pub struct MonitorReconcile {
     config: crate::config::Discovery,
+    rw_endpoint: ReadWriteEndpoint,
 }
 
 impl MonitorReconcile {
     pub fn new(config: ReadWriteSplittingDynamic, rw_endpoint: ReadWriteEndpoint) -> Self {
-        MonitorReconcile { config: config.discovery }
+        MonitorReconcile { config: config.discovery, rw_endpoint}
     }
 
     pub fn start_monitor_reconcile(
@@ -43,8 +39,10 @@ impl MonitorReconcile {
         let tx = send.clone();
         let rx = recv.clone();
 
+        let rw_endpoint = self.rw_endpoint.clone();
+
         tokio::spawn(async move {
-            MonitorReconcile::report(tx, monitor_interval, monitor_channel).await;
+            MonitorReconcile::report(tx, monitor_interval, rw_endpoint, monitor_channel).await;
         });
 
         rx
@@ -53,6 +51,7 @@ impl MonitorReconcile {
     async fn report(
         s: crossbeam_channel::Sender<ReadWriteEndpoint>,
         monitor_interval: u64,
+        rw_endpoint: ReadWriteEndpoint,
         monitor_channel: crate::readwritesplitting::MonitorChannel,
     ) {
         tokio::task::spawn_blocking(move || loop {
@@ -131,7 +130,7 @@ impl MonitorReconcile {
                     println!("err >>> {:#?}", err);
                 }
 
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+                std::thread::sleep(std::time::Duration::from_millis(monitor_interval));
             }
         });
     }

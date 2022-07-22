@@ -193,12 +193,10 @@ impl ClientConn {
     }
 
     pub async fn send_ping(&mut self) -> Result<bool, ProtocolError> {
-        let framed = match self.framed.take().unwrap();
-
+        let framed = self.framed.take().unwrap();
         let mut common_codec = framed.into_common();
 
         common_codec.send((COM_PING, &[])).await?;
-
         let res = match common_codec.next().await {
             Some(Ok(data)) => {
                 if data.0[4] == OK_HEADER {
@@ -211,6 +209,7 @@ impl ClientConn {
 
             _ => Ok(false),
         };
+        
         self.framed = Some(Box::new(ClientCodec::Common(common_codec)));
         res
     }

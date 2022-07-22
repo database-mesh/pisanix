@@ -35,27 +35,28 @@ use crate::{
     Route, RouteInput,
 };
 
+
 pub struct ReadWriteSplittingDynamicBuilder;
 
 // define monitor channel
 #[derive(Debug, Clone)]
 pub struct MonitorChannel {
-    pub connect_tx: crossbeam_channel::Sender<crate::discovery::discovery::ConnectMonitorResponse>,
+    pub connect_tx: crossbeam_channel::Sender<crate::monitors::connect_monitor::ConnectMonitorResponse>,
     pub connect_rx:
-        crossbeam_channel::Receiver<crate::discovery::discovery::ConnectMonitorResponse>,
+        crossbeam_channel::Receiver<crate::monitors::connect_monitor::ConnectMonitorResponse>,
 
-    pub ping_tx: crossbeam_channel::Sender<crate::discovery::discovery::PingMonitorResponse>,
-    pub ping_rx: crossbeam_channel::Receiver<crate::discovery::discovery::PingMonitorResponse>,
+    pub ping_tx: crossbeam_channel::Sender<crate::monitors::ping_monitor::PingMonitorResponse>,
+    pub ping_rx: crossbeam_channel::Receiver<crate::monitors::ping_monitor::PingMonitorResponse>,
 
     pub replication_lag_tx:
-        crossbeam_channel::Sender<crate::discovery::discovery::ReplicationLagMonitorResponse>,
+        crossbeam_channel::Sender<crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse>,
     pub replication_lag_rx:
-        crossbeam_channel::Receiver<crate::discovery::discovery::ReplicationLagMonitorResponse>,
+        crossbeam_channel::Receiver<crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse>,
 
     pub read_only_tx:
-        crossbeam_channel::Sender<crate::discovery::discovery::ReadOnlyMonitorResponse>,
+        crossbeam_channel::Sender<crate::monitors::read_only_monitor::ReadOnlyMonitorResponse>,
     pub read_only_rx:
-        crossbeam_channel::Receiver<crate::discovery::discovery::ReadOnlyMonitorResponse>,
+        crossbeam_channel::Receiver<crate::monitors::read_only_monitor::ReadOnlyMonitorResponse>,
 }
 
 impl MonitorChannel {
@@ -108,6 +109,7 @@ impl ReadWriteSplittingDynamicBuilder {
 
                 let mut monitor_reconcile =
                     MonitorReconcile::new(config.clone(), rw_endpoint.clone());
+
                 reciver = Some(
                     monitor_reconcile.start_monitor_reconcile(cc.monitor_interval, monitor_channel),
                 );
