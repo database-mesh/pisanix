@@ -24,7 +24,7 @@ use tokio_util::codec::Framed;
 
 use super::{
     auth::{handshake, ClientAuth},
-    codec::{ClientCodec, CommonStream, ResultsetStream},
+    codec::{ClientCodec, CommonStream, QueryResultStream, ResultsetStream},
     resultset::ResultSendCommand,
     stmt::Stmt,
     stream::{LocalStream, StreamWrapper},
@@ -33,6 +33,7 @@ use crate::{
     column::{Column, ColumnInfo},
     err::ProtocolError,
     mysql_const::*,
+    row::{RowDataText, RowDataTyp},
     util::length_encode_int,
 };
 
@@ -233,7 +234,7 @@ impl ClientConn {
     pub async fn query_result<'a>(
         &'a mut self,
         val: &'a [u8],
-    ) -> Result<Option<(Arc<[ColumnInfo]>, ResultsetStream<'a>)>, ProtocolError> {
+    ) -> Result<Option<QueryResultStream<'a, BytesMut>>, ProtocolError> {
         let mut stream = self.send_query(val).await?;
 
         let header = match stream.next().await {
@@ -267,7 +268,15 @@ impl ClientConn {
 
         let arc_col_info: Arc<[ColumnInfo]> = col_info.into_boxed_slice().into();
 
-        Ok(Some((arc_col_info, stream)))
+        let is_binary = stream.is_binary();
+        match is_binary {
+            false => {
+                let row_data_text = RowDataText::new(arc_col_info, BytesMut::new());
+                let row_data = RowDataTyp::Text(row_data_text);
+                Ok(Some(QueryResultStream::new(stream, row_data)))
+            }
+            true => todo!(),
+        }
     }
 
     // Send query, but discard result
@@ -412,7 +421,7 @@ mod test {
     use conn_pool::*;
     use tokio_stream::StreamExt;
 
-    use crate::{client::conn::ClientConn, err::ProtocolError, row::RowData, util::is_eof};
+    use crate::{client::conn::ClientConn, err::ProtocolError, row::RowData};
 
     #[tokio::test]
     async fn pool() {
@@ -470,17 +479,9 @@ mod test {
         let query = "select user,host from mysql.user".as_bytes();
         let mut res = driver.query_result(query).await.unwrap().unwrap();
 
-        while let Some(mut data) = res.1.next().await {
-            if is_eof(&data.as_ref().unwrap()) {
-                break;
-            }
+        while let Some(data) = res.next().await {
+            let mut row = data.unwrap();
 
-            //let mut data = &data.as_mut().unwrap()[4..];
-            //let user = data.decode_row_with_idx::<String>(0);
-
-            //let host = data.decode_row_with_idx::<String>(0);
-
-            let mut row = RowData::new(res.0.clone(), &data.as_mut().unwrap()[4..]);
             let user = row.decode_with_name::<String>("user");
             let host = row.decode_with_name::<String>("host");
 

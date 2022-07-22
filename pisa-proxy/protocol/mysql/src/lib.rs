@@ -20,7 +20,8 @@ pub mod mysql_const;
 pub mod row;
 pub mod server;
 pub mod util;
-pub mod value;
+mod value;
+mod macros;
 
 #[macro_use]
 extern crate lazy_static;
