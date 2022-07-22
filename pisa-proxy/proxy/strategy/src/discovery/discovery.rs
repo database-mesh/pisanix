@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use conn_pool::{Pool, PoolConn};
-// use mysql_protocol::client::conn::ClientConn;
-
 use std::{collections::HashMap, sync::Arc};
 
 use conn_pool::Pool;
-// use tokio_stream::StreamExt;
 use futures::StreamExt;
 use mysql_protocol::{client::conn::ClientConn, util::*};
 use tokio::time::{self, Duration};
+use pisa_error::error::{Error, ErrorKind};
 
 use crate::{config::MasterHighAvailability, readwritesplitting::ReadWriteEndpoint};
 
@@ -41,7 +38,6 @@ pub trait Discovery {
 pub struct DiscoveryMasterHighAvailability {
     config: MasterHighAvailability,
     rw_endpoint: ReadWriteEndpoint,
-    pool: Pool<ClientConn>,
     pub monitors: Vec<MonitorKind>,
 }
 
@@ -50,9 +46,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
     type Output = Self;
 
     fn build(config: MasterHighAvailability, rw_endpoint: ReadWriteEndpoint) -> Self::Output {
-        // build conn pool for monitor
-        let pool = Pool::<ClientConn>::new(config.pool_size.unwrap_or(64).into());
-        Self { config, rw_endpoint, pool, monitors: vec![] }
+        Self { config, rw_endpoint, monitors: vec![] }
     }
 
     async fn run(&self, monitor_channel: crate::readwritesplitting::MonitorChannel) {
@@ -74,7 +68,6 @@ impl Discovery for DiscoveryMasterHighAvailability {
             self.config.ping_max_failures,
             monitor_channel.ping_tx,
             self.rw_endpoint.clone(),
-            self.pool.clone(),
         )));
         monitors.push(MonitorKind::Lag(MonitorReplicationLag::new(
             self.config.user.clone(),
@@ -85,7 +78,6 @@ impl Discovery for DiscoveryMasterHighAvailability {
             self.config.max_replication_lag,
             monitor_channel.replication_lag_tx,
             self.rw_endpoint.clone(),
-            self.pool.clone(),
         )));
         monitors.push(MonitorKind::ReadOnly(MonitorReadOnly::new(
             self.config.user.clone(),
@@ -95,7 +87,6 @@ impl Discovery for DiscoveryMasterHighAvailability {
             self.config.read_only_max_failures,
             monitor_channel.read_only_tx,
             self.rw_endpoint.clone(),
-            self.pool.clone(),
         )));
         for monitor in monitors {
             tokio::spawn(async move {
@@ -161,6 +152,20 @@ pub struct ConnectMonitorResponse {
     pub readwrite: HashMap<String, ConnectStatus>,
 }
 
+impl ConnectMonitorResponse {
+    fn new(rw_endpoint: ReadWriteEndpoint) -> Self {
+        let mut read = HashMap::new();
+        let mut readwrite = HashMap::new();
+        for r in rw_endpoint.read {
+            read.insert(r.addr, ConnectStatus::Disconnected);
+        }
+        for rw in rw_endpoint.readwrite {
+            readwrite.insert(rw.addr, ConnectStatus::Connected);
+        }
+        ConnectMonitorResponse { read, readwrite }
+    }
+}
+
 // define Connect Monitor
 impl MonitorConnect {
     fn new(
@@ -201,34 +206,48 @@ impl Monitor for MonitorConnect {
         let rw_endpoint = self.rw_endpoint.clone();
         let connect_tx = self.connect_tx.clone();
 
-        let mut response =
-            ConnectMonitorResponse { read: HashMap::new(), readwrite: HashMap::new() };
+        // build connect monitor message channel
+        let mut response = ConnectMonitorResponse::new(rw_endpoint.clone());
 
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
+                println!("connect check....");
                 // maybe connection will timeout
                 if let Err(_) = time::timeout(Duration::from_millis(connect_timeout), async {
                     // probe read endpoint
                     for read in rw_endpoint.clone().read {
                         let conn_res = MonitorConnect::connnect_check(read.addr.clone()).await;
                         match conn_res {
-                            ConnectStatus::Connected => {}
+                            ConnectStatus::Connected => {
+                                response.read.insert(read.addr.clone(), ConnectStatus::Connected);
+                            }
                             ConnectStatus::Disconnected => {
                                 // connect failures retry
                                 loop {
                                     if retries > connect_max_failures {
-                                        response.read.insert(read.addr.clone(), conn_res.clone());
-                                        retries = 0;
+                                        response
+                                            .read
+                                            .insert(read.addr.clone(), ConnectStatus::Disconnected);
+                                        retries = 1;
                                         break;
                                     } else {
                                         match MonitorConnect::connnect_check(read.addr.clone())
                                             .await
                                         {
                                             ConnectStatus::Disconnected => retries += 1,
-                                            ConnectStatus::Connected => break,
+                                            ConnectStatus::Connected => {
+                                                response.read.insert(
+                                                    read.addr.clone(),
+                                                    ConnectStatus::Connected,
+                                                );
+                                                break;
+                                            }
                                         }
                                     }
+                                    std::thread::sleep(std::time::Duration::from_millis(
+                                        connect_interval,
+                                    ));
                                 }
                             }
                         }
@@ -238,7 +257,11 @@ impl Monitor for MonitorConnect {
                     for readwrite in rw_endpoint.clone().readwrite {
                         let conn_res = MonitorConnect::connnect_check(readwrite.addr.clone()).await;
                         match conn_res {
-                            ConnectStatus::Connected => {}
+                            ConnectStatus::Connected => {
+                                response
+                                    .readwrite
+                                    .insert(readwrite.addr.clone(), ConnectStatus::Connected);
+                            }
                             ConnectStatus::Disconnected => loop {
                                 if retries > connect_max_failures {
                                     response
@@ -251,9 +274,18 @@ impl Monitor for MonitorConnect {
                                         .await
                                     {
                                         ConnectStatus::Disconnected => retries += 1,
-                                        ConnectStatus::Connected => break,
+                                        ConnectStatus::Connected => {
+                                            response.readwrite.insert(
+                                                readwrite.addr.clone(),
+                                                ConnectStatus::Connected,
+                                            );
+                                            break;
+                                        }
                                     }
                                 }
+                                std::thread::sleep(std::time::Duration::from_millis(
+                                    connect_interval,
+                                ));
                             },
                         }
                     }
@@ -263,14 +295,15 @@ impl Monitor for MonitorConnect {
                     // start connect max failures retry
                     if retries > connect_max_failures {
                         // after connect_max_failures retrying time send message to Monitor Reconcile
-                        connect_tx.send(response.clone()).unwrap();
+                        // connect_tx.send(response.clone()).unwrap();
                         retries = 1;
                     }
                     retries += 1;
                 }
 
-                // println!("check.....");
-                // connect_tx.send(response.clone()).unwrap();
+                if let Err(e) = connect_tx.send(response.clone()) {
+                    println!("{}", e);
+                }
 
                 // connect monitor probe interval
                 std::thread::sleep(std::time::Duration::from_millis(connect_interval));
@@ -288,13 +321,12 @@ pub struct MonitorPing {
     pub ping_max_failures: u64,
     pub ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
-    pool: Pool<ClientConn>,
 }
 
 #[derive(Debug, Clone)]
 pub enum PingStatus {
-    PingOk,
-    PingNotOk,
+    ping_ok,
+    ping_not_ok,
 }
 
 #[derive(Debug, Clone)]
@@ -302,6 +334,22 @@ pub struct PingMonitorResponse {
     pub read: HashMap<String, PingStatus>,
     pub readwrite: HashMap<String, PingStatus>,
 }
+
+impl PingMonitorResponse {
+    fn new(rw_endpoint: ReadWriteEndpoint) -> Self {
+        let mut read = HashMap::new();
+        let mut readwrite = HashMap::new();
+        for r in rw_endpoint.read {
+            read.insert(r.addr, PingStatus::ping_not_ok);
+        }
+        for rw in rw_endpoint.readwrite {
+            readwrite.insert(rw.addr, PingStatus::ping_not_ok);
+        }
+        PingMonitorResponse { read, readwrite }
+    }
+}
+
+
 
 impl MonitorPing {
     fn new(
@@ -312,7 +360,6 @@ impl MonitorPing {
         ping_max_failures: u64,
         ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
-        pool: Pool<ClientConn>,
     ) -> Self {
         MonitorPing {
             user,
@@ -322,7 +369,6 @@ impl MonitorPing {
             ping_max_failures,
             ping_tx,
             rw_endpoint,
-            pool,
         }
     }
 
@@ -330,21 +376,26 @@ impl MonitorPing {
         user: String,
         password: String,
         addr: String,
-        mut pool: Pool<ClientConn>,
-    ) -> PingStatus {
+    ) -> Result<PingStatus, Error> {
+       
         let factory = ClientConn::with_opts(user, password, addr.clone());
-        pool.set_factory(factory);
-        let mut client_conn = pool.get_conn_with_endpoint(&addr).await.unwrap();
+        let mut client_conn = match factory.connect().await {
+            Ok(client_conn) => client_conn,
+            Err(_) => return Ok(PingStatus::ping_not_ok),
+        };
+
         match client_conn.send_ping().await {
-            Ok(data) => {
-                if is_ok(&data.0) {
-                    PingStatus::PingOk
+            Ok(ping_ok) => {
+                if ping_ok {
+                    return Ok(PingStatus::ping_ok);
                 } else {
-                    PingStatus::PingNotOk
+                    return Ok(PingStatus::ping_not_ok);
                 }
             }
-            Err(_) => PingStatus::PingNotOk,
+            Err(_) => {
+                return Ok(PingStatus::ping_not_ok)},
         }
+       
     }
 }
 
@@ -358,49 +409,102 @@ impl Monitor for MonitorPing {
         let ping_max_failures = self.ping_max_failures;
         let rw_endpoint = self.rw_endpoint.clone();
         let ping_tx = self.ping_tx.clone();
-        let pool = self.pool.clone();
 
-        let mut response = PingMonitorResponse { read: HashMap::new(), readwrite: HashMap::new() };
+        let mut response = PingMonitorResponse::new(rw_endpoint.clone());
+
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
+            
                 if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                     for read in rw_endpoint.clone().read {
                         match MonitorPing::ping_check(
                             user.clone(),
                             password.clone(),
                             read.addr.clone(),
-                            pool.clone(),
                         )
                         .await
                         {
-                            PingStatus::PingOk => {
-                                response.read.insert(read.addr, PingStatus::PingOk);
-                            }
-                            PingStatus::PingNotOk => loop {
-                                if retries > ping_max_failures {
-                                    response.read.insert(read.addr.clone(), PingStatus::PingNotOk);
-                                } else {
-                                    match MonitorPing::ping_check(
-                                        user.clone(),
-                                        password.clone(),
-                                        read.addr.clone(),
-                                        pool.clone(),
-                                    )
-                                    .await
-                                    {
-                                        PingStatus::PingOk => {
-                                            response
-                                                .read
-                                                .insert(read.addr.clone(), PingStatus::PingOk);
-                                            break;
-                                        }
-                                        PingStatus::PingNotOk => {
-                                            retries += 1;
+                            Ok(ping_status) => match ping_status {
+                                PingStatus::ping_ok => {
+                                    response.read.insert(read.addr, PingStatus::ping_ok);
+                                }
+                                PingStatus::ping_not_ok => loop {
+                                    if retries > ping_max_failures {
+                                        response
+                                            .read
+                                            .insert(read.addr.clone(), PingStatus::ping_not_ok);
+                                        retries = 1;
+                                        break;
+                                    } else {
+                                        match MonitorPing::ping_check(
+                                            user.clone(),
+                                            password.clone(),
+                                            read.addr.clone(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(ping_status) => match ping_status {
+                                                PingStatus::ping_ok => {
+                                                    response.read.insert(
+                                                        read.addr.clone(),
+                                                        PingStatus::ping_ok,
+                                                    );
+                                                    retries = 1;
+                                                    break;
+                                                }
+                                                PingStatus::ping_not_ok => {
+                                                    retries += 1;
+                                                }
+                                            },
+                                            Err(_) => { 
+                                                retries += 1
+                                            },
                                         }
                                     }
-                                }
+                                    std::thread::sleep(std::time::Duration::from_millis(
+                                        ping_interval,
+                                    ));
+                                },
                             },
+                            Err(_) => {
+                                loop {
+                                    if retries > ping_max_failures {
+                                        response
+                                            .read
+                                            .insert(read.addr.clone(), PingStatus::ping_not_ok);
+                                        retries = 1;
+                                        break;
+                                    } else {
+                                        match MonitorPing::ping_check(
+                                            user.clone(),
+                                            password.clone(),
+                                            read.addr.clone(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(ping_status) => match ping_status {
+                                                PingStatus::ping_ok => {
+                                                    response.read.insert(
+                                                        read.addr.clone(),
+                                                        PingStatus::ping_ok,
+                                                    );
+                                                    break;
+                                                }
+                                                PingStatus::ping_not_ok => {
+                                                    retries += 1;
+                                                }
+                                            },
+                                            Err(_) => {
+                                                retries += 1
+                                            },
+                                        }
+                                    }
+                                    std::thread::sleep(std::time::Duration::from_millis(
+                                        ping_interval,
+                                    ));
+                                }
+                            }
                         }
                     }
 
@@ -409,39 +513,55 @@ impl Monitor for MonitorPing {
                             user.clone(),
                             password.clone(),
                             readwrite.addr.clone(),
-                            pool.clone(),
                         )
                         .await
                         {
-                            PingStatus::PingOk => {
-                                response.read.insert(readwrite.addr, PingStatus::PingOk);
-                            }
-                            PingStatus::PingNotOk => loop {
-                                if retries > ping_max_failures {
-                                    response
-                                        .read
-                                        .insert(readwrite.addr.clone(), PingStatus::PingNotOk);
-                                } else {
-                                    match MonitorPing::ping_check(
-                                        user.clone(),
-                                        password.clone(),
-                                        readwrite.addr.clone(),
-                                        pool.clone(),
-                                    )
-                                    .await
-                                    {
-                                        PingStatus::PingOk => {
-                                            response
-                                                .read
-                                                .insert(readwrite.addr.clone(), PingStatus::PingOk);
-                                            break;
-                                        }
-                                        PingStatus::PingNotOk => {
-                                            retries += 1;
+                            Ok(ping_status) => match ping_status {
+                                PingStatus::ping_ok => {
+                                    response.readwrite.insert(readwrite.addr, PingStatus::ping_ok);
+                                }
+                                PingStatus::ping_not_ok => loop {
+                                    if retries > ping_max_failures {
+                                        response.readwrite.insert(
+                                            readwrite.addr.clone(),
+                                            PingStatus::ping_not_ok,
+                                        );
+                                    } else {
+                                        match MonitorPing::ping_check(
+                                            user.clone(),
+                                            password.clone(),
+                                            readwrite.addr.clone(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(ping_status) => match ping_status {
+                                                PingStatus::ping_ok => {
+                                                    response.readwrite.insert(
+                                                        readwrite.addr.clone(),
+                                                        PingStatus::ping_ok,
+                                                    );
+                                                    break;
+                                                }
+                                                PingStatus::ping_not_ok => {
+                                                    retries += 1;
+                                                }
+                                            },
+                                            Err(_) => {
+                                                response.readwrite.insert(
+                                                    readwrite.addr.clone(),
+                                                    PingStatus::ping_not_ok,
+                                                );
+                                            }
                                         }
                                     }
-                                }
+                                    std::thread::sleep(std::time::Duration::from_millis(
+                                        ping_interval,
+                                    ));
+                                },
                             },
+                            Err(_) => {
+                                continue;
+                            }
                         }
                     }
                 })
@@ -449,11 +569,15 @@ impl Monitor for MonitorPing {
                 {
                     if retries > ping_max_failures {
                         // after ping_max_failures retrying time send message to Monitor Reconcile
-                        ping_tx.send(response.clone()).unwrap();
                         retries = 1;
                     }
                     retries += 1;
                 }
+
+                if let Err(e) = ping_tx.send(response.clone()) {
+                    // println!(">>>>>> {:#?}", e);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(ping_interval));
             }
         });
     }
@@ -469,7 +593,6 @@ pub struct MonitorReplicationLag {
     pub max_replication_lag: u64,
     pub replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
-    pool: Pool<ClientConn>,
 }
 
 impl MonitorReplicationLag {
@@ -482,7 +605,6 @@ impl MonitorReplicationLag {
         max_replication_lag: u64,
         replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
-        pool: Pool<ClientConn>,
     ) -> Self {
         MonitorReplicationLag {
             user,
@@ -493,7 +615,6 @@ impl MonitorReplicationLag {
             max_replication_lag,
             replication_lag_tx,
             rw_endpoint,
-            pool,
         }
     }
 
@@ -501,13 +622,15 @@ impl MonitorReplicationLag {
         user: String,
         password: String,
         addr: String,
-        mut pool: Pool<ClientConn>,
-    ) -> Option<u64> {
+    ) -> Result<Option<u64>, Error> {
         let mut reasponse_replication_lag: Option<u64> = None;
 
         let factory = ClientConn::with_opts(user, password, addr.clone());
-        pool.set_factory(factory);
-        let mut client_conn = pool.get_conn_with_endpoint(&addr).await.unwrap();
+        let mut client_conn = match factory.connect().await {
+            Ok(client_conn) => client_conn,
+            Err(e) => return Err(Error::new(ErrorKind::Protocol(e))),
+        };
+
         let mut res =
             client_conn.query_result("show slave status".as_bytes()).await.unwrap().unwrap();
 
@@ -524,8 +647,8 @@ impl MonitorReplicationLag {
                 None => {}
             }
         }
-        println!("replication lag >>> {:#?}", reasponse_replication_lag);
-        reasponse_replication_lag
+        // println!("replication lag >>> {:#?}", reasponse_replication_lag);
+        Ok(reasponse_replication_lag)
     }
 }
 
@@ -541,6 +664,19 @@ pub struct ReplicationLagMonitorResponse {
     latency: HashMap<String, ReplicationLagResponseInner>,
 }
 
+impl ReplicationLagMonitorResponse {
+    fn new(rw_endpoint: ReadWriteEndpoint) -> Self {
+        let mut latency = HashMap::new();
+
+        for r in rw_endpoint.read {
+            let inner = ReplicationLagResponseInner { lag: 0, is_latency: true };
+            latency.insert(r.addr.clone(), inner);
+        }
+
+        ReplicationLagMonitorResponse { latency }
+    }
+}
+
 #[async_trait::async_trait]
 impl Monitor for MonitorReplicationLag {
     async fn run_check(&self) {
@@ -553,8 +689,7 @@ impl Monitor for MonitorReplicationLag {
         let replication_lag_tx = self.replication_lag_tx.clone();
         // customer define threshold
         let max_replication_lag = self.max_replication_lag;
-        let pool = self.pool.clone();
-        let mut response = ReplicationLagMonitorResponse { latency: HashMap::new() };
+        let mut response = ReplicationLagMonitorResponse::new(rw_endpoint.clone());
 
         tokio::spawn(async move {
             let mut retries = 1;
@@ -568,18 +703,62 @@ impl Monitor for MonitorReplicationLag {
                                 user.clone(),
                                 password.clone(),
                                 read.addr.clone(),
-                                pool.clone(),
                             )
                             .await
                             {
-                                Some(lag) => {
-                                    if lag > max_replication_lag {
-                                        loop {
+                                Ok(lag) => {
+                                    match lag {
+                                        Some(lag) => {
+                                            if lag > max_replication_lag {
+                                                loop {
+                                                    if retries > replication_lag_max_failures {
+                                                        response.latency.insert(
+                                                            read.addr.clone(),
+                                                            ReplicationLagResponseInner {
+                                                                lag,
+                                                                is_latency: true,
+                                                            },
+                                                        );
+                                                        retries = 1;
+                                                    } else {
+                                                        match MonitorReplicationLag::replication_lag_check(
+                                                            user.clone(),
+                                                            password.clone(),
+                                                            read.addr.clone(),
+                                                        )
+                                                        .await
+                                                        {
+                                                            Ok(lag) => {
+                                                                match lag {
+                                                                    Some(lag) => {
+                                                                        if lag > max_replication_lag {
+                                                                            retries += 1;
+                                                                        }
+                                                                    }
+                                                                    None => {
+                                                                        retries += 1;
+                                                                    }
+                                                                }
+                                                            },
+                                                            Err(_) => {
+                                                                retries += 1;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                response.latency.insert(
+                                                    read.addr,
+                                                    ReplicationLagResponseInner { lag, is_latency: false },
+                                                );
+                                            }
+                                        }
+                                        None => loop {
                                             if retries > replication_lag_max_failures {
                                                 response.latency.insert(
                                                     read.addr.clone(),
                                                     ReplicationLagResponseInner {
-                                                        lag,
+                                                        lag: 0,
                                                         is_latency: true,
                                                     },
                                                 );
@@ -589,58 +768,32 @@ impl Monitor for MonitorReplicationLag {
                                                     user.clone(),
                                                     password.clone(),
                                                     read.addr.clone(),
-                                                    pool.clone(),
                                                 )
                                                 .await
                                                 {
-                                                    Some(lag) => {
-                                                        if lag > max_replication_lag {
-                                                            retries += 1;
-                                                        }
-                                                    }
-                                                    None => {
-                                                        retries += 1;
-                                                    }
+                                                   Ok(lag) => {
+                                                       match lag {
+                                                            Some(lag) => {
+                                                                if lag > max_replication_lag {
+                                                                    retries += 1;
+                                                                }
+                                                            }
+                                                            None => {
+                                                                retries += 1;
+                                                            }
+                                                       }
+                                                   },
+                                                   Err(_) => {
+                                                       retries += 1;
+                                                   }
                                                 }
                                             }
-                                        }
-                                    } else {
-                                        response.latency.insert(
-                                            read.addr,
-                                            ReplicationLagResponseInner { lag, is_latency: false },
-                                        );
+                                        },
                                     }
                                 }
-                                None => loop {
-                                    if retries > replication_lag_max_failures {
-                                        response.latency.insert(
-                                            read.addr.clone(),
-                                            ReplicationLagResponseInner {
-                                                lag: 0,
-                                                is_latency: true,
-                                            },
-                                        );
-                                        retries = 1;
-                                    } else {
-                                        match MonitorReplicationLag::replication_lag_check(
-                                            user.clone(),
-                                            password.clone(),
-                                            read.addr.clone(),
-                                            pool.clone(),
-                                        )
-                                        .await
-                                        {
-                                            Some(lag) => {
-                                                if lag > max_replication_lag {
-                                                    retries += 1;
-                                                }
-                                            }
-                                            None => {
-                                                retries += 1;
-                                            }
-                                        }
-                                    }
-                                },
+                                Err(e) => {
+
+                                }
                             }
                         }
                     })
@@ -649,12 +802,11 @@ impl Monitor for MonitorReplicationLag {
                     // start connect max failures retry
                     if retries > replication_lag_max_failures {
                         // after connect_max_failures retrying time send message to Monitor Reconcile
-                        replication_lag_tx.send(response.clone()).unwrap();
                         retries = 1;
                     }
                     retries += 1;
                 }
-
+                replication_lag_tx.send(response.clone()).unwrap();
                 std::thread::sleep(time::Duration::from_millis(reaplication_lag_interval));
             }
         });
@@ -670,13 +822,26 @@ pub struct MonitorReadOnly {
     pub read_only_max_failures: u64,
     pub read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
-    pool: Pool<ClientConn>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ReadOnlyMonitorResponse {
     read: HashMap<String, String>,
     readwrite: HashMap<String, String>,
+}
+
+impl ReadOnlyMonitorResponse {
+    fn new(rw_endpoint: ReadWriteEndpoint) -> Self {
+        let mut read = HashMap::new();
+        let mut readwrite = HashMap::new();
+        for r in rw_endpoint.read {
+            read.insert(r.addr, String::from("OFF"));
+        }
+        for rw in rw_endpoint.readwrite {
+            readwrite.insert(rw.addr, String::from("OFF"));
+        }
+        ReadOnlyMonitorResponse { read, readwrite }
+    }
 }
 
 impl MonitorReadOnly {
@@ -688,7 +853,6 @@ impl MonitorReadOnly {
         read_only_max_failures: u64,
         read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
-        pool: Pool<ClientConn>,
     ) -> Self {
         MonitorReadOnly {
             user,
@@ -698,7 +862,6 @@ impl MonitorReadOnly {
             read_only_max_failures,
             read_only_tx,
             rw_endpoint,
-            pool,
         }
     }
 
@@ -707,15 +870,16 @@ impl MonitorReadOnly {
         user: String,
         password: String,
         addr: String,
-        mut pool: Pool<ClientConn>,
-    ) -> Option<String> {
+    ) -> Result<Option<String>, Error> {
+        println!("read only check....");
         let mut res_read_only_status: Option<String> = None;
 
         let factory = ClientConn::with_opts(user, password, addr.clone());
+        let mut client_conn = match factory.connect().await {
+            Ok(client_conn) => client_conn,
+            Err(e) => return Err(Error::new(ErrorKind::Protocol(e))),
+        };
 
-        pool.set_factory(factory);
-
-        let mut client_conn = pool.get_conn_with_endpoint(&addr).await.unwrap();
         let mut res = client_conn
             .query_result("SHOW VARIABLES LIKE 'read_only'".as_bytes())
             .await
@@ -734,7 +898,7 @@ impl MonitorReadOnly {
                 res_read_only_status = Some(read_only_values);
             }
         }
-        res_read_only_status
+        Ok(res_read_only_status)
     }
 }
 
@@ -743,15 +907,13 @@ impl Monitor for MonitorReadOnly {
     async fn run_check(&self) {
         let user = self.user.clone();
         let password = self.password.clone();
-        let pool = self.pool.clone();
         let rw_endpoint = self.rw_endpoint.clone();
         let read_only_interval = self.read_only_interval.clone();
         let read_only_timeout = self.read_only_timeout;
         let read_only_max_failures = self.read_only_max_failures;
         let read_only_tx = self.read_only_tx.clone();
 
-        let mut response =
-            ReadOnlyMonitorResponse { read: HashMap::new(), readwrite: HashMap::new() };
+        let mut response = ReadOnlyMonitorResponse::new(rw_endpoint.clone());
 
         tokio::spawn(async move {
             let mut retries = 1;
@@ -764,14 +926,20 @@ impl Monitor for MonitorReadOnly {
                             user.clone(),
                             password.clone(),
                             read.addr.clone(),
-                            pool.clone(),
                         )
                         .await
                         {
-                            Some(read_only_status) => {
-                                response.read.insert(read.addr, read_only_status).unwrap();
+                            Ok(read_only_status) => {
+                                match read_only_status {
+                                    Some(read_only_status) => {
+                                        response.read.insert(read.addr, read_only_status);
+                                    }
+                                    None => {
+                                        continue;
+                                    }
+                                }
                             }
-                            None => {
+                            Err(_) => {
                                 continue;
                             }
                         }
@@ -783,17 +951,20 @@ impl Monitor for MonitorReadOnly {
                             user.clone(),
                             password.clone(),
                             readwrite.addr.clone(),
-                            pool.clone(),
                         )
                         .await
                         {
-                            Some(read_only_status) => {
-                                response
-                                    .readwrite
-                                    .insert(readwrite.addr, read_only_status)
-                                    .unwrap();
-                            }
-                            None => {
+                            Ok(read_only_status) => {
+                                match read_only_status {
+                                    Some(read_only_status) => {
+                                        response.readwrite.insert(readwrite.addr, read_only_status);
+                                    }
+                                    None => {
+                                        continue;
+                                    }
+                                }
+                            },
+                            Err(_) => {
                                 continue;
                             }
                         }
@@ -801,13 +972,19 @@ impl Monitor for MonitorReadOnly {
                 })
                 .await
                 {
-                    if retries > read_only_max_failures {
-                        read_only_tx.send(response.clone()).unwrap();
-                        retries = 1;
+                    loop {
+                        if retries > read_only_max_failures {
+                            retries = 1;
+                            break;
+                        }
+                        retries += 1;
+                        std::thread::sleep(time::Duration::from_millis(read_only_interval));
                     }
-                    retries += 1;
                 }
 
+                if let Err(e) = read_only_tx.send(response.clone()) {
+                    println!("{}", e);
+                }
                 std::thread::sleep(time::Duration::from_millis(read_only_interval));
             }
         });

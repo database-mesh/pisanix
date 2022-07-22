@@ -17,3 +17,4 @@ loadbalance = { path = "../loadbalance" }
 endpoint = { path = "../endpoint" }
 conn_pool = { path = "../../proxy/pool" }
 mysql_protocol = {path = "../../protocol/mysql", package = "mysql_protocol"}
+pisa_error = {path = "../../error", package = "error"}

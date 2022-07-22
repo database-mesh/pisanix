@@ -14,13 +14,11 @@
 
 use std::{error::Error, ops::Deref, sync::Arc, thread, time};
 
-use crossbeam_channel::{unbounded, Select};
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
 use regex::Regex;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
-// use crate::discovery::discovery::Discovery;
 use super::ReadWriteEndpoint;
 use crate::{
     config::{ReadWriteSplittingRule, RegexRule, TargetRole},

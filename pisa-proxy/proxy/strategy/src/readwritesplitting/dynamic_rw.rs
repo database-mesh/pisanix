@@ -18,7 +18,7 @@ use crossbeam_channel::unbounded;
 use endpoint::endpoint::Endpoint;
 use futures::executor::block_on;
 use loadbalance::balance::LoadBalance;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
 use super::{
     rule_match::{RulesMatch, RulesMatchBuilder},
@@ -92,13 +92,13 @@ impl ReadWriteSplittingDynamicBuilder {
         let monitor_channel = MonitorChannel::build();
 
         let mut reciver: Option<crossbeam_channel::Receiver<ReadWriteEndpoint>> = None;
+
         // Match discovery type
         match config.clone().discovery {
             // Use Master High Availability Discovery
             crate::config::Discovery::Mha(cc) => {
                 let discovery_mha =
                     DiscoveryMasterHighAvailability::build(cc.clone(), rw_endpoint.clone());
-                // discovery_mha.register_monitor();
 
                 tokio_scoped::scope(|scope| {
                     scope.spawn(async {
@@ -106,14 +106,11 @@ impl ReadWriteSplittingDynamicBuilder {
                     });
                 });
 
-                // discovery_mha.run();
                 let mut monitor_reconcile =
                     MonitorReconcile::new(config.clone(), rw_endpoint.clone());
                 reciver = Some(
                     monitor_reconcile.start_monitor_reconcile(cc.monitor_interval, monitor_channel),
                 );
-
-                // DiscoveryKind::MasterHighAvailability(discovery_mha);
             }
         };
 

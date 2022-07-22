@@ -56,11 +56,20 @@ impl MonitorReconcile {
         monitor_channel: crate::readwritesplitting::MonitorChannel,
     ) {
         tokio::task::spawn_blocking(move || loop {
-            //TODO compute from 4 monitors
             loop {
                 let connect_monitor_response = monitor_channel.connect_rx.recv().unwrap();
-                // println!("connect monitor channel : {:#?}", aa);
+                println!("connect ....>>>>>>>>>>>> {:#?}", connect_monitor_response);
+                // match monitor_channel.ping_rx.try_recv() {
+                //     Ok(ping_monitor_response) => println!("{:#?}", ping_monitor_response),
+                //     Err(e) => println!("{}", e),
+                // }
 
+                // let replication_lag_response = monitor_channel.replication_lag_rx.recv().unwrap();
+                // println!("{:#?}", replication_lag_response);
+                // let read_only_response = monitor_channel.read_only_rx.recv().unwrap();
+                // println!("{:#?}", read_only_response);
+
+                // println!("{:#?}", read_only_response);
                 // let send_msg = match connect_monitor_response.read.get("127.0.0.1:3306").unwrap() {
                 //     crate::discovery::discovery::ConnectStatus::Disconnected => ReadWriteEndpoint {
                 //         read: vec![Endpoint {
@@ -121,8 +130,8 @@ impl MonitorReconcile {
                 if let Err(err) = s.try_send(send_msg) {
                     println!("err >>> {:#?}", err);
                 }
-                let ten_millis = time::Duration::from_millis(1000);
-                thread::sleep(ten_millis);
+
+                std::thread::sleep(std::time::Duration::from_millis(1000));
             }
         });
     }

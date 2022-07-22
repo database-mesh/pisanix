@@ -44,19 +44,19 @@ type = "mha"
 user = "root"
 password = "12345678"
 pool_size = 16
-monitor_interval = 10000
-connect_interval = 10000
+monitor_interval = 1000
+connect_interval = 1000
 connect_timeout = 200
 connect_max_failures = 3
 ping_interval = 1000
-ping_timeout = 100
+ping_timeout = 1000
 ping_max_failures = 3
 replication_lag_interval = 1000
-replication_lag_timeout = 3
+replication_lag_timeout = 3000
 replication_lag_max_failures = 3
 max_replication_lag = 3
 read_only_interval = 1000
-read_only_timeout = 3
+read_only_timeout = 3000
 read_only_max_failures = 3
 
 [[proxy.config.read_write_splitting.dynamic.rule]]

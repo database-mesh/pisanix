@@ -3177,6 +3177,7 @@ dependencies = [
  "conn_pool",
  "crossbeam-channel",
  "endpoint",
+ "error",
  "futures",
  "loadbalance",
  "mysql_protocol",
