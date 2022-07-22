@@ -157,6 +157,8 @@ mod test {
             "SHOW GRANTS FOR 'u1'@'localhost';",
             "SHOW GRANTS FOR 'u1'@'localhost' USING 'r1';",
             "SHOW GRANTS FOR 'u1'@'localhost' USING 'r1', 'r2';",
+            "CREATE LOGFILE GROUP logfile_group ADD UNDOFILE 'undo_file' INITIAL_SIZE = 1M UNDO_BUFFER_SIZE = 2M REDO_BUFFER_SIZE = 3M;",
+            "CREATE LOGFILE GROUP logfile_group ADD UNDOFILE 'undo_file' NODEGROUP 1234, WAIT, COMMENT 'logfile_group_comment', ENGINE  = 'logfile_group_engine';",
         ];
 
         let p = Parser::new();
