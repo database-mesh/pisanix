@@ -1355,37 +1355,6 @@ impl Visitor for WindowSpec {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct OrderExpr {
-    pub span: Span,
-    pub expr: Expr,
-    pub direction: Option<String>,
-}
-
-impl OrderExpr {
-    pub fn format(&self) -> String {
-        let mut order = Vec::with_capacity(2);
-
-        order.push(self.expr.format());
-
-        if let Some(direct) = &self.direction {
-            order.push(direct.to_string())
-        }
-
-        order.join(" ")
-    }
-}
-
-impl Visitor for OrderExpr {
-    fn visit<T: Transformer>(&mut self, tf: &mut T) -> Self {
-        let mut node_expr = Node::Expr(self.expr.clone());
-        tf.trans(&mut node_expr);
-        let mut new_node_expr = node_expr.into_expr().unwrap();
-        self.expr = new_node_expr.visit(tf);
-        self.clone()
-    }
-}
-
 // `WindowFrameClause` struct unused yet
 #[derive(Debug, Clone)]
 pub struct WindowFrameClause {

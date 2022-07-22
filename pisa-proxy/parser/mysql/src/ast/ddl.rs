@@ -188,3 +188,140 @@ pub enum SpCChistic {
     Deterministic,
     NotDeterministic,
 }
+
+#[derive(Debug, Clone)]
+pub enum CreateIndexStmt {
+    CommonIndex(CreateCommonIndexStmt),
+    FullTextIndex(CreateFullTextIndexStmt),
+    SpatialIndex(CreateSpatialIndexStmt),
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateCommonIndexStmt {
+    pub span: Span,
+    pub opt_unique: bool,
+    pub index_name: String,
+    pub opt_index_type_clause: Option<IndexTypeClause>,
+    pub table_name: String,
+    pub key_list_with_expression: Vec<KeyPartWithExpression>,
+    pub opt_index_options: Option<Vec<IndexOption>>,
+    pub opt_index_lock_and_algorithm: Option<IndexLockAndAlgorithm>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateFullTextIndexStmt {
+    pub span: Span,
+    pub index_name: String,
+    pub table_name: String,
+    pub key_list_with_expression: Vec<KeyPartWithExpression>,
+    pub opt_fulltext_index_options: Option<Vec<FullTextIndexOption>>,
+    pub opt_index_lock_and_algorithm: Option<IndexLockAndAlgorithm>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateSpatialIndexStmt {
+    pub span: Span,
+    pub index_name: String,
+    pub table_name: String,
+    pub key_list_with_expression: Vec<KeyPartWithExpression>,
+    pub opt_spatial_index_options: Option<Vec<SpatialIndexOption>>,
+    pub opt_index_lock_and_algorithm: Option<IndexLockAndAlgorithm>,
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexTypeClause {
+    pub span: Span,
+    pub index_type: IndexType,
+}
+
+#[derive(Debug, Clone)]
+pub enum IndexType {
+    Btree,
+    Rtree,
+    Hash,
+}
+
+#[derive(Debug, Clone)]
+pub enum IndexOption {
+    CommonIndexOption(CommonIndexOption),
+    IndexTypeClause(IndexTypeClause),
+}
+
+#[derive(Debug, Clone)]
+pub enum FullTextIndexOption {
+    CommonIndexOption(CommonIndexOption),
+    WithParserIdent(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum SpatialIndexOption {
+    CommonIndexOption(CommonIndexOption),
+}
+
+#[derive(Debug, Clone)]
+pub enum CommonIndexOption {
+    KeyBlockSizeOption(KeyBlockSizeOption),
+    CommentOption(CommentOption),
+    Visibility(Visibility),
+    AttributeOption(AttributeOption),
+}
+
+#[derive(Debug, Clone)]
+pub struct KeyBlockSizeOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub ulong_num: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CommentOption {
+    pub span: Span,
+    pub comment: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum Visibility {
+    Visible,
+    Invisible,
+}
+
+#[derive(Debug, Clone)]
+pub struct AttributeOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub attribute: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexLockAndAlgorithm {
+    pub alter_lock_option: Option<AlterLockOption>,
+    pub alter_algorithm_option: Option<AlterAlgorithmOption>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AlterLockOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub alter_lock_option_value: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AlterAlgorithmOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub alter_algorithm_option_value: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum KeyPartWithExpression {
+    KeyPart(KeyPart),
+    OrderingDirection(OrderExpr),
+}
+
+#[derive(Debug, Clone)]
+pub struct KeyPart {
+    pub span: Span,
+    pub ident: String,
+    pub length: Option<u32>,
+    pub direction: Option<String>,
+}
