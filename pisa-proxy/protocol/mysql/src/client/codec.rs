@@ -132,15 +132,12 @@ pub struct QueryResultStream<'a, T: Row> {
 }
 
 impl<'a, T: Row> QueryResultStream<'a, T> {
-    pub fn new(
-        rs: ResultsetStream<'a>,
-        row_data: RowDataTyp<T>,
-    ) -> Self {
+    pub fn new(rs: ResultsetStream<'a>, row_data: RowDataTyp<T>) -> Self {
         QueryResultStream { rs, row_data }
     }
 }
 
-impl<'a,  T: Row + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
+impl<'a, T: Row + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
     type Item = Result<RowDataTyp<T>, ProtocolError>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();

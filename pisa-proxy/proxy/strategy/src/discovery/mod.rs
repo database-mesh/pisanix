@@ -12,21 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_export]
-macro_rules! gen_row_data {
-    ($name:ident, $($var:ident($ty:ty)),*) => {
-        impl<T: Row> RowData<T> for RowDataTyp<T> {
-            fn with_buf(&mut self, buf: T)  {
-                match self {
-                    $($name::$var(x) => x.with_buf(buf),)*
-                }
-            }
-
-            fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
-                match self {
-                    $($name::$var(x) => x.decode_with_name(name),)*
-                }
-            }
-        }
-    }
-}
+pub mod discovery;
+pub mod monitor_reconcile;

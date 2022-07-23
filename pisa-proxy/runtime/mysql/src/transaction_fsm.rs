@@ -375,7 +375,7 @@ mod test {
     #[tokio::test]
     async fn test_trigger() {
         let lb = Arc::new(tokio::sync::Mutex::new(RouteStrategy::None));
-        let mut tsm = TransFsm::new_trans_fsm(lb,Pool::new(1));
+        let mut tsm = TransFsm::new_trans_fsm(lb, Pool::new(1));
         tsm.current_state = TransState::TransUseState;
         tsm.trigger(TransEventName::QueryEvent, RouteInput::None).await;
         assert_eq!(tsm.current_state, TransState::TransUseState);

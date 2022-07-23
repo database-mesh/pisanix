@@ -82,7 +82,7 @@ where
     pub conn: Option<T>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Pool<T>
 where
     T: ConnLike + ConnAttr + ConnAttrMut,
@@ -120,7 +120,6 @@ where
                 if !self.pool.contains_key(endpoint) {
                     self.pool.insert(endpoint.to_string(), PoolInner::new(self.size));
                 }
-
                 self.factory.as_ref().unwrap().build_conn().await?
             }
         };

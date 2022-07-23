@@ -18,7 +18,8 @@ use loadbalance::balance::{BalanceType, LoadBalance};
 use crate::{
     config::{self, TargetRole},
     readwritesplitting::{
-        ReadWriteEndpoint, ReadWriteSplittingStatic, ReadWriteSplittingStaticBuilder,
+        ReadWriteEndpoint, ReadWriteSplittingDynamic, ReadWriteSplittingDynamicBuilder,
+        ReadWriteSplittingStatic, ReadWriteSplittingStaticBuilder,
     },
 };
 
@@ -58,6 +59,7 @@ pub trait RouteBalance {
 /// Supported routing strategies
 pub enum RouteStrategy {
     Static(ReadWriteSplittingStatic),
+    Dynamic(ReadWriteSplittingDynamic),
     Simple(BalanceType),
     None,
 }
@@ -68,6 +70,9 @@ impl RouteStrategy {
             return Self::Static(ReadWriteSplittingStaticBuilder::build(config, rw_endpoint));
         }
 
+        if let Some(config) = config.dynamic {
+            return Self::Dynamic(ReadWriteSplittingDynamicBuilder::build(config, rw_endpoint));
+        }
         // Just to return
         Self::None
     }
@@ -86,6 +91,8 @@ impl Route for RouteStrategy {
     ) -> Result<(Option<Endpoint>, TargetRole), Self::Error> {
         match self {
             Self::Static(ins) => ins.dispatch(input),
+
+            Self::Dynamic(ins) => ins.dispatch(input),
 
             Self::Simple(ins) => Ok((ins.next(), TargetRole::ReadWrite)),
 
