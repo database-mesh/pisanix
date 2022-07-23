@@ -69,7 +69,6 @@ pub enum RowDataTyp<T: Row> {
     Text(RowDataText<T>),
 }
 
-
 crate::gen_row_data!(RowDataTyp, Text(RowDataText));
 
 #[derive(Debug, Clone)]

@@ -209,7 +209,7 @@ impl ClientConn {
 
             _ => Ok(false),
         };
-        
+
         self.framed = Some(Box::new(ClientCodec::Common(common_codec)));
         res
     }

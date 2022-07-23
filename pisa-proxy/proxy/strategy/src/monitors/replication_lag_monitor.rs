@@ -1,11 +1,11 @@
 // Copyright 2022 SphereEx Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+
 use futures::StreamExt;
+use mysql_protocol::{client::conn::ClientConn, row::RowData, util::*};
+use pisa_error::error::{Error, ErrorKind};
 use tokio::time::{self, Duration};
 
-use pisa_error::error::{Error, ErrorKind};
-use mysql_protocol::{client::conn::ClientConn, util::*};
-use crate::{config::MasterHighAvailability, readwritesplitting::ReadWriteEndpoint};
-use mysql_protocol::row::RowData;
-use crate::discovery::discovery::Monitor;
+use crate::{
+    config::MasterHighAvailability, discovery::discovery::Monitor,
+    readwritesplitting::ReadWriteEndpoint,
+};
 
 #[derive(Debug)]
 pub struct MonitorReplicationLag {
@@ -89,13 +91,13 @@ impl MonitorReplicationLag {
 #[derive(Debug, Clone)]
 pub struct ReplicationLagResponseInner {
     lag: u64,
-    is_latency: bool,
+    pub is_latency: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct ReplicationLagMonitorResponse {
     // define slave late from master
-    latency: HashMap<String, ReplicationLagResponseInner>,
+    pub latency: HashMap<String, ReplicationLagResponseInner>,
 }
 
 impl ReplicationLagMonitorResponse {
@@ -233,12 +235,13 @@ impl Monitor for MonitorReplicationLag {
                     })
                     .await
                 {
+                    // TODO: add timeout handler
                     // start connect max failures retry
-                    if retries > replication_lag_max_failures {
-                        // after connect_max_failures retrying time send message to Monitor Reconcile
-                        retries = 1;
-                    }
-                    retries += 1;
+                    // if retries > replication_lag_max_failures {
+                    //     // after connect_max_failures retrying time send message to Monitor Reconcile
+                    //     retries = 1;
+                    // }
+                    // retries += 1;
                 }
                 replication_lag_tx.send(response.clone()).unwrap();
                 std::thread::sleep(time::Duration::from_millis(reaplication_lag_interval));

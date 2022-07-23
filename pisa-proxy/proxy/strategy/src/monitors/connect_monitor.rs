@@ -1,11 +1,11 @@
 // Copyright 2022 SphereEx Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -13,14 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+
 use futures::StreamExt;
+use mysql_protocol::{client::conn::ClientConn, util::*};
 use tokio::time::{self, Duration};
 
-use pisa_error::error::{Error, ErrorKind};
-use mysql_protocol::{client::conn::ClientConn, util::*};
-use crate::{config::MasterHighAvailability, readwritesplitting::ReadWriteEndpoint};
-use mysql_protocol::row::RowData;
-use crate::discovery::discovery::Monitor;
+use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
 
 #[derive(Debug)]
 pub struct MonitorConnect {
@@ -107,7 +105,6 @@ impl Monitor for MonitorConnect {
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
-                println!("connect check....");
                 // maybe connection will timeout
                 if let Err(_) = time::timeout(Duration::from_millis(connect_timeout), async {
                     // probe read endpoint

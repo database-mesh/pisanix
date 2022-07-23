@@ -1,11 +1,11 @@
 // Copyright 2022 SphereEx Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+
 use futures::StreamExt;
+use mysql_protocol::{client::conn::ClientConn, row::RowData, util::*};
+use pisa_error::error::{Error, ErrorKind};
 use tokio::time::{self, Duration};
 
-use pisa_error::error::{Error, ErrorKind};
-use mysql_protocol::{client::conn::ClientConn, util::*};
-use crate::{config::MasterHighAvailability, readwritesplitting::ReadWriteEndpoint};
-use mysql_protocol::row::RowData;
-use crate::discovery::discovery::Monitor;
+use crate::{
+    config::MasterHighAvailability, discovery::discovery::Monitor,
+    readwritesplitting::ReadWriteEndpoint,
+};
 
 #[derive(Debug)]
 pub struct MonitorPing {
@@ -80,12 +82,7 @@ impl MonitorPing {
         }
     }
 
-    async fn ping_check(
-        user: String,
-        password: String,
-        addr: String,
-    ) -> Result<PingStatus, Error> {
-       
+    async fn ping_check(user: String, password: String, addr: String) -> Result<PingStatus, Error> {
         let factory = ClientConn::with_opts(user, password, addr.clone());
         let mut client_conn = match factory.connect().await {
             Ok(client_conn) => client_conn,
@@ -100,10 +97,8 @@ impl MonitorPing {
                     return Ok(PingStatus::PingNotOk);
                 }
             }
-            Err(_) => {
-                return Ok(PingStatus::PingNotOk)},
+            Err(_) => return Ok(PingStatus::PingNotOk),
         }
-       
     }
 }
 
@@ -123,7 +118,6 @@ impl Monitor for MonitorPing {
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
-            
                 if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                     for read in rw_endpoint.clone().read {
                         match MonitorPing::ping_check(
@@ -165,9 +159,7 @@ impl Monitor for MonitorPing {
                                                     retries += 1;
                                                 }
                                             },
-                                            Err(_) => { 
-                                                retries += 1
-                                            },
+                                            Err(_) => retries += 1,
                                         }
                                     }
                                     std::thread::sleep(std::time::Duration::from_millis(
@@ -175,44 +167,35 @@ impl Monitor for MonitorPing {
                                     ));
                                 },
                             },
-                            Err(_) => {
-                                loop {
-                                    if retries > ping_max_failures {
-                                        response
-                                            .read
-                                            .insert(read.addr.clone(), PingStatus::PingNotOk);
-                                        retries = 1;
-                                        break;
-                                    } else {
-                                        match MonitorPing::ping_check(
-                                            user.clone(),
-                                            password.clone(),
-                                            read.addr.clone(),
-                                        )
-                                        .await
-                                        {
-                                            Ok(ping_status) => match ping_status {
-                                                PingStatus::PingOk => {
-                                                    response.read.insert(
-                                                        read.addr.clone(),
-                                                        PingStatus::PingOk,
-                                                    );
-                                                    break;
-                                                }
-                                                PingStatus::PingNotOk => {
-                                                    retries += 1;
-                                                }
-                                            },
-                                            Err(_) => {
-                                                retries += 1
-                                            },
-                                        }
+                            Err(_) => loop {
+                                if retries > ping_max_failures {
+                                    response.read.insert(read.addr.clone(), PingStatus::PingNotOk);
+                                    retries = 1;
+                                    break;
+                                } else {
+                                    match MonitorPing::ping_check(
+                                        user.clone(),
+                                        password.clone(),
+                                        read.addr.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(ping_status) => match ping_status {
+                                            PingStatus::PingOk => {
+                                                response
+                                                    .read
+                                                    .insert(read.addr.clone(), PingStatus::PingOk);
+                                                break;
+                                            }
+                                            PingStatus::PingNotOk => {
+                                                retries += 1;
+                                            }
+                                        },
+                                        Err(_) => retries += 1,
                                     }
-                                    std::thread::sleep(std::time::Duration::from_millis(
-                                        ping_interval,
-                                    ));
                                 }
-                            }
+                                std::thread::sleep(std::time::Duration::from_millis(ping_interval));
+                            },
                         }
                     }
 
@@ -230,10 +213,9 @@ impl Monitor for MonitorPing {
                                 }
                                 PingStatus::PingNotOk => loop {
                                     if retries > ping_max_failures {
-                                        response.readwrite.insert(
-                                            readwrite.addr.clone(),
-                                            PingStatus::PingNotOk,
-                                        );
+                                        response
+                                            .readwrite
+                                            .insert(readwrite.addr.clone(), PingStatus::PingNotOk);
                                     } else {
                                         match MonitorPing::ping_check(
                                             user.clone(),

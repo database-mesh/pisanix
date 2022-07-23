@@ -15,10 +15,7 @@
 use crossbeam_channel::unbounded;
 use endpoint::endpoint::Endpoint;
 
-use crate::{
-    config::ReadWriteSplittingDynamic,
-    readwritesplitting::ReadWriteEndpoint,
-};
+use crate::{config::ReadWriteSplittingDynamic, readwritesplitting::ReadWriteEndpoint};
 
 pub struct MonitorReconcile {
     config: crate::config::Discovery,
@@ -27,7 +24,7 @@ pub struct MonitorReconcile {
 
 impl MonitorReconcile {
     pub fn new(config: ReadWriteSplittingDynamic, rw_endpoint: ReadWriteEndpoint) -> Self {
-        MonitorReconcile { config: config.discovery, rw_endpoint}
+        MonitorReconcile { config: config.discovery, rw_endpoint }
     }
 
     pub fn start_monitor_reconcile(
@@ -56,77 +53,127 @@ impl MonitorReconcile {
     ) {
         tokio::task::spawn_blocking(move || loop {
             loop {
+                let mut curr_rw_endpoint = rw_endpoint.clone();
+
                 let connect_monitor_response = monitor_channel.connect_rx.recv().unwrap();
-                println!("connect ....>>>>>>>>>>>> {:#?}", connect_monitor_response);
-                // match monitor_channel.ping_rx.try_recv() {
-                //     Ok(ping_monitor_response) => println!("{:#?}", ping_monitor_response),
-                //     Err(e) => println!("{}", e),
-                // }
+                let ping_monitor_response = monitor_channel.ping_rx.recv().unwrap();
+                let replication_lag_monitor_response =
+                    monitor_channel.replication_lag_rx.recv().unwrap();
+                let read_only_response = monitor_channel.read_only_rx.recv().unwrap();
 
-                // let replication_lag_response = monitor_channel.replication_lag_rx.recv().unwrap();
-                // println!("{:#?}", replication_lag_response);
-                // let read_only_response = monitor_channel.read_only_rx.recv().unwrap();
-                // println!("{:#?}", read_only_response);
+                for (read_write_connect_addr, read_write_connect_status) in
+                    connect_monitor_response.clone().readwrite
+                {
+                    match read_write_connect_status {
+                        // check master connected
+                        crate::monitors::connect_monitor::ConnectStatus::Connected => {
+                            for (read_write_ping_addr, read_write_ping_status) in
+                                ping_monitor_response.clone().readwrite
+                            {
+                                match read_write_ping_status {
+                                    // if master connected is ok, check ping
+                                    crate::monitors::ping_monitor::PingStatus::PingOk => {}
+                                    crate::monitors::ping_monitor::PingStatus::PingNotOk => {
+                                        //check if slave is change to master
+                                        for read_endpoint in curr_rw_endpoint.clone().read {
+                                            match read_only_response.roles.get(&read_endpoint.addr).unwrap() {
+                                                // slave change to master
+                                                crate::monitors::read_only_monitor::NodeRole::Master => {
+                                                    // clean readwrite list
+                                                    curr_rw_endpoint.readwrite = vec![];
+                                                    // add new read write into master list
+                                                    curr_rw_endpoint.readwrite.push(read_endpoint);
+                                                },
+                                                // slave doesn't change to master
+                                                crate::monitors::read_only_monitor::NodeRole::Slave => {
+                                                    // nothing to do
+                                                    continue;
+                                                },
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // master node connected failed
+                        crate::monitors::connect_monitor::ConnectStatus::Disconnected => {
+                            // check if slave is change to master
+                            for read_endpoint in curr_rw_endpoint.clone().read {
+                                match read_only_response.roles.get(&read_endpoint.addr).unwrap() {
+                                    // slave change to master
+                                    crate::monitors::read_only_monitor::NodeRole::Master => {
+                                        curr_rw_endpoint.readwrite = vec![];
+                                        // add new read write into master list
+                                        curr_rw_endpoint.readwrite.push(read_endpoint);
+                                    }
+                                    // slave doesn't change to master
+                                    crate::monitors::read_only_monitor::NodeRole::Slave => {
+                                        // nothing to do
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
-                // println!("{:#?}", read_only_response);
-                // let send_msg = match connect_monitor_response.read.get("127.0.0.1:3306").unwrap() {
-                //     crate::discovery::discovery::ConnectStatus::Disconnected => ReadWriteEndpoint {
-                //         read: vec![Endpoint {
-                //             weight: 2,
-                //             name: String::from("dasheng001"),
-                //             db: String::from("test"),
-                //             user: String::from("root"),
-                //             password: String::from("12345678"),
-                //             addr: String::from("127.0.0.1:3308"),
-                //         }],
-                //         readwrite: vec![Endpoint {
-                //             weight: 2,
-                //             name: String::from("dasheng002"),
-                //             db: String::from("test"),
-                //             user: String::from("root"),
-                //             password: String::from("12345678"),
-                //             addr: String::from("127.0.0.1:3308"),
-                //         }],
-                //     },
-                //     crate::discovery::discovery::ConnectStatus::Connected => ReadWriteEndpoint {
-                //         read: vec![Endpoint {
-                //             weight: 2,
-                //             name: String::from("dasheng001"),
-                //             db: String::from("test"),
-                //             user: String::from("root"),
-                //             password: String::from("12345678"),
-                //             addr: String::from("127.0.0.1:3306"),
-                //         }],
-                //         readwrite: vec![Endpoint {
-                //             weight: 2,
-                //             name: String::from("dasheng002"),
-                //             db: String::from("test"),
-                //             user: String::from("root"),
-                //             password: String::from("12345678"),
-                //             addr: String::from("127.0.0.1:3306"),
-                //         }],
-                //     },
-                // };
-                // final data
-                let send_msg = ReadWriteEndpoint {
-                    read: vec![Endpoint {
-                        weight: 2,
-                        name: String::from("dasheng001"),
-                        db: String::from("test"),
-                        user: String::from("root"),
-                        password: String::from("12345678"),
-                        addr: String::from("127.0.0.1:3306"),
-                    }],
-                    readwrite: vec![Endpoint {
-                        weight: 2,
-                        name: String::from("dasheng002"),
-                        db: String::from("test"),
-                        user: String::from("root"),
-                        password: String::from("12345678"),
-                        addr: String::from("127.0.0.1:3306"),
-                    }],
-                };
-                if let Err(err) = s.try_send(send_msg) {
+                for (read_addr, read_connect_status) in connect_monitor_response.clone().read {
+                    match read_connect_status {
+                        crate::monitors::connect_monitor::ConnectStatus::Connected => {
+                            for (read_ping_addr, read_ping_status) in
+                                ping_monitor_response.clone().read
+                            {
+                                match read_ping_status {
+                                    crate::monitors::ping_monitor::PingStatus::PingOk => {
+                                        for (replication_lag_addr, lag_status) in
+                                            &replication_lag_monitor_response.latency
+                                        {
+                                            if !lag_status.is_latency {
+                                                continue;
+                                            } else {
+                                                // add replication_lag_addr to read_write list
+                                                curr_rw_endpoint.readwrite.push(
+                                                    rw_endpoint
+                                                        .read
+                                                        .iter()
+                                                        .find(|r| r.addr.eq(replication_lag_addr))
+                                                        .unwrap()
+                                                        .clone(),
+                                                );
+                                                curr_rw_endpoint.read.remove(
+                                                    rw_endpoint
+                                                        .read
+                                                        .iter()
+                                                        .position(|r| {
+                                                            r.addr.eq(replication_lag_addr)
+                                                        })
+                                                        .unwrap(),
+                                                );
+                                            }
+                                        }
+                                    }
+                                    crate::monitors::ping_monitor::PingStatus::PingNotOk => {
+                                        curr_rw_endpoint.readwrite.push(
+                                            rw_endpoint
+                                                .read
+                                                .iter()
+                                                .find(|r| r.addr.eq(&read_ping_addr))
+                                                .unwrap()
+                                                .clone(),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        crate::monitors::connect_monitor::ConnectStatus::Disconnected => {
+                            curr_rw_endpoint.readwrite.append(&mut curr_rw_endpoint.read.clone());
+                            curr_rw_endpoint.read = vec![];
+                        }
+                    }
+                }
+
+                println!("response {:#?}", curr_rw_endpoint);
+                if let Err(err) = s.try_send(curr_rw_endpoint) {
                     println!("err >>> {:#?}", err);
                 }
 

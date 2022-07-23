@@ -1,11 +1,11 @@
 // Copyright 2022 SphereEx Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+
 use futures::StreamExt;
+use mysql_protocol::{client::conn::ClientConn, row::RowData, util::*};
+use pisa_error::error::{Error, ErrorKind};
 use tokio::time::{self, Duration};
 
-use pisa_error::error::{Error, ErrorKind};
-use mysql_protocol::{client::conn::ClientConn, util::*};
-use crate::{config::MasterHighAvailability, readwritesplitting::ReadWriteEndpoint};
-use mysql_protocol::row::RowData;
-use crate::discovery::discovery::Monitor;
+use crate::{
+    config::MasterHighAvailability, discovery::discovery::Monitor,
+    readwritesplitting::ReadWriteEndpoint,
+};
 
 #[derive(Debug)]
 pub struct MonitorReadOnly {
@@ -34,22 +36,27 @@ pub struct MonitorReadOnly {
 }
 
 #[derive(Debug, Clone)]
+pub enum NodeRole {
+    Master,
+    Slave,
+}
+
+#[derive(Debug, Clone)]
 pub struct ReadOnlyMonitorResponse {
-    read: HashMap<String, String>,
-    readwrite: HashMap<String, String>,
+    pub roles: HashMap<String, NodeRole>,
 }
 
 impl ReadOnlyMonitorResponse {
     pub fn new(rw_endpoint: ReadWriteEndpoint) -> Self {
-        let mut read = HashMap::new();
-        let mut readwrite = HashMap::new();
+        let mut roles = HashMap::new();
+
         for r in rw_endpoint.read {
-            read.insert(r.addr, String::from("OFF"));
+            roles.insert(r.addr, NodeRole::Slave);
         }
         for rw in rw_endpoint.readwrite {
-            readwrite.insert(rw.addr, String::from("OFF"));
+            roles.insert(rw.addr, NodeRole::Master);
         }
-        ReadOnlyMonitorResponse { read, readwrite }
+        ReadOnlyMonitorResponse { roles }
     }
 }
 
@@ -79,9 +86,7 @@ impl MonitorReadOnly {
         user: String,
         password: String,
         addr: String,
-    ) -> Result<Option<String>, Error> {
-        let mut res_read_only_status: Option<String> = None;
-
+    ) -> Result<NodeRole, Error> {
         let factory = ClientConn::with_opts(user, password, addr.clone());
         let mut client_conn = match factory.connect().await {
             Ok(client_conn) => client_conn,
@@ -95,16 +100,14 @@ impl MonitorReadOnly {
             .unwrap();
         while let Some(data) = res.next().await {
             let mut row = data.unwrap();
-            // let mut row =
-            //     mysql_protocol::row::RowData::new(res.0.clone(), &data.as_mut().unwrap()[4..]);
             let read_only_status = row.decode_with_name::<String>("Variable_name").unwrap();
             let read_only_values = row.decode_with_name::<String>("Value").unwrap();
 
             if read_only_status.eq("read_only") {
-                res_read_only_status = Some(read_only_values);
+                return Ok(NodeRole::Slave);
             }
         }
-        Ok(res_read_only_status)
+        Ok(NodeRole::Master)
     }
 }
 
@@ -136,14 +139,7 @@ impl Monitor for MonitorReadOnly {
                         .await
                         {
                             Ok(read_only_status) => {
-                                match read_only_status {
-                                    Some(read_only_status) => {
-                                        response.read.insert(read.addr, read_only_status);
-                                    }
-                                    None => {
-                                        continue;
-                                    }
-                                }
+                                response.roles.insert(read.addr, read_only_status);
                             }
                             Err(_) => {
                                 continue;
@@ -161,15 +157,8 @@ impl Monitor for MonitorReadOnly {
                         .await
                         {
                             Ok(read_only_status) => {
-                                match read_only_status {
-                                    Some(read_only_status) => {
-                                        response.readwrite.insert(readwrite.addr, read_only_status);
-                                    }
-                                    None => {
-                                        continue;
-                                    }
-                                }
-                            },
+                                response.roles.insert(readwrite.addr, read_only_status);
+                            }
                             Err(_) => {
                                 continue;
                             }

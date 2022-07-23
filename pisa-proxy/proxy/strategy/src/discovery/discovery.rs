@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use futures::StreamExt;
-use tokio::time::{self, Duration};
-
-use pisa_error::error::{Error, ErrorKind};
-use mysql_protocol::{client::conn::ClientConn, util::*};
-use crate::{config::MasterHighAvailability, readwritesplitting::ReadWriteEndpoint};
-use mysql_protocol::row::RowData;
-use crate::monitors::connect_monitor::MonitorConnect;
-use crate::monitors::ping_monitor::MonitorPing;
-use crate::monitors::read_only_monitor::MonitorReadOnly;
-use crate::monitors::replication_lag_monitor::MonitorReplicationLag;
+use crate::{
+    config::MasterHighAvailability,
+    monitors::{
+        connect_monitor::MonitorConnect, ping_monitor::MonitorPing,
+        read_only_monitor::MonitorReadOnly, replication_lag_monitor::MonitorReplicationLag,
+    },
+    readwritesplitting::ReadWriteEndpoint,
+};
 
 //define discovery kind (support MHA,RDS,MGR etc.)
 pub enum DiscoveryKind {

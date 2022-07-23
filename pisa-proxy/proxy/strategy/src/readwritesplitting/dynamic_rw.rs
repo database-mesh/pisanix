@@ -35,23 +35,25 @@ use crate::{
     Route, RouteInput,
 };
 
-
 pub struct ReadWriteSplittingDynamicBuilder;
 
 // define monitor channel
 #[derive(Debug, Clone)]
 pub struct MonitorChannel {
-    pub connect_tx: crossbeam_channel::Sender<crate::monitors::connect_monitor::ConnectMonitorResponse>,
+    pub connect_tx:
+        crossbeam_channel::Sender<crate::monitors::connect_monitor::ConnectMonitorResponse>,
     pub connect_rx:
         crossbeam_channel::Receiver<crate::monitors::connect_monitor::ConnectMonitorResponse>,
 
     pub ping_tx: crossbeam_channel::Sender<crate::monitors::ping_monitor::PingMonitorResponse>,
     pub ping_rx: crossbeam_channel::Receiver<crate::monitors::ping_monitor::PingMonitorResponse>,
 
-    pub replication_lag_tx:
-        crossbeam_channel::Sender<crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse>,
-    pub replication_lag_rx:
-        crossbeam_channel::Receiver<crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse>,
+    pub replication_lag_tx: crossbeam_channel::Sender<
+        crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse,
+    >,
+    pub replication_lag_rx: crossbeam_channel::Receiver<
+        crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse,
+    >,
 
     pub read_only_tx:
         crossbeam_channel::Sender<crate::monitors::read_only_monitor::ReadOnlyMonitorResponse>,
