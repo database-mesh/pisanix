@@ -20,6 +20,7 @@ use crate::ast::{base::*, FieldType, SelectStmt};
 pub enum Create {
     CreateDatabase(Box<CreateDatabase>),
     CreateViewOrTriggerOrSpOrEvent(Box<ViewOrTriggerOrSpOrEvent>),
+    CreateLogFileGroup(Box<CreateLogFileGroup>),
 }
 
 #[derive(Debug, Clone)]
@@ -261,7 +262,7 @@ pub enum SpatialIndexOption {
 #[derive(Debug, Clone)]
 pub enum CommonIndexOption {
     KeyBlockSizeOption(KeyBlockSizeOption),
-    CommentOption(CommentOption),
+    CommentOption(IndexCommentOption),
     Visibility(Visibility),
     AttributeOption(AttributeOption),
 }
@@ -274,7 +275,7 @@ pub struct KeyBlockSizeOption {
 }
 
 #[derive(Debug, Clone)]
-pub struct CommentOption {
+pub struct IndexCommentOption {
     pub span: Span,
     pub comment: String,
 }
@@ -324,4 +325,62 @@ pub struct KeyPart {
     pub ident: String,
     pub length: Option<u32>,
     pub direction: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateLogFileGroup {
+    pub span: Span,
+    pub logfile_group: String,
+    pub undo_file: UndoFile,
+    pub opt_logfile_group_options: Option<Vec<LogFileGroupOption>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UndoFile {
+    pub span: Span,
+    pub file_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum LogFileGroupOption {
+    SizeOption(SizeOption),
+    NodeGroupOption(NodeGroupOption),
+    CommentOption(CommentOption),
+    EngineOption(EngineOption),
+    WaitOption(WaitOption),
+}
+
+#[derive(Debug, Clone)]
+pub struct SizeOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub size: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeGroupOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub nodegroup_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CommentOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub comment: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct EngineOption {
+    pub span: Span,
+    pub opt_storage: bool,
+    pub is_equal: bool,
+    pub engine_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum WaitOption {
+    Wait,
+    NoWait,
 }
