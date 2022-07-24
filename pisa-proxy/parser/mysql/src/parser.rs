@@ -163,6 +163,8 @@ mod test {
             "CREATE SPATIAL INDEX idx_order_name ON t_order (name) INVISIBLE;",
             "CREATE FULLTEXT INDEX idx_order_name ON t_order (name) WITH PARSER parser_name ALGORITHM DEFAULT;",
             "CREATE FULLTEXT INDEX idx_order_name ON t_order (name) WITH PARSER parser_name LOCK = EXCLUSIVE;",
+            "CREATE LOGFILE GROUP logfile_group ADD UNDOFILE 'undo_file' INITIAL_SIZE = 1M UNDO_BUFFER_SIZE = 2M REDO_BUFFER_SIZE = 3M;",
+            "CREATE LOGFILE GROUP logfile_group ADD UNDOFILE 'undo_file' NODEGROUP 1234, WAIT, COMMENT 'logfile_group_comment', ENGINE  = 'logfile_group_engine';",
         ];
 
         let p = Parser::new();

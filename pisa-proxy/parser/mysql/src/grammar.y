@@ -6376,22 +6376,37 @@ opt_savepoint ->  bool:
 ;
 
 create -> Create:
-          'CREATE' 'DATABASE' opt_if_not_exists ident opt_create_database_options
-          {
-		Create::CreateDatabase(Box::new(
-			CreateDatabase{
-				is_not_exists: $3,
-				database_name: $4.0,
-				opt_create_database_options: $5,
-			}
-		))
-          }
-          | 'CREATE' view_or_trigger_or_sp_or_event
-          {
-		Create::CreateViewOrTriggerOrSpOrEvent(Box::new($2))
-          }
-          /* TODO */
-        ;
+       'CREATE' 'DATABASE' opt_if_not_exists ident opt_create_database_options
+       {
+		    Create::CreateDatabase(Box::new(
+			    CreateDatabase{
+				    is_not_exists: $3,
+				    database_name: $4.0,
+				    opt_create_database_options: $5,
+			    }
+		    ))
+       }
+    | 'CREATE' view_or_trigger_or_sp_or_event
+       {
+		    Create::CreateViewOrTriggerOrSpOrEvent(Box::new($2))
+       }
+
+       /* TODO create user */
+
+    | 'CREATE' 'LOGFILE' 'GROUP' ident 'ADD' lg_undofile opt_logfile_group_options
+       {
+            Create::CreateLogFileGroup(Box::new(
+                CreateLogFileGroup {
+                    span: $span,
+                    logfile_group: $4.0,
+                    undo_file: $6,
+                    opt_logfile_group_options: $7,
+                }
+            ))
+       }
+
+    /* TODO */
+;
 
 opt_if_not_exists -> bool:
           /* empty */   { false }
@@ -6781,6 +6796,158 @@ sp_suid -> SpSuid:
           }
         ;
 
+lg_undofile -> UndoFile:
+    'UNDOFILE' 'TEXT_STRING'
+    {
+        UndoFile {
+            span: $span,
+            file_name: String::from($lexer.span_str($2.as_ref().unwrap().span())),
+        }
+    }
+;
+
+opt_logfile_group_options -> Option<Vec<LogFileGroupOption>>:
+      /* empty */ { None }
+    | logfile_group_option_list
+      {
+          Some($1)
+      }
+;
+
+logfile_group_option_list -> Vec<LogFileGroupOption>:
+     logfile_group_option
+     {
+           vec![$1]
+      }
+    | logfile_group_option_list opt_comma logfile_group_option
+      {
+           $1.push($3);
+           $1
+      }
+;
+
+opt_comma -> bool:
+      /* empty */  { false }
+    | ','          { true }
+;
+
+logfile_group_option -> LogFileGroupOption:
+      ts_option_initial_size { $1 }
+    | ts_option_undo_buffer_size { $1 }
+    | ts_option_redo_buffer_size { $1 }
+    | ts_option_nodegroup { $1 }
+    | ts_option_engine { $1 }
+    | ts_option_wait { $1 }
+    | ts_option_comment { $1 }
+;
+
+ts_option_initial_size -> LogFileGroupOption:
+    'INITIAL_SIZE' opt_equal size_number
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         LogFileGroupOption::SizeOption(SizeOption {
+             span: $span,
+             is_equal: is_equal,
+             size: $3,
+         })
+    }
+;
+
+ts_option_undo_buffer_size -> LogFileGroupOption:
+    'UNDO_BUFFER_SIZE' opt_equal size_number
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         LogFileGroupOption::SizeOption(SizeOption {
+             span: $span,
+             is_equal: is_equal,
+             size: $3,
+         })
+    }
+;
+
+ts_option_redo_buffer_size -> LogFileGroupOption:
+    'REDO_BUFFER_SIZE' opt_equal size_number
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         LogFileGroupOption::SizeOption(SizeOption {
+             span: $span,
+             is_equal: is_equal,
+             size: $3,
+         })
+    }
+;
+
+ts_option_nodegroup -> LogFileGroupOption:
+    'NODEGROUP' opt_equal real_ulong_num
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         LogFileGroupOption::NodeGroupOption(NodeGroupOption {
+             span: $span,
+             is_equal: is_equal,
+             nodegroup_id: $3,
+         })
+    }
+;
+
+ts_option_comment -> LogFileGroupOption:
+    'COMMENT' opt_equal 'TEXT_STRING'
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         LogFileGroupOption::CommentOption(CommentOption {
+             span: $span,
+             is_equal: is_equal,
+             comment: String::from($lexer.span_str($3.as_ref().unwrap().span())),
+         })
+    }
+;
+
+ts_option_engine -> LogFileGroupOption:
+    opt_storage 'ENGINE' opt_equal ident_or_text
+    {
+         let is_equal = match $3 {
+             Some(_) => true,
+             None => false,
+         };
+         LogFileGroupOption::EngineOption(EngineOption {
+             span: $span,
+             opt_storage: $1,
+             is_equal: is_equal,
+             engine_name: $4,
+         })
+    }
+;
+
+ts_option_wait -> LogFileGroupOption:
+     'WAIT'
+     {
+          LogFileGroupOption::WaitOption(WaitOption::Wait)
+     }
+    | 'NO_WAIT'
+     {
+          LogFileGroupOption::WaitOption(WaitOption::NoWait)
+     }
+;
+
+size_number -> String:
+      real_ulonglong_num { $1 }
+    | IDENT_sys { $1.0 }
+;
+
 create_index_stmt -> CreateIndexStmt:
       'CREATE' opt_unique 'INDEX' ident opt_index_type_clause 'ON' table_ident '(' key_list_with_expression ')'
       opt_index_options opt_index_lock_and_algorithm
@@ -7002,7 +7169,7 @@ common_index_option -> CommonIndexOption:
       }
     | 'COMMENT' TEXT_STRING_sys
       {
-          CommonIndexOption::CommentOption(CommentOption{
+          CommonIndexOption::CommentOption(IndexCommentOption{
               span: $span,
               comment: $2,
           })
