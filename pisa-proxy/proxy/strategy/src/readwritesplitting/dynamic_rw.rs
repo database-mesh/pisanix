@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use crossbeam_channel::unbounded;
-use parking_lot::Mutex;
+use endpoint::endpoint::Endpoint;
 use futures::executor::block_on;
 // use tokio::sync::Mutex;
-
 use loadbalance::balance::LoadBalance;
-use endpoint::endpoint::Endpoint;
+use parking_lot::Mutex;
+
 use super::{
     rule_match::{RulesMatch, RulesMatchBuilder},
     ReadWriteEndpoint,
@@ -29,7 +29,7 @@ use crate::{
     config,
     config::TargetRole,
     discovery::{
-        discovery::{Discovery, DiscoveryKind, DiscoveryMasterHighAvailability},
+        discovery::{Discovery, DiscoveryMasterHighAvailability},
         monitor_reconcile::MonitorReconcile,
     },
     route::{BoxError, RouteBalance},
@@ -82,6 +82,8 @@ impl MonitorChannel {
     }
 }
 
+use crate::discovery::discovery::Monitor;
+
 impl ReadWriteSplittingDynamicBuilder {
     pub fn build(
         config: config::ReadWriteSplittingDynamic,
@@ -101,20 +103,18 @@ impl ReadWriteSplittingDynamicBuilder {
         match config.clone().discovery {
             // Use Master High Availability Discovery
             crate::config::Discovery::Mha(cc) => {
-                let discovery_mha =
-                    DiscoveryMasterHighAvailability::build(cc.clone(), rw_endpoint.clone());
-
-                tokio_scoped::scope(|scope| {
-                    scope.spawn(async {
-                        discovery_mha.run(monitor_channel.clone()).await;
+                let monitors = DiscoveryMasterHighAvailability::build(cc.clone(), rw_endpoint.clone()).build_monitors(monitor_channel.clone());
+                for monitor in monitors {
+                    tokio::spawn(async move {
+                        monitor.run_check().await;
                     });
-                });
+                }
 
                 let mut monitor_reconcile =
                     MonitorReconcile::new(config.clone(), rw_endpoint.clone());
 
                 reciver = Some(
-                    monitor_reconcile.start_monitor_reconcile(cc.monitor_interval, monitor_channel),
+                    monitor_reconcile.start_monitor_reconcile(cc.monitor_interval, monitor_channel.clone()),
                 );
             }
         };
@@ -130,7 +130,7 @@ impl ReadWriteSplittingDynamicBuilder {
             )
             .await;
         });
-        ReadWriteSplittingDynamic { rules_match: rules_match_wrapper.clone() }
+        ReadWriteSplittingDynamic {rules_match: rules_match_wrapper.clone() }
     }
 }
 

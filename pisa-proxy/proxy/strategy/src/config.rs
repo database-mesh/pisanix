@@ -53,7 +53,6 @@ pub enum Discovery {
 pub struct MasterHighAvailability {
     pub user: String,
     pub password: String,
-    pub pool_size: Option<u8>,
     pub monitor_interval: u64,
     pub connect_interval: u64,
     pub connect_timeout: u64,

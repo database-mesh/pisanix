@@ -14,15 +14,12 @@
 
 use std::collections::HashMap;
 
-use futures::StreamExt;
-use mysql_protocol::{client::conn::ClientConn, row::RowData, util::*};
-use pisa_error::error::{Error, ErrorKind};
+use mysql_protocol::client::conn::ClientConn;
+use pisa_error::error::Error;
 use tokio::time::{self, Duration};
+use tracing::debug;
 
-use crate::{
-    config::MasterHighAvailability, discovery::discovery::Monitor,
-    readwritesplitting::ReadWriteEndpoint,
-};
+use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
 
 #[derive(Debug)]
 pub struct MonitorPing {
@@ -257,10 +254,7 @@ impl Monitor for MonitorPing {
                 })
                 .await
                 {
-                    if retries > ping_max_failures {
-                        retries = 1;
-                    }
-                    retries += 1;
+                    debug!("ping monitor check timeout");
                 }
 
                 if let Err(e) = ping_tx.send(response.clone()) {

@@ -26,7 +26,7 @@ pool_size = 3
 # 服务端版本
 server_version = "5.7.37"
 
-# 后端负载均衡配置
+# # 后端负载均衡配置
 # [proxy.config.simple_loadbalance]
 # # 负载均衡算法：[random/roundrobin], 默认值: random 算法
 # balance_type = "random"
@@ -43,20 +43,19 @@ default_target = "readwrite"
 type = "mha"
 user = "root"
 password = "12345678"
-pool_size = 16
 monitor_interval = 1000
 connect_interval = 1000
-connect_timeout = 200
+connect_timeout = 60000
 connect_max_failures = 3
 ping_interval = 1000
-ping_timeout = 1000
+ping_timeout = 60000
 ping_max_failures = 3
 replication_lag_interval = 1000
-replication_lag_timeout = 10000
+replication_lag_timeout = 60000
 replication_lag_max_failures = 3
 max_replication_lag = 3
 read_only_interval = 1000
-read_only_timeout = 3000
+read_only_timeout = 60000
 read_only_max_failures = 3
 
 [[proxy.config.read_write_splitting.dynamic.rule]]
@@ -81,14 +80,14 @@ algorithm_name = "roundrobin"
 # [[proxy.config.read_write_splitting.static.rule]]
 # name = "read-rule"
 # type = "regex"
-# regex = [".*"]
+# regex = ["^select"]
 # target = "read"
 # algorithm_name = "random"
 
 # [[proxy.config.read_write_splitting.static.rule]]
 # name = "write-rule"
 # type = "regex"
-# regex = [".*"]
+# regex = ["^insert"]
 # target = "readwrite"
 # algorithm_name = "roundrobin"
 

@@ -14,9 +14,8 @@
 
 use std::collections::HashMap;
 
-use futures::StreamExt;
-use mysql_protocol::{client::conn::ClientConn, util::*};
 use tokio::time::{self, Duration};
+use tracing::debug;
 
 use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
 
@@ -184,12 +183,7 @@ impl Monitor for MonitorConnect {
                 })
                 .await
                 {
-                    // start connect max failures retry
-                    if retries > connect_max_failures {
-                        // after connect_max_failures retrying time send message to Monitor Reconcile
-                        retries = 1;
-                    }
-                    retries += 1;
+                    debug!("connect monitor check timeout");
                 }
 
                 if let Err(e) = connect_tx.send(response.clone()) {

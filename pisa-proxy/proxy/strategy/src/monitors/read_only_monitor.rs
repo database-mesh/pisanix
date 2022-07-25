@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 
 use futures::StreamExt;
-use tracing::{error, info, warn, Level};
 use mysql_protocol::{client::conn::ClientConn, row::RowData};
 use pisa_error::error::{Error, ErrorKind};
 use tokio::time::{self, Duration};
+use tracing::debug;
 
 use crate::{
     config::MasterHighAvailability, discovery::discovery::Monitor,
@@ -143,7 +143,23 @@ impl Monitor for MonitorReadOnly {
                                 response.roles.insert(read.addr, read_only_status);
                             }
                             Err(_) => {
-                                continue;
+                                if retries > read_only_max_failures {
+                                    retries = 1;
+                                    break;
+                                } else {
+                                    match MonitorReadOnly::read_only_check(
+                                        user.clone(),
+                                        password.clone(),
+                                        read.addr.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(read_only_status) => {
+                                            response.roles.insert(read.addr, read_only_status);
+                                        }
+                                        Err(_) => retries += 1,
+                                    }
+                                }
                             }
                         }
                     }
@@ -161,13 +177,30 @@ impl Monitor for MonitorReadOnly {
                                 response.roles.insert(readwrite.addr, read_only_status);
                             }
                             Err(_) => {
-                                continue;
+                                if retries > read_only_max_failures {
+                                    retries = 1;
+                                    break;
+                                } else {
+                                    match MonitorReadOnly::read_only_check(
+                                        user.clone(),
+                                        password.clone(),
+                                        readwrite.addr.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(read_only_status) => {
+                                            response.roles.insert(readwrite.addr, read_only_status);
+                                        }
+                                        Err(_) => retries += 1,
+                                    }
+                                }
                             }
                         }
                     }
                 })
                 .await
                 {
+                    debug!("read only monitor check timeout");
                     println!("timeout");
                 }
 

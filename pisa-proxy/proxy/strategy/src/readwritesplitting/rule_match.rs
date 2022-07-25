@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::{error::Error, sync::Arc, thread, time};
+
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
 use regex::Regex;
@@ -110,8 +111,7 @@ impl RulesMatch {
                 inner.clone().lock().inner =
                     RulesMatchBuilder::build_rules(rules.clone(), rw_endpoint.clone());
 
-                let ten_millis = time::Duration::from_millis(1000);
-                thread::sleep(ten_millis);
+                // thread::sleep(time::Duration::from_millis(100000));
             }
         });
     }

@@ -18,14 +18,13 @@ use futures::StreamExt;
 use mysql_protocol::{client::conn::ClientConn, row::RowData};
 use pisa_error::error::{Error, ErrorKind};
 use tokio::time::{self, Duration};
-use endpoint::endpoint::Endpoint;
+use tracing::debug;
 
 use crate::{
     discovery::discovery::Monitor,
+    monitors::read_only_monitor::{MonitorReadOnly, NodeRole},
     readwritesplitting::ReadWriteEndpoint,
 };
-use crate::monitors::read_only_monitor::MonitorReadOnly;
-use crate::monitors::read_only_monitor::NodeRole;
 
 #[derive(Debug)]
 pub struct MonitorReplicationLag {
@@ -62,35 +61,44 @@ impl MonitorReplicationLag {
         }
     }
 
-    async fn build_read_only_endpoint(user: String, password: String, rw_endpoint: ReadWriteEndpoint) -> ReadWriteEndpoint {
+    async fn build_read_only_endpoint(
+        user: String,
+        password: String,
+        rw_endpoint: ReadWriteEndpoint,
+    ) -> ReadWriteEndpoint {
         let mut read_endpoint = vec![];
         for readwrite in rw_endpoint.clone().readwrite {
-            match MonitorReadOnly::read_only_check(user.clone(), password.clone(), readwrite.clone().addr).await {
-                Ok(role) => {
-                    match role {
-                        NodeRole::Slave => read_endpoint.push(readwrite),
-                        NodeRole::Master => {},
-                    }
+            match MonitorReadOnly::read_only_check(
+                user.clone(),
+                password.clone(),
+                readwrite.clone().addr,
+            )
+            .await
+            {
+                Ok(role) => match role {
+                    NodeRole::Slave => read_endpoint.push(readwrite),
+                    NodeRole::Master => {}
                 },
-                Err(e) => {},
+                Err(e) => {}
             }
         }
 
         for read in rw_endpoint.clone().read {
-            match MonitorReadOnly::read_only_check(user.clone(), password.clone(), read.clone().addr).await {
-                Ok(role) => {
-                    match role {
-                        NodeRole::Slave => read_endpoint.push(read),
-                        NodeRole::Master => {},
-                    }
-                }
+            match MonitorReadOnly::read_only_check(
+                user.clone(),
+                password.clone(),
+                read.clone().addr,
+            )
+            .await
+            {
+                Ok(role) => match role {
+                    NodeRole::Slave => read_endpoint.push(read),
+                    NodeRole::Master => {}
+                },
                 Err(e) => {}
             }
         }
-        ReadWriteEndpoint {
-            read: read_endpoint,
-            readwrite: rw_endpoint.readwrite,
-        }
+        ReadWriteEndpoint { read: read_endpoint, readwrite: rw_endpoint.readwrite }
     }
 
     async fn replication_lag_check(
@@ -157,7 +165,12 @@ impl Monitor for MonitorReplicationLag {
         let reaplication_lag_interval = self.replication_lag_interval;
         let replication_lag_tx = self.replication_lag_tx.clone();
         let max_replication_lag = self.max_replication_lag;
-        let mut curr_rw_endpoint = MonitorReplicationLag::build_read_only_endpoint(user.clone(), password.clone(), self.rw_endpoint.clone()).await;
+        let curr_rw_endpoint = MonitorReplicationLag::build_read_only_endpoint(
+            user.clone(),
+            password.clone(),
+            self.rw_endpoint.clone(),
+        )
+        .await;
         let mut response = ReplicationLagMonitorResponse::new(curr_rw_endpoint.clone());
 
         tokio::spawn(async move {
@@ -167,6 +180,7 @@ impl Monitor for MonitorReplicationLag {
                     replication_lag_tx.send(response.clone()).unwrap();
                     std::thread::sleep(time::Duration::from_millis(reaplication_lag_interval));
                     continue;
+                } else {
                 }
                 if let Err(_) =
                     time::timeout(Duration::from_millis(replication_lag_timeout), async {
@@ -265,20 +279,21 @@ impl Monitor for MonitorReplicationLag {
                                         },
                                     }
                                 }
-                                Err(e) => {
-
+                                Err(_) => {
+                                    retries += 1;
                                 }
                             }
                         }
                     })
                     .await
                 {
-                    println!("timeout");
+                    debug!("reaplication lag monitor check timeout");
                 }
+
                 if response.latency.len() > 0 {
                     replication_lag_tx.send(response.clone()).unwrap();
                 }
-                
+
                 std::thread::sleep(time::Duration::from_millis(reaplication_lag_interval));
             }
         });
