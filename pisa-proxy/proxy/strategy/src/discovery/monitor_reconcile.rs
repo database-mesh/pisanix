@@ -54,13 +54,20 @@ impl MonitorReconcile {
         tokio::task::spawn_blocking(move || loop {
             loop {
                 let mut curr_rw_endpoint = rw_endpoint.clone();
+                let mut replication_lag_monitor_response: Option<crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse> = None;
 
                 let connect_monitor_response = monitor_channel.connect_rx.recv().unwrap();
                 let ping_monitor_response = monitor_channel.ping_rx.recv().unwrap();
-                let replication_lag_monitor_response =
-                    monitor_channel.replication_lag_rx.recv().unwrap();
-                let read_only_response = monitor_channel.read_only_rx.recv().unwrap();
 
+                match monitor_channel.replication_lag_rx.recv()  {
+                    Ok(replication_lag_response) => {
+                        replication_lag_monitor_response = Some(replication_lag_response);
+                    },
+                    Err(_) => {},
+                };
+
+                let read_only_response = monitor_channel.read_only_rx.recv().unwrap();
+                
                 for (read_write_connect_addr, read_write_connect_status) in
                     connect_monitor_response.clone().readwrite
                 {
@@ -74,21 +81,27 @@ impl MonitorReconcile {
                                     // if master connected is ok, check ping
                                     crate::monitors::ping_monitor::PingStatus::PingOk => {}
                                     crate::monitors::ping_monitor::PingStatus::PingNotOk => {
-                                        //check if slave is change to master
-                                        for read_endpoint in curr_rw_endpoint.clone().read {
-                                            match read_only_response.roles.get(&read_endpoint.addr).unwrap() {
-                                                // slave change to master
-                                                crate::monitors::read_only_monitor::NodeRole::Master => {
-                                                    // clean readwrite list
-                                                    curr_rw_endpoint.readwrite = vec![];
-                                                    // add new read write into master list
-                                                    curr_rw_endpoint.readwrite.push(read_endpoint);
-                                                },
-                                                // slave doesn't change to master
-                                                crate::monitors::read_only_monitor::NodeRole::Slave => {
-                                                    // nothing to do
-                                                    continue;
-                                                },
+                                        if curr_rw_endpoint.clone().read.len() > 0 {
+                                             //check if slave is change to master
+                                            for read_endpoint in curr_rw_endpoint.clone().read {
+                                                match read_only_response.roles.get(&read_endpoint.addr).unwrap() {
+                                                    // slave change to master
+                                                    crate::monitors::read_only_monitor::NodeRole::Master => {
+                                                        // clean readwrite list
+                                                        curr_rw_endpoint.readwrite = vec![];
+                                                        // add new read write into master list
+                                                        curr_rw_endpoint.readwrite.push(read_endpoint);
+                                                        
+                                                        println!("curr endpoint ...... .>>>>>>>> {:#?}", curr_rw_endpoint);
+                                                        //TODO send replication_lag_endpoint tx to update read only list
+                                                        // replication_lag_endpoint_tx.send(curr_rw_endpoint.clone()).unwrap();
+                                                    },
+                                                    // slave doesn't change to master
+                                                    crate::monitors::read_only_monitor::NodeRole::Slave => {
+                                                        // nothing to do
+                                                        continue;
+                                                    },
+                                                }
                                             }
                                         }
                                     }
@@ -125,49 +138,40 @@ impl MonitorReconcile {
                             {
                                 match read_ping_status {
                                     crate::monitors::ping_monitor::PingStatus::PingOk => {
-                                        for (replication_lag_addr, lag_status) in
-                                            &replication_lag_monitor_response.latency
-                                        {
-                                            if !lag_status.is_latency {
-                                                continue;
-                                            } else {
-                                                // add replication_lag_addr to read_write list
-                                                curr_rw_endpoint.readwrite.push(
-                                                    rw_endpoint
-                                                        .read
-                                                        .iter()
-                                                        .find(|r| r.addr.eq(replication_lag_addr))
-                                                        .unwrap()
-                                                        .clone(),
-                                                );
-                                                curr_rw_endpoint.read.remove(
-                                                    rw_endpoint
-                                                        .read
-                                                        .iter()
-                                                        .position(|r| {
-                                                            r.addr.eq(replication_lag_addr)
-                                                        })
-                                                        .unwrap(),
-                                                );
+                                        match replication_lag_monitor_response.clone() {
+                                            Some(replication_lag_response) => {
+                                                for (replication_lag_addr, lag_status) in &replication_lag_response.latency {
+                                                    if !lag_status.is_latency {
+                                                        curr_rw_endpoint.read.append(&mut curr_rw_endpoint.read.clone());
+                                                        continue;
+                                                    } else {
+                                                        println!("----- >>>> {:#?}", replication_lag_addr);
+                                                        // add replication_lag_addr to read_write list
+                                                        curr_rw_endpoint.readwrite.push(
+                                                            rw_endpoint.read.iter().find(|r| r.addr.eq(replication_lag_addr)).unwrap().clone(),
+                                                        );
+                                                        curr_rw_endpoint.read.remove(
+                                                            rw_endpoint.read.iter().position(|r| {r.addr.eq(replication_lag_addr)}).unwrap(),
+                                                        );
+                                                    }
+                                                }
                                             }
+                                            None => {},
                                         }
                                     }
                                     crate::monitors::ping_monitor::PingStatus::PingNotOk => {
                                         curr_rw_endpoint.readwrite.push(
-                                            rw_endpoint
-                                                .read
-                                                .iter()
-                                                .find(|r| r.addr.eq(&read_ping_addr))
-                                                .unwrap()
-                                                .clone(),
+                                            rw_endpoint.read.iter().find(|r| r.addr.eq(&read_ping_addr)).unwrap().clone(),
                                         );
                                     }
                                 }
                             }
                         }
                         crate::monitors::connect_monitor::ConnectStatus::Disconnected => {
-                            curr_rw_endpoint.readwrite.append(&mut curr_rw_endpoint.read.clone());
-                            curr_rw_endpoint.read = vec![];
+                            curr_rw_endpoint.read.remove(
+                                rw_endpoint.read.iter().position(|r| {r.addr.eq(&read_addr)}).unwrap(),
+                            );
+                            // curr_rw_endpoint.readwrite.append(&mut curr_rw_endpoint.read.clone());
                         }
                     }
                 }

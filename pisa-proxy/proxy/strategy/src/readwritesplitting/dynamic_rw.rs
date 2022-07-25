@@ -15,11 +15,12 @@
 use std::sync::Arc;
 
 use crossbeam_channel::unbounded;
-use endpoint::endpoint::Endpoint;
+use parking_lot::Mutex;
 use futures::executor::block_on;
-use loadbalance::balance::LoadBalance;
-use tokio::sync::Mutex;
+// use tokio::sync::Mutex;
 
+use loadbalance::balance::LoadBalance;
+use endpoint::endpoint::Endpoint;
 use super::{
     rule_match::{RulesMatch, RulesMatchBuilder},
     ReadWriteEndpoint,
@@ -145,7 +146,8 @@ impl Route for ReadWriteSplittingDynamic {
         input: &RouteInput,
     ) -> Result<(Option<Endpoint>, TargetRole), Self::Error> {
         let rules_match_wrapper = self.rules_match.clone();
-        let mut rules_match = block_on(async move { rules_match_wrapper.lock_owned().await });
+        // let mut rules_match = block_on(async move { rules_match_wrapper.lock() });
+        let mut rules_match = rules_match_wrapper.lock();
         let b = rules_match.get(input);
         Ok((b.0.next(), b.1))
     }

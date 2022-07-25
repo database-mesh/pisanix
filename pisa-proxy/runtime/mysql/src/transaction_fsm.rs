@@ -86,7 +86,6 @@ impl ConnDriver for Driver {
         debug!("route_strategy to {:?} for input: {:?}", dispatch_res, input);
 
         let endpoint = dispatch_res.0.unwrap();
-
         let factory = ClientConn::with_opts(
             endpoint.user.clone(),
             endpoint.password.clone(),

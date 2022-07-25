@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{error::Error, ops::Deref, sync::Arc, thread, time};
-
+use std::{error::Error, sync::Arc, thread, time};
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
 use regex::Regex;
-use tokio::sync::Mutex;
 
 use super::ReadWriteEndpoint;
 use crate::{
@@ -94,22 +92,22 @@ pub struct RulesMatch {
 impl RulesMatch {
     pub async fn start_rules_match_reconcile(
         rx: crossbeam_channel::Receiver<ReadWriteEndpoint>,
-        inner: Arc<Mutex<RulesMatch>>,
+        inner: Arc<parking_lot::Mutex<RulesMatch>>,
         rules: Vec<ReadWriteSplittingRule>,
         default_target: TargetRole,
     ) {
         tokio::spawn(async move {
             loop {
                 let rw_endpoint = rx.clone().recv().unwrap();
-                inner.clone().lock().await.default_target = default_target.clone();
-                inner.clone().lock().await.default_balance =
+                inner.clone().lock().default_target = default_target.clone();
+                inner.clone().lock().default_balance =
                     RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
-                inner.clone().lock().await.default_trans_balance =
+                inner.clone().lock().default_trans_balance =
                     RulesMatchBuilder::build_default_balance(
                         &TargetRole::ReadWrite,
                         rw_endpoint.clone(),
                     );
-                inner.clone().lock().await.inner =
+                inner.clone().lock().inner =
                     RulesMatchBuilder::build_rules(rules.clone(), rw_endpoint.clone());
 
                 let ten_millis = time::Duration::from_millis(1000);
@@ -178,6 +176,9 @@ impl RegexRuleMatchInner {
         let mut balance = Balance.build_balance(algorithm_name);
         match target {
             TargetRole::Read => {
+                if rw_endpoint.read.len() == 0 {
+                    balance_add_endpoint(&mut balance, rw_endpoint.readwrite);
+                }
                 balance_add_endpoint(&mut balance, rw_endpoint.read);
             }
 

@@ -15,7 +15,8 @@
 use std::collections::HashMap;
 
 use futures::StreamExt;
-use mysql_protocol::{client::conn::ClientConn, row::RowData, util::*};
+use tracing::{error, info, warn, Level};
+use mysql_protocol::{client::conn::ClientConn, row::RowData};
 use pisa_error::error::{Error, ErrorKind};
 use tokio::time::{self, Duration};
 
@@ -82,7 +83,7 @@ impl MonitorReadOnly {
     }
 
     // show variables like 'read_only';
-    async fn read_only_check(
+    pub async fn read_only_check(
         user: String,
         password: String,
         addr: String,
@@ -103,11 +104,11 @@ impl MonitorReadOnly {
             let read_only_status = row.decode_with_name::<String>("Variable_name").unwrap();
             let read_only_values = row.decode_with_name::<String>("Value").unwrap();
 
-            if read_only_status.eq("read_only") {
+            if read_only_status.eq("read_only") && read_only_values.eq("ON") {
                 return Ok(NodeRole::Slave);
             }
         }
-        Ok(NodeRole::Master)
+        return Ok(NodeRole::Master);
     }
 }
 
@@ -167,11 +168,7 @@ impl Monitor for MonitorReadOnly {
                 })
                 .await
                 {
-                    if retries > read_only_max_failures {
-                        retries = 1;
-                    }
-                    retries += 1;
-                    std::thread::sleep(time::Duration::from_millis(read_only_interval));
+                    println!("timeout");
                 }
 
                 if let Err(e) = read_only_tx.send(response.clone()) {

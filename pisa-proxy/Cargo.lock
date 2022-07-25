@@ -3181,11 +3181,15 @@ dependencies = [
  "futures",
  "loadbalance",
  "mysql_protocol",
+ "parking_lot 0.12.0",
  "regex",
  "serde",
  "serde_derive",
  "tokio",
  "tokio-scoped",
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber 0.2.25",
 ]
 
 [[package]]

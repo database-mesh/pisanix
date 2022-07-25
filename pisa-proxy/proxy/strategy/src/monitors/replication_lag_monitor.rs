@@ -15,14 +15,17 @@
 use std::collections::HashMap;
 
 use futures::StreamExt;
-use mysql_protocol::{client::conn::ClientConn, row::RowData, util::*};
+use mysql_protocol::{client::conn::ClientConn, row::RowData};
 use pisa_error::error::{Error, ErrorKind};
 use tokio::time::{self, Duration};
+use endpoint::endpoint::Endpoint;
 
 use crate::{
-    config::MasterHighAvailability, discovery::discovery::Monitor,
+    discovery::discovery::Monitor,
     readwritesplitting::ReadWriteEndpoint,
 };
+use crate::monitors::read_only_monitor::MonitorReadOnly;
+use crate::monitors::read_only_monitor::NodeRole;
 
 #[derive(Debug)]
 pub struct MonitorReplicationLag {
@@ -56,6 +59,37 @@ impl MonitorReplicationLag {
             max_replication_lag,
             replication_lag_tx,
             rw_endpoint,
+        }
+    }
+
+    async fn build_read_only_endpoint(user: String, password: String, rw_endpoint: ReadWriteEndpoint) -> ReadWriteEndpoint {
+        let mut read_endpoint = vec![];
+        for readwrite in rw_endpoint.clone().readwrite {
+            match MonitorReadOnly::read_only_check(user.clone(), password.clone(), readwrite.clone().addr).await {
+                Ok(role) => {
+                    match role {
+                        NodeRole::Slave => read_endpoint.push(readwrite),
+                        NodeRole::Master => {},
+                    }
+                },
+                Err(e) => {},
+            }
+        }
+
+        for read in rw_endpoint.clone().read {
+            match MonitorReadOnly::read_only_check(user.clone(), password.clone(), read.clone().addr).await {
+                Ok(role) => {
+                    match role {
+                        NodeRole::Slave => read_endpoint.push(read),
+                        NodeRole::Master => {},
+                    }
+                }
+                Err(e) => {}
+            }
+        }
+        ReadWriteEndpoint {
+            read: read_endpoint,
+            readwrite: rw_endpoint.readwrite,
         }
     }
 
@@ -121,19 +155,23 @@ impl Monitor for MonitorReplicationLag {
         let replication_lag_timeout = self.replication_lag_timeout;
         let replication_lag_max_failures = self.replication_lag_max_failures;
         let reaplication_lag_interval = self.replication_lag_interval;
-        let rw_endpoint = self.rw_endpoint.clone();
         let replication_lag_tx = self.replication_lag_tx.clone();
-        // customer define threshold
         let max_replication_lag = self.max_replication_lag;
-        let mut response = ReplicationLagMonitorResponse::new(rw_endpoint.clone());
+        let mut curr_rw_endpoint = MonitorReplicationLag::build_read_only_endpoint(user.clone(), password.clone(), self.rw_endpoint.clone()).await;
+        let mut response = ReplicationLagMonitorResponse::new(curr_rw_endpoint.clone());
 
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
+                if curr_rw_endpoint.read.len() == 0 {
+                    replication_lag_tx.send(response.clone()).unwrap();
+                    std::thread::sleep(time::Duration::from_millis(reaplication_lag_interval));
+                    continue;
+                }
                 if let Err(_) =
                     time::timeout(Duration::from_millis(replication_lag_timeout), async {
                         // probe read endpoint
-                        for read in rw_endpoint.clone().read {
+                        for read in curr_rw_endpoint.clone().read {
                             // ping_res include slave addr and latency from master
                             match MonitorReplicationLag::replication_lag_check(
                                 user.clone(),
@@ -235,15 +273,12 @@ impl Monitor for MonitorReplicationLag {
                     })
                     .await
                 {
-                    // TODO: add timeout handler
-                    // start connect max failures retry
-                    // if retries > replication_lag_max_failures {
-                    //     // after connect_max_failures retrying time send message to Monitor Reconcile
-                    //     retries = 1;
-                    // }
-                    // retries += 1;
+                    println!("timeout");
                 }
-                replication_lag_tx.send(response.clone()).unwrap();
+                if response.latency.len() > 0 {
+                    replication_lag_tx.send(response.clone()).unwrap();
+                }
+                
                 std::thread::sleep(time::Duration::from_millis(reaplication_lag_interval));
             }
         });
