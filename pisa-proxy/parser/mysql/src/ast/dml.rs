@@ -3082,7 +3082,7 @@ pub struct ShowCreateTableStmt {
 #[derive(Debug, Clone)]
 pub struct ShowKeysStmt {
     pub span: Span,
-    pub opt_extended: bool,
+    pub is_extended: bool,
     pub keys_or_index: KeysOrIndex,
     pub from_table: ShowFromTable,
     pub opt_db: Option<ShowTableDb>,
@@ -3156,4 +3156,16 @@ pub struct ShowGrantsStmt {
     pub span: Span,
     pub user: Option<User>,
     pub user_list: Option<Vec<User>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowEnginesStmt {
+    pub span: Span,
+    pub is_storage: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowProcessListStmt {
+    pub span: Span,
+    pub is_full: bool,
 }
