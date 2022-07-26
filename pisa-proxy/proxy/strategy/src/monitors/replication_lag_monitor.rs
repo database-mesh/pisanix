@@ -180,6 +180,7 @@ impl Monitor for MonitorReplicationLag {
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
+                // println!("replication lag monitor checking....333333333");
                 if curr_rw_endpoint.read.len() == 0 {
                     replication_lag_tx.send(response.clone()).unwrap();
                     std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));

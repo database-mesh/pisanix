@@ -139,7 +139,7 @@ impl Monitor for MonitorReadOnly {
                             Ok(read_only_status) => {
                                 response.roles.insert(read.addr, read_only_status);
                             }
-                            Err(_) => {
+                            Err(_) => loop {
                                 if retries > read_only_failure_threshold {
                                     retries = 1;
                                     break;
@@ -153,11 +153,12 @@ impl Monitor for MonitorReadOnly {
                                     {
                                         Ok(read_only_status) => {
                                             response.roles.insert(read.addr, read_only_status);
+                                            break;
                                         }
                                         Err(_) => retries += 1,
                                     }
                                 }
-                            }
+                            },
                         }
                     }
 
@@ -173,7 +174,7 @@ impl Monitor for MonitorReadOnly {
                             Ok(read_only_status) => {
                                 response.roles.insert(readwrite.addr, read_only_status);
                             }
-                            Err(_) => {
+                            Err(_) => loop {
                                 if retries > read_only_failure_threshold {
                                     retries = 1;
                                     break;
@@ -187,11 +188,12 @@ impl Monitor for MonitorReadOnly {
                                     {
                                         Ok(read_only_status) => {
                                             response.roles.insert(readwrite.addr, read_only_status);
+                                            break;
                                         }
                                         Err(_) => retries += 1,
                                     }
                                 }
-                            }
+                            },
                         }
                     }
                 })

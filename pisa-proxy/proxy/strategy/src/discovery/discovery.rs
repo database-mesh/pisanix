@@ -72,6 +72,15 @@ impl Discovery for DiscoveryMasterHighAvailability {
             monitor_channel.ping_tx,
             self.rw_endpoint.clone(),
         )));
+        monitors.push(MonitorKind::ReadOnly(MonitorReadOnly::new(
+            self.config.user.clone(),
+            self.config.password.clone(),
+            self.config.read_only_period,
+            self.config.read_only_timeout,
+            self.config.read_only_failure_threshold,
+            monitor_channel.read_only_tx,
+            self.rw_endpoint.clone(),
+        )));
         monitors.push(MonitorKind::Lag(MonitorReplicationLag::new(
             self.config.user.clone(),
             self.config.password.clone(),
@@ -80,15 +89,6 @@ impl Discovery for DiscoveryMasterHighAvailability {
             self.config.replication_lag_failure_threshold,
             self.config.max_replication_lag,
             monitor_channel.replication_lag_tx,
-            self.rw_endpoint.clone(),
-        )));
-        monitors.push(MonitorKind::ReadOnly(MonitorReadOnly::new(
-            self.config.user.clone(),
-            self.config.password.clone(),
-            self.config.read_only_period,
-            self.config.read_only_timeout,
-            self.config.read_only_failure_threshold,
-            monitor_channel.read_only_tx,
             self.rw_endpoint.clone(),
         )));
 
@@ -117,9 +117,6 @@ impl Monitor for MonitorKind {
         }
     }
 }
-
-#[derive(Debug)]
-pub struct MonitorReconcile {}
 
 #[async_trait::async_trait]
 pub trait Monitor {

@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use mysql_protocol::client::conn::ClientConn;
 use tokio::time::{self, Duration};
 use tracing::{debug, error};
 
@@ -49,7 +50,7 @@ impl ConnectMonitorResponse {
         let mut read = HashMap::new();
         let mut readwrite = HashMap::new();
         for r in rw_endpoint.read {
-            read.insert(r.addr, ConnectStatus::Disconnected);
+            read.insert(r.addr, ConnectStatus::Connected);
         }
         for rw in rw_endpoint.readwrite {
             readwrite.insert(rw.addr, ConnectStatus::Connected);
@@ -82,10 +83,17 @@ impl MonitorConnect {
 
     // probe datasource by connect
     pub async fn connnect_check(endpoint: String) -> ConnectStatus {
-        match tokio::net::TcpStream::connect(endpoint.clone()).await {
-            Ok(_) => ConnectStatus::Connected,
-            Err(_) => ConnectStatus::Disconnected,
+        let factory =
+            ClientConn::with_opts(String::from("root"), String::from("12345678"), endpoint);
+        match factory.connect().await {
+            Ok(_) => return ConnectStatus::Connected,
+            Err(_) => return ConnectStatus::Disconnected,
         }
+
+        // match tokio::net::TcpStream::connect(endpoint.clone()).await {
+        //     Ok(_) => ConnectStatus::Connected,
+        //     Err(_) => ConnectStatus::Disconnected,
+        // }
     }
 }
 
@@ -187,7 +195,7 @@ impl Monitor for MonitorConnect {
                 }
 
                 if let Err(e) = connect_tx.send(response.clone()) {
-                    error!("send connect response err: {:#?}", e);
+                    error!("send connect response err: {:#?}", e.into_inner());
                 }
 
                 // connect monitor probe interval

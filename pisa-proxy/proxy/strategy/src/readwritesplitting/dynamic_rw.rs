@@ -146,7 +146,6 @@ impl Route for ReadWriteSplittingDynamic {
         input: &RouteInput,
     ) -> Result<(Option<Endpoint>, TargetRole), Self::Error> {
         let rules_match_wrapper = self.rules_match.clone();
-        // let mut rules_match = block_on(async move { rules_match_wrapper.lock() });
         let mut rules_match = rules_match_wrapper.lock();
         let b = rules_match.get(input);
         Ok((b.0.next(), b.1))

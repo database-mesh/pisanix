@@ -115,7 +115,7 @@ impl Monitor for MonitorPing {
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
-                println!("ping check...");
+                // println!("ping check...22222222222");
                 if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                     for read in rw_endpoint.clone().read {
                         match MonitorPing::ping_check(

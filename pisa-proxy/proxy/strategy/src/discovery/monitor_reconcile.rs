@@ -51,7 +51,7 @@ impl MonitorReconcile {
         rw_endpoint: ReadWriteEndpoint,
         monitor_channel: crate::readwritesplitting::MonitorChannel,
     ) {
-        tokio::task::spawn_blocking(move || loop {
+        tokio::task::spawn_blocking(move || {
             loop {
                 let mut curr_rw_endpoint = rw_endpoint.clone();
                 let mut replication_lag_monitor_response: Option<
@@ -93,8 +93,6 @@ impl MonitorReconcile {
                                                         curr_rw_endpoint.readwrite = vec![];
                                                         // add new read write into master list
                                                         curr_rw_endpoint.readwrite.push(read_endpoint);
-                                                        //TODO send replication_lag_endpoint tx to update read only list
-                                                        // replication_lag_endpoint_tx.send(curr_rw_endpoint.clone()).unwrap();
                                                     },
                                                     // slave doesn't change to master
                                                     crate::monitors::read_only_monitor::NodeRole::Slave => {
@@ -197,7 +195,7 @@ impl MonitorReconcile {
                     }
                 }
 
-                if let Err(err) = s.try_send(curr_rw_endpoint) {
+                if let Err(err) = s.send(curr_rw_endpoint) {
                     error!("send read write endpoint err: {:#?}", err);
                 }
 
