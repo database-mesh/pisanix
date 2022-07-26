@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::Error;
 use tokio::time::{self, Duration};
-use tracing::debug;
+use tracing::{debug,error};
 
 use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
 
@@ -25,9 +25,9 @@ use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint
 pub struct MonitorPing {
     pub user: String,
     pub password: String,
-    pub ping_interval: u64,
+    pub ping_period: u64,
     pub ping_timeout: u64,
-    pub ping_max_failures: u64,
+    pub ping_failure_threshold: u64,
     pub ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
 }
@@ -62,18 +62,18 @@ impl MonitorPing {
     pub fn new(
         user: String,
         password: String,
-        ping_interval: u64,
+        ping_period: u64,
         ping_timeout: u64,
-        ping_max_failures: u64,
+        ping_failure_threshold: u64,
         ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> Self {
         MonitorPing {
             user,
             password,
-            ping_interval,
+            ping_period,
             ping_timeout,
-            ping_max_failures,
+            ping_failure_threshold,
             ping_tx,
             rw_endpoint,
         }
@@ -104,9 +104,9 @@ impl Monitor for MonitorPing {
     async fn run_check(&self) {
         let user = self.user.clone();
         let password = self.password.clone();
-        let ping_interval = self.ping_interval;
+        let ping_period = self.ping_period;
         let ping_timeout = self.ping_timeout;
-        let ping_max_failures = self.ping_max_failures;
+        let ping_failure_threshold = self.ping_failure_threshold;
         let rw_endpoint = self.rw_endpoint.clone();
         let ping_tx = self.ping_tx.clone();
 
@@ -129,7 +129,7 @@ impl Monitor for MonitorPing {
                                     response.read.insert(read.addr, PingStatus::PingOk);
                                 }
                                 PingStatus::PingNotOk => loop {
-                                    if retries > ping_max_failures {
+                                    if retries > ping_failure_threshold {
                                         response
                                             .read
                                             .insert(read.addr.clone(), PingStatus::PingNotOk);
@@ -160,12 +160,12 @@ impl Monitor for MonitorPing {
                                         }
                                     }
                                     std::thread::sleep(std::time::Duration::from_millis(
-                                        ping_interval,
+                                        ping_period,
                                     ));
                                 },
                             },
                             Err(_) => loop {
-                                if retries > ping_max_failures {
+                                if retries > ping_failure_threshold {
                                     response.read.insert(read.addr.clone(), PingStatus::PingNotOk);
                                     retries = 1;
                                     break;
@@ -191,7 +191,7 @@ impl Monitor for MonitorPing {
                                         Err(_) => retries += 1,
                                     }
                                 }
-                                std::thread::sleep(std::time::Duration::from_millis(ping_interval));
+                                std::thread::sleep(std::time::Duration::from_millis(ping_period));
                             },
                         }
                     }
@@ -209,7 +209,7 @@ impl Monitor for MonitorPing {
                                     response.readwrite.insert(readwrite.addr, PingStatus::PingOk);
                                 }
                                 PingStatus::PingNotOk => loop {
-                                    if retries > ping_max_failures {
+                                    if retries > ping_period {
                                         response
                                             .readwrite
                                             .insert(readwrite.addr.clone(), PingStatus::PingNotOk);
@@ -242,7 +242,7 @@ impl Monitor for MonitorPing {
                                         }
                                     }
                                     std::thread::sleep(std::time::Duration::from_millis(
-                                        ping_interval,
+                                        ping_period,
                                     ));
                                 },
                             },
@@ -258,9 +258,9 @@ impl Monitor for MonitorPing {
                 }
 
                 if let Err(e) = ping_tx.send(response.clone()) {
-                    // println!(">>>>>> {:#?}", e);
+                    error!("{:#?}", e);
                 }
-                std::thread::sleep(std::time::Duration::from_millis(ping_interval));
+                std::thread::sleep(std::time::Duration::from_millis(ping_period));
             }
         });
     }

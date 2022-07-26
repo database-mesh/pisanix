@@ -30,9 +30,9 @@ use crate::{
 pub struct MonitorReplicationLag {
     pub user: String,
     pub password: String,
-    pub replication_lag_interval: u64,
+    pub replication_lag_period: u64,
     pub replication_lag_timeout: u64,
-    pub replication_lag_max_failures: u64,
+    pub replication_lag_failure_threshold: u64,
     pub max_replication_lag: u64,
     pub replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
@@ -42,9 +42,9 @@ impl MonitorReplicationLag {
     pub fn new(
         user: String,
         password: String,
-        replication_lag_interval: u64,
+        replication_lag_period: u64,
         replication_lag_timeout: u64,
-        replication_lag_max_failures: u64,
+        replication_lag_failure_threshold: u64,
         max_replication_lag: u64,
         replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
@@ -52,9 +52,9 @@ impl MonitorReplicationLag {
         MonitorReplicationLag {
             user,
             password,
-            replication_lag_interval,
+            replication_lag_period,
             replication_lag_timeout,
-            replication_lag_max_failures,
+            replication_lag_failure_threshold,
             max_replication_lag,
             replication_lag_tx,
             rw_endpoint,
@@ -161,8 +161,8 @@ impl Monitor for MonitorReplicationLag {
         let user = self.user.clone();
         let password = self.password.clone();
         let replication_lag_timeout = self.replication_lag_timeout;
-        let replication_lag_max_failures = self.replication_lag_max_failures;
-        let reaplication_lag_interval = self.replication_lag_interval;
+        let replication_lag_failure_threshold = self.replication_lag_failure_threshold;
+        let reaplication_lag_period = self.replication_lag_period;
         let replication_lag_tx = self.replication_lag_tx.clone();
         let max_replication_lag = self.max_replication_lag;
         let curr_rw_endpoint = MonitorReplicationLag::build_read_only_endpoint(
@@ -178,7 +178,7 @@ impl Monitor for MonitorReplicationLag {
             loop {
                 if curr_rw_endpoint.read.len() == 0 {
                     replication_lag_tx.send(response.clone()).unwrap();
-                    std::thread::sleep(time::Duration::from_millis(reaplication_lag_interval));
+                    std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));
                     continue;
                 } else {
                 }
@@ -199,7 +199,7 @@ impl Monitor for MonitorReplicationLag {
                                         Some(lag) => {
                                             if lag > max_replication_lag {
                                                 loop {
-                                                    if retries > replication_lag_max_failures {
+                                                    if retries > replication_lag_failure_threshold {
                                                         response.latency.insert(
                                                             read.addr.clone(),
                                                             ReplicationLagResponseInner {
@@ -242,7 +242,7 @@ impl Monitor for MonitorReplicationLag {
                                             }
                                         }
                                         None => loop {
-                                            if retries > replication_lag_max_failures {
+                                            if retries > replication_lag_failure_threshold {
                                                 response.latency.insert(
                                                     read.addr.clone(),
                                                     ReplicationLagResponseInner {
@@ -294,7 +294,7 @@ impl Monitor for MonitorReplicationLag {
                     replication_lag_tx.send(response.clone()).unwrap();
                 }
 
-                std::thread::sleep(time::Duration::from_millis(reaplication_lag_interval));
+                std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));
             }
         });
     }

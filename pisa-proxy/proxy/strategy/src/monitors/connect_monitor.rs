@@ -23,9 +23,9 @@ use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint
 pub struct MonitorConnect {
     pub user: String,
     pub password: String,
-    pub connect_interval: u64,
+    pub connect_period: u64,
     pub connect_timeout: u64,
-    pub connect_max_failures: u64,
+    pub connect_failure_threshold: u64,
     pub rw_endpoint: ReadWriteEndpoint,
     pub connect_tx: crossbeam_channel::Sender<ConnectMonitorResponse>,
 }
@@ -63,9 +63,9 @@ impl MonitorConnect {
     pub fn new(
         user: String,
         password: String,
-        connect_interval: u64,
+        connect_period: u64,
         connect_timeout: u64,
-        connect_max_failures: u64,
+        connect_failure_threshold: u64,
         rw_endpoint: ReadWriteEndpoint,
         connect_tx: crossbeam_channel::Sender<ConnectMonitorResponse>,
     ) -> Self {
@@ -73,9 +73,9 @@ impl MonitorConnect {
             connect_tx,
             user,
             password,
-            connect_interval,
+            connect_period,
             connect_timeout,
-            connect_max_failures,
+            connect_failure_threshold,
             rw_endpoint,
         }
     }
@@ -92,8 +92,8 @@ impl MonitorConnect {
 #[async_trait::async_trait]
 impl Monitor for MonitorConnect {
     async fn run_check(&self) {
-        let connect_interval = self.connect_interval;
-        let connect_max_failures = self.connect_max_failures;
+        let connect_period = self.connect_period;
+        let connect_failure_threshold = self.connect_failure_threshold;
         let connect_timeout = self.connect_timeout;
         let rw_endpoint = self.rw_endpoint.clone();
         let connect_tx = self.connect_tx.clone();
@@ -116,7 +116,7 @@ impl Monitor for MonitorConnect {
                             ConnectStatus::Disconnected => {
                                 // connect failures retry
                                 loop {
-                                    if retries > connect_max_failures {
+                                    if retries > connect_failure_threshold {
                                         response
                                             .read
                                             .insert(read.addr.clone(), ConnectStatus::Disconnected);
@@ -137,7 +137,7 @@ impl Monitor for MonitorConnect {
                                         }
                                     }
                                     std::thread::sleep(std::time::Duration::from_millis(
-                                        connect_interval,
+                                        connect_period,
                                     ));
                                 }
                             }
@@ -154,7 +154,7 @@ impl Monitor for MonitorConnect {
                                     .insert(readwrite.addr.clone(), ConnectStatus::Connected);
                             }
                             ConnectStatus::Disconnected => loop {
-                                if retries > connect_max_failures {
+                                if retries > connect_failure_threshold {
                                     response
                                         .readwrite
                                         .insert(readwrite.addr.clone(), conn_res.clone());
@@ -175,7 +175,7 @@ impl Monitor for MonitorConnect {
                                     }
                                 }
                                 std::thread::sleep(std::time::Duration::from_millis(
-                                    connect_interval,
+                                    connect_period,
                                 ));
                             },
                         }
@@ -191,7 +191,7 @@ impl Monitor for MonitorConnect {
                 }
 
                 // connect monitor probe interval
-                std::thread::sleep(std::time::Duration::from_millis(connect_interval));
+                std::thread::sleep(std::time::Duration::from_millis(connect_period));
             }
         });
     }

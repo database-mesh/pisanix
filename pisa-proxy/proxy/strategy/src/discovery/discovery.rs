@@ -53,27 +53,27 @@ impl Discovery for DiscoveryMasterHighAvailability {
         monitors.push(MonitorKind::Connect(MonitorConnect::new(
             self.config.user.clone(),
             self.config.password.clone(),
-            self.config.connect_interval,
+            self.config.connect_period,
             self.config.connect_timeout,
-            self.config.connect_max_failures,
+            self.config.connect_failure_threshold,
             self.rw_endpoint.clone(),
             monitor_channel.connect_tx,
         )));
         monitors.push(MonitorKind::Ping(MonitorPing::new(
             self.config.user.clone(),
             self.config.password.clone(),
-            self.config.ping_interval,
+            self.config.ping_period,
             self.config.ping_timeout,
-            self.config.ping_max_failures,
+            self.config.ping_failure_threshold,
             monitor_channel.ping_tx,
             self.rw_endpoint.clone(),
         )));
         monitors.push(MonitorKind::Lag(MonitorReplicationLag::new(
             self.config.user.clone(),
             self.config.password.clone(),
-            self.config.replication_lag_interval,
+            self.config.replication_lag_period,
             self.config.replication_lag_timeout,
-            self.config.replication_lag_max_failures,
+            self.config.replication_lag_failure_threshold,
             self.config.max_replication_lag,
             monitor_channel.replication_lag_tx,
             self.rw_endpoint.clone(),
@@ -81,9 +81,9 @@ impl Discovery for DiscoveryMasterHighAvailability {
         monitors.push(MonitorKind::ReadOnly(MonitorReadOnly::new(
             self.config.user.clone(),
             self.config.password.clone(),
-            self.config.read_only_interval,
+            self.config.read_only_period,
             self.config.read_only_timeout,
-            self.config.read_only_max_failures,
+            self.config.read_only_failure_threshold,
             monitor_channel.read_only_tx,
             self.rw_endpoint.clone(),
         )));

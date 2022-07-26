@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use tracing::debug;
 use crossbeam_channel::unbounded;
 use crate::{config::ReadWriteSplittingDynamic, readwritesplitting::ReadWriteEndpoint};
 
@@ -91,7 +92,6 @@ impl MonitorReconcile {
                                                         curr_rw_endpoint.readwrite = vec![];
                                                         // add new read write into master list
                                                         curr_rw_endpoint.readwrite.push(read_endpoint);
-                                                        // println!("curr endpoint ...... .>>>>>>>> {:#?}", curr_rw_endpoint);
                                                         //TODO send replication_lag_endpoint tx to update read only list
                                                         // replication_lag_endpoint_tx.send(curr_rw_endpoint.clone()).unwrap();
                                                     },
@@ -128,46 +128,22 @@ impl MonitorReconcile {
                         }
                     }
                 }
-
                 for (read_addr, read_connect_status) in connect_monitor_response.clone().read {
                     match read_connect_status {
                         crate::monitors::connect_monitor::ConnectStatus::Connected => {
-                            for (read_ping_addr, read_ping_status) in
-                                ping_monitor_response.clone().read
-                            {
+                            for (read_ping_addr, read_ping_status) in ping_monitor_response.clone().read {
                                 match read_ping_status {
                                     crate::monitors::ping_monitor::PingStatus::PingOk => {
                                         match replication_lag_monitor_response.clone() {
                                             Some(replication_lag_response) => {
-                                                for (replication_lag_addr, lag_status) in
-                                                    &replication_lag_response.latency
-                                                {
+                                                for (replication_lag_addr, lag_status) in &replication_lag_response.latency {
                                                     if !lag_status.is_latency {
-                                                        curr_rw_endpoint.read.append(
-                                                            &mut curr_rw_endpoint.read.clone(),
-                                                        );
+                                                        curr_rw_endpoint.read.append(&mut curr_rw_endpoint.read.clone());
                                                         continue;
                                                     } else {
                                                         // add replication_lag_addr to read_write list
-                                                        curr_rw_endpoint.readwrite.push(
-                                                            rw_endpoint
-                                                                .read
-                                                                .iter()
-                                                                .find(|r| {
-                                                                    r.addr.eq(replication_lag_addr)
-                                                                })
-                                                                .unwrap()
-                                                                .clone(),
-                                                        );
-                                                        curr_rw_endpoint.read.remove(
-                                                            rw_endpoint
-                                                                .read
-                                                                .iter()
-                                                                .position(|r| {
-                                                                    r.addr.eq(replication_lag_addr)
-                                                                })
-                                                                .unwrap(),
-                                                        );
+                                                        // curr_rw_endpoint.readwrite.push(rw_endpoint.read.iter().find(|r| {r.addr.eq(replication_lag_addr)}).unwrap().clone());
+                                                        curr_rw_endpoint.read.remove(rw_endpoint.read.iter().position(|r| {r.addr.eq(replication_lag_addr)}).unwrap());
                                                     }
                                                 }
                                             }
@@ -175,34 +151,24 @@ impl MonitorReconcile {
                                         }
                                     }
                                     crate::monitors::ping_monitor::PingStatus::PingNotOk => {
-                                        curr_rw_endpoint.readwrite.push(
-                                            rw_endpoint
-                                                .read
-                                                .iter()
-                                                .find(|r| r.addr.eq(&read_ping_addr))
-                                                .unwrap()
-                                                .clone(),
-                                        );
+                                        curr_rw_endpoint.read.remove(rw_endpoint.read.iter().position(|r| {r.addr.eq(&read_ping_addr)}).unwrap());
+                                        // curr_rw_endpoint.readwrite.push(
+                                        //     rw_endpoint.read.iter().find(|r| r.addr.eq(&read_ping_addr)).unwrap().clone());
                                     }
                                 }
                             }
                         }
                         crate::monitors::connect_monitor::ConnectStatus::Disconnected => {
                             curr_rw_endpoint.read.remove(
-                                rw_endpoint
-                                    .read
-                                    .iter()
-                                    .position(|r| r.addr.eq(&read_addr))
-                                    .unwrap(),
+                                rw_endpoint.read.iter().position(|r| r.addr.eq(&read_addr)).unwrap(),
                             );
                             // curr_rw_endpoint.readwrite.append(&mut curr_rw_endpoint.read.clone());
                         }
                     }
                 }
 
-                // println!("response {:#?}", curr_rw_endpoint);
                 if let Err(err) = s.try_send(curr_rw_endpoint) {
-                    println!("err >>> {:#?}", err);
+                    debug!("err >>> {:#?}", err);
                 }
 
                 std::thread::sleep(std::time::Duration::from_millis(monitor_interval));

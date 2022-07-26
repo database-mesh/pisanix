@@ -21,7 +21,7 @@ use tokio::time::{self, Duration};
 use tracing::debug;
 
 use crate::{
-    config::MasterHighAvailability, discovery::discovery::Monitor,
+    discovery::discovery::Monitor,
     readwritesplitting::ReadWriteEndpoint,
 };
 
@@ -29,9 +29,9 @@ use crate::{
 pub struct MonitorReadOnly {
     pub user: String,
     pub password: String,
-    pub read_only_interval: u64,
+    pub read_only_period: u64,
     pub read_only_timeout: u64,
-    pub read_only_max_failures: u64,
+    pub read_only_failure_threshold: u64,
     pub read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
 }
@@ -65,18 +65,18 @@ impl MonitorReadOnly {
     pub fn new(
         user: String,
         password: String,
-        read_only_interval: u64,
+        read_only_period: u64,
         read_only_timeout: u64,
-        read_only_max_failures: u64,
+        read_only_failure_threshold: u64,
         read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> Self {
         MonitorReadOnly {
             user,
             password,
-            read_only_interval,
+            read_only_period,
             read_only_timeout,
-            read_only_max_failures,
+            read_only_failure_threshold,
             read_only_tx,
             rw_endpoint,
         }
@@ -118,9 +118,9 @@ impl Monitor for MonitorReadOnly {
         let user = self.user.clone();
         let password = self.password.clone();
         let rw_endpoint = self.rw_endpoint.clone();
-        let read_only_interval = self.read_only_interval.clone();
+        let read_only_period = self.read_only_period.clone();
         let read_only_timeout = self.read_only_timeout;
-        let read_only_max_failures = self.read_only_max_failures;
+        let read_only_failure_threshold = self.read_only_failure_threshold;
         let read_only_tx = self.read_only_tx.clone();
 
         let mut response = ReadOnlyMonitorResponse::new(rw_endpoint.clone());
@@ -143,7 +143,7 @@ impl Monitor for MonitorReadOnly {
                                 response.roles.insert(read.addr, read_only_status);
                             }
                             Err(_) => {
-                                if retries > read_only_max_failures {
+                                if retries > read_only_failure_threshold {
                                     retries = 1;
                                     break;
                                 } else {
@@ -177,7 +177,7 @@ impl Monitor for MonitorReadOnly {
                                 response.roles.insert(readwrite.addr, read_only_status);
                             }
                             Err(_) => {
-                                if retries > read_only_max_failures {
+                                if retries > read_only_failure_threshold {
                                     retries = 1;
                                     break;
                                 } else {
@@ -207,7 +207,7 @@ impl Monitor for MonitorReadOnly {
                 if let Err(e) = read_only_tx.send(response.clone()) {
                     println!("{}", e);
                 }
-                std::thread::sleep(time::Duration::from_millis(read_only_interval));
+                std::thread::sleep(time::Duration::from_millis(read_only_period));
             }
         });
     }

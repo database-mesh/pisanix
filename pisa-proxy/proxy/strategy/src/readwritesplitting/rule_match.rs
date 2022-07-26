@@ -100,6 +100,7 @@ impl RulesMatch {
         tokio::spawn(async move {
             loop {
                 let rw_endpoint = rx.clone().recv().unwrap();
+                println!("rules match ::: >>>> {:#?}", rw_endpoint);
                 inner.clone().lock().default_target = default_target.clone();
                 inner.clone().lock().default_balance =
                     RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
@@ -110,8 +111,6 @@ impl RulesMatch {
                     );
                 inner.clone().lock().inner =
                     RulesMatchBuilder::build_rules(rules.clone(), rw_endpoint.clone());
-
-                // thread::sleep(time::Duration::from_millis(100000));
             }
         });
     }
