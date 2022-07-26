@@ -138,8 +138,95 @@ spec:
                                 algorithmName:
                                   description: 'the algorithm of rule'
                                   type: string
-                    required:
-                    - static 
+                      dynamic:
+                        description: 'Dynamic rule based read write splitting'
+                        type: object 
+                        properties:
+                          defaultTarget:
+                            type: string
+                          rules:                           
+                            type: array
+                            items:
+                              type: object
+                              description: 'A set of rules' 
+                              properties:
+                                name:
+                                  description: 'the name of rule'
+                                  type: string
+                                type:
+                                  description: 'the type of rule'
+                                  type: string
+                                regex:
+                                  items:
+                                    type: string
+                                  type: array
+                                  description: 'the regex of rule'
+                                target:
+                                  description: 'the target of rule'
+                                  type: string
+                                algorithmName:
+                                  description: 'the algorithm of rule'
+                                  type: string
+                          discovery:
+                            type: object
+                            description: 'Discovery setup to detect role of MySQL instances'
+                            properties:
+                              managedHighAvailability:
+                                type: object
+                                description: 'Managed High Availability'
+                                properties:
+                                  user:
+                                    type: string
+                                  password:
+                                    type: string
+                                  monitorPeriod:
+                                    type: integer
+                                  connectionProbe:
+                                    type: object
+                                    properties:
+                                      periodMilliseconds:
+                                        type: integer
+                                      timeoutMilliseconds:
+                                        type: integer
+                                      failureThreshold:
+                                        type: integer
+                                      successThreshold:
+                                        type: integer
+                                  pingProbe:
+                                    type: object
+                                    properties:
+                                      periodMilliseconds:
+                                        type: integer
+                                      timeoutMilliseconds:
+                                        type: integer
+                                      failureThreshold:
+                                        type: integer
+                                      successThreshold:
+                                        type: integer
+                                  replicationLagProbe:
+                                    type: object
+                                    properties:
+                                      maxReplicationLag:
+                                        type: integer
+                                      periodMilliseconds:
+                                        type: integer
+                                      timeoutMilliseconds:
+                                        type: integer
+                                      failureThreshold:
+                                        type: integer
+                                      successThreshold:
+                                        type: integer
+                                  readOnlyProbe:
+                                    type: object
+                                    properties:
+                                      periodMilliseconds:
+                                        type: integer
+                                      timeoutMilliseconds:
+                                        type: integer
+                                      failureThreshold:
+                                        type: integer
+                                      successThreshold:
+                                        type: integer
                     type: object
                 type: object
               selector:

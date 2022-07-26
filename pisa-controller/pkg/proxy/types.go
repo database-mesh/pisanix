@@ -45,20 +45,51 @@ type SimpleLoadBalance struct {
 }
 
 type ReadWriteSplitting struct {
-	Static *ReadWriteSplittingStatic `json:"static,omitempty"`
+	Static  *ReadWriteSplittingStatic  `json:"static,omitempty"`
+	Dynamic *ReadWriteSplittingDynamic `json:"dynamic,omitempty"`
 }
 
 type ReadWriteSplittingStatic struct {
-	DefaultTarget string                         `json:"default_target"`
-	Rules         []ReadWriteSplittingStaticRule `json:"rule"`
+	DefaultTarget string                   `json:"default_target"`
+	Rules         []ReadWriteSplittingRule `json:"rule"`
 }
 
-type ReadWriteSplittingStaticRule struct {
+type ReadWriteSplittingRule struct {
 	Name          string   `json:"name"`
 	Type          string   `json:"type"`
 	Regex         []string `json:"regex"`
 	Target        string   `json:"target"`
 	AlgorithmName string   `json:"algorithm_name"`
+}
+
+type ReadWriteSplittingDynamic struct {
+	DefaultTarget string                   `json:"default_target"`
+	Rules         []ReadWriteSplittingRule `json:"rule"`
+	Discovery     ReadWriteDiscovery       `json:"discovery"`
+}
+
+type ReadWriteDiscovery struct {
+	*ManagedHighAvailablity
+}
+
+type ManagedHighAvailablity struct {
+	Type                      string `json:"type"`
+	User                      string `json:"user"`
+	Password                  string `json:"password"`
+	MonitorInterval           uint64 `json:"monitor_period"`
+	ConnectInterval           uint64 `json:"connect_period"`
+	ConnectTimeout            uint64 `json:"connect_timeout"`
+	ConnectMaxFailures        uint64 `json:"connect_failure_threshold"`
+	PingInterval              uint64 `json:"ping_period"`
+	PingTimeout               uint64 `json:"ping_timeout"`
+	PingMaxFailures           uint64 `json:"ping_failure_threshold"`
+	ReplicationLagInterval    uint64 `json:"replication_lag_period"`
+	ReplicationLagTimeout     uint64 `json:"replication_lag_timeout"`
+	ReplicationLagMaxFailures uint64 `json:"replication_lag_failure_threshold"`
+	MaxReplicationLag         uint64 `json:"max_replication_lag"`
+	ReadOnlyInterval          uint64 `json:"read_only_period"`
+	ReadOnlyTimeout           uint64 `json:"read_only_timeout"`
+	ReadOnlyMaxFailures       uint64 `json:"read_only_failure_threshold"`
 }
 
 // ConcurrencyControl The conversion used for json key is defined here
