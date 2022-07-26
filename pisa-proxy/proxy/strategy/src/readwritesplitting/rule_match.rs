@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{error::Error, sync::Arc, thread, time};
+use std::{error::Error, sync::Arc};
 
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
@@ -100,7 +100,6 @@ impl RulesMatch {
         tokio::spawn(async move {
             loop {
                 let rw_endpoint = rx.clone().recv().unwrap();
-                println!("rules match ::: >>>> {:#?}", rw_endpoint);
                 inner.clone().lock().default_target = default_target.clone();
                 inner.clone().lock().default_balance =
                     RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());

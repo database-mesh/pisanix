@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use mysql_protocol::client::conn::ClientConn;
 use pisa_error::error::Error;
 use tokio::time::{self, Duration};
-use tracing::{debug,error};
+use tracing::{debug, error};
 
 use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
 
@@ -115,6 +115,7 @@ impl Monitor for MonitorPing {
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
+                println!("ping check...");
                 if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                     for read in rw_endpoint.clone().read {
                         match MonitorPing::ping_check(

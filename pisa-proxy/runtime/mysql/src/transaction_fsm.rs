@@ -81,10 +81,8 @@ impl ConnDriver for Driver {
         pool: &mut Pool<ClientConn>,
         input: RouteInput<'_>,
     ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error> {
-        println!("999999999999999");
         let mut strategy = route_strategy.clone().lock_owned().await;
         let dispatch_res = strategy.dispatch(&input).unwrap();
-        println!("333333333333333");
         debug!("route_strategy to {:?} for input: {:?}", dispatch_res, input);
 
         let endpoint = dispatch_res.0.unwrap();
@@ -93,7 +91,6 @@ impl ConnDriver for Driver {
             endpoint.password.clone(),
             endpoint.addr.clone(),
         );
-        println!("kkkkkkkkkkk");
         pool.set_factory(factory);
 
         match pool.get_conn_with_endpoint(endpoint.addr.as_ref()).await {

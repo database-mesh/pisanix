@@ -18,12 +18,9 @@ use futures::StreamExt;
 use mysql_protocol::{client::conn::ClientConn, row::RowData};
 use pisa_error::error::{Error, ErrorKind};
 use tokio::time::{self, Duration};
-use tracing::debug;
+use tracing::{debug, error};
 
-use crate::{
-    discovery::discovery::Monitor,
-    readwritesplitting::ReadWriteEndpoint,
-};
+use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
 
 #[derive(Debug)]
 pub struct MonitorReadOnly {
@@ -201,11 +198,10 @@ impl Monitor for MonitorReadOnly {
                 .await
                 {
                     debug!("read only monitor check timeout");
-                    println!("timeout");
                 }
 
                 if let Err(e) = read_only_tx.send(response.clone()) {
-                    println!("{}", e);
+                    error!("send read only response error: {:#?}", e);
                 }
                 std::thread::sleep(time::Duration::from_millis(read_only_period));
             }

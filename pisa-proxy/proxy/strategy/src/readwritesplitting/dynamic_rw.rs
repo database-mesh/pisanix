@@ -14,10 +14,7 @@
 
 use std::sync::Arc;
 
-use crossbeam_channel::unbounded;
 use endpoint::endpoint::Endpoint;
-use futures::executor::block_on;
-// use tokio::sync::Mutex;
 use loadbalance::balance::LoadBalance;
 use parking_lot::Mutex;
 
@@ -103,7 +100,9 @@ impl ReadWriteSplittingDynamicBuilder {
         match config.clone().discovery {
             // Use Master High Availability Discovery
             crate::config::Discovery::Mha(cc) => {
-                let monitors = DiscoveryMasterHighAvailability::build(cc.clone(), rw_endpoint.clone()).build_monitors(monitor_channel.clone());
+                let monitors =
+                    DiscoveryMasterHighAvailability::build(cc.clone(), rw_endpoint.clone())
+                        .build_monitors(monitor_channel.clone());
                 for monitor in monitors {
                     tokio::spawn(async move {
                         monitor.run_check().await;
@@ -114,7 +113,8 @@ impl ReadWriteSplittingDynamicBuilder {
                     MonitorReconcile::new(config.clone(), rw_endpoint.clone());
 
                 reciver = Some(
-                    monitor_reconcile.start_monitor_reconcile(cc.monitor_period, monitor_channel.clone()),
+                    monitor_reconcile
+                        .start_monitor_reconcile(cc.monitor_period, monitor_channel.clone()),
                 );
             }
         };
@@ -130,7 +130,7 @@ impl ReadWriteSplittingDynamicBuilder {
             )
             .await;
         });
-        ReadWriteSplittingDynamic {rules_match: rules_match_wrapper.clone() }
+        ReadWriteSplittingDynamic { rules_match: rules_match_wrapper.clone() }
     }
 }
 

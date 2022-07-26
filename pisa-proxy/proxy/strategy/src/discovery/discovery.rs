@@ -26,12 +26,14 @@ pub enum DiscoveryKind {
     MasterHighAvailability(DiscoveryMasterHighAvailability),
 }
 
-// #[async_trait::async_trait]
 pub trait Discovery {
     type Output;
 
     fn build(config: MasterHighAvailability, rw_endpoint: ReadWriteEndpoint) -> Self::Output;
-    fn build_monitors(&self, monitor_channel: crate::readwritesplitting::MonitorChannel) -> Vec::<MonitorKind>;
+    fn build_monitors(
+        &self,
+        monitor_channel: crate::readwritesplitting::MonitorChannel,
+    ) -> Vec<MonitorKind>;
 }
 
 pub struct DiscoveryMasterHighAvailability {
@@ -40,7 +42,6 @@ pub struct DiscoveryMasterHighAvailability {
     pub monitors: Vec<MonitorKind>,
 }
 
-// #[async_trait::async_trait]
 impl Discovery for DiscoveryMasterHighAvailability {
     type Output = Self;
 
@@ -48,7 +49,10 @@ impl Discovery for DiscoveryMasterHighAvailability {
         Self { config, rw_endpoint, monitors: vec![] }
     }
 
-    fn build_monitors(&self, monitor_channel: crate::readwritesplitting::MonitorChannel) -> Vec::<MonitorKind> {
+    fn build_monitors(
+        &self,
+        monitor_channel: crate::readwritesplitting::MonitorChannel,
+    ) -> Vec<MonitorKind> {
         let mut monitors = vec![];
         monitors.push(MonitorKind::Connect(MonitorConnect::new(
             self.config.user.clone(),

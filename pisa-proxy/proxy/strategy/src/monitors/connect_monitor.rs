@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use tokio::time::{self, Duration};
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
 
@@ -187,7 +187,7 @@ impl Monitor for MonitorConnect {
                 }
 
                 if let Err(e) = connect_tx.send(response.clone()) {
-                    println!("{}", e);
+                    error!("send connect response err: {:#?}", e);
                 }
 
                 // connect monitor probe interval
