@@ -89,17 +89,10 @@ impl MonitorConnect {
 
     // probe datasource by connect
     pub async fn connnect_check(endpoint: String) -> ConnectStatus {
-        let factory =
-            ClientConn::with_opts(String::from("root"), String::from("12345678"), endpoint);
-        match factory.connect().await {
-            Ok(_) => return ConnectStatus::Connected,
-            Err(_) => return ConnectStatus::Disconnected,
+        match tokio::net::TcpStream::connect(endpoint.clone()).await {
+            Ok(_) => ConnectStatus::Connected,
+            Err(_) => ConnectStatus::Disconnected,
         }
-
-        // match tokio::net::TcpStream::connect(endpoint.clone()).await {
-        //     Ok(_) => ConnectStatus::Connected,
-        //     Err(_) => ConnectStatus::Disconnected,
-        // }
     }
 }
 
@@ -211,10 +204,6 @@ impl Monitor for MonitorConnect {
                 {
                     error!("send connect response err: {:#?}", err.into_inner());
                 }
-                // if let Err(e) = connect_tx.send(response.clone()) {
-                //     error!("send connect response err: {:#?}", e.into_inner());
-                // }
-
                 // connect monitor probe interval
                 std::thread::sleep(std::time::Duration::from_millis(connect_period));
             }

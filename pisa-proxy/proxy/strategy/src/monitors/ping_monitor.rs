@@ -305,9 +305,6 @@ impl Monitor for MonitorPing {
                 {
                     error!("send ping response err: {:#?}", err.into_inner());
                 }
-                // if let Err(e) = ping_tx.send(response.clone()) {
-                //     error!("{:#?}", e);
-                // }
                 std::thread::sleep(std::time::Duration::from_millis(ping_period));
             }
         });

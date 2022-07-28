@@ -364,9 +364,6 @@ impl Monitor for MonitorReplicationLag {
                     {
                         error!("send replication lag response err: {:#?}", err.into_inner());
                     }
-                    // if let Err(err) = replication_lag_tx.send(response.clone()) {
-                    //     error!("send replication lag response err: {:#?}", err);
-                    // }
                 }
 
                 std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));

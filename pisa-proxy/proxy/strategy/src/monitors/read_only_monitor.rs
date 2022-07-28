@@ -219,9 +219,6 @@ impl Monitor for MonitorReadOnly {
                 {
                     error!("send read only response err: {:#?}", err.into_inner());
                 }
-                // if let Err(e) = read_only_tx.send(response.clone()) {
-                //     error!("send read only response error: {:#?}", e);
-                // }
                 std::thread::sleep(time::Duration::from_millis(read_only_period));
             }
         });
