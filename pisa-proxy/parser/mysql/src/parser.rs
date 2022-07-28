@@ -124,7 +124,6 @@ mod test {
             "SET @@GLOBAL.character_set_client = gbk;",
             "SET @@SESSION.character_set_client = gbk;",
             "SELECT * from mysql.select;",
-            "create database if not exists db CHARACTER SET = utf8;",
             "select * from test.test limit 1",
             "select * from test.1test limit 1",
             "SHOW COLUMNS FROM t_order;",
@@ -157,6 +156,15 @@ mod test {
             "SHOW GRANTS FOR 'u1'@'localhost';",
             "SHOW GRANTS FOR 'u1'@'localhost' USING 'r1';",
             "SHOW GRANTS FOR 'u1'@'localhost' USING 'r1', 'r2';",
+        ];
+
+        parser(inputs);
+    }
+
+    #[test]
+    fn test_ddl_stmt() {
+        let inputs = vec![
+            "CREATE DATABASE IF NOT EXISTS db CHARACTER SET = utf8;",
             "CREATE INDEX idx_order_id ON t_order (order_id);",
             "CREATE UNIQUE INDEX idx_order_compose USING BTREE ON t_order (name(10) DESC, (col1 + col2) ASC);",
             "CREATE FULLTEXT INDEX idx_order_name ON t_order (name) WITH PARSER parser_name;",
@@ -167,6 +175,10 @@ mod test {
             "CREATE LOGFILE GROUP logfile_group ADD UNDOFILE 'undo_file' NODEGROUP 1234, WAIT, COMMENT 'logfile_group_comment', ENGINE  = 'logfile_group_engine';",
         ];
 
+        parser(inputs);
+    }
+
+    fn parser(inputs: Vec<&str>) {
         let p = Parser::new();
         for input in inputs {
             let res = p.parse(input);

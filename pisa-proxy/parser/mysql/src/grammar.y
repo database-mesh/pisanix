@@ -119,7 +119,7 @@ sql_stmt -> SqlStmt:
   | show_engines_stmt { SqlStmt::ShowEnginesStmt($1) }
   | show_plugins_stmt { SqlStmt::ShowPluginsStmt($1) }
   | show_privileges_stmt { SqlStmt::ShowPrivilegesStmt($1) }
-  | show_processlist_stmt { SqlStmt::ShowProcesslistStmt($1) }
+  | show_processlist_stmt { SqlStmt::ShowProcessListStmt($1) }
   | show_replicas_stmt { SqlStmt::ShowReplicasStmt($1) }
   | show_replica_status_stmt { SqlStmt::ShowReplicaStatusStmt($1) }
   | show_grants_stmt { SqlStmt::ShowGrantsStmt($1) }
@@ -6013,7 +6013,7 @@ show_keys_stmt -> Box<ShowKeysStmt>:
     {
     	Box::new(ShowKeysStmt {
     	   span: $span,
-    	   opt_extended: $2,
+    	   is_extended: $2,
     	   keys_or_index: $3,
     	   from_table: $4,
     	   opt_db: $5,
@@ -6070,11 +6070,12 @@ show_master_status_stmt -> Box<ShowDetailsStmt>:
     }
 ;
 
-show_engines_stmt -> Box<ShowDetailsStmt>:
+show_engines_stmt -> Box<ShowEnginesStmt>:
     'SHOW' opt_storage 'ENGINES'
     {
-        Box::new(ShowDetailsStmt {
+        Box::new(ShowEnginesStmt {
            span: $span,
+           is_storage: $2,
         })
     }
 ;
@@ -6152,11 +6153,12 @@ show_create_user_stmt -> Box<ShowCreateUserStmt>:
     }
 ;
 
-show_processlist_stmt -> Box<ShowDetailsStmt>:
+show_processlist_stmt -> Box<ShowProcessListStmt>:
     'SHOW' opt_full 'PROCESSLIST'
     {
-        Box::new(ShowDetailsStmt {
+        Box::new(ShowProcessListStmt {
            span: $span,
+           is_full: $2,
         })
     }
 ;
