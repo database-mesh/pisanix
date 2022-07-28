@@ -15,4 +15,6 @@
 pub mod config;
 pub mod route;
 use route::*;
+pub mod discovery;
+pub mod monitors;
 pub mod readwritesplitting;

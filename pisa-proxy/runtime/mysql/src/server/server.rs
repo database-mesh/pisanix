@@ -411,12 +411,6 @@ impl MySQLServer {
         let sql = str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         let earlier = SystemTime::now();
-        //if let Err(err) =
-        //    self.trans_fsm.trigger(TransEventName::QueryEvent, RouteInput::Statement(sql)).await
-        //{
-        //    error!("err:{:?}", err);
-        //}
-        //let mut client_conn = self.trans_fsm.get_conn().await.unwrap();
 
         let mut client_conn = match self.get_ast(sql) {
             Err(err) => {
@@ -485,7 +479,6 @@ impl MySQLServer {
         self.handle_query_resultset(stream)
             .await
             .map_err(|e| Error::new(ErrorKind::Protocol(e)))?;
-
         let ep = client_conn.get_endpoint().unwrap();
         self.trans_fsm.put_conn(client_conn);
         collect_sql_under_processing_dec!(self, "COM_QUERY", ep.as_str());

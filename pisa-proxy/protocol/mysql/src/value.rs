@@ -35,6 +35,13 @@ impl Value for u64 {
     }
 }
 
+impl Value for Option<u64> {
+    type Item = Option<u64>;
+    fn from(val: Vec<u8>) -> Result<Self> {
+        <Self::Item as Convert<Option<u64>>>::new(val)
+    }
+}
+
 pub trait Convert<T> {
     fn new(val: Vec<u8>) -> Result<T>;
 }
@@ -49,6 +56,18 @@ impl Convert<u64> for u64 {
     fn new(val: Vec<u8>) -> Result<u64> {
         let mut buf = val.as_slice();
         Ok(buf.get_uint_le(val.len()))
+    }
+}
+
+impl Convert<Option<u64>> for Option<u64> {
+    fn new(val: Vec<u8>) -> Result<Option<u64>> {
+        let buf = val.as_slice();
+        if buf[0] == 0 {
+            return Ok(None);
+        }
+        let v = String::from_utf8(val)?;
+        let result = v.parse::<u64>()?;
+        Ok(Some(result))
     }
 }
 

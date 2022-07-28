@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
     pub statics: Option<ReadWriteSplittingStatic>,
+    pub dynamic: Option<ReadWriteSplittingDynamic>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -32,6 +33,40 @@ pub struct ReadWriteSplittingStatic {
 #[serde(untagged)]
 pub enum ReadWriteSplittingRule {
     Regex(RegexRule),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReadWriteSplittingDynamic {
+    pub default_target: TargetRole,
+    #[serde(rename = "rule")]
+    pub rules: Vec<ReadWriteSplittingRule>,
+    pub discovery: Discovery,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "lowercase", tag = "type")]
+pub enum Discovery {
+    Mha(MasterHighAvailability),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct MasterHighAvailability {
+    pub user: String,
+    pub password: String,
+    pub monitor_period: u64,
+    pub connect_period: u64,
+    pub connect_timeout: u64,
+    pub connect_failure_threshold: u64,
+    pub ping_period: u64,
+    pub ping_timeout: u64,
+    pub ping_failure_threshold: u64,
+    pub replication_lag_period: u64,
+    pub replication_lag_timeout: u64,
+    pub replication_lag_failure_threshold: u64,
+    pub max_replication_lag: u64,
+    pub read_only_period: u64,
+    pub read_only_timeout: u64,
+    pub read_only_failure_threshold: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
