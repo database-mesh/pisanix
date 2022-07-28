@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::error::Error;
+use std::{error::Error, sync::Arc};
 
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
 use regex::Regex;
+use tracing::debug;
 
 use super::ReadWriteEndpoint;
 use crate::{
@@ -33,14 +34,21 @@ impl RulesMatchBuilder {
         default_target: TargetRole,
         rw_endpoint: ReadWriteEndpoint,
     ) -> RulesMatch {
-        let inner = RulesMatchBuilder::build_rules(rules, rw_endpoint.clone());
+        let inner = RulesMatchBuilder::build_rules(rules.clone(), rw_endpoint.clone());
         let default_balance =
             RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
 
         let default_trans_balance =
             RulesMatchBuilder::build_default_balance(&TargetRole::ReadWrite, rw_endpoint);
 
-        RulesMatch { default_target, default_trans_balance, inner, default_balance }
+        let rules_match = RulesMatch {
+            default_target: default_target.clone(),
+            default_trans_balance,
+            inner,
+            default_balance,
+        };
+
+        return rules_match;
     }
 
     fn build_rules(
@@ -56,7 +64,6 @@ impl RulesMatchBuilder {
                 }
             }
         }
-
         instances
     }
 
@@ -77,14 +84,39 @@ impl RulesMatchBuilder {
 }
 
 pub struct RulesMatch {
-    default_target: TargetRole,
-    default_balance: BalanceType,
+    pub default_target: TargetRole,
+    pub default_balance: BalanceType,
     // Default transaction balance
-    default_trans_balance: BalanceType,
-    inner: Vec<RulesMatchInner>,
+    pub default_trans_balance: BalanceType,
+    pub inner: Vec<RulesMatchInner>,
 }
 
-enum RulesMatchInner {
+impl RulesMatch {
+    pub async fn start_rules_match_reconcile(
+        rx: crossbeam_channel::Receiver<ReadWriteEndpoint>,
+        inner: Arc<parking_lot::Mutex<RulesMatch>>,
+        rules: Vec<ReadWriteSplittingRule>,
+        default_target: TargetRole,
+    ) {
+        tokio::spawn(async move {
+            loop {
+                let rw_endpoint = rx.clone().recv().unwrap();
+                debug!("reconcile update endpoint: {:#?}", rw_endpoint);
+                inner.clone().lock().default_balance =
+                    RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
+                inner.clone().lock().default_trans_balance =
+                    RulesMatchBuilder::build_default_balance(
+                        &TargetRole::ReadWrite,
+                        rw_endpoint.clone(),
+                    );
+                inner.clone().lock().inner =
+                    RulesMatchBuilder::build_rules(rules.clone(), rw_endpoint.clone());
+            }
+        });
+    }
+}
+
+pub enum RulesMatchInner {
     Regex(RegexRuleMatchInner),
 }
 
@@ -110,7 +142,7 @@ impl RouteBalance for RulesMatch {
     }
 }
 
-struct RegexRuleMatchInner {
+pub struct RegexRuleMatchInner {
     rule: RegexRule,
     regexs: Vec<Regex>,
     balance: BalanceType,
@@ -143,6 +175,9 @@ impl RegexRuleMatchInner {
         let mut balance = Balance.build_balance(algorithm_name);
         match target {
             TargetRole::Read => {
+                if rw_endpoint.read.len() == 0 {
+                    balance_add_endpoint(&mut balance, rw_endpoint.readwrite);
+                }
                 balance_add_endpoint(&mut balance, rw_endpoint.read);
             }
 

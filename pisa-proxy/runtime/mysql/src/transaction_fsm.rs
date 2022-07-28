@@ -86,13 +86,11 @@ impl ConnDriver for Driver {
         debug!("route_strategy to {:?} for input: {:?}", dispatch_res, input);
 
         let endpoint = dispatch_res.0.unwrap();
-
         let factory = ClientConn::with_opts(
             endpoint.user.clone(),
             endpoint.password.clone(),
             endpoint.addr.clone(),
         );
-
         pool.set_factory(factory);
 
         match pool.get_conn_with_endpoint(endpoint.addr.as_ref()).await {
@@ -375,7 +373,7 @@ mod test {
     #[tokio::test]
     async fn test_trigger() {
         let lb = Arc::new(tokio::sync::Mutex::new(RouteStrategy::None));
-        let mut tsm = TransFsm::new_trans_fsm(lb,Pool::new(1));
+        let mut tsm = TransFsm::new_trans_fsm(lb, Pool::new(1));
         tsm.current_state = TransState::TransUseState;
         tsm.trigger(TransEventName::QueryEvent, RouteInput::None).await;
         assert_eq!(tsm.current_state, TransState::TransUseState);

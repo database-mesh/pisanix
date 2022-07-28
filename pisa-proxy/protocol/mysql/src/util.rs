@@ -206,6 +206,14 @@ pub fn is_ok(data: &[u8]) -> bool {
 }
 
 #[inline]
+pub fn is_ok_header(data: u8) -> bool {
+    if data == OK_HEADER {
+        return true;
+    }
+    false
+}
+
+#[inline]
 pub fn get_length(buf: &[u8]) -> usize {
     let mut out = 0u64;
     let ptr_out = &mut out as *mut u64 as *mut u8;
