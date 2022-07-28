@@ -20,7 +20,10 @@ use pisa_error::error::{Error, ErrorKind};
 use tokio::time::{self, Duration};
 use tracing::{debug, error};
 
-use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
+use crate::{
+    discovery::discovery::Monitor,
+    readwritesplitting::{dynamic_rw::MonitorResponse, ReadWriteEndpoint},
+};
 
 #[derive(Debug)]
 pub struct MonitorReadOnly {
@@ -29,7 +32,8 @@ pub struct MonitorReadOnly {
     pub read_only_period: u64,
     pub read_only_timeout: u64,
     pub read_only_failure_threshold: u64,
-    pub read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
+    // pub read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
+    pub monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
 }
 
@@ -65,7 +69,8 @@ impl MonitorReadOnly {
         read_only_period: u64,
         read_only_timeout: u64,
         read_only_failure_threshold: u64,
-        read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
+        // read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
+        monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> Self {
         MonitorReadOnly {
@@ -74,7 +79,8 @@ impl MonitorReadOnly {
             read_only_period,
             read_only_timeout,
             read_only_failure_threshold,
-            read_only_tx,
+            // read_only_tx,
+            monitor_response_tx,
             rw_endpoint,
         }
     }
@@ -118,16 +124,17 @@ impl Monitor for MonitorReadOnly {
         let read_only_period = self.read_only_period.clone();
         let read_only_timeout = self.read_only_timeout;
         let read_only_failure_threshold = self.read_only_failure_threshold;
-        let read_only_tx = self.read_only_tx.clone();
+        // let read_only_tx = self.read_only_tx.clone();
+        let monitor_response_tx = self.monitor_response_tx.clone();
 
         let mut response = ReadOnlyMonitorResponse::new(rw_endpoint.clone());
 
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
-                if let Err(_) = time::timeout(Duration::from_millis(read_only_timeout), async {
-                    // probe read endpoint
-                    for read in rw_endpoint.clone().read {
+                // probe read endpoint
+                for read in rw_endpoint.clone().read {
+                    if let Err(_) = time::timeout(Duration::from_millis(read_only_timeout), async {
                         // ping_res include slave addr and latency from master
                         match MonitorReadOnly::read_only_check(
                             user.clone(),
@@ -160,9 +167,15 @@ impl Monitor for MonitorReadOnly {
                                 }
                             },
                         }
+                    })
+                    .await
+                    {
+                        debug!("read only monitor check timeout");
                     }
+                }
 
-                    for readwrite in rw_endpoint.clone().readwrite {
+                for readwrite in rw_endpoint.clone().readwrite {
+                    if let Err(_) = time::timeout(Duration::from_millis(read_only_timeout), async {
                         // ping_res include slave addr and latency from master
                         match MonitorReadOnly::read_only_check(
                             user.clone(),
@@ -195,16 +208,20 @@ impl Monitor for MonitorReadOnly {
                                 }
                             },
                         }
-                    }
-                })
-                .await
+                    })
+                    .await
+                    {
+                        debug!("read only monitor check timeout");
+                    };
+                }
+                if let Err(err) = monitor_response_tx
+                    .send(MonitorResponse::ReadOnlyMonitorResponse(response.clone()))
                 {
-                    debug!("read only monitor check timeout");
+                    error!("send read only response err: {:#?}", err.into_inner());
                 }
-
-                if let Err(e) = read_only_tx.send(response.clone()) {
-                    error!("send read only response error: {:#?}", e);
-                }
+                // if let Err(e) = read_only_tx.send(response.clone()) {
+                //     error!("send read only response error: {:#?}", e);
+                // }
                 std::thread::sleep(time::Duration::from_millis(read_only_period));
             }
         });

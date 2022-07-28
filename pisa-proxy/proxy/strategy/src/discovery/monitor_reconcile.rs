@@ -15,12 +15,21 @@
 use crossbeam_channel::unbounded;
 use tracing::error;
 
-use crate::{config::ReadWriteSplittingDynamic, readwritesplitting::ReadWriteEndpoint};
+use crate::{
+    config::ReadWriteSplittingDynamic,
+    readwritesplitting::{dynamic_rw::MonitorResponse, ReadWriteEndpoint},
+};
 
 pub struct MonitorReconcile {
     config: crate::config::Discovery,
     rw_endpoint: ReadWriteEndpoint,
 }
+
+use crate::monitors::{
+    connect_monitor::ConnectMonitorResponse, ping_monitor::PingMonitorResponse,
+    read_only_monitor::ReadOnlyMonitorResponse,
+    replication_lag_monitor::ReplicationLagMonitorResponse,
+};
 
 impl MonitorReconcile {
     pub fn new(config: ReadWriteSplittingDynamic, rw_endpoint: ReadWriteEndpoint) -> Self {
@@ -30,7 +39,8 @@ impl MonitorReconcile {
     pub fn start_monitor_reconcile(
         &mut self,
         monitor_interval: u64,
-        monitor_channel: crate::readwritesplitting::MonitorChannel,
+        monitor_response_channel: crate::readwritesplitting::MonitorResponseChannel,
+        monitors_len: usize,
     ) -> crossbeam_channel::Receiver<ReadWriteEndpoint> {
         let (send, recv) = unbounded();
         let tx = send.clone();
@@ -39,7 +49,8 @@ impl MonitorReconcile {
         let rw_endpoint = self.rw_endpoint.clone();
 
         tokio::spawn(async move {
-            MonitorReconcile::report(tx, monitor_interval, rw_endpoint, monitor_channel).await;
+            MonitorReconcile::report(tx, monitor_interval, rw_endpoint, monitor_response_channel, monitors_len)
+                .await;
         });
 
         rx
@@ -49,35 +60,42 @@ impl MonitorReconcile {
         s: crossbeam_channel::Sender<ReadWriteEndpoint>,
         monitor_interval: u64,
         rw_endpoint: ReadWriteEndpoint,
-        monitor_channel: crate::readwritesplitting::MonitorChannel,
+        monitor_response_channel: crate::readwritesplitting::MonitorResponseChannel,
+        monitors_len: usize,
     ) {
+        let mut connect_monitor_response: Option<ConnectMonitorResponse> = None;
+        let mut ping_monitor_response: Option<PingMonitorResponse> = None;
+        let mut replication_lag_monitor_response: Option<ReplicationLagMonitorResponse> = None;
+        let mut read_only_monitor_response: Option<ReadOnlyMonitorResponse> = None;
+
         tokio::task::spawn_blocking(move || {
             loop {
                 let mut curr_rw_endpoint = rw_endpoint.clone();
-                let mut replication_lag_monitor_response: Option<
-                    crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse,
-                > = None;
-
-                let connect_monitor_response = monitor_channel.connect_rx.recv().unwrap();
-                let ping_monitor_response = monitor_channel.ping_rx.recv().unwrap();
-
-                match monitor_channel.replication_lag_rx.recv() {
-                    Ok(replication_lag_response) => {
-                        replication_lag_monitor_response = Some(replication_lag_response);
+                for _ in 0..monitors_len {
+                    match monitor_response_channel.monitor_response_rx.recv().unwrap() {
+                        MonitorResponse::ConnectMonitorResponse(connect_response) => {
+                            connect_monitor_response = Some(connect_response);
+                        }
+                        MonitorResponse::PingMonitorResponse(ping_response) => {
+                            ping_monitor_response = Some(ping_response);
+                        }
+                        MonitorResponse::ReadOnlyMonitorResponse(read_only_response) => {
+                            read_only_monitor_response = Some(read_only_response);
+                        }
+                        MonitorResponse::ReplicationLagResponse(replication_lag_response) => {
+                            replication_lag_monitor_response = Some(replication_lag_response);
+                        }
                     }
-                    Err(_) => {}
-                };
-
-                let read_only_response = monitor_channel.read_only_rx.recv().unwrap();
+                }
 
                 for (_read_write_connect_addr, read_write_connect_status) in
-                    connect_monitor_response.clone().readwrite
+                    connect_monitor_response.clone().unwrap().readwrite
                 {
                     match read_write_connect_status {
                         // check master connected
                         crate::monitors::connect_monitor::ConnectStatus::Connected => {
                             for (_read_write_ping_addr, read_write_ping_status) in
-                                ping_monitor_response.clone().readwrite
+                                ping_monitor_response.clone().unwrap().readwrite
                             {
                                 match read_write_ping_status {
                                     // if master connected is ok, check ping
@@ -86,7 +104,7 @@ impl MonitorReconcile {
                                         if curr_rw_endpoint.clone().read.len() > 0 {
                                             //check if slave is change to master
                                             for read_endpoint in curr_rw_endpoint.clone().read {
-                                                match read_only_response.roles.get(&read_endpoint.addr).unwrap() {
+                                                match read_only_monitor_response.clone().unwrap().roles.get(&read_endpoint.addr).unwrap() {
                                                     // slave change to master
                                                     crate::monitors::read_only_monitor::NodeRole::Master => {
                                                         // clean readwrite list
@@ -110,7 +128,13 @@ impl MonitorReconcile {
                         crate::monitors::connect_monitor::ConnectStatus::Disconnected => {
                             // check if slave is change to master
                             for read_endpoint in curr_rw_endpoint.clone().read {
-                                match read_only_response.roles.get(&read_endpoint.addr).unwrap() {
+                                match read_only_monitor_response
+                                    .clone()
+                                    .unwrap()
+                                    .roles
+                                    .get(&read_endpoint.addr)
+                                    .unwrap()
+                                {
                                     // slave change to master
                                     crate::monitors::read_only_monitor::NodeRole::Master => {
                                         curr_rw_endpoint.readwrite = vec![];
@@ -127,11 +151,13 @@ impl MonitorReconcile {
                         }
                     }
                 }
-                for (read_addr, read_connect_status) in connect_monitor_response.clone().read {
+                for (read_addr, read_connect_status) in
+                    connect_monitor_response.clone().unwrap().read
+                {
                     match read_connect_status {
                         crate::monitors::connect_monitor::ConnectStatus::Connected => {
                             for (read_ping_addr, read_ping_status) in
-                                ping_monitor_response.clone().read
+                                ping_monitor_response.clone().unwrap().read
                             {
                                 match read_ping_status {
                                     crate::monitors::ping_monitor::PingStatus::PingOk => {

@@ -32,7 +32,7 @@ pub trait Discovery {
     fn build(config: MasterHighAvailability, rw_endpoint: ReadWriteEndpoint) -> Self::Output;
     fn build_monitors(
         &self,
-        monitor_channel: crate::readwritesplitting::MonitorChannel,
+        monitor_response_channel: crate::readwritesplitting::MonitorResponseChannel,
     ) -> Vec<MonitorKind>;
 }
 
@@ -51,7 +51,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
 
     fn build_monitors(
         &self,
-        monitor_channel: crate::readwritesplitting::MonitorChannel,
+        monitor_response_channel: crate::readwritesplitting::MonitorResponseChannel,
     ) -> Vec<MonitorKind> {
         let mut monitors = vec![];
         monitors.push(MonitorKind::Connect(MonitorConnect::new(
@@ -61,7 +61,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
             self.config.connect_timeout,
             self.config.connect_failure_threshold,
             self.rw_endpoint.clone(),
-            monitor_channel.connect_tx,
+            monitor_response_channel.monitor_response_tx.clone(),
         )));
         monitors.push(MonitorKind::Ping(MonitorPing::new(
             self.config.user.clone(),
@@ -69,7 +69,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
             self.config.ping_period,
             self.config.ping_timeout,
             self.config.ping_failure_threshold,
-            monitor_channel.ping_tx,
+            monitor_response_channel.monitor_response_tx.clone(),
             self.rw_endpoint.clone(),
         )));
         monitors.push(MonitorKind::ReadOnly(MonitorReadOnly::new(
@@ -78,7 +78,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
             self.config.read_only_period,
             self.config.read_only_timeout,
             self.config.read_only_failure_threshold,
-            monitor_channel.read_only_tx,
+            monitor_response_channel.monitor_response_tx.clone(),
             self.rw_endpoint.clone(),
         )));
         monitors.push(MonitorKind::Lag(MonitorReplicationLag::new(
@@ -88,7 +88,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
             self.config.replication_lag_timeout,
             self.config.replication_lag_failure_threshold,
             self.config.max_replication_lag,
-            monitor_channel.replication_lag_tx,
+            monitor_response_channel.monitor_response_tx,
             self.rw_endpoint.clone(),
         )));
 

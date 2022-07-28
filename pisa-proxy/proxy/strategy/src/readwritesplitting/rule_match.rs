@@ -17,6 +17,7 @@ use std::{error::Error, sync::Arc};
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
 use regex::Regex;
+use tracing::debug;
 
 use super::ReadWriteEndpoint;
 use crate::{
@@ -100,7 +101,7 @@ impl RulesMatch {
         tokio::spawn(async move {
             loop {
                 let rw_endpoint = rx.clone().recv().unwrap();
-                inner.clone().lock().default_target = default_target.clone();
+                debug!("reconcile update endpoint: {:#?}", rw_endpoint);
                 inner.clone().lock().default_balance =
                     RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
                 inner.clone().lock().default_trans_balance =

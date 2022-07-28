@@ -19,7 +19,10 @@ use pisa_error::error::Error;
 use tokio::time::{self, Duration};
 use tracing::{debug, error};
 
-use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
+use crate::{
+    discovery::discovery::Monitor,
+    readwritesplitting::{dynamic_rw::MonitorResponse, ReadWriteEndpoint},
+};
 
 #[derive(Debug)]
 pub struct MonitorPing {
@@ -28,7 +31,8 @@ pub struct MonitorPing {
     pub ping_period: u64,
     pub ping_timeout: u64,
     pub ping_failure_threshold: u64,
-    pub ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
+    // pub ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
+    pub monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
 }
 
@@ -65,7 +69,8 @@ impl MonitorPing {
         ping_period: u64,
         ping_timeout: u64,
         ping_failure_threshold: u64,
-        ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
+        // ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
+        monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> Self {
         MonitorPing {
@@ -74,7 +79,8 @@ impl MonitorPing {
             ping_period,
             ping_timeout,
             ping_failure_threshold,
-            ping_tx,
+            // ping_tx,
+            monitor_response_tx,
             rw_endpoint,
         }
     }
@@ -108,16 +114,17 @@ impl Monitor for MonitorPing {
         let ping_timeout = self.ping_timeout;
         let ping_failure_threshold = self.ping_failure_threshold;
         let rw_endpoint = self.rw_endpoint.clone();
-        let ping_tx = self.ping_tx.clone();
+        // let ping_tx = self.ping_tx.clone();
+        let monitor_response_tx = self.monitor_response_tx.clone();
 
         let mut response = PingMonitorResponse::new(rw_endpoint.clone());
 
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
-                // println!("ping check...22222222222");
-                if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
-                    for read in rw_endpoint.clone().read {
+                // if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
+                for read in rw_endpoint.clone().read {
+                    if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                         match MonitorPing::ping_check(
                             user.clone(),
                             password.clone(),
@@ -195,9 +202,15 @@ impl Monitor for MonitorPing {
                                 std::thread::sleep(std::time::Duration::from_millis(ping_period));
                             },
                         }
+                    })
+                    .await
+                    {
+                        debug!("ping monitor check timeout");
                     }
+                }
 
-                    for readwrite in rw_endpoint.clone().readwrite {
+                for readwrite in rw_endpoint.clone().readwrite {
+                    if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                         match MonitorPing::ping_check(
                             user.clone(),
                             password.clone(),
@@ -247,20 +260,54 @@ impl Monitor for MonitorPing {
                                     ));
                                 },
                             },
-                            Err(_) => {
-                                continue;
-                            }
+                            Err(_) => loop {
+                                if retries > ping_failure_threshold {
+                                    response
+                                        .read
+                                        .insert(readwrite.addr.clone(), PingStatus::PingNotOk);
+                                    retries = 1;
+                                    break;
+                                } else {
+                                    match MonitorPing::ping_check(
+                                        user.clone(),
+                                        password.clone(),
+                                        readwrite.addr.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(ping_status) => match ping_status {
+                                            PingStatus::PingOk => {
+                                                response.read.insert(
+                                                    readwrite.addr.clone(),
+                                                    PingStatus::PingOk,
+                                                );
+                                                break;
+                                            }
+                                            PingStatus::PingNotOk => {
+                                                retries += 1;
+                                            }
+                                        },
+                                        Err(_) => retries += 1,
+                                    }
+                                }
+                                std::thread::sleep(std::time::Duration::from_millis(ping_period));
+                            },
                         }
+                    })
+                    .await
+                    {
+                        debug!("ping monitor check timeout");
                     }
-                })
-                .await
-                {
-                    debug!("ping monitor check timeout");
                 }
 
-                if let Err(e) = ping_tx.send(response.clone()) {
-                    error!("{:#?}", e);
+                if let Err(err) =
+                    monitor_response_tx.send(MonitorResponse::PingMonitorResponse(response.clone()))
+                {
+                    error!("send ping response err: {:#?}", err.into_inner());
                 }
+                // if let Err(e) = ping_tx.send(response.clone()) {
+                //     error!("{:#?}", e);
+                // }
                 std::thread::sleep(std::time::Duration::from_millis(ping_period));
             }
         });

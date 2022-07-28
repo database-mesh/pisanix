@@ -18,7 +18,10 @@ use mysql_protocol::client::conn::ClientConn;
 use tokio::time::{self, Duration};
 use tracing::{debug, error};
 
-use crate::{discovery::discovery::Monitor, readwritesplitting::ReadWriteEndpoint};
+use crate::{
+    discovery::discovery::Monitor,
+    readwritesplitting::{dynamic_rw::MonitorResponse, ReadWriteEndpoint},
+};
 
 #[derive(Debug)]
 pub struct MonitorConnect {
@@ -28,7 +31,8 @@ pub struct MonitorConnect {
     pub connect_timeout: u64,
     pub connect_failure_threshold: u64,
     pub rw_endpoint: ReadWriteEndpoint,
-    pub connect_tx: crossbeam_channel::Sender<ConnectMonitorResponse>,
+    // pub connect_tx: crossbeam_channel::Sender<ConnectMonitorResponse>,
+    pub monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
 }
 
 // define Connect Monitor probe status
@@ -68,10 +72,12 @@ impl MonitorConnect {
         connect_timeout: u64,
         connect_failure_threshold: u64,
         rw_endpoint: ReadWriteEndpoint,
-        connect_tx: crossbeam_channel::Sender<ConnectMonitorResponse>,
+        // connect_tx: crossbeam_channel::Sender<ConnectMonitorResponse>,
+        monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
     ) -> Self {
         MonitorConnect {
-            connect_tx,
+            // connect_tx,
+            monitor_response_tx,
             user,
             password,
             connect_period,
@@ -104,7 +110,8 @@ impl Monitor for MonitorConnect {
         let connect_failure_threshold = self.connect_failure_threshold;
         let connect_timeout = self.connect_timeout;
         let rw_endpoint = self.rw_endpoint.clone();
-        let connect_tx = self.connect_tx.clone();
+        // let connect_tx = self.connect_tx.clone();
+        let monitor_response_tx = self.monitor_response_tx.clone();
 
         // build connect monitor message channel
         let mut response = ConnectMonitorResponse::new(rw_endpoint.clone());
@@ -112,10 +119,9 @@ impl Monitor for MonitorConnect {
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
-                // maybe connection will timeout
-                if let Err(_) = time::timeout(Duration::from_millis(connect_timeout), async {
-                    // probe read endpoint
-                    for read in rw_endpoint.clone().read {
+                // probe read endpoint
+                for read in rw_endpoint.clone().read {
+                    if let Err(_) = time::timeout(Duration::from_millis(connect_timeout), async {
                         let conn_res = MonitorConnect::connnect_check(read.addr.clone()).await;
                         match conn_res {
                             ConnectStatus::Connected => {
@@ -150,10 +156,16 @@ impl Monitor for MonitorConnect {
                                 }
                             }
                         }
-                    }
+                    })
+                    .await
+                    {
+                        debug!("connect monitor check timeout");
+                    };
+                }
 
-                    // probe readwrite endpoint
-                    for readwrite in rw_endpoint.clone().readwrite {
+                // probe readwrite endpoint
+                for readwrite in rw_endpoint.clone().readwrite {
+                    if let Err(_) = time::timeout(Duration::from_millis(connect_timeout), async {
                         let conn_res = MonitorConnect::connnect_check(readwrite.addr.clone()).await;
                         match conn_res {
                             ConnectStatus::Connected => {
@@ -187,16 +199,21 @@ impl Monitor for MonitorConnect {
                                 ));
                             },
                         }
-                    }
-                })
-                .await
-                {
-                    debug!("connect monitor check timeout");
+                    })
+                    .await
+                    {
+                        debug!("connect monitor check timeout");
+                    };
                 }
 
-                if let Err(e) = connect_tx.send(response.clone()) {
-                    error!("send connect response err: {:#?}", e.into_inner());
+                if let Err(err) = monitor_response_tx
+                    .send(MonitorResponse::ConnectMonitorResponse(response.clone()))
+                {
+                    error!("send connect response err: {:#?}", err.into_inner());
                 }
+                // if let Err(e) = connect_tx.send(response.clone()) {
+                //     error!("send connect response err: {:#?}", e.into_inner());
+                // }
 
                 // connect monitor probe interval
                 std::thread::sleep(std::time::Duration::from_millis(connect_period));

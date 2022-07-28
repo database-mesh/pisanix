@@ -23,7 +23,7 @@ use tracing::{debug, error};
 use crate::{
     discovery::discovery::Monitor,
     monitors::read_only_monitor::{MonitorReadOnly, NodeRole},
-    readwritesplitting::ReadWriteEndpoint,
+    readwritesplitting::{dynamic_rw::MonitorResponse, ReadWriteEndpoint},
 };
 
 #[derive(Debug)]
@@ -34,7 +34,8 @@ pub struct MonitorReplicationLag {
     pub replication_lag_timeout: u64,
     pub replication_lag_failure_threshold: u64,
     pub max_replication_lag: u64,
-    pub replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
+    // pub replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
+    pub monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
 }
 
@@ -46,7 +47,8 @@ impl MonitorReplicationLag {
         replication_lag_timeout: u64,
         replication_lag_failure_threshold: u64,
         max_replication_lag: u64,
-        replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
+        // replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
+        monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> Self {
         MonitorReplicationLag {
@@ -56,7 +58,8 @@ impl MonitorReplicationLag {
             replication_lag_timeout,
             replication_lag_failure_threshold,
             max_replication_lag,
-            replication_lag_tx,
+            // replication_lag_tx,
+            monitor_response_tx,
             rw_endpoint,
         }
     }
@@ -167,7 +170,8 @@ impl Monitor for MonitorReplicationLag {
         let replication_lag_timeout = self.replication_lag_timeout;
         let replication_lag_failure_threshold = self.replication_lag_failure_threshold;
         let reaplication_lag_period = self.replication_lag_period;
-        let replication_lag_tx = self.replication_lag_tx.clone();
+        // let replication_lag_tx = self.replication_lag_tx.clone();
+        let monitor_response_tx = self.monitor_response_tx.clone();
         let max_replication_lag = self.max_replication_lag;
         let curr_rw_endpoint = MonitorReplicationLag::build_read_only_endpoint(
             user.clone(),
@@ -180,86 +184,138 @@ impl Monitor for MonitorReplicationLag {
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
-                // println!("replication lag monitor checking....333333333");
                 if curr_rw_endpoint.read.len() == 0 {
-                    replication_lag_tx.send(response.clone()).unwrap();
+                    monitor_response_tx
+                        .send(MonitorResponse::ReplicationLagResponse(response.clone()))
+                        .unwrap();
+                    // replication_lag_tx.send(response.clone()).unwrap();
                     std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));
                     continue;
                 }
-                if let Err(_) =
-                    time::timeout(Duration::from_millis(replication_lag_timeout), async {
-                        // probe read endpoint
-                        for read in curr_rw_endpoint.clone().read {
-                            // ping_res include slave addr and latency from master
-                            match MonitorReplicationLag::replication_lag_check(
-                                user.clone(),
-                                password.clone(),
-                                read.addr.clone(),
-                            )
-                            .await
-                            {
-                                Ok(lag) => {
-                                    match lag {
-                                        Some(lag) => {
-                                            // if slave lag > customer lag threshold
-                                            if lag > max_replication_lag {
-                                                // start retry
-                                                loop {
-                                                    if retries > replication_lag_failure_threshold {
-                                                        response.latency.insert(
-                                                            read.addr.clone(),
-                                                            ReplicationLagResponseInner {
-                                                                lag,
-                                                                is_latency: true,
-                                                            },
-                                                        );
-                                                        retries = 1;
-                                                        break;
-                                                    } else {
-                                                        match MonitorReplicationLag::replication_lag_check(
-                                                            user.clone(),
-                                                            password.clone(),
-                                                            read.addr.clone(),
-                                                        )
-                                                        .await
-                                                        {
-                                                            Ok(lag) => {
-                                                                match lag {
-                                                                    Some(lag) => {
-                                                                        if lag > max_replication_lag {
+                // probe read endpoint
+                for read in curr_rw_endpoint.clone().read {
+                    if let Err(_) = time::timeout(Duration::from_millis(replication_lag_timeout), async {
+                                // ping_res include slave addr and latency from master
+                                match MonitorReplicationLag::replication_lag_check(
+                                    user.clone(),
+                                    password.clone(),
+                                    read.addr.clone(),
+                                )
+                                .await
+                                {
+                                    Ok(lag) => {
+                                        match lag {
+                                            Some(lag) => {
+                                                // if slave lag > customer lag threshold
+                                                if lag > max_replication_lag {
+                                                    // start retry
+                                                    loop {
+                                                        if retries > replication_lag_failure_threshold {
+                                                            response.latency.insert(
+                                                                read.addr.clone(),
+                                                                ReplicationLagResponseInner {
+                                                                    lag,
+                                                                    is_latency: true,
+                                                                },
+                                                            );
+                                                            retries = 1;
+                                                            break;
+                                                        } else {
+                                                            match MonitorReplicationLag::replication_lag_check(
+                                                                user.clone(),
+                                                                password.clone(),
+                                                                read.addr.clone(),
+                                                            )
+                                                            .await
+                                                            {
+                                                                Ok(lag) => {
+                                                                    match lag {
+                                                                        Some(lag) => {
+                                                                            if lag > max_replication_lag {
+                                                                                retries += 1;
+                                                                            } else {
+                                                                                response.latency.insert(
+                                                                                    read.addr.clone(),
+                                                                                    ReplicationLagResponseInner {
+                                                                                        lag,
+                                                                                        is_latency: false,
+                                                                                    },
+                                                                                );
+                                                                                retries = 1;
+                                                                                break;
+                                                                            }
+                                                                        }
+                                                                        None => {
                                                                             retries += 1;
-                                                                        } else {
-                                                                            response.latency.insert(
-                                                                                read.addr.clone(),
-                                                                                ReplicationLagResponseInner {
-                                                                                    lag,
-                                                                                    is_latency: false,
-                                                                                },
-                                                                            );
-                                                                            retries = 1;
-                                                                            break;
                                                                         }
                                                                     }
-                                                                    None => {
-                                                                        retries += 1;
-                                                                    }
+                                                                },
+                                                                Err(_) => {
+                                                                    retries += 1;
                                                                 }
-                                                            },
-                                                            Err(_) => {
-                                                                retries += 1;
                                                             }
                                                         }
+                                                        std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));
                                                     }
-                                                    std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));
+                                                } else {
+                                                    response.latency.insert(
+                                                        read.addr,
+                                                        ReplicationLagResponseInner { lag, is_latency: false },
+                                                    );
                                                 }
-                                            } else {
-                                                response.latency.insert(
-                                                    read.addr,
-                                                    ReplicationLagResponseInner { lag, is_latency: false },
-                                                );
                                             }
+                                            None => loop {
+                                                if retries > replication_lag_failure_threshold {
+                                                    response.latency.insert(
+                                                        read.addr.clone(),
+                                                        ReplicationLagResponseInner {
+                                                            lag: 0,
+                                                            is_latency: true,
+                                                        },
+                                                    );
+                                                    retries = 1;
+                                                    break;
+                                                } else {
+                                                    match MonitorReplicationLag::replication_lag_check(
+                                                        user.clone(),
+                                                        password.clone(),
+                                                        read.addr.clone(),
+                                                    )
+                                                    .await
+                                                    {
+                                                    Ok(lag) => {
+                                                        match lag {
+                                                                Some(lag) => {
+                                                                    if lag > max_replication_lag {
+                                                                        retries += 1;
+                                                                    } else {
+                                                                        response.latency.insert(
+                                                                            read.addr.clone(),
+                                                                            ReplicationLagResponseInner {
+                                                                                lag,
+                                                                                is_latency: false,
+                                                                            },
+                                                                        );
+                                                                        retries = 1;
+                                                                        break;
+                                                                    }
+                                                                }
+                                                                None => {
+                                                                    retries += 1;
+                                                                }
+                                                        }
+                                                    },
+                                                    Err(_) => {
+                                                        retries += 1;
+                                                    }
+                                                    }
+                                                }
+                                                std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));
+                                            },
                                         }
-                                        None => loop {
+                                    }
+                                    Err(_) => {
+                                        loop {
                                             if retries > replication_lag_failure_threshold {
                                                 response.latency.insert(
                                                     read.addr.clone(),
@@ -275,90 +331,42 @@ impl Monitor for MonitorReplicationLag {
                                                     user.clone(),
                                                     password.clone(),
                                                     read.addr.clone(),
-                                                )
-                                                .await
-                                                {
-                                                   Ok(lag) => {
-                                                       match lag {
+                                                ).await{
+                                                Ok(lag) => {
+                                                    match lag {
                                                             Some(lag) => {
                                                                 if lag > max_replication_lag {
                                                                     retries += 1;
-                                                                } else {
-                                                                    response.latency.insert(
-                                                                        read.addr.clone(),
-                                                                        ReplicationLagResponseInner {
-                                                                            lag,
-                                                                            is_latency: false,
-                                                                        },
-                                                                    );
-                                                                    retries = 1;
-                                                                    break;
                                                                 }
                                                             }
                                                             None => {
                                                                 retries += 1;
                                                             }
-                                                       }
-                                                   },
-                                                   Err(_) => {
-                                                       retries += 1;
-                                                   }
+                                                    }
+                                                },
+                                                Err(_) => {
+                                                    retries += 1;
+                                                }
                                                 }
                                             }
                                             std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));
-                                        },
-                                    }
-                                }
-                                Err(_) => {
-                                    loop {
-                                        if retries > replication_lag_failure_threshold {
-                                            response.latency.insert(
-                                                read.addr.clone(),
-                                                ReplicationLagResponseInner {
-                                                    lag: 0,
-                                                    is_latency: true,
-                                                },
-                                            );
-                                            retries = 1;
-                                            break;
-                                        } else {
-                                            match MonitorReplicationLag::replication_lag_check(
-                                                user.clone(),
-                                                password.clone(),
-                                                read.addr.clone(),
-                                            ).await{
-                                               Ok(lag) => {
-                                                   match lag {
-                                                        Some(lag) => {
-                                                            if lag > max_replication_lag {
-                                                                retries += 1;
-                                                            }
-                                                        }
-                                                        None => {
-                                                            retries += 1;
-                                                        }
-                                                   }
-                                               },
-                                               Err(_) => {
-                                                   retries += 1;
-                                               }
-                                            }
                                         }
-                                        std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));
                                     }
                                 }
+                            }).await {
+                                debug!("reaplication lag monitor check timeout");
                             }
-                        }
-                    })
-                    .await
-                {
-                    debug!("reaplication lag monitor check timeout");
                 }
 
                 if response.latency.len() > 0 {
-                    if let Err(err) = replication_lag_tx.send(response.clone()) {
-                        error!("send replication lag response err: {:#?}", err);
+                    if let Err(err) = monitor_response_tx
+                        .send(MonitorResponse::ReplicationLagResponse(response.clone()))
+                    {
+                        error!("send replication lag response err: {:#?}", err.into_inner());
                     }
+                    // if let Err(err) = replication_lag_tx.send(response.clone()) {
+                    //     error!("send replication lag response err: {:#?}", err);
+                    // }
                 }
 
                 std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));

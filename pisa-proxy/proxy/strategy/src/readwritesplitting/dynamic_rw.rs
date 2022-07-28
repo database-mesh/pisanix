@@ -26,8 +26,13 @@ use crate::{
     config,
     config::TargetRole,
     discovery::{
-        discovery::{Discovery, DiscoveryMasterHighAvailability},
+        discovery::{Discovery, DiscoveryMasterHighAvailability, Monitor},
         monitor_reconcile::MonitorReconcile,
+    },
+    monitors::{
+        connect_monitor::ConnectMonitorResponse, ping_monitor::PingMonitorResponse,
+        read_only_monitor::ReadOnlyMonitorResponse,
+        replication_lag_monitor::ReplicationLagMonitorResponse,
     },
     route::{BoxError, RouteBalance},
     Route, RouteInput,
@@ -35,51 +40,27 @@ use crate::{
 
 pub struct ReadWriteSplittingDynamicBuilder;
 
-// define monitor channel
 #[derive(Debug, Clone)]
-pub struct MonitorChannel {
-    pub connect_tx:
-        crossbeam_channel::Sender<crate::monitors::connect_monitor::ConnectMonitorResponse>,
-    pub connect_rx:
-        crossbeam_channel::Receiver<crate::monitors::connect_monitor::ConnectMonitorResponse>,
-
-    pub ping_tx: crossbeam_channel::Sender<crate::monitors::ping_monitor::PingMonitorResponse>,
-    pub ping_rx: crossbeam_channel::Receiver<crate::monitors::ping_monitor::PingMonitorResponse>,
-
-    pub replication_lag_tx: crossbeam_channel::Sender<
-        crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse,
-    >,
-    pub replication_lag_rx: crossbeam_channel::Receiver<
-        crate::monitors::replication_lag_monitor::ReplicationLagMonitorResponse,
-    >,
-
-    pub read_only_tx:
-        crossbeam_channel::Sender<crate::monitors::read_only_monitor::ReadOnlyMonitorResponse>,
-    pub read_only_rx:
-        crossbeam_channel::Receiver<crate::monitors::read_only_monitor::ReadOnlyMonitorResponse>,
+pub enum MonitorResponse {
+    ConnectMonitorResponse(ConnectMonitorResponse),
+    PingMonitorResponse(PingMonitorResponse),
+    ReplicationLagResponse(ReplicationLagMonitorResponse),
+    ReadOnlyMonitorResponse(ReadOnlyMonitorResponse),
 }
 
-impl MonitorChannel {
-    fn build() -> Self {
-        let (connect_tx, connect_rx) = crossbeam_channel::unbounded();
-        let (ping_tx, ping_rx) = crossbeam_channel::unbounded();
-        let (replication_lag_tx, replication_lag_rx) = crossbeam_channel::unbounded();
-        let (read_only_tx, read_only_rx) = crossbeam_channel::unbounded();
+#[derive(Debug, Clone)]
+pub struct MonitorResponseChannel {
+    pub monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
+    pub monitor_response_rx: crossbeam_channel::Receiver<MonitorResponse>,
+}
 
-        MonitorChannel {
-            connect_tx,
-            connect_rx,
-            ping_tx,
-            ping_rx,
-            replication_lag_tx,
-            replication_lag_rx,
-            read_only_tx,
-            read_only_rx,
-        }
+impl MonitorResponseChannel {
+    fn build() -> Self {
+        let (monitor_response_tx, monitor_response_rx) = crossbeam_channel::unbounded();
+
+        MonitorResponseChannel { monitor_response_tx, monitor_response_rx }
     }
 }
-
-use crate::discovery::discovery::Monitor;
 
 impl ReadWriteSplittingDynamicBuilder {
     pub fn build(
@@ -92,7 +73,8 @@ impl ReadWriteSplittingDynamicBuilder {
             rw_endpoint.clone(),
         );
 
-        let monitor_channel = MonitorChannel::build();
+        // let monitor_channel = MonitorChannel::build();
+        let monitor_response_channel = MonitorResponseChannel::build();
 
         let mut reciver: Option<crossbeam_channel::Receiver<ReadWriteEndpoint>> = None;
 
@@ -102,7 +84,8 @@ impl ReadWriteSplittingDynamicBuilder {
             crate::config::Discovery::Mha(cc) => {
                 let monitors =
                     DiscoveryMasterHighAvailability::build(cc.clone(), rw_endpoint.clone())
-                        .build_monitors(monitor_channel.clone());
+                        .build_monitors(monitor_response_channel.clone());
+                let monitors_len = monitors.len();
                 for monitor in monitors {
                     tokio::spawn(async move {
                         monitor.run_check().await;
@@ -112,10 +95,12 @@ impl ReadWriteSplittingDynamicBuilder {
                 let mut monitor_reconcile =
                     MonitorReconcile::new(config.clone(), rw_endpoint.clone());
 
-                reciver = Some(
-                    monitor_reconcile
-                        .start_monitor_reconcile(cc.monitor_period, monitor_channel.clone()),
-                );
+                reciver =
+                    Some(monitor_reconcile.start_monitor_reconcile(
+                        cc.monitor_period,
+                        monitor_response_channel.clone(),
+                        monitors_len,
+                    ));
             }
         };
 

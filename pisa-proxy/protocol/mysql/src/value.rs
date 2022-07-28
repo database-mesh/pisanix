@@ -55,7 +55,6 @@ impl Convert<String> for String {
 impl Convert<u64> for u64 {
     fn new(val: Vec<u8>) -> Result<u64> {
         let mut buf = val.as_slice();
-        // println!("u64 >> {:#?}", val.get_u64_be());
         Ok(buf.get_uint_le(val.len()))
     }
 }
@@ -66,7 +65,10 @@ impl Convert<Option<u64>> for Option<u64> {
         if buf[0] == 0 {
             return Ok(None);
         }
-        Ok(Some(String::from_utf8(val).unwrap().parse::<u64>().unwrap()))
+        let v = String::from_utf8(val)?;
+        let result = v.parse::<u64>()?;
+        Ok(Some(result))
+        // Ok(Some(String::from_utf8(val).unwrap().parse::<u64>().unwrap()))
     }
 }
 
