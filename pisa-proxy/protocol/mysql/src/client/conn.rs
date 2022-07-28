@@ -34,7 +34,7 @@ use crate::{
     err::ProtocolError,
     mysql_const::*,
     row::{RowDataText, RowDataTyp},
-    util::length_encode_int,
+    util::{is_ok_header, length_encode_int},
 };
 
 #[derive(Debug, Default)]
@@ -175,7 +175,7 @@ impl ClientConn {
 
         let res = match common_codec.next().await {
             Some(Ok(data)) => {
-                if data.0[4] == OK_HEADER {
+                if is_ok_header(data.0[4]) {
                     common_codec.codec_mut().auth_info.as_mut().unwrap().db = val.to_string();
                     Ok((data.0, true))
                 } else {
@@ -199,7 +199,7 @@ impl ClientConn {
         common_codec.send((COM_PING, &[])).await?;
         let res = match common_codec.next().await {
             Some(Ok(data)) => {
-                if data.0[4] == OK_HEADER {
+                if is_ok_header(data.0[4]) {
                     Ok(true)
                 } else {
                     Ok(false)

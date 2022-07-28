@@ -68,7 +68,6 @@ impl Convert<Option<u64>> for Option<u64> {
         let v = String::from_utf8(val)?;
         let result = v.parse::<u64>()?;
         Ok(Some(result))
-        // Ok(Some(String::from_utf8(val).unwrap().parse::<u64>().unwrap()))
     }
 }
 

@@ -49,8 +49,14 @@ impl MonitorReconcile {
         let rw_endpoint = self.rw_endpoint.clone();
 
         tokio::spawn(async move {
-            MonitorReconcile::report(tx, monitor_interval, rw_endpoint, monitor_response_channel, monitors_len)
-                .await;
+            MonitorReconcile::report(
+                tx,
+                monitor_interval,
+                rw_endpoint,
+                monitor_response_channel,
+                monitors_len,
+            )
+            .await;
         });
 
         rx

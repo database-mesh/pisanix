@@ -32,7 +32,6 @@ pub struct MonitorReadOnly {
     pub read_only_period: u64,
     pub read_only_timeout: u64,
     pub read_only_failure_threshold: u64,
-    // pub read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
     pub monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
 }
@@ -69,7 +68,6 @@ impl MonitorReadOnly {
         read_only_period: u64,
         read_only_timeout: u64,
         read_only_failure_threshold: u64,
-        // read_only_tx: crossbeam_channel::Sender<ReadOnlyMonitorResponse>,
         monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> Self {
@@ -79,7 +77,6 @@ impl MonitorReadOnly {
             read_only_period,
             read_only_timeout,
             read_only_failure_threshold,
-            // read_only_tx,
             monitor_response_tx,
             rw_endpoint,
         }
@@ -124,7 +121,6 @@ impl Monitor for MonitorReadOnly {
         let read_only_period = self.read_only_period.clone();
         let read_only_timeout = self.read_only_timeout;
         let read_only_failure_threshold = self.read_only_failure_threshold;
-        // let read_only_tx = self.read_only_tx.clone();
         let monitor_response_tx = self.monitor_response_tx.clone();
 
         let mut response = ReadOnlyMonitorResponse::new(rw_endpoint.clone());
@@ -135,7 +131,6 @@ impl Monitor for MonitorReadOnly {
                 // probe read endpoint
                 for read in rw_endpoint.clone().read {
                     if let Err(_) = time::timeout(Duration::from_millis(read_only_timeout), async {
-                        // ping_res include slave addr and latency from master
                         match MonitorReadOnly::read_only_check(
                             user.clone(),
                             password.clone(),

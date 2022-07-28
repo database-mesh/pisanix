@@ -34,7 +34,6 @@ pub struct MonitorReplicationLag {
     pub replication_lag_timeout: u64,
     pub replication_lag_failure_threshold: u64,
     pub max_replication_lag: u64,
-    // pub replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
     pub monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
 }
@@ -47,7 +46,6 @@ impl MonitorReplicationLag {
         replication_lag_timeout: u64,
         replication_lag_failure_threshold: u64,
         max_replication_lag: u64,
-        // replication_lag_tx: crossbeam_channel::Sender<ReplicationLagMonitorResponse>,
         monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> Self {
@@ -58,7 +56,6 @@ impl MonitorReplicationLag {
             replication_lag_timeout,
             replication_lag_failure_threshold,
             max_replication_lag,
-            // replication_lag_tx,
             monitor_response_tx,
             rw_endpoint,
         }
@@ -170,7 +167,6 @@ impl Monitor for MonitorReplicationLag {
         let replication_lag_timeout = self.replication_lag_timeout;
         let replication_lag_failure_threshold = self.replication_lag_failure_threshold;
         let reaplication_lag_period = self.replication_lag_period;
-        // let replication_lag_tx = self.replication_lag_tx.clone();
         let monitor_response_tx = self.monitor_response_tx.clone();
         let max_replication_lag = self.max_replication_lag;
         let curr_rw_endpoint = MonitorReplicationLag::build_read_only_endpoint(
@@ -188,7 +184,6 @@ impl Monitor for MonitorReplicationLag {
                     monitor_response_tx
                         .send(MonitorResponse::ReplicationLagResponse(response.clone()))
                         .unwrap();
-                    // replication_lag_tx.send(response.clone()).unwrap();
                     std::thread::sleep(time::Duration::from_millis(reaplication_lag_period));
                     continue;
                 }

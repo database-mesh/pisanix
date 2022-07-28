@@ -31,7 +31,6 @@ pub struct MonitorPing {
     pub ping_period: u64,
     pub ping_timeout: u64,
     pub ping_failure_threshold: u64,
-    // pub ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
     pub monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
     pub rw_endpoint: ReadWriteEndpoint,
 }
@@ -69,7 +68,6 @@ impl MonitorPing {
         ping_period: u64,
         ping_timeout: u64,
         ping_failure_threshold: u64,
-        // ping_tx: crossbeam_channel::Sender<PingMonitorResponse>,
         monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> Self {
@@ -79,7 +77,6 @@ impl MonitorPing {
             ping_period,
             ping_timeout,
             ping_failure_threshold,
-            // ping_tx,
             monitor_response_tx,
             rw_endpoint,
         }
@@ -114,7 +111,6 @@ impl Monitor for MonitorPing {
         let ping_timeout = self.ping_timeout;
         let ping_failure_threshold = self.ping_failure_threshold;
         let rw_endpoint = self.rw_endpoint.clone();
-        // let ping_tx = self.ping_tx.clone();
         let monitor_response_tx = self.monitor_response_tx.clone();
 
         let mut response = PingMonitorResponse::new(rw_endpoint.clone());
@@ -122,7 +118,6 @@ impl Monitor for MonitorPing {
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
-                // if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                 for read in rw_endpoint.clone().read {
                     if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                         match MonitorPing::ping_check(

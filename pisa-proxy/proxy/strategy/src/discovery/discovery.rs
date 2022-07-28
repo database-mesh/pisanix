@@ -81,7 +81,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
             monitor_response_channel.monitor_response_tx.clone(),
             self.rw_endpoint.clone(),
         )));
-        monitors.push(MonitorKind::Lag(MonitorReplicationLag::new(
+        monitors.push(MonitorKind::ReplicationLag(MonitorReplicationLag::new(
             self.config.user.clone(),
             self.config.password.clone(),
             self.config.replication_lag_period,
@@ -100,7 +100,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
 pub enum MonitorKind {
     Connect(MonitorConnect),
     Ping(MonitorPing),
-    Lag(MonitorReplicationLag),
+    ReplicationLag(MonitorReplicationLag),
     ReadOnly(MonitorReadOnly),
 }
 
@@ -110,7 +110,7 @@ impl Monitor for MonitorKind {
         match self {
             MonitorKind::Connect(inner_connect_monitor) => inner_connect_monitor.run_check().await,
             MonitorKind::Ping(inner_ping_monitor) => inner_ping_monitor.run_check().await,
-            MonitorKind::Lag(inner_lag_monitor) => inner_lag_monitor.run_check().await,
+            MonitorKind::ReplicationLag(inner_lag_monitor) => inner_lag_monitor.run_check().await,
             MonitorKind::ReadOnly(inner_read_only_monitor) => {
                 inner_read_only_monitor.run_check().await
             }

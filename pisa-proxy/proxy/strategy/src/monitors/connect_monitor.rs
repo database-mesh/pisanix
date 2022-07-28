@@ -31,7 +31,6 @@ pub struct MonitorConnect {
     pub connect_timeout: u64,
     pub connect_failure_threshold: u64,
     pub rw_endpoint: ReadWriteEndpoint,
-    // pub connect_tx: crossbeam_channel::Sender<ConnectMonitorResponse>,
     pub monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
 }
 
@@ -72,7 +71,6 @@ impl MonitorConnect {
         connect_timeout: u64,
         connect_failure_threshold: u64,
         rw_endpoint: ReadWriteEndpoint,
-        // connect_tx: crossbeam_channel::Sender<ConnectMonitorResponse>,
         monitor_response_tx: crossbeam_channel::Sender<MonitorResponse>,
     ) -> Self {
         MonitorConnect {
@@ -103,7 +101,6 @@ impl Monitor for MonitorConnect {
         let connect_failure_threshold = self.connect_failure_threshold;
         let connect_timeout = self.connect_timeout;
         let rw_endpoint = self.rw_endpoint.clone();
-        // let connect_tx = self.connect_tx.clone();
         let monitor_response_tx = self.monitor_response_tx.clone();
 
         // build connect monitor message channel

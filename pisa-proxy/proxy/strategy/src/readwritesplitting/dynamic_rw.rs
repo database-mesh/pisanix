@@ -95,12 +95,11 @@ impl ReadWriteSplittingDynamicBuilder {
                 let mut monitor_reconcile =
                     MonitorReconcile::new(config.clone(), rw_endpoint.clone());
 
-                reciver =
-                    Some(monitor_reconcile.start_monitor_reconcile(
-                        cc.monitor_period,
-                        monitor_response_channel.clone(),
-                        monitors_len,
-                    ));
+                reciver = Some(monitor_reconcile.start_monitor_reconcile(
+                    cc.monitor_period,
+                    monitor_response_channel.clone(),
+                    monitors_len,
+                ));
             }
         };
 
