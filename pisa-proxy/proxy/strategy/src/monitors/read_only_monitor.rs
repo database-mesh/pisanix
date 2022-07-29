@@ -209,7 +209,6 @@ impl Monitor for MonitorReadOnly {
                         debug!("read only monitor check timeout");
                     };
                 }
-                println!("resonse {:#?}", response);
                 if let Err(err) = monitor_response_tx
                     .send(MonitorResponse::ReadOnlyMonitorResponse(response.clone()))
                 {
