@@ -185,18 +185,59 @@ func (b *ProxyBuilder) Build() *Proxy {
 		switch {
 		case b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting != nil:
 			{
-				proxy.ReadWriteSplitting = &ReadWriteSplitting{
-					Static: &ReadWriteSplittingStatic{},
-				}
+
 				if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static != nil {
+					proxy.ReadWriteSplitting = &ReadWriteSplitting{
+						Static: &ReadWriteSplittingStatic{},
+					}
 					proxy.ReadWriteSplitting.Static.DefaultTarget = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
-					proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingStaticRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules))
+					proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules))
 					for i := range b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules {
 						proxy.ReadWriteSplitting.Static.Rules[i].Name = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
 						proxy.ReadWriteSplitting.Static.Rules[i].Type = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
 						proxy.ReadWriteSplitting.Static.Rules[i].Target = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
 						proxy.ReadWriteSplitting.Static.Rules[i].Regex = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
 						proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
+					}
+				}
+				if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic != nil {
+					proxy.ReadWriteSplitting = &ReadWriteSplitting{
+						Dynamic: &ReadWriteSplittingDynamic{},
+					}
+
+					proxy.ReadWriteSplitting.Dynamic.DefaultTarget = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.DefaultTarget
+					proxy.ReadWriteSplitting.Dynamic.Rules = make([]ReadWriteSplittingRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules))
+
+					for i := range b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules {
+						proxy.ReadWriteSplitting.Dynamic.Rules[i].Name = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Name
+						proxy.ReadWriteSplitting.Dynamic.Rules[i].Type = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Type)
+						proxy.ReadWriteSplitting.Dynamic.Rules[i].Target = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Target
+						proxy.ReadWriteSplitting.Dynamic.Rules[i].Regex = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Regex
+						proxy.ReadWriteSplitting.Dynamic.Rules[i].AlgorithmName = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].AlgorithmName)
+					}
+
+					if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability != nil {
+						proxy.ReadWriteSplitting.Dynamic.Discovery = ReadWriteDiscovery{
+							MasterHighAvailablity: &MasterHighAvailablity{
+								Type:                      "mha",
+								User:                      b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.User,
+								Password:                  b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.Password,
+								MonitorInterval:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.MonitorInterval,
+								ConnectInterval:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ConnectionProbe.PeriodMilliseconds,
+								ConnectTimeout:            b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ConnectionProbe.TimeoutMilliseconds,
+								ConnectMaxFailures:        b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ConnectionProbe.FailureThreshold,
+								PingInterval:              b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.PingProbe.PeriodMilliseconds,
+								PingTimeout:               b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.PingProbe.TimeoutMilliseconds,
+								PingMaxFailures:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.PingProbe.FailureThreshold,
+								ReplicationLagInterval:    b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.PeriodMilliseconds,
+								ReplicationLagTimeout:     b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.TimeoutMilliseconds,
+								ReplicationLagMaxFailures: b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.FailureThreshold,
+								MaxReplicationLag:         b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.MaxReplicationLag,
+								ReadOnlyInterval:          b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReadOnlyProbe.PeriodMilliseconds,
+								ReadOnlyTimeout:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReadOnlyProbe.TimeoutMilliseconds,
+								ReadOnlyMaxFailures:       b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReadOnlyProbe.FailureThreshold,
+							},
+						}
 					}
 				}
 			}

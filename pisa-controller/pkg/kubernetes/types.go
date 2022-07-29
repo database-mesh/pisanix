@@ -94,22 +94,67 @@ type LoadBalance struct {
 
 // ReadWriteSplitting support static and dynamic read-write splitting algorithm
 type ReadWriteSplitting struct {
-	Static *ReadWriteSplittingStatic `json:"static"`
+	Static  *ReadWriteSplittingStatic  `json:"static"`
+	Dynamic *ReadWriteSplittingDynamic `json:"dynamic"`
 }
 
 // ReadWriteSplittingStatic defines static rules based read-write splitting algorithm
 type ReadWriteSplittingStatic struct {
-	DefaultTarget string                         `json:"defaultTarget,omitempty"`
-	Rules         []ReadWriteSplittingStaticRule `json:"rules,omitempty"`
+	DefaultTarget string                   `json:"defaultTarget,omitempty"`
+	Rules         []ReadWriteSplittingRule `json:"rules,omitempty"`
 }
 
 // ReadWriteSplittingStaticRule defines static rules
-type ReadWriteSplittingStaticRule struct {
+type ReadWriteSplittingRule struct {
 	Name          string               `json:"name"`
 	Type          RuleType             `json:"type"`
 	Regex         []string             `json:"regex"`
 	Target        string               `json:"target"`
 	AlgorithmName LoadBalanceAlgorithm `json:"algorithmName"`
+}
+
+type ReadWriteSplittingDynamic struct {
+	DefaultTarget string                   `json:"defaultTarget,omitempty"`
+	Rules         []ReadWriteSplittingRule `json:"rules,omitempty"`
+	Discovery     ReadWriteDiscovery       `json:"discovery"`
+}
+
+type ReadWriteDiscovery struct {
+	MasterHighAvailability *MasterHighAvailability `json:"masterHighAvailability,omitempty"`
+}
+
+type MasterHighAvailability struct {
+	User                string               `json:"user"`
+	Password            string               `json:"password"`
+	MonitorInterval     uint64               `json:"monitorInterval"`
+	ConnectionProbe     *ConnectionProbe     `json:"connectionProbe"`
+	PingProbe           *PingProbe           `json:"pingProbe"`
+	ReplicationLagProbe *ReplicationLagProbe `json:"replicationLagProbe"`
+	ReadOnlyProbe       *ReadOnlyProbe       `json:"readOnlyProbe"`
+}
+
+type ReadOnlyProbe struct {
+	*Probe
+}
+
+type ReplicationLagProbe struct {
+	*Probe
+	MaxReplicationLag uint64 `json:"maxReplicationLag"`
+}
+
+type PingProbe struct {
+	*Probe
+}
+
+type ConnectionProbe struct {
+	*Probe
+}
+
+type Probe struct {
+	PeriodMilliseconds  uint64 `json:"periodMilliseconds"`
+	TimeoutMilliseconds uint64 `json:"timeoutMilliseconds"`
+	FailureThreshold    uint64 `json:"failureThreshold"`
+	SuccessThreshold    uint64 `json:"successThreshold"`
 }
 
 // RuleType defines the type of static rule
