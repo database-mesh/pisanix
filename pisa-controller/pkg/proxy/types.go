@@ -69,10 +69,10 @@ type ReadWriteSplittingDynamic struct {
 }
 
 type ReadWriteDiscovery struct {
-	*ManagedHighAvailablity
+	*MasterHighAvailablity
 }
 
-type ManagedHighAvailablity struct {
+type MasterHighAvailablity struct {
 	Type                      string `json:"type"`
 	User                      string `json:"user"`
 	Password                  string `json:"password"`
