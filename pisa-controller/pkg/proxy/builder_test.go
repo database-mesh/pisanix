@@ -66,7 +66,7 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 								},
 							},
 							Discovery: kubernetes.ReadWriteDiscovery{
-								ManagedHighAvailability: &kubernetes.ManagedHighAvailability{
+								MasterHighAvailability: &kubernetes.MasterHighAvailability{
 									User:            "monitor",
 									Password:        "monitor",
 									MonitorInterval: 1000,
