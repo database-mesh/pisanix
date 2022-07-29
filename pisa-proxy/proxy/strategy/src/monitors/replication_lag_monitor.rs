@@ -66,6 +66,7 @@ impl MonitorReplicationLag {
         password: String,
         rw_endpoint: ReadWriteEndpoint,
     ) -> ReadWriteEndpoint {
+        println!("vvvv >> {:#?}", rw_endpoint);
         let mut read_endpoint = vec![];
         for readwrite in rw_endpoint.clone().readwrite {
             match MonitorReadOnly::read_only_check(
