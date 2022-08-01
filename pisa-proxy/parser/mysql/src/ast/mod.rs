@@ -24,6 +24,9 @@ pub use tcl::*;
 pub mod ddl;
 pub use ddl::*;
 
+pub mod dal;
+pub use dal::*;
+
 #[macro_use]
 pub mod api;
 pub use api::*;

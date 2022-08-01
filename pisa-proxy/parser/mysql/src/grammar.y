@@ -3584,6 +3584,12 @@ ident -> (String, bool):
   | non_reserved_keyword { (String::from($1), false) }
   ;
 
+/* TODO */
+role_ident -> (String, bool):
+    IDENT_sys      { $1 }
+  | non_reserved_keyword { (String::from($1), false) }
+;
+
 /*
   non-reserved keywords
 */
@@ -4142,6 +4148,14 @@ ident_or_text -> String:
     ident           { $1.0 }
   | 'TEXT_STRING'
     {   
+      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+    }
+  ;
+
+role_ident_or_text -> String:
+    role_ident           { $1.0 }
+  | 'TEXT_STRING'
+    {
       String::from($lexer.span_str($1.as_ref().unwrap().span()))
     }
   ;
@@ -6225,6 +6239,27 @@ TEXT_STRING_sys -> String:
     }
 ;
 
+TEXT_STRING_password -> String:
+    'TEXT_STRING'
+    {
+      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+    }
+;
+
+TEXT_STRING_hash -> String:
+    'TEXT_STRING'
+    {
+      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+    }
+;
+
+TEXT_STRING_literal -> String:
+    'TEXT_STRING'
+    {
+      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+    }
+;
+
 show_grants_stmt -> Box<ShowGrantsStmt>:
     'SHOW' 'GRANTS'
     {
@@ -6393,8 +6428,24 @@ create -> Create:
 		    Create::CreateViewOrTriggerOrSpOrEvent(Box::new($2))
        }
 
-       /* TODO create user */
-
+    | 'CREATE' 'USER' opt_if_not_exists create_user_list default_role_clause
+                      require_clause connect_options
+                      opt_account_lock_password_expire_options
+                      opt_user_attribute
+       {
+            Create::CreateUser(Box::new(
+			    CreateUser {
+			        span: $span,
+				    is_not_exists: $3,
+				    create_user_list: $4,
+				    default_role_clause: $5,
+				    require_clause: $6,
+				    connect_options: $7,
+				    opt_account_lock_password_expire_options: $8,
+				    opt_user_attribute: $9,
+			    }
+		    ))
+       }
     | 'CREATE' 'LOGFILE' 'GROUP' ident 'ADD' lg_undofile opt_logfile_group_options
        {
             Create::CreateLogFileGroup(Box::new(
@@ -7299,6 +7350,459 @@ alter_lock_option_value -> String:
     | ident
       {
           $1.0
+      }
+;
+
+create_user_list -> Vec<UserAndAuthOption>:
+      create_user
+      {
+           vec![$1]
+      }
+    | create_user_list ',' create_user
+      {
+           $1.push($3);
+           $1
+      }
+;
+
+create_user -> UserAndAuthOption:
+      user identification opt_create_user_with_mfa
+      {
+          UserAndAuthOption {
+              span: $span,
+              user: $1,
+              identification: Some($2),
+              opt_create_user_with_mfa: $3,
+              identified_with_plugin: None,
+              opt_initial_auth: None,
+          }
+      }
+    | user opt_create_user_with_mfa
+      {
+          UserAndAuthOption {
+              span: $span,
+              user: $1,
+              identification: None,
+              opt_create_user_with_mfa: $2,
+              identified_with_plugin: None,
+              opt_initial_auth: None,
+          }
+      }
+;
+
+opt_create_user_with_mfa -> Option<CreateUserWithMFA>:
+      /* empty */                          { None }
+    | 'AND' identification
+      {
+          Some(CreateUserWithMFA::CreateUserWith2FA(CreateUserWith2FA{
+              span: $span,
+              auth_2fa_option: $2,
+          }))
+      }
+    | 'AND' identification 'AND' identification
+      {
+          Some(CreateUserWithMFA::CreateUserWith3FA(CreateUserWith3FA{
+              span: $span,
+              auth_2fa_option: $2,
+              auth_3fa_option: $4,
+          }))
+      }
+;
+
+identification -> Identification:
+      identified_by_password { $1 }
+    | identified_by_random_password { $1 }
+    | identified_with_plugin { $1 }
+    | identified_with_plugin_as_auth { $1 }
+    | identified_with_plugin_by_password { $1 }
+    | identified_with_plugin_by_random_password { $1 }
+;
+
+identified_by_password -> Identification:
+    'IDENTIFIED' 'BY' TEXT_STRING_password
+    {
+        Identification::IdentifiedByPassword(IdentifiedByPassword {
+            span: $span,
+            auth_string: $3,
+        })
+    }
+;
+
+identified_by_random_password -> Identification:
+    'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD'
+    {
+        Identification::IdentifiedByRandomPassword(IdentifiedByRandomPassword {
+            span: $span,
+        })
+    }
+;
+
+identified_with_plugin -> Identification:
+    'IDENTIFIED' 'WITH' ident_or_text
+    {
+        Identification::IdentifiedWithPlugin(IdentifiedWithPlugin {
+            span: $span,
+            auth_plugin: $3,
+        })
+    }
+;
+
+identified_with_plugin_as_auth -> Identification:
+    'IDENTIFIED' 'WITH' ident_or_text 'AS' TEXT_STRING_hash
+    {
+        Identification::IdentifiedWithPluginAsAuth(IdentifiedWithPluginAsAuth {
+            span: $span,
+            auth_plugin: $3,
+            auth_string: $5,
+        })
+    }
+;
+
+identified_with_plugin_by_password -> Identification:
+    'IDENTIFIED' 'WITH' ident_or_text 'BY' TEXT_STRING_password
+    {
+        Identification::IdentifiedWithPluginByPassword(IdentifiedWithPluginByPassword {
+            span: $span,
+            auth_plugin: $3,
+            auth_string: $5,
+        })
+    }
+;
+
+identified_with_plugin_by_random_password -> Identification:
+    'IDENTIFIED' 'WITH' ident_or_text 'BY' 'RANDOM' 'PASSWORD'
+    {
+        Identification::IdentifiedWithPluginByRandomPassword(IdentifiedWithPluginByRandomPassword {
+            span: $span,
+            auth_plugin: $3,
+        })
+    }
+;
+
+default_role_clause -> Option<DefaultRoleClause>:
+      /* empty */
+      {
+          None
+      }
+    |
+      'DEFAULT' 'ROLE' role_list
+      {
+          Some(DefaultRoleClause {
+              span: $span,
+              roles: $3,
+          })
+      }
+;
+
+role_list -> Vec<Role>:
+      role
+      {
+           vec![$1]
+      }
+    | role_list ',' role
+      {
+           $1.push($3);
+           $1
+      }
+;
+
+role -> Role:
+      role_ident_or_text
+      {
+           Role {
+               span: $span,
+               role: $1,
+           }
+      }
+    | role_ident_or_text '@' ident_or_text
+      {
+            $1.push('@');
+            $1.push_str(&$3);
+            Role {
+                span: $span,
+                role: $1,
+            }
+      }
+;
+
+require_clause -> Option<RequireClause>:
+      /* empty */     { None }
+    | 'REQUIRE' require_list
+      {
+           Some(RequireClause{
+               span: $span,
+               requires: Some($2),
+           })
+      }
+    | 'REQUIRE' 'SSL'
+      {
+           Some(RequireClause{
+               span: $span,
+               requires: None,
+           })
+      }
+    | 'REQUIRE' 'X509'
+      {
+           Some(RequireClause{
+               span: $span,
+               requires: None,
+           })
+      }
+    | 'REQUIRE' 'NONE'
+      {
+           Some(RequireClause{
+               span: $span,
+               requires: None,
+           })
+      }
+;
+
+require_list -> Vec<RequireElement>:
+      require_list_element opt_and require_list
+      {
+           $3.push($1);
+           $3
+      }
+    | require_list_element
+      {
+           vec![$1]
+      }
+;
+
+opt_and -> bool:
+      /* empty */ { false }
+    | 'AND'       { true }
+;
+
+require_list_element -> RequireElement:
+      'SUBJECT' 'TEXT_STRING'
+      {
+          RequireElement {
+              span: $span,
+              require: String::from($lexer.span_str($2.as_ref().unwrap().span())),
+          }
+      }
+    | 'ISSUER' 'TEXT_STRING'
+      {
+          RequireElement {
+              span: $span,
+              require: String::from($lexer.span_str($2.as_ref().unwrap().span())),
+          }
+      }
+    | 'CIPHER' 'TEXT_STRING'
+      {
+          RequireElement {
+              span: $span,
+              require: String::from($lexer.span_str($2.as_ref().unwrap().span())),
+          }
+      }
+;
+
+connect_options -> Option<ConnectOptions>:
+      /* empty */ { None }
+    | 'WITH' connect_option_list
+      {
+           Some(ConnectOptions{
+               span: $span,
+               options: $2,
+           })
+      }
+;
+
+connect_option_list -> Vec<ConnectOption>:
+      connect_option_list connect_option
+      {
+           $1.push($2);
+           $1
+      }
+    | connect_option
+      {
+           vec![$1]
+      }
+;
+
+connect_option -> ConnectOption:
+      'MAX_QUERIES_PER_HOUR' ulong_num
+      {
+           ConnectOption {
+               span: $span,
+               num: $2,
+           }
+      }
+    | 'MAX_UPDATES_PER_HOUR' ulong_num
+      {
+           ConnectOption {
+               span: $span,
+               num: $2,
+           }
+      }
+    | 'MAX_CONNECTIONS_PER_HOUR' ulong_num
+      {
+           ConnectOption {
+               span: $span,
+               num: $2,
+           }
+      }
+    | 'MAX_USER_CONNECTIONS' ulong_num
+      {
+           ConnectOption {
+               span: $span,
+               num: $2,
+           }
+      }
+;
+
+opt_account_lock_password_expire_options -> Option<AccountLockPasswordExpireOptions>:
+      /* empty */    { None }
+    | opt_account_lock_password_expire_option_list
+      {
+           Some(AccountLockPasswordExpireOptions{
+               span: $span,
+               options: $1,
+           })
+      }
+;
+
+opt_account_lock_password_expire_option_list -> Vec<AccountLockPasswordExpireOption>:
+      opt_account_lock_password_expire_option
+      {
+           vec![$1]
+      }
+    | opt_account_lock_password_expire_option_list opt_account_lock_password_expire_option
+      {
+           $1.push($2);
+           $1
+      }
+;
+
+opt_account_lock_password_expire_option -> AccountLockPasswordExpireOption:
+      'ACCOUNT' 'UNLOCK'
+      {
+           AccountLockPasswordExpireOption::AccountLock(AccountLock{
+               span: $span,
+           })
+      }
+    | 'ACCOUNT' 'LOCK'
+      {
+           AccountLockPasswordExpireOption::AccountLock(AccountLock{
+               span: $span,
+           })
+      }
+    | 'PASSWORD' 'EXPIRE'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: None,
+           })
+      }
+    | 'PASSWORD' 'EXPIRE' 'INTERVAL' real_ulong_num 'DAY'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: Some($4),
+           })
+      }
+    | 'PASSWORD' 'EXPIRE' 'NEVER'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: None,
+           })
+      }
+    | 'PASSWORD' 'EXPIRE' 'DEFAULT'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: None,
+           })
+      }
+    | 'PASSWORD' 'HISTORY' real_ulong_num
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: Some($3),
+           })
+      }
+    | 'PASSWORD' 'HISTORY' 'DEFAULT'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: None,
+           })
+      }
+    | 'PASSWORD' 'REUSE' 'INTERVAL' real_ulong_num 'DAY'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: Some($4),
+           })
+      }
+    | 'PASSWORD' 'REUSE' 'INTERVAL' 'DEFAULT'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: None,
+           })
+      }
+    | 'PASSWORD' 'REQUIRE' 'CURRENT'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: None,
+           })
+      }
+    | 'PASSWORD' 'REQUIRE' 'CURRENT' 'DEFAULT'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: None,
+           })
+      }
+    | 'PASSWORD' 'REQUIRE' 'CURRENT' 'OPTIONAL'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: None,
+           })
+      }
+    | 'FAILED_LOGIN_ATTEMPTS' real_ulong_num
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: Some($2),
+           })
+      }
+    | 'PASSWORD_LOCK_TIME' real_ulong_num
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: Some($2),
+           })
+      }
+    | 'PASSWORD_LOCK_TIME' 'UNBOUNDED'
+      {
+           AccountLockPasswordExpireOption::PasswordExpire(PasswordExpire{
+               span: $span,
+               num: None,
+           })
+      }
+;
+
+opt_user_attribute -> Option<UserAttribute>:
+      /* empty */    { None }
+    | 'ATTRIBUTE' TEXT_STRING_literal
+      {
+           Some(UserAttribute{
+               span: $span,
+               content: $2,
+           })
+      }
+    | 'COMMENT' TEXT_STRING_literal
+      {
+           Some(UserAttribute{
+               span: $span,
+               content: $2,
+           })
       }
 ;
 
