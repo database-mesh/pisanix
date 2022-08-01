@@ -51,7 +51,7 @@ impl RulesMatchBuilder {
         return rules_match;
     }
 
-    fn build_rules(
+    pub fn build_rules(
         rules: Vec<ReadWriteSplittingRule>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> Vec<RulesMatchInner> {
@@ -67,7 +67,7 @@ impl RulesMatchBuilder {
         instances
     }
 
-    fn build_default_balance(
+    pub fn build_default_balance(
         default_target: &TargetRole,
         rw_endpoint: ReadWriteEndpoint,
     ) -> BalanceType {

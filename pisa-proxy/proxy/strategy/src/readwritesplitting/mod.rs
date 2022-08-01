@@ -19,7 +19,7 @@ pub use dynamic_rw::*;
 use endpoint::endpoint::Endpoint;
 pub use static_rw::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReadWriteEndpoint {
     pub read: Vec<Endpoint>,
     pub readwrite: Vec<Endpoint>,

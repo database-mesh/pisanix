@@ -106,7 +106,6 @@ impl Default for TargetRole {
     }
 }
 
-
 fn default_monitor_period() -> u64 {
     1000
 }
