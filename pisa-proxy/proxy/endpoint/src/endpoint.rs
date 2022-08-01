@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct Endpoint {
     pub weight: i64,
     pub name: String,
