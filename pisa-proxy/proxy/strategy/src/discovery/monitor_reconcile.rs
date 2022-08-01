@@ -73,9 +73,10 @@ impl MonitorReconcile {
         let mut ping_monitor_response: Option<PingMonitorResponse> = None;
         let mut replication_lag_monitor_response: Option<ReplicationLagMonitorResponse> = None;
         let mut read_only_monitor_response: Option<ReadOnlyMonitorResponse> = None;
-        let mut pre_rw_endpoint = rw_endpoint.clone();
+        
 
         tokio::task::spawn_blocking(move || {
+            let mut pre_rw_endpoint = rw_endpoint.clone();
             loop {
                 let monitor_response_channel = monitor_response_channel.clone();
                 let mut curr_rw_endpoint = rw_endpoint.clone();
