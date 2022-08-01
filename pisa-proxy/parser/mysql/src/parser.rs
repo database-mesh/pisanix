@@ -178,6 +178,16 @@ mod test {
         parser(inputs);
     }
 
+    #[test]
+    fn test_dal_stmt() {
+        let inputs = vec![
+            "CREATE USER IF NOT EXISTS 'jeffrey'@'localhost' IDENTIFIED BY 'password';",
+            //"CREATE USER IF NOT EXISTS 'jeffrey'@'localhost' IDENTIFIED WITH 'password' INITIAL AUTHENTICATION IDENTIFIED BY RANDOM PASSWORD;",
+        ];
+
+        parser(inputs);
+    }
+
     fn parser(inputs: Vec<&str>) {
         let p = Parser::new();
         for input in inputs {
@@ -188,7 +198,7 @@ mod test {
                     println!("sql={:?} {:?}", input, e)
                 }
                 Ok(_stmt) => {
-                    //println!("{:#?}", _stmt)
+                    println!("{:#?}", _stmt)
                 }
             }
         }
