@@ -1,0 +1,13 @@
+[package]
+name = "pisa-daemon"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+resolver = "2"
+members = [
+  "app/config",
+  "app/traffic_qos",
+  "bpf",
+  "tc"
+]
