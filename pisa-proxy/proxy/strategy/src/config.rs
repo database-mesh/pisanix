@@ -53,19 +53,33 @@ pub enum Discovery {
 pub struct MasterHighAvailability {
     pub user: String,
     pub password: String,
+    #[serde(default = "default_monitor_period")]
     pub monitor_period: u64,
+    #[serde(default = "default_connect_period")]
     pub connect_period: u64,
+    #[serde(default = "default_connect_timeout")]
     pub connect_timeout: u64,
+    #[serde(default = "default_connect_failure_threshold")]
     pub connect_failure_threshold: u64,
+    #[serde(default = "default_ping_period")]
     pub ping_period: u64,
+    #[serde(default = "default_ping_timeout")]
     pub ping_timeout: u64,
+    #[serde(default = "default_ping_failure_threshold")]
     pub ping_failure_threshold: u64,
+    #[serde(default = "default_replication_lag_period")]
     pub replication_lag_period: u64,
+    #[serde(default = "default_replication_lag_timeout")]
     pub replication_lag_timeout: u64,
+    #[serde(default = "default_replication_lag_failure_threshold")]
     pub replication_lag_failure_threshold: u64,
+    #[serde(default = "default_max_replication_lag")]
     pub max_replication_lag: u64,
+    #[serde(default = "default_read_only_period")]
     pub read_only_period: u64,
+    #[serde(default = "default_read_only_timeout")]
     pub read_only_timeout: u64,
+    #[serde(default = "default_read_only_failure_threshold")]
     pub read_only_failure_threshold: u64,
 }
 
@@ -90,4 +104,61 @@ impl Default for TargetRole {
     fn default() -> Self {
         Self::ReadWrite
     }
+}
+
+
+fn default_monitor_period() -> u64 {
+    1000
+}
+
+fn default_connect_period() -> u64 {
+    1000
+}
+
+fn default_connect_timeout() -> u64 {
+    6000
+}
+
+fn default_connect_failure_threshold() -> u64 {
+    1
+}
+
+fn default_ping_period() -> u64 {
+    1000
+}
+
+fn default_ping_timeout() -> u64 {
+    6000
+}
+
+fn default_ping_failure_threshold() -> u64 {
+    1
+}
+
+fn default_replication_lag_period() -> u64 {
+    1000
+}
+
+fn default_replication_lag_timeout() -> u64 {
+    6000
+}
+
+fn default_replication_lag_failure_threshold() -> u64 {
+    1
+}
+
+fn default_max_replication_lag() -> u64 {
+    10000
+}
+
+fn default_read_only_period() -> u64 {
+    1000
+}
+
+fn default_read_only_timeout() -> u64 {
+    6000
+}
+
+fn default_read_only_failure_threshold() -> u64 {
+    1
 }

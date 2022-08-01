@@ -245,12 +245,84 @@ port = 3308
 role = "readwrite"
 ```
 
+#### 配置后端数据库动态读写分离
+```
+[admin]
+log_level = "INFO"
+
+[proxy]
+[[proxy.config]]
+listen_addr = "0.0.0.0:9089"
+user = "root"
+password = "root"
+db = "test"
+backend_type = "mysql"
+pool_size = 3
+
+[proxy.config.read_write_splitting]
+
+[proxy.config.read_write_splitting.dynamic]
+default_target = "readwrite"
+
+[proxy.config.read_write_splitting.dynamic.discovery]
+type = "mha"
+user = "root"
+password = "12345678"
+monitor_period = 1
+connect_period = 100
+connect_timeout = 600
+connect_failure_threshold = 1
+ping_period = 100
+ping_timeout = 300
+ping_failure_threshold = 1
+replication_lag_period = 100
+replication_lag_timeout = 600
+replication_lag_failure_threshold = 1
+max_replication_lag = 3
+read_only_period = 100
+read_only_timeout = 600
+read_only_failure_threshold = 1
+
+[[proxy.config.read_write_splitting.dynamic.rule]]
+name = "write-rule"
+type = "regex"
+regex = ["^insert"]
+target = "readwrite"
+algorithm_name = "roundrobin"
+
+[[proxy.config.read_write_splitting.dynamic.rule]]
+name = "read-rule"
+type = "regex"
+regex = ["^select"]
+target = "read"
+algorithm_name = "roundrobin"
+
+[mysql]
+[[mysql.node]]
+name = "ds001"
+db = "test"
+user = "root"
+password = "root"
+host = "127.0.0.1"
+port = 3307
+role = "read"
+
+[[mysql.node]]
+name = "ds002"
+db = "test"
+user = "root"
+password = "root"
+host = "127.0.0.1"
+port = 3308
+role = "readwrite"
+```
+
 #### 启动 Pisa-Proxy
 
 这里假设配置文件存放路径为 `examples/example-config.toml`，最后使用如下命令即可完成启动。
 
 ```shell
-LOCAL_CONFIG=true ../bin/proxy -c examples/example-config.toml
+/bin/proxy daemon -c examples/example-config.toml
 ```
 
 当观察日志确认***Pisa-Proxy*** 启动后即可进行访问。
