@@ -29,9 +29,9 @@ Pisa-Proxy 支持两种类型的读写分离方案：
 
 指无动态感知后端数据库角色变更。配置说明[请见](#读写分离配置)。
 
-- 动态读写分离(目前还不支持)
+- 动态读写分离
 
-指能够感知后端数据库角色变更。
+指能够感知后端数据库角色变更，配置说明[请见](#动态读写分离)。
 
 目前，两种方案都需要配置[读写分离规则](#读写分离规则说明)。
 
@@ -151,4 +151,88 @@ spec:
       password: root 
       port: 3306
       user: root
+```
+
+## 动态读写分离
+
+动态读写分离是在静态读写分离基础之上加入了对后端数据源的动态感知，Pisa-Proxy 主动探测后端集群节点状态和主从之间的状态，并根据探测到的状态来动态调整 Pisa-Proxy 的路由策略。在动态读写分离中主要包含了 Discovery，Monitor 两个模块用来感知后端数据源状态。
+
+#### 名词解释
+Discovery: discovery 指 Pisa-Proxy 对后端高可用的感知方式，例如: MHA，RDS，MGR等等。在当前版本中支持 MHA 的方式。
+
+Monitor: monitor 为对后端数据源的探测模块，其中包含了以下4种探测方式。
+
+- Connect Monitor: 探测后端数据源的网络层连通性。
+- Ping Monitor: 探测后端数据源是否健康。
+- Replication Lag Monitor: 探测后端数据源主从复制状态和延迟情况。
+- Read Only Monitor: 探测后端数据源角色。
+
+#### 配置项
+|参数 | 类型| 是否依赖| 默认值 | 含义|
+|-- | -- | -- | -- | --|
+|user | string | 是 | None |探测模块执行检查 SQL 语句用户名|
+|password | string | 是 | None |探测模块执行检查 SQL 语句密码|
+|monitor_period | u64 | 是 | 1000 |探测模块更新感知后端数据源状态周期(毫秒)|
+|connect_period | u64 | 是 | 1000 |connect 模块探测周期(毫秒)|
+|connect_timeout | u64 | 是| 6000 |connect 模块探测超时时间(毫秒)|
+|connect_failure_threshold | u64 | 是 | 1 |connect 模块探测失败重试次数|
+|ping_period | u64 | 是 | 1000 |ping 模块探测周期(毫秒)|
+|ping_timeout | u64 | 是 | 6000 |ping 模块探测超市时间(毫秒)|
+|ping_failure_threshold | u64 | 是 | 1 |ping 模块探测失败重试次数|
+|replication_lag_period | u64 | 是 | 1000 |replication lag 模块探测周期(毫秒)|
+|replication_lag_timeout | u64 | 是 | 6000|replication lag 模块探测超时时间(毫秒)|
+|replication_lag_failure_threshold | u64 | 是 | 1 |replication lag 探测失败重拾次数|
+|max_replication_lag | u64 | 是 | 10000 |用户定义主从最大延迟时间阈值(毫秒)|
+|read_only_period | u64 | 是 | 1000 |read only 探测周期(毫秒)|
+|read_only_timeout | u64 | 是 | 6000|read only 探测超市时间(毫秒)|
+|read_only_failure_threshold | u64 | 是 | 3 |read only 探测失败重拾次数|
+
+
+#### 一个完整的 TrafficStrategy CRD 配置如下：
+```yaml
+apiVersion: core.database-mesh.io/v1alpha1
+kind: TrafficStrategy
+metadata:
+  name: catalogue
+  namespace: demotest
+spec:
+  loadBalance:
+    readWriteSplitting:
+      dynamic:
+        defaultTarget: readwrite
+        discovery:
+          managedHighAvailability:
+            connectionProbe:
+              failureThreshold: 3
+              periodMilliseconds: 1000
+              timeoutMilliseconds: 6000
+            monitorPeriod: 1000
+            pingProbe:
+              failureThreshold: 3
+              periodMilliseconds: 1000
+              timeoutMilliseconds: 6000
+            readOnlyProbe:
+              failureThreshold: 3
+              periodMilliseconds: 1000
+              timeoutMilliseconds: 6000
+            replicationLagProbe:
+              failureThreshold: 3
+              maxReplicationLag: 3
+              periodMilliseconds: 1000
+              timeoutMilliseconds: 6000
+            user: monitor
+            password: monitor
+        rules:
+        - algorithmName: roundrobin
+          name: write-rule
+          regex:
+          - ^insert
+          target: readwrite
+          type: regex
+        - algorithmName: roundrobin
+          name: read-rule
+          regex:
+          - ^select
+          target: read
+          type: regex
 ```
