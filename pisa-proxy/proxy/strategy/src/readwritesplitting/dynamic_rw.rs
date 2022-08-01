@@ -24,7 +24,7 @@ use super::{
 };
 use crate::{
     config,
-    config::TargetRole,
+    config::{ReadWriteSplittingRule, TargetRole},
     discovery::{
         discovery::{Discovery, DiscoveryMasterHighAvailability, Monitor},
         monitor_reconcile::MonitorReconcile,
@@ -103,23 +103,14 @@ impl ReadWriteSplittingDynamicBuilder {
             }
         };
 
-        let rules_match_wrapper = Arc::new(Mutex::new(rules_match));
-        let rm = rules_match_wrapper.clone();
-        tokio::spawn(async move {
-            RulesMatch::start_rules_match_reconcile(
-                reciver.unwrap().clone(),
-                rm,
-                config.clone().rules,
-                config.clone().default_target,
-            )
-            .await;
-        });
-        ReadWriteSplittingDynamic { rules_match: rules_match_wrapper.clone() }
+        ReadWriteSplittingDynamic { rx: reciver.unwrap(), rules: config.clone().rules, rules_match }
     }
 }
 
 pub struct ReadWriteSplittingDynamic {
-    rules_match: Arc<Mutex<RulesMatch>>,
+    rx: crossbeam_channel::Receiver<ReadWriteEndpoint>,
+    rules: Vec<ReadWriteSplittingRule>,
+    rules_match: RulesMatch,
 }
 
 impl Route for ReadWriteSplittingDynamic {
@@ -129,9 +120,28 @@ impl Route for ReadWriteSplittingDynamic {
         &mut self,
         input: &RouteInput,
     ) -> Result<(Option<Endpoint>, TargetRole), Self::Error> {
-        let rules_match_wrapper = self.rules_match.clone();
-        let mut rules_match = rules_match_wrapper.lock();
-        let b = rules_match.get(input);
-        Ok((b.0.next(), b.1))
+        let v: Vec<_> = self.rx.try_iter().collect();
+        match v.last() {
+            Some(rw_endpoint) => {
+                self.rules_match.default_balance = RulesMatchBuilder::build_default_balance(
+                    &self.rules_match.default_target,
+                    rw_endpoint.clone(),
+                );
+                self.rules_match.default_trans_balance = RulesMatchBuilder::build_default_balance(
+                    &TargetRole::ReadWrite,
+                    rw_endpoint.clone(),
+                );
+                self.rules_match.inner =
+                    RulesMatchBuilder::build_rules(self.rules.clone(), rw_endpoint.clone());
+
+                let b = self.rules_match.get(input);
+                Ok((b.0.next(), b.1))
+            }
+
+            None => {
+                let b = self.rules_match.get(input);
+                Ok((b.0.next(), b.1))
+            }
+        }
     }
 }

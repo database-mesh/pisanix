@@ -73,6 +73,7 @@ impl MonitorReconcile {
         let mut ping_monitor_response: Option<PingMonitorResponse> = None;
         let mut replication_lag_monitor_response: Option<ReplicationLagMonitorResponse> = None;
         let mut read_only_monitor_response: Option<ReadOnlyMonitorResponse> = None;
+        let mut pre_rw_endpoint = rw_endpoint.clone();
 
         tokio::task::spawn_blocking(move || {
             loop {
@@ -94,8 +95,6 @@ impl MonitorReconcile {
                         }
                     }
                 }
-                
-               
 
                 for (_read_write_connect_addr, read_write_connect_status) in
                     connect_monitor_response.clone().unwrap().readwrite
@@ -150,7 +149,7 @@ impl MonitorReconcile {
                                             crate::monitors::read_only_monitor::NodeRole::Slave => {
                                             }
                                         }
-                                    },
+                                    }
                                     None => {}
                                 }
                             }
@@ -216,8 +215,8 @@ impl MonitorReconcile {
                                             }
                                         }
                                     }
-                                },
-                                None => {},
+                                }
+                                None => {}
                             }
                         }
                         crate::monitors::connect_monitor::ConnectStatus::Disconnected => {
@@ -232,9 +231,13 @@ impl MonitorReconcile {
                     }
                 }
 
-                if let Err(err) = s.send(curr_rw_endpoint) {
-                    error!("send read write endpoint err: {:#?}", err);
+                if pre_rw_endpoint != curr_rw_endpoint {
+                    if let Err(err) = s.send(curr_rw_endpoint.clone()) {
+                        error!("send read write endpoint err: {:#?}", err);
+                    }
                 }
+
+                pre_rw_endpoint = curr_rw_endpoint;
 
                 std::thread::sleep(std::time::Duration::from_millis(monitor_interval));
             }
