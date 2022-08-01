@@ -42,8 +42,6 @@ impl LoadSockFilter {
         let socket = Self::open_device(device)?;
         prog.attach(socket.as_raw_fd())?;
 
-        //let mut app_endpoints = HashMap::try_from(bpf.map_mut("app_endpoints")?)?;
-
         Ok(())
     }
 
@@ -104,7 +102,6 @@ impl TrafficTyp {
     // Todo, need to add config parameter
     pub fn load_app_config(&self, bpf: &mut Bpf) -> Result<MapRefMut, Box<(dyn std::error::Error + 'static)>> {
         bpf.map_mut(APP_ENDPOINTS_CLASSID_MAP_NAME).map_err(|e| e.into())
-        //map.insert(Endpoint{ ip: 1, port: 1 }, 1, 0)?;
     }
 }
 
