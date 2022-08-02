@@ -287,6 +287,10 @@ impl ClientConn {
         Ok(())
     }
 
+    pub async fn is_ready(&self) -> bool {
+        self.framed.as_ref().unwrap().is_ready().await
+    }
+
     pub fn get_endpoint(&self) -> Option<String> {
         Some(self.endpoint.clone())
     }

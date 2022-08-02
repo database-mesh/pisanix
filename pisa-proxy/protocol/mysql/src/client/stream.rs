@@ -29,7 +29,7 @@ use crate::err::ProtocolError;
 #[pin_project]
 #[derive(Debug)]
 pub struct LocalStream {
-    wrapper: StreamWrapper,
+    pub wrapper: StreamWrapper,
 }
 
 impl LocalStream {

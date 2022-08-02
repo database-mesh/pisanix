@@ -106,6 +106,11 @@ where
         self.factory = Some(factory)
     }
 
+    pub async fn rebuild_conn(&self) -> Result<PoolConn<T>, T::Error> {
+        let conn = self.factory.as_ref().unwrap().build_conn().await?;
+        Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
+    }
+
     // Get connection by endpoint attribute
     pub async fn get_conn_with_endpoint(&self, endpoint: &str) -> Result<PoolConn<T>, T::Error> {
         let conn = self.pool.get(endpoint);
