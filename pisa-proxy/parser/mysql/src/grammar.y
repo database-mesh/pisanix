@@ -7353,7 +7353,7 @@ alter_lock_option_value -> String:
       }
 ;
 
-create_user_list -> Vec<UserAndAuthOption>:
+create_user_list -> Vec<UserWithAuthOption>:
       create_user
       {
            vec![$1]
@@ -7365,43 +7365,38 @@ create_user_list -> Vec<UserAndAuthOption>:
       }
 ;
 
-create_user -> UserAndAuthOption:
+create_user -> UserWithAuthOption:
       user identification opt_create_user_with_mfa
       {
-          UserAndAuthOption {
+          UserWithAuthOption::UserIdentification(UserIdentification {
               span: $span,
               user: $1,
-              identification: Some($2),
+              identification: $2,
               opt_create_user_with_mfa: $3,
-              identified_with_plugin: None,
-              opt_initial_auth: None,
-          }
+          })
       }
     | user opt_create_user_with_mfa
       {
-          UserAndAuthOption {
+          UserWithAuthOption::UserWithMFA(UserWithMFA {
               span: $span,
               user: $1,
-              identification: None,
               opt_create_user_with_mfa: $2,
-              identified_with_plugin: None,
-              opt_initial_auth: None,
-          }
+          })
       }
 ;
 
-opt_create_user_with_mfa -> Option<CreateUserWithMFA>:
+opt_create_user_with_mfa -> Option<AuthMFA>:
       /* empty */                          { None }
     | 'AND' identification
       {
-          Some(CreateUserWithMFA::CreateUserWith2FA(CreateUserWith2FA{
+          Some(AuthMFA::Auth2FA(Auth2FA {
               span: $span,
               auth_2fa_option: $2,
           }))
       }
     | 'AND' identification 'AND' identification
       {
-          Some(CreateUserWithMFA::CreateUserWith3FA(CreateUserWith3FA{
+          Some(AuthMFA::Auth3FA(Auth3FA {
               span: $span,
               auth_2fa_option: $2,
               auth_3fa_option: $4,
@@ -7803,6 +7798,31 @@ opt_user_attribute -> Option<UserAttribute>:
                span: $span,
                content: $2,
            })
+      }
+;
+
+opt_initial_auth -> Option<InitialAuth>:
+      /* empty */            { None }
+    | 'INITIAL' 'AUTHENTICATION' identified_by_random_password
+      {
+          Some(InitialAuth {
+              span: $span,
+              identification: $3
+          })
+      }
+    | 'INITIAL' 'AUTHENTICATION' identified_with_plugin_as_auth
+      {
+          Some(InitialAuth {
+              span: $span,
+              identification: $3
+          })
+      }
+    | 'INITIAL' 'AUTHENTICATION' identified_by_password
+      {
+          Some(InitialAuth {
+              span: $span,
+              identification: $3
+          })
       }
 ;
 

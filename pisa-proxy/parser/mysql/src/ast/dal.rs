@@ -19,7 +19,7 @@ use crate::ast::User;
 pub struct CreateUser {
     pub span: Span,
     pub is_not_exists: bool,
-    pub create_user_list: Vec<UserAndAuthOption>,
+    pub create_user_list: Vec<UserWithAuthOption>,
     pub default_role_clause: Option<DefaultRoleClause>,
     pub require_clause: Option<RequireClause>,
     pub connect_options: Option<ConnectOptions>,
@@ -28,13 +28,33 @@ pub struct CreateUser {
 }
 
 #[derive(Debug, Clone)]
-pub struct UserAndAuthOption {
+pub enum UserWithAuthOption {
+    UserIdentification(UserIdentification),
+    UserIdentifiedWithPlugin(UserIdentifiedWithPlugin),
+    UserWithMFA(UserWithMFA),
+}
+
+#[derive(Debug, Clone)]
+pub struct UserIdentification {
     pub span: Span,
     pub user: User,
-    pub identification: Option<Identification>,
-    pub opt_create_user_with_mfa: Option<CreateUserWithMFA>,
-    pub identified_with_plugin: Option<Identification>,
+    pub identification: Identification,
+    pub opt_create_user_with_mfa: Option<AuthMFA>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UserIdentifiedWithPlugin {
+    pub span: Span,
+    pub user: User,
+    pub identified_with_plugin: Identification,
     pub opt_initial_auth: Option<InitialAuth>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UserWithMFA {
+    pub span: Span,
+    pub user: User,
+    pub opt_create_user_with_mfa: Option<AuthMFA>,
 }
 
 #[derive(Debug, Clone)]
@@ -48,19 +68,19 @@ pub enum Identification {
 }
 
 #[derive(Debug, Clone)]
-pub enum CreateUserWithMFA {
-    CreateUserWith2FA(CreateUserWith2FA),
-    CreateUserWith3FA(CreateUserWith3FA),
+pub enum AuthMFA {
+    Auth2FA(Auth2FA),
+    Auth3FA(Auth3FA),
 }
 
 #[derive(Debug, Clone)]
-pub struct CreateUserWith2FA {
+pub struct Auth2FA {
     pub span: Span,
     pub auth_2fa_option: Identification,
 }
 
 #[derive(Debug, Clone)]
-pub struct CreateUserWith3FA {
+pub struct Auth3FA {
     pub span: Span,
     pub auth_2fa_option: Identification,
     pub auth_3fa_option: Identification,
