@@ -171,9 +171,9 @@ spec:
                             type: object
                             description: 'Discovery setup to detect role of MySQL instances'
                             properties:
-                              managedHighAvailability:
+                              masterHighAvailability:
                                 type: object
-                                description: 'Managed High Availability'
+                                description: 'Master High Availability'
                                 properties:
                                   user:
                                     type: string
