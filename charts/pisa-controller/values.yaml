@@ -28,14 +28,14 @@ image:
   repository: pisanixio/controller
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v0.1.1"
+  tag: "v0.2.0"
   imagePullSecrets: [ ]
 
 ## @param proxyImage.repository 需要注入的 pisa-proxy 的镜像名
 ## @param proxyImage.tag 需要注入的 pisa-proxy 镜像tag
 proxyImage:
   repository: pisanixio/proxy
-  tag: "v0.1.1"
+  tag: "v0.2.0"
 
 ## @param resources.limits pisa-controller 资源限制数值
 ## @param resources.requests.cpu pisa-controller 资源申请cpu核数
