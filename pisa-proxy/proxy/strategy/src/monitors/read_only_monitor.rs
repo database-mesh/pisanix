@@ -155,6 +155,7 @@ impl Monitor for MonitorReadOnly {
                                     {
                                         Ok(read_only_status) => {
                                             response.roles.insert(read.addr, read_only_status);
+                                            retries = 1;
                                             break;
                                         }
                                         Err(_) => retries += 1,
@@ -196,6 +197,7 @@ impl Monitor for MonitorReadOnly {
                                     {
                                         Ok(read_only_status) => {
                                             response.roles.insert(readwrite.addr, read_only_status);
+                                            retries = 1;
                                             break;
                                         }
                                         Err(_) => retries += 1,
