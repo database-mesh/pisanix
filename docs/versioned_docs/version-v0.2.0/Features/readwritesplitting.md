@@ -196,12 +196,15 @@ metadata:
   name: catalogue
   namespace: demotest
 spec:
+  selector:
+    matchLabels:
+      source: test
   loadBalance:
     readWriteSplitting:
       dynamic:
         defaultTarget: readwrite
         discovery:
-          managedHighAvailability:
+          masterHighAvailability:
             connectionProbe:
               failureThreshold: 3
               periodMilliseconds: 1000
