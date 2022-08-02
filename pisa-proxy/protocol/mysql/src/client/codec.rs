@@ -25,13 +25,14 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use pin_project::pin_project;
 use protocol_codegen::mysql_codec_convert;
+use tokio::io::Interest;
 use tokio_util::codec::{Decoder, Encoder, Framed};
 
 use super::{
     auth::ClientAuth,
     resultset::{write_command_binary, ResultsetCodec},
     stmt::Stmt,
-    stream::LocalStream,
+    stream::{LocalStream, StreamWrapper},
 };
 use crate::{
     err::ProtocolError,
@@ -73,6 +74,38 @@ impl DerefMut for ClientCodec {
             Self::Resultset(framed) => framed.codec_mut().auth_info.as_mut().unwrap(),
             Self::Stmt(framed) => framed.codec_mut().auth_info.as_mut().unwrap(),
             Self::Common(framed) => framed.codec_mut().auth_info.as_mut().unwrap(),
+        }
+    }
+}
+
+impl ClientCodec {
+    pub async fn is_ready(&self) -> bool {
+        let local_stream = match self {
+            Self::ClientAuth(framed) => framed.get_ref(),
+            Self::Resultset(framed) => framed.get_ref(),
+            Self::Stmt(framed) => framed.get_ref(),
+            Self::Common(framed) => framed.get_ref(),
+        };
+
+        let underly_io = match &local_stream.wrapper {
+            StreamWrapper::Plain(stream) => {
+                stream.as_ref().unwrap()
+            },
+            StreamWrapper::Secure(stream) => {
+                stream.get_ref().get_ref().get_ref()
+            }
+        };
+
+        let is_ready = underly_io.ready(Interest::READABLE | Interest::WRITABLE).await;
+        match is_ready {
+            Ok(ready) => {
+                if ready.is_read_closed() || ready.is_write_closed() {
+                    false
+                } else {
+                    true
+                }
+            }
+            Err(_) => false,
         }
     }
 }
