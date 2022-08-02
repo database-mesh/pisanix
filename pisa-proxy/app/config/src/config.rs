@@ -36,9 +36,9 @@ pub struct PisaProxyConfigBuilder {
 
     pub _deployed_ns: String,
     pub _deployed_name: String,
-    pub _pisa_svc: String,
-    pub _pisa_ns: String,
-    pub _pisa_host: String,
+    pub _pisa_controller_host: String,
+    pub _pisa_controller_svc: String,
+    pub _pisa_controller_ns: String,
 
     pub _git_tag: String,
     pub _git_commit: String,
@@ -80,6 +80,22 @@ impl PisaProxyConfigBuilder {
             .subcommand(
                 Command::new("sidecar")
                     .about("used for sidecar mode")
+                    .arg(
+                        Arg::new("pisa-controller-service")
+                            .long("pisa-controller-service")
+                            .help("Pisa Controller Service")
+                            .default_value(DEFAULT_PISA_CONTROLLER_SERVICE)
+                            .env(ENV_PISA_CONTROLLER_SERVICE)
+                            .takes_value(true),
+                    )
+                    .arg(
+                        Arg::new("pisa-controller-namespace")
+                            .long("pisa-controller-namespace")
+                            .help("Pisa Controller Namespace")
+                            .default_value(DEFAULT_PISA_CONTROLLER_NAMESPACE)
+                            .env(ENV_PISA_CONTROLLER_NAMESPACE)
+                            .takes_value(true),
+                    )
                     .arg(
                         Arg::new("pisa-controller-host")
                             .long("pisa-controller-host")
@@ -159,7 +175,16 @@ impl PisaProxyConfigBuilder {
                 self._local = true;
             }
             ("sidecar", cmd) => {
-                self._pisa_host = cmd.value_of("pisa-controller-host").unwrap().to_string();
+                self._pisa_controller_svc =
+                    cmd.value_of("pisa-controller-service").unwrap().to_string();
+                self._pisa_controller_ns =
+                    cmd.value_of("pisa-controller-namespace").unwrap().to_string();
+                self._pisa_controller_host =
+                    cmd.value_of("pisa-controller-host").unwrap().to_string();
+                if self._pisa_controller_host.is_empty() {
+                    self._pisa_controller_host =
+                        format!("{}.{}:8080", self._pisa_controller_svc, self._pisa_controller_ns);
+                }
                 self._deployed_ns = cmd.value_of("pisa-deployed-namespace").unwrap().to_string();
                 self._deployed_name = cmd.value_of("pisa-deployed-name").unwrap().to_string();
             }
@@ -191,7 +216,7 @@ impl PisaProxyConfigBuilder {
         } else {
             let http_path = format!(
                 "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-                self._pisa_host, self._deployed_ns, self._deployed_name
+                self._pisa_controller_host, self._deployed_ns, self._deployed_name
             );
             builder.build_from_http(http_path).unwrap()
         };
