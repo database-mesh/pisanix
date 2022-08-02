@@ -167,7 +167,7 @@ impl Monitor for MonitorConnect {
                                     response
                                         .readwrite
                                         .insert(readwrite.addr.clone(), conn_res.clone());
-                                    retries = 0;
+                                    retries = 1;
                                     break;
                                 } else {
                                     match MonitorConnect::connnect_check(readwrite.addr.clone())

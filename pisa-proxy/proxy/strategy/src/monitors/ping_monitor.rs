@@ -218,10 +218,12 @@ impl Monitor for MonitorPing {
                                     response.readwrite.insert(readwrite.addr.clone(), PingStatus::PingOk);
                                 }
                                 PingStatus::PingNotOk => loop {
-                                    if retries > ping_period {
+                                    if retries > ping_failure_threshold {
                                         response
                                             .readwrite
                                             .insert(readwrite.addr.clone(), PingStatus::PingNotOk);
+                                        retries = 1;
+                                        break;
                                     } else {
                                         match MonitorPing::ping_check(
                                             user.clone(),
@@ -236,6 +238,7 @@ impl Monitor for MonitorPing {
                                                         readwrite.addr.clone(),
                                                         PingStatus::PingOk,
                                                     );
+                                                    retries = 1;
                                                     break;
                                                 }
                                                 PingStatus::PingNotOk => {
@@ -276,6 +279,7 @@ impl Monitor for MonitorPing {
                                                     readwrite.addr.clone(),
                                                     PingStatus::PingOk,
                                                 );
+                                                retries = 1;
                                                 break;
                                             }
                                             PingStatus::PingNotOk => {
