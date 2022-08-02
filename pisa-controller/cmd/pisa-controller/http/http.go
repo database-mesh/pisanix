@@ -38,6 +38,8 @@ type HttpConfig struct {
 	Addr         string
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
+	TLSCertFile  string
+	TLSKeyFile   string
 }
 
 func NewHttpConfig() *HttpConfig {
@@ -59,6 +61,16 @@ func (c *HttpConfig) SetWriteTimeout(t time.Duration) *HttpConfig {
 	return c
 }
 
+func (c *HttpConfig) SetTLSCertFile(file string) *HttpConfig {
+	c.TLSCertFile = file
+	return c
+}
+
+func (c *HttpConfig) SetTLSKeyFile(file string) *HttpConfig {
+	c.TLSKeyFile = file
+	return c
+}
+
 type HttpServer struct {
 	core *http.Server
 }
@@ -74,6 +86,10 @@ func (s *HttpServer) Build() *HttpServer {
 
 func (s *HttpServer) ListenAndServe() error {
 	return s.core.ListenAndServe()
+}
+
+func (s *HttpServer) ListenAndServeTLS(cert, key string) error {
+	return s.core.ListenAndServeTLS(cert, key)
 }
 
 func NewHttpServer(conf *HttpConfig) *HttpServer {
