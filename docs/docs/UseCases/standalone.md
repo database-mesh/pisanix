@@ -366,5 +366,5 @@ role = "readwrite"
 /bin/proxy daemon -c examples/example-config.toml
 ```
 
-当观察日志确认***Pisa-Proxy*** 启动后即可进行访问。
+当观察日志确认 ***Pisa-Proxy*** 启动后即可进行访问。
 
