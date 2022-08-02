@@ -78,6 +78,7 @@ impl MonitorReconcile {
         tokio::task::spawn_blocking(move || {
             let mut pre_rw_endpoint = rw_endpoint.clone();
             loop {
+                let monitor_response_channel = monitor_response_channel.clone();
                 let mut curr_rw_endpoint = rw_endpoint.clone();
                 for _ in 0..monitors_len {
                     match monitor_response_channel.monitor_response_rx.recv().unwrap() {
