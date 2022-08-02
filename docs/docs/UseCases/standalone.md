@@ -16,7 +16,7 @@ Pisa-Proxy 支持从配置文件和 Remote API 获取配置。目前支持 ```da
 
 ### 命令行参数
 ```
-# ./target/debug/proxy --help
+# ./proxy --help
 Pisa-Proxy -
 
 USAGE:
@@ -37,7 +37,7 @@ SUBCOMMANDS:
 
 通常在单机部署中使用 ```daemon``` 子命令并通过 ```-c,--config``` 指定配置文件路径。
 ```
-#./target/debug/proxy daemon --help
+# ./proxy daemon --help
 proxy-daemon 
 used for standalone mode
 
@@ -51,7 +51,7 @@ OPTIONS:
 
 在 Kubernetes 中以 sidecar 方式部署可以通过 ```sidecar``` 子命令从远程获取配置。
 ```
-./target/debug/proxy sidecar -h
+# ./proxy sidecar -h
 proxy-sidecar 
 used for sidecar mode
 
