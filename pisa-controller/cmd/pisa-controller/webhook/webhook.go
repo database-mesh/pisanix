@@ -28,19 +28,23 @@ const (
 )
 
 type WebhookServer struct {
-	core *http.HttpServer
+	core        *http.HttpServer
+	tlsCertFile string
+	tlsKeyFile  string
 }
 
 func (s WebhookServer) Run() error {
-	return s.core.ListenAndServe()
+	return s.core.ListenAndServeTLS(s.tlsCertFile, s.tlsKeyFile)
 }
 
 func NewTask() task.Task {
-	conf := http.NewHttpConfig().SetAddr(webhook.Conf.Port)
+	conf := http.NewHttpConfig().SetAddr(webhook.Conf.Port).SetTLSCertFile(webhook.Conf.TLSCertFile).SetTLSKeyFile(webhook.Conf.TLSKeyFile)
 	handler := webhook.Handler()
 	hs := http.NewHttpServer(conf).WithHandler(handler).Build()
 	w := &WebhookServer{
-		core: hs,
+		core:        hs,
+		tlsCertFile: conf.TLSCertFile,
+		tlsKeyFile:  conf.TLSKeyFile,
 	}
 
 	return w
