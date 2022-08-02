@@ -124,9 +124,10 @@ pub struct IdentifiedWithPluginByRandomPassword {
 }
 
 #[derive(Debug, Clone)]
-pub struct InitialAuth {
-    pub span: Span,
-    pub identification: Identification,
+pub enum InitialAuth {
+    IdentifiedByRandomPassword(IdentifiedByRandomPassword),
+    IdentifiedWithPluginAsAuth(IdentifiedWithPluginAsAuth),
+    IdentifiedByPassword(IdentifiedByPassword),
 }
 
 #[derive(Debug, Clone)]

@@ -7814,24 +7814,15 @@ opt_initial_auth -> Option<InitialAuth>:
       /* empty */            { None }
     | 'INITIAL' 'AUTHENTICATION' identified_by_random_password
       {
-          Some(InitialAuth {
-              span: $span,
-              identification: Identification::IdentifiedByRandomPassword($3)
-          })
+          Some(InitialAuth::IdentifiedByRandomPassword($3)
       }
     | 'INITIAL' 'AUTHENTICATION' identified_with_plugin_as_auth
       {
-          Some(InitialAuth {
-              span: $span,
-              identification: Identification::IdentifiedWithPluginAsAuth($3)
-          })
+          Some(InitialAuth::IdentifiedWithPluginAsAuth($3)
       }
     | 'INITIAL' 'AUTHENTICATION' identified_by_password
       {
-          Some(InitialAuth {
-              span: $span,
-              identification: Identification::IdentifiedByPassword($3)
-          })
+          Some(InitialAuth::IdentifiedByPassword($3)
       }
 ;
 
