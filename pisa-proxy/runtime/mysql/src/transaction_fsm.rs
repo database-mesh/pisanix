@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use conn_pool::{ConnAttrMut, Pool, PoolConn, ConnLike};
+use conn_pool::{ConnAttrMut, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
 use mysql_protocol::client::conn::{ClientConn, SessionAttr};
 use pisa_error::error::{Error, ErrorKind};
