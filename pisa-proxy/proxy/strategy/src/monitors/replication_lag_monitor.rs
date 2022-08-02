@@ -169,17 +169,18 @@ impl Monitor for MonitorReplicationLag {
         let reaplication_lag_period = self.replication_lag_period;
         let monitor_response_tx = self.monitor_response_tx.clone();
         let max_replication_lag = self.max_replication_lag;
-        let curr_rw_endpoint = MonitorReplicationLag::build_read_only_endpoint(
-            user.clone(),
-            password.clone(),
-            self.rw_endpoint.clone(),
-        )
-        .await;
-        let mut response = ReplicationLagMonitorResponse::new(curr_rw_endpoint.clone());
-
+        let rw_endpoint = self.rw_endpoint.clone();
+        
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
+                let curr_rw_endpoint = MonitorReplicationLag::build_read_only_endpoint(
+                    user.clone(),
+                    password.clone(),
+                    rw_endpoint.clone(),
+                ).await;
+                let mut response = ReplicationLagMonitorResponse::new(curr_rw_endpoint.clone());
+
                 if curr_rw_endpoint.read.len() == 0 {
                     monitor_response_tx
                         .send(MonitorResponse::ReplicationLagResponse(response.clone()))
