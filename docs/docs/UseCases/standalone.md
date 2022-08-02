@@ -12,22 +12,64 @@ sidebar_position: 2
 
 ## 部署说明
 
-Pisa-Proxy 支持从配置文件和 Remote API 获取配置。在当前版本,若需要从本地文件加载配置需要导出 ```LOCAL_CONFIG=true``` 环境变量，并通过 ```-c，--config``` 参数指定配置文件路径。若不指定，默认从 ```./etc/config.toml``` 文件中进行加载。此外，Pisa-Proxy 支持通过命令行参数和环境变量进行服务启动配置。配置详解如下：
+Pisa-Proxy 支持从配置文件和 Remote API 获取配置。目前支持 ```daemon``` 和 ```sidecar``` 两个子命令，用来指定不同的启动方式。
 
 ### 命令行参数
 ```
-./pisa-proxy -h
-Pisa-Proxy 
+# ./proxy --help
+Pisa-Proxy -
 
 USAGE:
-    pisa-proxy [OPTIONS]
+    proxy [OPTIONS] <SUBCOMMAND>
 
 OPTIONS:
-    -c, --config <config>         Config path               # 指定配置文件路径
-    -h, --help                    Print help information    # 查看使用帮助
-        --log-level <loglevel>    Log level                 # 指定日志级别
-    -p, --port <port>             Http port                 # 指定 HTTP 端口号
-    -V, --version                 Print version information # 打印版本信息
+    -h, --host <host>             Http host [env: PISA_PROXY_ADMIN_LISTEN_HOST=] [default: 0.0.0.0]
+        --help                    Print help information
+        --log-level <loglevel>    Log level [env: PISA_PROXY_ADMIN_LOG_LEVEL=] [default: WARN]
+    -p, --port <port>             Http port [env: PISA_PROXY_ADMIN_LISTEN_PORT=] [default: 5591]
+    -V, --version                 Print version information
+
+SUBCOMMANDS:
+    daemon     used for standalone mode
+    help       Print this message or the help of the given subcommand(s)
+    sidecar    used for sidecar mode
+```
+
+通常在单机部署中使用 ```daemon``` 子命令并通过 ```-c,--config``` 指定配置文件路径。
+```
+# ./proxy daemon --help
+proxy-daemon 
+used for standalone mode
+
+USAGE:
+    proxy daemon [OPTIONS]
+
+OPTIONS:
+    -c, --config <config>    Config path [default: etc/config.toml]
+    -h, --help               Print help information
+```
+
+在 Kubernetes 中以 sidecar 方式部署可以通过 ```sidecar``` 子命令从远程获取配置。
+```
+# ./proxy sidecar -h
+proxy-sidecar 
+used for sidecar mode
+
+USAGE:
+    proxy sidecar [OPTIONS]
+
+OPTIONS:
+    -h, --help
+            Print help information
+
+        --pisa-controller-host <pisa-controller-host>
+            Pisa Controller Host [env: PISA_CONTROLLER_HOST=] [default: localhost:8080]
+
+        --pisa-deployed-name <pisa-deployed-name>
+            Name [env: PISA_DEPLOYED_NAME=] [default: default]
+
+        --pisa-deployed-namespace <pisa-deployed-namespace>
+            Namespace [env: PISA_DEPLOYED_NAMESPACE=] [default: default]
 ```
 
 ### 环境变量
@@ -35,8 +77,7 @@ OPTIONS:
 环境变量包括如下：
 1. PISA_PROXY_ADMIN_LISTEN_HOST: HTTP 服务启动 IP
 1. PISA_PROXY_ADMIN_LISTEN_PORT: HTTP 服务启动端口号
-2. LOG_LEVEL: 日志级别
-3. LOCAL_CONFIG: 指定 Pisa-Proxy 从本地加载配置
+2. DEFAULT_PISA_PROXY_ADMIN_LOG_LEVEL: 日志级别
 
 ### 配置文件
 
@@ -325,5 +366,5 @@ role = "readwrite"
 /bin/proxy daemon -c examples/example-config.toml
 ```
 
-当观察日志确认***Pisa-Proxy*** 启动后即可进行访问。
+当观察日志确认 ***Pisa-Proxy*** 启动后即可进行访问。
 
