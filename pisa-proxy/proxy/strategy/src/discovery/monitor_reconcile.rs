@@ -78,10 +78,9 @@ impl MonitorReconcile {
         tokio::task::spawn_blocking(move || {
             let mut pre_rw_endpoint = rw_endpoint.clone();
             loop {
-                let monitor_response_channel = monitor_response_channel.clone();
                 let mut curr_rw_endpoint = rw_endpoint.clone();
                 for _ in 0..monitors_len {
-                    match monitor_response_channel.monitor_response_rx.clone().recv().unwrap() {
+                    match monitor_response_channel.monitor_response_rx.recv().unwrap() {
                         MonitorResponse::ConnectMonitorResponse(connect_response) => {
                             connect_monitor_response = Some(connect_response);
                         }
@@ -98,7 +97,7 @@ impl MonitorReconcile {
                 }
 
                 for (_read_write_connect_addr, read_write_connect_status) in
-                    connect_monitor_response.clone().unwrap().readwrite
+                    &connect_monitor_response.as_ref().unwrap().readwrite
                 {
                     match read_write_connect_status {
                         // check master connected
@@ -113,7 +112,7 @@ impl MonitorReconcile {
                                         if curr_rw_endpoint.clone().read.len() > 0 {
                                             //check if slave is change to master
                                             for read_endpoint in curr_rw_endpoint.clone().read {
-                                                match read_only_monitor_response.clone().unwrap().roles.get(&read_endpoint.addr).unwrap() {
+                                                match read_only_monitor_response.as_ref().unwrap().roles.get(&read_endpoint.addr).unwrap() {
                                                     // slave change to master
                                                     crate::monitors::read_only_monitor::NodeRole::Master => {
                                                         // clean readwrite list
@@ -158,7 +157,7 @@ impl MonitorReconcile {
                     }
                 }
                 for (read_addr, read_connect_status) in
-                    connect_monitor_response.clone().unwrap().read
+                    &connect_monitor_response.as_ref().unwrap().read
                 {
                     match read_connect_status {
                         crate::monitors::connect_monitor::ConnectStatus::Connected => {
@@ -225,7 +224,7 @@ impl MonitorReconcile {
                                 rw_endpoint
                                     .read
                                     .iter()
-                                    .position(|r| r.addr.eq(&read_addr))
+                                    .position(|r| r.addr.eq(read_addr))
                                     .unwrap(),
                             );
                         }

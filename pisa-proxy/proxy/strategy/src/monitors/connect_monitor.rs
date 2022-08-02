@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use mysql_protocol::client::conn::ClientConn;
 use tokio::time::{self, Duration};
 use tracing::{debug, error};
 
@@ -110,7 +109,7 @@ impl Monitor for MonitorConnect {
             let mut retries = 1;
             loop {
                 // probe read endpoint
-                for read in rw_endpoint.clone().read {
+                for read in &rw_endpoint.read {
                     if let Err(_) = time::timeout(Duration::from_millis(connect_timeout), async {
                         let conn_res = MonitorConnect::connnect_check(read.addr.clone()).await;
                         match conn_res {
@@ -154,7 +153,7 @@ impl Monitor for MonitorConnect {
                 }
 
                 // probe readwrite endpoint
-                for readwrite in rw_endpoint.clone().readwrite {
+                for readwrite in &rw_endpoint.readwrite {
                     if let Err(_) = time::timeout(Duration::from_millis(connect_timeout), async {
                         let conn_res = MonitorConnect::connnect_check(readwrite.addr.clone()).await;
                         match conn_res {

@@ -118,7 +118,7 @@ impl Monitor for MonitorPing {
         tokio::spawn(async move {
             let mut retries = 1;
             loop {
-                for read in rw_endpoint.clone().read {
+                for read in &rw_endpoint.read {
                     if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                         match MonitorPing::ping_check(
                             user.clone(),
@@ -129,7 +129,7 @@ impl Monitor for MonitorPing {
                         {
                             Ok(ping_status) => match ping_status {
                                 PingStatus::PingOk => {
-                                    response.read.insert(read.addr, PingStatus::PingOk);
+                                    response.read.insert(read.addr.clone(), PingStatus::PingOk);
                                 }
                                 PingStatus::PingNotOk => loop {
                                     if retries > ping_failure_threshold {
@@ -204,7 +204,7 @@ impl Monitor for MonitorPing {
                     }
                 }
 
-                for readwrite in rw_endpoint.clone().readwrite {
+                for readwrite in &rw_endpoint.readwrite {
                     if let Err(_) = time::timeout(Duration::from_millis(ping_timeout), async {
                         match MonitorPing::ping_check(
                             user.clone(),
@@ -215,7 +215,7 @@ impl Monitor for MonitorPing {
                         {
                             Ok(ping_status) => match ping_status {
                                 PingStatus::PingOk => {
-                                    response.readwrite.insert(readwrite.addr, PingStatus::PingOk);
+                                    response.readwrite.insert(readwrite.addr.clone(), PingStatus::PingOk);
                                 }
                                 PingStatus::PingNotOk => loop {
                                     if retries > ping_period {

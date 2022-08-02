@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::LoadBalance;
-use parking_lot::Mutex;
 
 use super::{
     rule_match::{RulesMatch, RulesMatchBuilder},
