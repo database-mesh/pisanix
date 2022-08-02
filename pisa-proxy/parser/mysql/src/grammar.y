@@ -7375,6 +7375,15 @@ create_user -> UserWithAuthOption:
               opt_create_user_with_mfa: $3,
           })
       }
+    | user identified_with_plugin opt_initial_auth
+      {
+           UserWithAuthOption::UserIdentifiedWithPlugin(UserIdentifiedWithPlugin {
+               span: $span,
+               user: $1,
+               identified_with_plugin: $2,
+               opt_initial_auth: $3,
+           })
+      }
     | user opt_create_user_with_mfa
       {
           UserWithAuthOption::UserWithMFA(UserWithMFA {
