@@ -46,7 +46,7 @@ pub struct UserIdentification {
 pub struct UserIdentifiedWithPlugin {
     pub span: Span,
     pub user: User,
-    pub identified_with_plugin: Identification,
+    pub identified_with_plugin: IdentifiedWithPlugin,
     pub opt_initial_auth: Option<InitialAuth>,
 }
 

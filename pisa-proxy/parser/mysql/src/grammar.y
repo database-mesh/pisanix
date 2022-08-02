@@ -7405,72 +7405,72 @@ opt_create_user_with_mfa -> Option<AuthMFA>:
 ;
 
 identification -> Identification:
-      identified_by_password { $1 }
-    | identified_by_random_password { $1 }
-    | identified_with_plugin { $1 }
-    | identified_with_plugin_as_auth { $1 }
-    | identified_with_plugin_by_password { $1 }
-    | identified_with_plugin_by_random_password { $1 }
+      identified_by_password { Identification::IdentifiedByPassword($1) }
+    | identified_by_random_password { Identification::IdentifiedByRandomPassword($1) }
+    | identified_with_plugin { Identification::IdentifiedWithPlugin($1) }
+    | identified_with_plugin_as_auth { Identification::IdentifiedWithPluginAsAuth($1) }
+    | identified_with_plugin_by_password { Identification::IdentifiedWithPluginByPassword($1) }
+    | identified_with_plugin_by_random_password { Identification::IdentifiedWithPluginByRandomPassword($1) }
 ;
 
-identified_by_password -> Identification:
+identified_by_password -> IdentifiedByPassword:
     'IDENTIFIED' 'BY' TEXT_STRING_password
     {
-        Identification::IdentifiedByPassword(IdentifiedByPassword {
+        IdentifiedByPassword {
             span: $span,
             auth_string: $3,
-        })
+        }
     }
 ;
 
-identified_by_random_password -> Identification:
+identified_by_random_password -> IdentifiedByRandomPassword:
     'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD'
     {
-        Identification::IdentifiedByRandomPassword(IdentifiedByRandomPassword {
+        IdentifiedByRandomPassword {
             span: $span,
-        })
+        }
     }
 ;
 
-identified_with_plugin -> Identification:
+identified_with_plugin -> IdentifiedWithPlugin:
     'IDENTIFIED' 'WITH' ident_or_text
     {
-        Identification::IdentifiedWithPlugin(IdentifiedWithPlugin {
+        IdentifiedWithPlugin {
             span: $span,
             auth_plugin: $3,
-        })
+        }
     }
 ;
 
-identified_with_plugin_as_auth -> Identification:
+identified_with_plugin_as_auth -> IdentifiedWithPluginAsAuth:
     'IDENTIFIED' 'WITH' ident_or_text 'AS' TEXT_STRING_hash
     {
-        Identification::IdentifiedWithPluginAsAuth(IdentifiedWithPluginAsAuth {
+        IdentifiedWithPluginAsAuth {
             span: $span,
             auth_plugin: $3,
             auth_string: $5,
-        })
+        }
     }
 ;
 
-identified_with_plugin_by_password -> Identification:
+identified_with_plugin_by_password -> IdentifiedWithPluginByPassword:
     'IDENTIFIED' 'WITH' ident_or_text 'BY' TEXT_STRING_password
     {
-        Identification::IdentifiedWithPluginByPassword(IdentifiedWithPluginByPassword {
+        IdentifiedWithPluginByPassword {
             span: $span,
             auth_plugin: $3,
             auth_string: $5,
-        })
+        }
     }
 ;
 
-identified_with_plugin_by_random_password -> Identification:
+identified_with_plugin_by_random_password -> IdentifiedWithPluginByRandomPassword:
     'IDENTIFIED' 'WITH' ident_or_text 'BY' 'RANDOM' 'PASSWORD'
     {
-        Identification::IdentifiedWithPluginByRandomPassword(IdentifiedWithPluginByRandomPassword {
+        IdentifiedWithPluginByRandomPassword {
             span: $span,
             auth_plugin: $3,
-        })
+        }
     }
 ;
 
@@ -7807,21 +7807,21 @@ opt_initial_auth -> Option<InitialAuth>:
       {
           Some(InitialAuth {
               span: $span,
-              identification: $3
+              identification: Identification::IdentifiedByRandomPassword($3)
           })
       }
     | 'INITIAL' 'AUTHENTICATION' identified_with_plugin_as_auth
       {
           Some(InitialAuth {
               span: $span,
-              identification: $3
+              identification: Identification::IdentifiedWithPluginAsAuth($3)
           })
       }
     | 'INITIAL' 'AUTHENTICATION' identified_by_password
       {
           Some(InitialAuth {
               span: $span,
-              identification: $3
+              identification: Identification::IdentifiedByPassword($3)
           })
       }
 ;
