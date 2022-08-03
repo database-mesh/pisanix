@@ -7378,7 +7378,7 @@ create_user -> UserWithAuthOption:
 
     /**
       TODO: There is a grammar conflict, but I can't solve it.
-            If someone can fix it, we can discuess it.
+            If someone can fix it, we can discuss it.
     | user identified_with_plugin opt_initial_auth
       {
            UserWithAuthOption::UserIdentifiedWithPlugin(UserIdentifiedWithPlugin {
