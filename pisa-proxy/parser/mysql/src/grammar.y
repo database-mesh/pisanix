@@ -7375,6 +7375,10 @@ create_user -> UserWithAuthOption:
               opt_create_user_with_mfa: $3,
           })
       }
+
+    /**
+      TODO: There is a grammar conflict, but I can't solve it.
+            If someone can fix it, we can discuess it.
     | user identified_with_plugin opt_initial_auth
       {
            UserWithAuthOption::UserIdentifiedWithPlugin(UserIdentifiedWithPlugin {
@@ -7384,6 +7388,8 @@ create_user -> UserWithAuthOption:
                opt_initial_auth: $3,
            })
       }
+    */
+
     | user opt_create_user_with_mfa
       {
           UserWithAuthOption::UserWithMFA(UserWithMFA {
@@ -7814,15 +7820,15 @@ opt_initial_auth -> Option<InitialAuth>:
       /* empty */            { None }
     | 'INITIAL' 'AUTHENTICATION' identified_by_random_password
       {
-          Some(InitialAuth::IdentifiedByRandomPassword($3)
+          Some(InitialAuth::IdentifiedByRandomPassword($3))
       }
     | 'INITIAL' 'AUTHENTICATION' identified_with_plugin_as_auth
       {
-          Some(InitialAuth::IdentifiedWithPluginAsAuth($3)
+          Some(InitialAuth::IdentifiedWithPluginAsAuth($3))
       }
     | 'INITIAL' 'AUTHENTICATION' identified_by_password
       {
-          Some(InitialAuth::IdentifiedByPassword($3)
+          Some(InitialAuth::IdentifiedByPassword($3))
       }
 ;
 
