@@ -53,6 +53,9 @@ var dbep = kubernetes.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
+		Annotations: map[string]string{
+			DatabaseEndpointRoleKey: ReadWriteSplittingRoleReadWrite,
+		},
 		Labels: map[string]string{
 			"source": "catalogue",
 		},
@@ -221,7 +224,7 @@ var tsReadWriteSplttingDynamic = kubernetes.TrafficStrategy{
 	},
 }
 
-var expected = &Proxy{
+var expectedProxy = &Proxy{
 	Name:          "catalogue",
 	BackendType:   "mysql",
 	DB:            "socksdb",
@@ -295,8 +298,8 @@ var expected = &Proxy{
 			},
 		},
 	},
-	Plugin: Plugin{
-		CircuitBreaks: []kubernetes.CircuitBreak{
+	Plugin: &Plugin{
+		CircuitBreaks: []CircuitBreak{
 			{
 				Regex: []string{
 					"^select",
@@ -336,7 +339,7 @@ func Test_ProxyBuilder(t *testing.T) {
 
 	for _, b := range builders {
 		actual := b.Build()
-		assertProxy(t, expected, actual, "proxy should be correct")
+		assertProxy(t, expectedProxy, actual, "proxy should be correct")
 	}
 }
 
@@ -410,11 +413,11 @@ func assertReadWriteDiscovery(t *testing.T, act, exp ReadWriteDiscovery, msg ...
 		assert.Equal(t, act.ReadOnlyMaxFailures, exp.ReadOnlyMaxFailures, "readOnlyMaxFailures should be equal")
 }
 
-func assertPlugin(t *testing.T, act, exp Plugin, msg ...interface{}) bool {
+func assertPlugin(t *testing.T, act, exp *Plugin, msg ...interface{}) bool {
 	return assertCircuitBreaks(t, act.CircuitBreaks, exp.CircuitBreaks, "circuitBreaks should be equal") && assertConcurrencyControls(t, act.ConcurrencyControls, exp.ConcurrencyControls, "concurrencyControls should be equal")
 }
 
-func assertCircuitBreaks(t *testing.T, act, exp []kubernetes.CircuitBreak, msg ...interface{}) bool {
+func assertCircuitBreaks(t *testing.T, act, exp []CircuitBreak, msg ...interface{}) bool {
 	return assert.ElementsMatch(t, act, exp, "circuitBreaks should be equal")
 }
 

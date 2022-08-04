@@ -29,7 +29,7 @@ func GetConfig(ctx *gin.Context) {
 	namespace := ctx.Param("namespace")
 	appname := ctx.Param("appname")
 	client := kubernetes.GetClient()
-	proxyConfig, err := getConfig(client.Client, namespace, appname)
+	proxyConfig, err := getConfig(ctx, client.Client, namespace, appname)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, err)
 		return
@@ -38,11 +38,7 @@ func GetConfig(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, proxyConfig)
 }
 
-func getConfig(client dynamic.Interface, namespace, appname string) (interface{}, error) {
-	ctx := context.Background()
-
-	builder := NewPisaProxyConfigBuilder()
-
+func getConfig(ctx context.Context, client dynamic.Interface, namespace, appname string) (interface{}, error) {
 	vdb, err := kubernetes.GetVirtualDatabaseWithContext(ctx, client, namespace, appname)
 	if err != nil {
 		return nil, err
@@ -58,6 +54,12 @@ func getConfig(client dynamic.Interface, namespace, appname string) (interface{}
 		return nil, err
 	}
 
+	return build(vdb, tslist, dbeplist)
+
+}
+
+func build(vdb *kubernetes.VirtualDatabase, tslist *kubernetes.TrafficStrategyList, dbeplist *kubernetes.DatabaseEndpointList) (*PisaProxyConfig, error) {
+	builder := NewPisaProxyConfigBuilder()
 	builders := []*ProxyBuilder{}
 	for _, service := range vdb.Spec.Services {
 		builder := NewProxyBuilder().SetVirtualDatabaseService(service)
