@@ -202,6 +202,16 @@ impl MySQLServer {
             }
 
             if let Err(err) = self.handle_command(&mut buf).await {
+                // let err_info = self.client.pkt.make_err_packet(MySQLError::new(
+                //     1049,
+                //     "42000".as_bytes().to_vec(),
+                //     String::from("connect refused"),
+                // ));
+                // self.client
+                //     .pkt
+                //     .write_buf(&err_info)
+                //     .await
+                //     .map_err(|e| Error::new(ErrorKind::Protocol(e))).unwrap();
                 error!("exec command err: {:?}", err);
             };
 

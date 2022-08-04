@@ -96,10 +96,13 @@ impl ConnDriver for Driver {
         match pool.get_conn_with_endpoint(endpoint.addr.as_ref()).await {
             Ok(client_conn) => {
                 if !client_conn.is_ready().await {
-                    return Ok((pool.rebuild_conn().await.map_err(ErrorKind::Protocol)?, Some(endpoint.clone())))
+                    return Ok((
+                        pool.rebuild_conn().await.map_err(ErrorKind::Protocol)?,
+                        Some(endpoint.clone()),
+                    ));
                 }
                 Ok((client_conn, Some(endpoint.clone())))
-            },
+            }
             Err(err) => {
                 println!("errr {:?}", err);
                 Err(Error::new(ErrorKind::Protocol(err)))

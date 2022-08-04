@@ -20,7 +20,7 @@ use conn_pool::Pool;
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{Balance, LoadBalance};
 use mysql_parser::parser::Parser;
-use mysql_protocol::client::conn::ClientConn;
+use mysql_protocol::{client::conn::ClientConn, server::err::MySQLError};
 use parking_lot::Mutex;
 use pisa_error::error::{Error, ErrorKind};
 use plugin::build_phase::PluginPhase;
@@ -28,10 +28,18 @@ use proxy::{
     listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
-use strategy::{config::TargetRole, readwritesplitting::ReadWriteEndpoint, route::RouteStrategy};
+use strategy::{
+    config::TargetRole,
+    monitors::connect_monitor::{ConnectStatus, MonitorConnect},
+    readwritesplitting::ReadWriteEndpoint,
+    route::RouteStrategy,
+};
 use tracing::error;
 
-use crate::server::{metrics::MySQLServerMetricsCollector, server::MySQLServerBuilder};
+use crate::server::{
+    metrics::MySQLServerMetricsCollector,
+    server::{MySQLServer, MySQLServerBuilder},
+};
 
 #[derive(Default)]
 pub struct MySQLProxy {
@@ -73,6 +81,32 @@ impl MySQLProxy {
     }
 }
 
+impl MySQLProxy {
+    pub async fn connect_check(&self, mut server_connection: MySQLServer) -> MySQLServer {
+        for node in &self.mysql_nodes {
+            match MonitorConnect::connnect_check(format!("{}:{}", node.host, node.port)).await {
+                ConnectStatus::Connected => return server_connection,
+                ConnectStatus::Disconnected => {}
+            }
+        }
+
+        let err_info = server_connection.client.pkt.make_err_packet(MySQLError::new(
+            2002,
+            "HY000".as_bytes().to_vec(),
+            String::from("There is no healthy backend. Can't connect to Pisa-Proxy server."),
+        ));
+        server_connection
+            .client
+            .pkt
+            .write_buf(&err_info)
+            .await
+            .map_err(|e| Error::new(ErrorKind::Protocol(e)))
+            .unwrap();
+
+        server_connection
+    }
+}
+
 #[async_trait::async_trait]
 impl proxy::factory::Proxy for MySQLProxy {
     async fn start(&mut self) -> Result<(), Error> {
@@ -109,7 +143,15 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         loop {
             // TODO: need refactor
-            let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
+            // let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?
+            let socket = match proxy.accept(&listener).await {
+                Ok(socket) => socket,
+                Err(e) => {
+                    println!("err: {:#?}", e);
+                    return Ok(());
+                }
+            };
+
             let lb = Arc::clone(&lb);
             let plugin = plugin.clone();
             let pcfg = self.proxy_config.clone();
@@ -117,7 +159,7 @@ impl proxy::factory::Proxy for MySQLProxy {
             let ast_cache = ast_cache.clone();
             let pool = pool.clone();
 
-            let mut mysql_server = MySQLServerBuilder::new(socket, lb, plugin)
+            let mysql_server = MySQLServerBuilder::new(socket, lb, plugin)
                 .with_pcfg(pcfg)
                 .with_pool(pool)
                 .with_buf(BytesMut::with_capacity(8192))
@@ -128,6 +170,8 @@ impl proxy::factory::Proxy for MySQLProxy {
                 .with_metrics_collector(metrics_collector)
                 .with_pisa_version(self.pisa_version.clone())
                 .build();
+
+            let mut mysql_server = self.connect_check(mysql_server).await;
 
             if let Err(err) = mysql_server.handshake().await {
                 error!("{:?}", err);
