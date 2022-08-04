@@ -39,6 +39,8 @@ For DBAs who could and would like to solve problems with programming. Pisanix su
 
 # Current Status 
 
+Pisanix now supports TrafficStrategy, besides VirtualDatabase, DatabaseEndpoint:
+
 - TrafficStrategy
   - Load Balance  
     - [x] Simple LoadBalance 
