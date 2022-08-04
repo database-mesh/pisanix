@@ -264,13 +264,6 @@ func (b *ProxyBuilder) Build() *Proxy {
 				proxy.Plugin.ConcurrencyControls = append(proxy.Plugin.ConcurrencyControls, *(*ConcurrencyControl)(&control))
 			}
 		}
-
-		// if b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil {
-		// 	for _, node := range nodes {
-		// 		proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
-		// 	}
-		// }
-
 	}
 
 	return proxy
