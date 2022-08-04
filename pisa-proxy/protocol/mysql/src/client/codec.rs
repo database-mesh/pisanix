@@ -88,12 +88,8 @@ impl ClientCodec {
         };
 
         let underly_io = match &local_stream.wrapper {
-            StreamWrapper::Plain(stream) => {
-                stream.as_ref().unwrap()
-            },
-            StreamWrapper::Secure(stream) => {
-                stream.get_ref().get_ref().get_ref()
-            }
+            StreamWrapper::Plain(stream) => stream.as_ref().unwrap(),
+            StreamWrapper::Secure(stream) => stream.get_ref().get_ref().get_ref(),
         };
 
         let is_ready = underly_io.ready(Interest::READABLE | Interest::WRITABLE).await;

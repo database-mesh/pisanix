@@ -31,7 +31,10 @@ use proxy::{
 use strategy::{config::TargetRole, readwritesplitting::ReadWriteEndpoint, route::RouteStrategy};
 use tracing::error;
 
-use crate::server::{metrics::MySQLServerMetricsCollector, server::MySQLServerBuilder};
+use crate::server::{
+    metrics::MySQLServerMetricsCollector,
+    server::{MySQLServer, MySQLServerBuilder},
+};
 
 #[derive(Default)]
 pub struct MySQLProxy {
@@ -110,6 +113,7 @@ impl proxy::factory::Proxy for MySQLProxy {
         loop {
             // TODO: need refactor
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
+
             let lb = Arc::clone(&lb);
             let plugin = plugin.clone();
             let pcfg = self.proxy_config.clone();

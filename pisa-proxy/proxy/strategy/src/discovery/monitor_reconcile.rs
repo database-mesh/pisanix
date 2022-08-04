@@ -73,7 +73,6 @@ impl MonitorReconcile {
         let mut ping_monitor_response: Option<PingMonitorResponse> = None;
         let mut replication_lag_monitor_response: Option<ReplicationLagMonitorResponse> = None;
         let mut read_only_monitor_response: Option<ReadOnlyMonitorResponse> = None;
-        
 
         tokio::task::spawn_blocking(move || {
             let mut pre_rw_endpoint = rw_endpoint.clone();
@@ -222,11 +221,7 @@ impl MonitorReconcile {
                         }
                         crate::monitors::connect_monitor::ConnectStatus::Disconnected => {
                             curr_rw_endpoint.read.remove(
-                                rw_endpoint
-                                    .read
-                                    .iter()
-                                    .position(|r| r.addr.eq(read_addr))
-                                    .unwrap(),
+                                rw_endpoint.read.iter().position(|r| r.addr.eq(read_addr)).unwrap(),
                             );
                         }
                     }

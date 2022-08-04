@@ -215,7 +215,9 @@ impl Monitor for MonitorPing {
                         {
                             Ok(ping_status) => match ping_status {
                                 PingStatus::PingOk => {
-                                    response.readwrite.insert(readwrite.addr.clone(), PingStatus::PingOk);
+                                    response
+                                        .readwrite
+                                        .insert(readwrite.addr.clone(), PingStatus::PingOk);
                                 }
                                 PingStatus::PingNotOk => loop {
                                     if retries > ping_failure_threshold {
