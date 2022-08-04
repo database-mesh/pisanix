@@ -209,7 +209,7 @@ mod test {
                     println!("sql={:?} {:?}", input, e)
                 }
                 Ok(_stmt) => {
-                    println!("{:#?}", _stmt)
+                    // println!("{:#?}", _stmt)
                 }
             }
         }
