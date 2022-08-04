@@ -39,7 +39,7 @@ For DBAs who could and would like to solve problems with programming. Pisanix su
 
 # Current Status 
 
-Pisanix now supports TrafficStrategy, besides VirtualDatabase, DatabaseEndpoint:
+Pisanix now supports `TrafficStrategy` of [Database Mesh Specificiation](https://github.com/database-mesh/database-mesh), besides `VirtualDatabase`, `DatabaseEndpoint`:
 
 - TrafficStrategy
   - Load Balance  
