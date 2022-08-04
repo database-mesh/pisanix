@@ -20,7 +20,7 @@ use conn_pool::Pool;
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{Balance, LoadBalance};
 use mysql_parser::parser::Parser;
-use mysql_protocol::{client::conn::ClientConn, server::err::MySQLError};
+use mysql_protocol::client::conn::ClientConn;
 use parking_lot::Mutex;
 use pisa_error::error::{Error, ErrorKind};
 use plugin::build_phase::PluginPhase;
@@ -28,12 +28,7 @@ use proxy::{
     listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
-use strategy::{
-    config::TargetRole,
-    monitors::connect_monitor::{ConnectStatus, MonitorConnect},
-    readwritesplitting::ReadWriteEndpoint,
-    route::RouteStrategy,
-};
+use strategy::{config::TargetRole, readwritesplitting::ReadWriteEndpoint, route::RouteStrategy};
 use tracing::error;
 
 use crate::server::{
@@ -78,32 +73,6 @@ impl MySQLProxy {
             self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
             rw_endpoint,
         )
-    }
-}
-
-impl MySQLProxy {
-    pub async fn connect_check(&self, mut server_connection: MySQLServer) -> MySQLServer {
-        for node in &self.mysql_nodes {
-            match MonitorConnect::connnect_check(format!("{}:{}", node.host, node.port)).await {
-                ConnectStatus::Connected => return server_connection,
-                ConnectStatus::Disconnected => {}
-            }
-        }
-
-        let err_info = server_connection.client.pkt.make_err_packet(MySQLError::new(
-            2002,
-            "HY000".as_bytes().to_vec(),
-            String::from("There is no healthy backend. Can't connect to Pisa-Proxy server."),
-        ));
-        server_connection
-            .client
-            .pkt
-            .write_buf(&err_info)
-            .await
-            .map_err(|e| Error::new(ErrorKind::Protocol(e)))
-            .unwrap();
-
-        server_connection
     }
 }
 
@@ -152,7 +121,7 @@ impl proxy::factory::Proxy for MySQLProxy {
             let ast_cache = ast_cache.clone();
             let pool = pool.clone();
 
-            let mysql_server = MySQLServerBuilder::new(socket, lb, plugin)
+            let mut mysql_server = MySQLServerBuilder::new(socket, lb, plugin)
                 .with_pcfg(pcfg)
                 .with_pool(pool)
                 .with_buf(BytesMut::with_capacity(8192))
@@ -163,8 +132,6 @@ impl proxy::factory::Proxy for MySQLProxy {
                 .with_metrics_collector(metrics_collector)
                 .with_pisa_version(self.pisa_version.clone())
                 .build();
-
-            let mut mysql_server = self.connect_check(mysql_server).await;
 
             if let Err(err) = mysql_server.handshake().await {
                 error!("{:?}", err);

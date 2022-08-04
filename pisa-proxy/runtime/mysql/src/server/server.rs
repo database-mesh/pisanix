@@ -167,17 +167,22 @@ impl MySQLServerBuilder {
 }
 
 impl MySQLServer {
-    pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
+    pub async fn handshake(&mut self) -> Result<(), Error> {
         if let Err(err) = self.client.handshake().await {
-            if let ProtocolError::AuthFailed(err) = err {
-                return self.client.pkt.write_buf(&err).await;
+            if let ProtocolError::AuthFailed(ref err) = err {
+                self.client
+                    .pkt
+                    .write_buf(&err)
+                    .await
+                    .map_err(|e| Error::new(ErrorKind::Protocol(e)))?;
+                // return self.client.pkt.write_buf(&err).await;
             }
-            return Err(err);
+            return Err(Error::new(ErrorKind::Protocol(err)));
         }
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<(), ProtocolError> {
+    pub async fn run(&mut self) -> Result<(), Error> {
         // set db to trans_fsm
         self.trans_fsm.set_db(self.client.db.clone());
 
@@ -187,7 +192,7 @@ impl MySQLServer {
             self.client.pkt.sequence = 0;
 
             let length = match self.client.pkt.read_packet_buf(&mut buf).await {
-                Err(err) => return Err(err),
+                Err(err) => return Err(Error::new(ErrorKind::Protocol(err))),
                 Ok(length) => length,
             };
 
@@ -202,6 +207,16 @@ impl MySQLServer {
             }
 
             if let Err(err) = self.handle_command(&mut buf).await {
+                let err_info = self.client.pkt.make_err_packet(MySQLError::new(
+                    2002,
+                    "HY000".as_bytes().to_vec(),
+                    String::from("There is no healthy backend to connect."),
+                ));
+                self.client
+                    .pkt
+                    .write_buf(&err_info)
+                    .await
+                    .map_err(|e| Error::new(ErrorKind::Protocol(e)))?;
                 error!("exec command err: {:?}", err);
             };
 
