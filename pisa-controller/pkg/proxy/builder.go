@@ -84,7 +84,11 @@ type AdminConfigBuilder struct {
 }
 
 func NewAdminConfigBuilder() *AdminConfigBuilder {
-	return &AdminConfigBuilder{}
+	return &AdminConfigBuilder{
+		host:     "0.0.0.0",
+		port:     5591,
+		logLevel: "INFO",
+	}
 }
 
 func (b *AdminConfigBuilder) SetHost(host string) *AdminConfigBuilder {
@@ -290,7 +294,7 @@ func BuildMySQLNodesFromDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) [
 				Password: dbep.Spec.Database.MySQL.Password,
 				Host:     dbep.Spec.Database.MySQL.Host,
 				Port:     dbep.Spec.Database.MySQL.Port,
-				Weight:   1,
+				Weight:   DefaultLoadBalanceWeight,
 				Role:     getDbEpRole(dbep.GetAnnotations()),
 			})
 		}
@@ -303,6 +307,8 @@ const (
 	ReadWriteSplittingRoleRead      = "read"
 
 	DatabaseEndpointRoleKey = "database-mesh.io/role"
+
+	DefaultLoadBalanceWeight = 1
 )
 
 func getDbEpRole(annotations map[string]string) (role string) {
