@@ -143,14 +143,7 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         loop {
             // TODO: need refactor
-            // let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?
-            let socket = match proxy.accept(&listener).await {
-                Ok(socket) => socket,
-                Err(e) => {
-                    println!("err: {:#?}", e);
-                    return Ok(());
-                }
-            };
+            let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
 
             let lb = Arc::clone(&lb);
             let plugin = plugin.clone();
@@ -159,7 +152,7 @@ impl proxy::factory::Proxy for MySQLProxy {
             let ast_cache = ast_cache.clone();
             let pool = pool.clone();
 
-            let mysql_server = MySQLServerBuilder::new(socket, lb, plugin)
+            let mut mysql_server = MySQLServerBuilder::new(socket, lb, plugin)
                 .with_pcfg(pcfg)
                 .with_pool(pool)
                 .with_buf(BytesMut::with_capacity(8192))
