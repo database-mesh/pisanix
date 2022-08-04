@@ -21,17 +21,19 @@ import (
 )
 
 type Proxy struct {
-	BackendType        string              `json:"backend_type"`
-	DB                 string              `json:"db"`
-	ListenAddr         string              `json:"listen_addr"`
-	Name               string              `json:"name"`
-	Password           string              `json:"password"`
+	BackendType string `json:"backend_type"`
+	DB          string `json:"db"`
+	ListenAddr  string `json:"listen_addr"`
+	Name        string `json:"name"`
+	Password    string `json:"password"`
+	// TODO: should be refactored to a new pool configuration
 	PoolSize           uint32              `json:"pool_size,omitempty"`
 	User               string              `json:"user"`
 	SimpleLoadBalance  *SimpleLoadBalance  `json:"simple_loadbalance,omitempty"`
 	ReadWriteSplitting *ReadWriteSplitting `json:"read_write_splitting,omitempty"`
-	Plugin             Plugin              `json:"plugin,omitempty"`
-	ServerVersion      string              `json:"server_version,omitempty"`
+	// TODO: consider using pointer instead of value
+	Plugin        Plugin `json:"plugin,omitempty"`
+	ServerVersion string `json:"server_version,omitempty"`
 }
 
 type Plugin struct {

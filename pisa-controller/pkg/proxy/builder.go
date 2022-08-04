@@ -243,8 +243,13 @@ func (b *ProxyBuilder) Build() *Proxy {
 			}
 		case b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil:
 			{
+				nodes := BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
 				proxy.SimpleLoadBalance = &SimpleLoadBalance{
 					BalancerType: string(b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance.Kind),
+					Nodes:        []string{},
+				}
+				for _, node := range nodes {
+					proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
 				}
 			}
 		}
@@ -260,13 +265,11 @@ func (b *ProxyBuilder) Build() *Proxy {
 			}
 		}
 
-		nodes := BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
-
-		if b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil {
-			for _, node := range nodes {
-				proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
-			}
-		}
+		// if b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil {
+		// 	for _, node := range nodes {
+		// 		proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
+		// 	}
+		// }
 
 	}
 
