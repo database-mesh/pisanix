@@ -1,6 +1,6 @@
 # Introduction
 
-[![GitHub release](https://img.shields.io/github/release/SphereEx/shardingsphere-on-cloud.svg)](https://github.com/database-mesh/pisanix/releases)
+[![GitHub release](https://img.shields.io/github/release/database-mesh/pisanix.svg)](https://github.com/database-mesh/pisanix/releases)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Slack](https://img.shields.io/badge/%20Slack-DatabaseMesh%20Channel-blueviolet)](https://join.slack.com/t/databasemesh/shared_invite/zt-19rhvnxkz-USjZ~am~ghd_Q0q~8bAJXA)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdatabase-mesh%2Fpisanix.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdatabase-mesh%2Fpisanix?ref=badge_shield)
