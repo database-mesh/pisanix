@@ -16,8 +16,6 @@ package proxy
 
 import (
 	"time"
-
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 )
 
 type Proxy struct {
@@ -31,14 +29,13 @@ type Proxy struct {
 	User               string              `json:"user"`
 	SimpleLoadBalance  *SimpleLoadBalance  `json:"simple_loadbalance,omitempty"`
 	ReadWriteSplitting *ReadWriteSplitting `json:"read_write_splitting,omitempty"`
-	// TODO: consider using pointer instead of value
-	Plugin        Plugin `json:"plugin,omitempty"`
-	ServerVersion string `json:"server_version,omitempty"`
+	Plugin             *Plugin             `json:"plugin,omitempty"`
+	ServerVersion      string              `json:"server_version,omitempty"`
 }
 
 type Plugin struct {
-	CircuitBreaks       []kubernetes.CircuitBreak `json:"circuit_break,omitempty"`
-	ConcurrencyControls []ConcurrencyControl      `json:"concurrency_control,omitempty"`
+	CircuitBreaks       []CircuitBreak       `json:"circuit_break,omitempty"`
+	ConcurrencyControls []ConcurrencyControl `json:"concurrency_control,omitempty"`
 }
 
 type SimpleLoadBalance struct {
@@ -92,6 +89,12 @@ type MasterHighAvailablity struct {
 	ReadOnlyInterval          uint64 `json:"read_only_period"`
 	ReadOnlyTimeout           uint64 `json:"read_only_timeout"`
 	ReadOnlyMaxFailures       uint64 `json:"read_only_failure_threshold"`
+}
+
+// CircuitBreak works with regular expressions.
+// SQL statements that conform to regular expressions will be denied.
+type CircuitBreak struct {
+	Regex []string `json:"regex"`
 }
 
 // ConcurrencyControl The conversion used for json key is defined here

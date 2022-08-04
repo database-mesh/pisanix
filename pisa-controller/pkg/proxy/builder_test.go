@@ -295,8 +295,8 @@ var expected = &Proxy{
 			},
 		},
 	},
-	Plugin: Plugin{
-		CircuitBreaks: []kubernetes.CircuitBreak{
+	Plugin: &Plugin{
+		CircuitBreaks: []CircuitBreak{
 			{
 				Regex: []string{
 					"^select",

@@ -254,9 +254,19 @@ func (b *ProxyBuilder) Build() *Proxy {
 			}
 		}
 
-		if len(b.TrafficStrategy.Spec.CircuitBreaks) != 0 {
-			proxy.Plugin.CircuitBreaks = b.TrafficStrategy.Spec.CircuitBreaks
+		if b.TrafficStrategy.Spec.CircuitBreaks != nil || b.TrafficStrategy.Spec.ConcurrencyControls != nil {
+			proxy.Plugin = &Plugin{}
 		}
+
+		if len(b.TrafficStrategy.Spec.CircuitBreaks) != 0 {
+			for _, cb := range b.TrafficStrategy.Spec.CircuitBreaks {
+				proxy.Plugin.CircuitBreaks = append(proxy.Plugin.CircuitBreaks, CircuitBreak{
+					Regex: cb.Regex,
+				})
+			}
+
+		}
+
 		if len(b.TrafficStrategy.Spec.ConcurrencyControls) != 0 {
 			for _, control := range b.TrafficStrategy.Spec.ConcurrencyControls {
 				// TODO: Convert CRD to configuration file json format.Need a better implementation
