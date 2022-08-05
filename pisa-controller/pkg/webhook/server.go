@@ -43,7 +43,7 @@ func Handler() http.Handler {
 	// NOTE: there is not API path in this request
 	// TODO: test trailing slash
 	g.GET("", ApiCheck)
-	g.POST("/mutate", InjectSidecar)
+	g.POST("/mutate", Injection)
 
 	return r
 }

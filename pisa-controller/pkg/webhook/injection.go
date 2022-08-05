@@ -18,8 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -29,112 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/util/json"
-)
-
-var (
-	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost, pisaProxyLoglevel string
-	pisaProxyAdminListenPort                                                                                    uint32
-)
-
-const (
-	pisaProxyContainerName = "pisa-proxy"
-
-	EnvPisaProxyAdminListenHost = "PISA_PROXY_ADMIN_LISTEN_HOST"
-	EnvPisaProxyAdminListenPort = "PISA_PROXY_ADMIN_LISTEN_PORT"
-	EnvPisaProxyLoglevel        = "PISA_PROXY_ADMIN_LOG_LEVEL"
-	EnvPisaProxyImage           = "PISA_PROXY_IMAGE"
-	EnvPisaControllerService    = "PISA_CONTROLLER_SERVIE"
-	EnvPisaControllerNamespace  = "PISA_CONTROLLER_NAMESPACE"
-
-	DefaultPisaProxyAdminListenHost = "0.0.0.0"
-	DefaultPisaProxyAdminListenPort = 5591
-	DefaultPisaProxyLoglevel        = "INFO"
-	DefaultPisaProxyImage           = "pisanixio/proxy:latest"
-	DefaultPisaControllerService    = "default"
-	DefaultPisaControllerNamespace  = "default"
-)
-
-func init() {
-	if pisaProxyImage = os.Getenv(EnvPisaProxyImage); pisaProxyImage == "" {
-		pisaProxyImage = DefaultPisaProxyImage
-	}
-
-	if pisaControllerService = os.Getenv(EnvPisaControllerService); pisaControllerService == "" {
-		pisaControllerService = DefaultPisaControllerService
-	}
-	if pisaControllerNamespace = os.Getenv(EnvPisaControllerNamespace); pisaControllerNamespace == "" {
-		pisaControllerNamespace = DefaultPisaControllerNamespace
-	}
-
-	if host := os.Getenv(EnvPisaProxyAdminListenHost); host == "" {
-		pisaProxyAdminListenHost = DefaultPisaProxyAdminListenHost
-	} else {
-		pisaProxyAdminListenHost = host
-	}
-
-	if port, err := strconv.Atoi(os.Getenv(EnvPisaProxyAdminListenPort)); port <= 0 || err != nil {
-		pisaProxyAdminListenPort = DefaultPisaProxyAdminListenPort
-	} else {
-		pisaProxyAdminListenPort = uint32(port)
-	}
-
-	if lv := os.Getenv(EnvPisaProxyLoglevel); lv == "" {
-		pisaProxyLoglevel = DefaultPisaProxyLoglevel
-	} else {
-		pisaProxyLoglevel = lv
-	}
-}
-
-const (
-	podsSidecarPatch = `[
-		{
-			"op":"add", 
-			"path":"/spec/containers/-",
-			"value":{
-				"image":"%v",
-				"name":"%s",
-				"args": ["sidecar"],
-				"ports": [
-					{
-						"containerPort": %d,
-						"name": "pisa-admin",
-						"protocol": "TCP"
-					}	
-				],
-				"resources":{},
-				"env": [
-					{
-						"name": "PISA_CONTROLLER_SERVICE",
-						"value": "%s"
-					},{
-						"name": "PISA_CONTROLLER_NAMESPACE",
-						"value": "%s"
-					},{
-						"name": "PISA_DEPLOYED_NAMESPACE",
-						"valueFrom": {
-                            "fieldRef": {
-                                "apiVersion": "v1",
-                                "fieldPath": "metadata.namespace"
-                            }
-                        }
-					},{
-						"name": "PISA_DEPLOYED_NAME",
-						"value": "%s"
-					},{
-						"name": "PISA_PROXY_ADMIN_LISTEN_HOST",
-						"value": "%s"
-					},{
-						"name": "PISA_PROXY_ADMIN_LISTEN_PORT",
-						"value": "%d"
-					},{
-						"name": "PISA_PROXY_ADMIN_LOG_LEVEL",
-						"value": "%s"
-					}
-				]
-			}
-		}
-	]`
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -143,17 +36,12 @@ var (
 	deserializer  = codecs.UniversalDeserializer()
 )
 
-type PodInfo struct {
-	Metadata struct {
-		GenerateName string `json:"generateName"`
-	} `json:"metadata"`
-}
-
-func InjectSidecar(ctx *gin.Context) {
+func Injection(ctx *gin.Context) {
 	rawData, err := ctx.GetRawData()
 	if err != nil || len(rawData) == 0 {
 		log.Error("get body raw data error.")
 		ctx.JSON(http.StatusBadRequest, NewV1AdmissionResponseFromError(err))
+		return
 	}
 
 	ar := &v1.AdmissionReview{}
@@ -174,59 +62,19 @@ func InjectSidecar(ctx *gin.Context) {
 }
 
 func injection(ar *v1.AdmissionReview) error {
-	podinfo := &PodInfo{}
-	err := json.Unmarshal(ar.Request.Object.Raw, podinfo)
-	if err != nil {
-		return err
-	}
-
-	//FIXME: Considering only the Pod whose name contains two segments as suffix.
-	// e.g. the Pod of Deployment
-	podSlice := strings.Split(podinfo.Metadata.GenerateName, "-")
-	podSlice = podSlice[:len(podSlice)-2]
-
-	patch := fmt.Sprintf(podsSidecarPatch,
-		pisaProxyImage,
-		pisaProxyContainerName,
-		pisaProxyAdminListenPort,
-		pisaControllerService,
-		pisaControllerNamespace,
-		strings.Join(podSlice, "-"),
-		pisaProxyAdminListenHost,
-		pisaProxyAdminListenPort,
-		pisaProxyLoglevel,
-	)
-
-	if err = applyPodPatch(ar, patch); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func applyPodPatch(ar *v1.AdmissionReview, patch string) error {
-	log.Info("mutating pods")
-
 	pod := retrievePodFromAdmissionRequest(ar.Request)
 	if pod == nil {
 		return errors.New("retrieve pod from admission request error")
 	}
 
-	log.Infof("pod %v", pod)
+	patch := buildPatch(pod)
 
-	reviewResponse := &v1.AdmissionResponse{
-		UID:     ar.Request.UID,
-		Allowed: true,
+	resp := buildPodPatchResponse(ar.Request.UID, pod, patch)
+	if resp != nil {
+		return errors.New("build pod patch response error")
 	}
 
-	if !hasContainer(pod.Spec.Containers, pisaProxyContainerName) {
-		reviewResponse.Patch = []byte(patch)
-		pt := v1.PatchTypeJSONPatch
-		reviewResponse.PatchType = &pt
-	}
-
-	ar.Response = reviewResponse
-
+	ar.Response = resp
 	return nil
 }
 
@@ -239,11 +87,78 @@ func retrievePodFromAdmissionRequest(req *v1.AdmissionRequest) *corev1.Pod {
 
 	pod := &corev1.Pod{}
 	if _, _, err := deserializer.Decode(req.Object.Raw, nil, pod); err != nil {
-		log.Error(err)
+		log.Errorf("retrieve from raw object error: %s", err)
 		return nil
 	}
 
 	return pod
+}
+
+func buildPatch(pod *corev1.Pod) string {
+	var pisaProxyDeployedName string
+
+	if pod.OwnerReferences == nil || pod.OwnerReferences[0].Kind == "" {
+		pisaProxyDeployedName = pod.ObjectMeta.Name
+	} else {
+		pisaProxyDeployedName = getPisaProxyDeployedNameFromPod(pod.OwnerReferences[0].Kind, pod.ObjectMeta.GenerateName)
+	}
+
+	return fmt.Sprintf(podsSidecarPatch,
+		pisaProxyImage,
+		pisaProxyContainerName,
+		pisaProxyAdminListenPort,
+		pisaControllerService,
+		pisaControllerNamespace,
+		pisaProxyDeployedName,
+		pisaProxyAdminListenHost,
+		pisaProxyAdminListenPort,
+		pisaProxyLoglevel,
+	)
+}
+
+func getPisaProxyDeployedNameFromPod(kind, generatedName string) string {
+	var name string
+
+	switch kind {
+	case "ReplicaSet":
+		fallthrough
+	case "Job":
+		name = getPodNameFromGeneratedName(generatedName, 2)
+	case "StatefulSet":
+		fallthrough
+	case "DaemonSet":
+		name = getPodNameFromGeneratedName(generatedName, 1)
+	}
+	return name
+}
+
+func getPodNameFromGeneratedName(generatedName string, offset uint) string {
+	podSlice := strings.Split(generatedName, "-")
+	l := len(podSlice)
+
+	if l > int(offset) {
+		podSlice = podSlice[:l-int(offset)]
+		return strings.Join(podSlice, "-")
+	}
+	return generatedName
+}
+
+func buildPodPatchResponse(UID types.UID, pod *corev1.Pod, patch string) *v1.AdmissionResponse {
+	log.Info("mutating pods")
+
+	if !hasContainer(pod.Spec.Containers, pisaProxyContainerName) {
+		resp := &v1.AdmissionResponse{
+			UID:     UID,
+			Allowed: true,
+			Patch:   []byte(patch),
+		}
+
+		pt := v1.PatchTypeJSONPatch
+		resp.PatchType = &pt
+		return resp
+	}
+
+	return nil
 }
 
 func NewV1AdmissionResponseFromError(err error) *v1.AdmissionResponse {
