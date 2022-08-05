@@ -15,6 +15,7 @@
 package webhook
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -37,32 +38,47 @@ var (
 )
 
 const (
-	SidecarNamePisaProxy            = "pisa-proxy"
-	EnvPisaProxyAdminListenHost     = "PISA_PROXY_ADMIN_LISTEN_HOST"
-	EnvPisaProxyAdminListenPort     = "PISA_PROXY_ADMIN_LISTEN_PORT"
-	EnvPisaProxyLoglevel            = "PISA_PROXY_ADMIN_LOG_LEVEL"
+	pisaProxyContainerName = "pisa-proxy"
+
+	EnvPisaProxyAdminListenHost = "PISA_PROXY_ADMIN_LISTEN_HOST"
+	EnvPisaProxyAdminListenPort = "PISA_PROXY_ADMIN_LISTEN_PORT"
+	EnvPisaProxyLoglevel        = "PISA_PROXY_ADMIN_LOG_LEVEL"
+	EnvPisaProxyImage           = "PISA_PROXY_IMAGE"
+	EnvPisaControllerService    = "PISA_CONTROLLER_SERVIE"
+	EnvPisaControllerNamespace  = "PISA_CONTROLLER_NAMESPACE"
+
 	DefaultPisaProxyAdminListenHost = "0.0.0.0"
 	DefaultPisaProxyAdminListenPort = 5591
 	DefaultPisaProxyLoglevel        = "INFO"
+	DefaultPisaProxyImage           = "pisanixio/proxy:latest"
+	DefaultPisaControllerService    = "default"
+	DefaultPisaControllerNamespace  = "default"
 )
 
 func init() {
-	pisaProxyImage = os.Getenv("PISA_PROXY_IMAGE")
-	if pisaProxyImage == "" {
-		pisaProxyImage = "pisanixio/proxy:latest"
+	if pisaProxyImage = os.Getenv(EnvPisaProxyImage); pisaProxyImage == "" {
+		pisaProxyImage = DefaultPisaProxyImage
 	}
-	pisaControllerService = os.Getenv("PISA_CONTROLLER_SERVICE")
-	pisaControllerNamespace = os.Getenv("PISA_CONTROLLER_NAMESPACE")
+
+	if pisaControllerService = os.Getenv(EnvPisaControllerService); pisaControllerService == "" {
+		pisaControllerService = DefaultPisaControllerService
+	}
+	if pisaControllerNamespace = os.Getenv(EnvPisaControllerNamespace); pisaControllerNamespace == "" {
+		pisaControllerNamespace = DefaultPisaControllerNamespace
+	}
+
 	if host := os.Getenv(EnvPisaProxyAdminListenHost); host == "" {
 		pisaProxyAdminListenHost = DefaultPisaProxyAdminListenHost
 	} else {
 		pisaProxyAdminListenHost = host
 	}
+
 	if port, err := strconv.Atoi(os.Getenv(EnvPisaProxyAdminListenPort)); port <= 0 || err != nil {
 		pisaProxyAdminListenPort = DefaultPisaProxyAdminListenPort
 	} else {
 		pisaProxyAdminListenPort = uint32(port)
 	}
+
 	if lv := os.Getenv(EnvPisaProxyLoglevel); lv == "" {
 		pisaProxyLoglevel = DefaultPisaProxyLoglevel
 	} else {
@@ -96,7 +112,12 @@ const (
 						"value": "%s"
 					},{
 						"name": "PISA_DEPLOYED_NAMESPACE",
-						"value": "%s"
+						"valueFrom": {
+                            "fieldRef": {
+                                "apiVersion": "v1",
+                                "fieldPath": "metadata.namespace"
+                            }
+                        }
 					},{
 						"name": "PISA_DEPLOYED_NAME",
 						"value": "%s"
@@ -130,74 +151,102 @@ type PodInfo struct {
 
 func InjectSidecar(ctx *gin.Context) {
 	rawData, err := ctx.GetRawData()
-	if err != nil {
+	if err != nil || len(rawData) == 0 {
 		log.Error("get body raw data error.")
-		ctx.JSON(http.StatusBadRequest, toV1AdmissionResponse(err))
+		ctx.JSON(http.StatusBadRequest, NewV1AdmissionResponseFromError(err))
 	}
-	if len(rawData) == 0 {
-		log.Errorf("get a empty body!")
+
+	ar := &v1.AdmissionReview{}
+	if _, _, err := deserializer.Decode(rawData, nil, ar); err != nil {
+		log.Errorf("can not decode body to AdmissionReview: %v", err)
+		ctx.JSON(http.StatusBadRequest, NewV1AdmissionResponseFromError(err))
 		return
 	}
 
-	ar := v1.AdmissionReview{}
-	if _, _, err := deserializer.Decode(rawData, nil, &ar); err != nil {
-		log.Errorf("can't decode body to AdmissionReview: %v", err)
-		ctx.JSON(http.StatusBadRequest, toV1AdmissionResponse(err))
+	if err = injection(ar); err != nil {
+		log.Errorf("injection error: %v", err)
+		ctx.JSON(http.StatusInternalServerError, NewV1AdmissionResponseFromError(err))
 		return
 	}
-	shouldPatchPod := func(pod *corev1.Pod) bool {
-		return !hasContainer(pod.Spec.Containers, SidecarNamePisaProxy)
-	}
+
+	log.Infof("mutating Success %s/%s", ar.Request.Namespace, ar.Request.Name)
+	ctx.JSON(http.StatusOK, ar)
+}
+
+func injection(ar *v1.AdmissionReview) error {
 	podinfo := &PodInfo{}
-	_ = json.Unmarshal(ar.Request.Object.Raw, podinfo)
+	err := json.Unmarshal(ar.Request.Object.Raw, podinfo)
+	if err != nil {
+		return err
+	}
+
+	//FIXME: Considering only the Pod whose name contains two segments as suffix.
+	// e.g. the Pod of Deployment
 	podSlice := strings.Split(podinfo.Metadata.GenerateName, "-")
 	podSlice = podSlice[:len(podSlice)-2]
 
 	patch := fmt.Sprintf(podsSidecarPatch,
 		pisaProxyImage,
-		SidecarNamePisaProxy,
+		pisaProxyContainerName,
 		pisaProxyAdminListenPort,
 		pisaControllerService,
 		pisaControllerNamespace,
-		ar.Request.Namespace,
 		strings.Join(podSlice, "-"),
 		pisaProxyAdminListenHost,
 		pisaProxyAdminListenPort,
 		pisaProxyLoglevel,
 	)
-	ar.Response = applyPodPatch(ar, shouldPatchPod, patch)
-	log.Infof("mutating Success %v", patch)
 
-	ctx.JSON(http.StatusOK, ar)
+	if err = applyPodPatch(ar, patch); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func applyPodPatch(ar v1.AdmissionReview, shouldPatchPod func(*corev1.Pod) bool, patch string) *v1.AdmissionResponse {
+func applyPodPatch(ar *v1.AdmissionReview, patch string) error {
 	log.Info("mutating pods")
-	podResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	if ar.Request.Resource != podResource {
-		log.Errorf("expect resource to be %s", podResource)
-		return nil
+
+	pod := retrievePodFromAdmissionRequest(ar.Request)
+	if pod == nil {
+		return errors.New("retrieve pod from admission request error")
 	}
 
-	raw := ar.Request.Object.Raw
-	pod := corev1.Pod{}
-	if _, _, err := deserializer.Decode(raw, nil, &pod); err != nil {
-		log.Error(err)
-		return toV1AdmissionResponse(err)
-	}
 	log.Infof("pod %v", pod)
-	reviewResponse := v1.AdmissionResponse{}
-	reviewResponse.UID = ar.Request.UID
-	reviewResponse.Allowed = true
-	if shouldPatchPod(&pod) {
+
+	reviewResponse := &v1.AdmissionResponse{
+		UID:     ar.Request.UID,
+		Allowed: true,
+	}
+
+	if !hasContainer(pod.Spec.Containers, pisaProxyContainerName) {
 		reviewResponse.Patch = []byte(patch)
 		pt := v1.PatchTypeJSONPatch
 		reviewResponse.PatchType = &pt
 	}
-	return &reviewResponse
+
+	ar.Response = reviewResponse
+
+	return nil
 }
 
-func toV1AdmissionResponse(err error) *v1.AdmissionResponse {
+func retrievePodFromAdmissionRequest(req *v1.AdmissionRequest) *corev1.Pod {
+	gvr := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+	if req.Resource != gvr {
+		log.Errorf("expect resource to be %s", gvr)
+		return nil
+	}
+
+	pod := &corev1.Pod{}
+	if _, _, err := deserializer.Decode(req.Object.Raw, nil, pod); err != nil {
+		log.Error(err)
+		return nil
+	}
+
+	return pod
+}
+
+func NewV1AdmissionResponseFromError(err error) *v1.AdmissionResponse {
 	return &v1.AdmissionResponse{
 		Result: &metav1.Status{
 			Message: err.Error(),
