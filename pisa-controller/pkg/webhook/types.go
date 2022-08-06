@@ -20,8 +20,8 @@ import (
 )
 
 var (
-	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost, pisaProxyLoglevel string
-	pisaProxyAdminListenPort                                                                                    uint32
+	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost, pisaProxyAdminLoglevel string
+	pisaProxyAdminListenPort                                                                                         uint32
 )
 
 func init() {
@@ -48,26 +48,28 @@ func init() {
 		pisaProxyAdminListenPort = uint32(port)
 	}
 
-	if lv := os.Getenv(EnvPisaProxyLoglevel); lv == "" {
-		pisaProxyLoglevel = DefaultPisaProxyLoglevel
+	if lv := os.Getenv(EnvPisaProxyAdminLoglevel); lv == "" {
+		pisaProxyAdminLoglevel = DefaultPisaProxyAdminLoglevel
 	} else {
-		pisaProxyLoglevel = lv
+		pisaProxyAdminLoglevel = lv
 	}
 }
 
 const (
 	pisaProxyContainerName = "pisa-proxy"
 
-	EnvPisaProxyAdminListenHost = "PISA_PROXY_ADMIN_LISTEN_HOST"
-	EnvPisaProxyAdminListenPort = "PISA_PROXY_ADMIN_LISTEN_PORT"
-	EnvPisaProxyLoglevel        = "PISA_PROXY_ADMIN_LOG_LEVEL"
-	EnvPisaProxyImage           = "PISA_PROXY_IMAGE"
-	EnvPisaControllerService    = "PISA_CONTROLLER_SERVIE"
-	EnvPisaControllerNamespace  = "PISA_CONTROLLER_NAMESPACE"
+	EnvPisaProxyAdminListenHost   = "PISA_PROXY_ADMIN_LISTEN_HOST"
+	EnvPisaProxyAdminListenPort   = "PISA_PROXY_ADMIN_LISTEN_PORT"
+	EnvPisaProxyAdminLoglevel     = "PISA_PROXY_ADMIN_LOG_LEVEL"
+	EnvPisaProxyImage             = "PISA_PROXY_IMAGE"
+	EnvPisaProxyDeployedNamespace = "PISA_DEPLOYED_NAMESPACE"
+	EnvPisaProxyDeployedName      = "PISA_DEPLOYED_NAME"
+	EnvPisaControllerService      = "PISA_CONTROLLER_SERVICE"
+	EnvPisaControllerNamespace    = "PISA_CONTROLLER_NAMESPACE"
 
 	DefaultPisaProxyAdminListenHost = "0.0.0.0"
 	DefaultPisaProxyAdminListenPort = 5591
-	DefaultPisaProxyLoglevel        = "INFO"
+	DefaultPisaProxyAdminLoglevel   = "INFO"
 	DefaultPisaProxyImage           = "pisanixio/proxy:latest"
 	DefaultPisaControllerService    = "default"
 	DefaultPisaControllerNamespace  = "default"
