@@ -14,50 +14,12 @@
 
 package webhook
 
-import (
-	"os"
-	"strconv"
-)
-
-var (
-	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost, pisaProxyAdminLoglevel string
-	pisaProxyAdminListenPort                                                                                         uint32
-)
-
-func init() {
-	if pisaProxyImage = os.Getenv(EnvPisaProxyImage); pisaProxyImage == "" {
-		pisaProxyImage = DefaultPisaProxyImage
-	}
-
-	if pisaControllerService = os.Getenv(EnvPisaControllerService); pisaControllerService == "" {
-		pisaControllerService = DefaultPisaControllerService
-	}
-	if pisaControllerNamespace = os.Getenv(EnvPisaControllerNamespace); pisaControllerNamespace == "" {
-		pisaControllerNamespace = DefaultPisaControllerNamespace
-	}
-
-	if host := os.Getenv(EnvPisaProxyAdminListenHost); host == "" {
-		pisaProxyAdminListenHost = DefaultPisaProxyAdminListenHost
-	} else {
-		pisaProxyAdminListenHost = host
-	}
-
-	if port, err := strconv.Atoi(os.Getenv(EnvPisaProxyAdminListenPort)); port <= 0 || err != nil {
-		pisaProxyAdminListenPort = DefaultPisaProxyAdminListenPort
-	} else {
-		pisaProxyAdminListenPort = uint32(port)
-	}
-
-	if lv := os.Getenv(EnvPisaProxyAdminLoglevel); lv == "" {
-		pisaProxyAdminLoglevel = DefaultPisaProxyAdminLoglevel
-	} else {
-		pisaProxyAdminLoglevel = lv
-	}
-}
+// var (
+// 	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost, pisaProxyLoglevel string
+// 	pisaProxyAdminListenPort                                                                                    uint32
+// )
 
 const (
-	pisaProxyContainerName = "pisa-proxy"
-
 	EnvPisaProxyAdminListenHost   = "PISA_PROXY_ADMIN_LISTEN_HOST"
 	EnvPisaProxyAdminListenPort   = "PISA_PROXY_ADMIN_LISTEN_PORT"
 	EnvPisaProxyAdminLoglevel     = "PISA_PROXY_ADMIN_LOG_LEVEL"
@@ -71,6 +33,7 @@ const (
 	DefaultPisaProxyAdminListenPort = 5591
 	DefaultPisaProxyAdminLoglevel   = "INFO"
 	DefaultPisaProxyImage           = "pisanixio/proxy:latest"
+	DefaultPisaProxyContainerName   = "pisa-proxy"
 	DefaultPisaControllerService    = "default"
 	DefaultPisaControllerNamespace  = "default"
 )
