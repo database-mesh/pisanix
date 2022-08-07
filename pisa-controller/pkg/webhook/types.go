@@ -14,6 +14,7 @@
 
 package webhook
 
+<<<<<<< HEAD
 import (
 	"os"
 	"strconv"
@@ -54,6 +55,12 @@ func init() {
 		pisaProxyAdminLoglevel = lv
 	}
 }
+=======
+// var (
+// 	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost, pisaProxyLoglevel string
+// 	pisaProxyAdminListenPort                                                                                    uint32
+// )
+>>>>>>> 0f5fdf9 (wip(injection): refactor sidecar injection)
 
 const (
 	pisaProxyContainerName = "pisa-proxy"

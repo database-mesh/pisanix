@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -96,8 +98,12 @@ func retrievePodFromAdmissionRequest(req *v1.AdmissionRequest) *corev1.Pod {
 
 //TODO: fix the fields
 func buildPatch(pod *corev1.Pod) string {
-	var pisaProxyDeployedName string
+	cm := &PisaControllerInjectionMeta{}
+	cm.SetNamespaceFromEnv().SetServiceFromEnv()
+	pm := &PisaProxyInjectionMeta{}
+	pm.SetImageFromEnv().SetAdminListenHostFromEnv().SetAdminListenPortFromEnv().SetAdminLogLevelFromEnv()
 
+	var pisaProxyDeployedName string
 	if pod.OwnerReferences == nil || pod.OwnerReferences[0].Kind == "" {
 		pisaProxyDeployedName = pod.ObjectMeta.Name
 	} else {
@@ -105,17 +111,96 @@ func buildPatch(pod *corev1.Pod) string {
 	}
 
 	return fmt.Sprintf(podsSidecarPatch,
-		pisaProxyImage,
+		pm.Image,
 		pisaProxyContainerName,
-		pisaProxyAdminListenPort,
-		pisaControllerService,
-		pisaControllerNamespace,
+		pm.AdminListenPort,
+		cm.Service,
+		cm.Namespace,
 		pisaProxyDeployedName,
-		pisaProxyAdminListenHost,
-		pisaProxyAdminListenPort,
-		pisaProxyAdminLoglevel,
+		pm.AdminListenHost,
+		pm.AdminListenPort,
+		pm.AdminLogLevel,
 	)
 }
+
+type PisaControllerInjectionMeta struct {
+	Service   string
+	Namespace string
+}
+
+func (m *PisaControllerInjectionMeta) BuildEnvs() []corev1.EnvVar {
+	var envs []corev1.EnvVar
+	return envs
+}
+
+func (m *PisaControllerInjectionMeta) SetServiceFromEnv() *PisaControllerInjectionMeta {
+	if m.Service = os.Getenv(EnvPisaControllerService); m.Service == "" {
+		m.Service = DefaultPisaControllerService
+	}
+	return m
+}
+
+func (m *PisaControllerInjectionMeta) SetNamespaceFromEnv() *PisaControllerInjectionMeta {
+	if m.Namespace = os.Getenv(EnvPisaControllerNamespace); m.Namespace == "" {
+		m.Namespace = DefaultPisaControllerNamespace
+	}
+	return m
+}
+
+type PisaProxyInjectionMeta struct {
+	Image           string
+	AdminListenHost string
+	AdminListenPort uint32
+	AdminLogLevel   string
+}
+
+func (m *PisaProxyInjectionMeta) BuildEnvs() []corev1.EnvVar {
+	var envs []corev1.EnvVar
+	return envs
+}
+
+func (m *PisaProxyInjectionMeta) SetImageFromEnv() *PisaProxyInjectionMeta {
+	if m.Image = os.Getenv(EnvPisaProxyImage); m.Image == "" {
+		m.Image = DefaultPisaProxyImage
+	}
+	return m
+}
+
+func (m *PisaProxyInjectionMeta) SetAdminListenHostFromEnv() *PisaProxyInjectionMeta {
+	if host := os.Getenv(EnvPisaProxyAdminListenHost); host == "" {
+		m.AdminListenHost = DefaultPisaProxyAdminListenHost
+	} else {
+		m.AdminListenHost = host
+	}
+	return m
+}
+
+func (m *PisaProxyInjectionMeta) SetAdminListenPortFromEnv() *PisaProxyInjectionMeta {
+	if port, err := strconv.Atoi(os.Getenv(EnvPisaProxyAdminListenPort)); port <= 0 || err != nil {
+		m.AdminListenPort = DefaultPisaProxyAdminListenPort
+	} else {
+		m.AdminListenPort = uint32(port)
+	}
+	return m
+}
+
+func (m *PisaProxyInjectionMeta) SetAdminLogLevelFromEnv() *PisaProxyInjectionMeta {
+	if lv := os.Getenv(EnvPisaProxyAdminLoglevel); lv == "" {
+		m.AdminLogLevel = DefaultPisaProxyAdminLoglevel
+	} else {
+		m.AdminLogLevel = lv
+	}
+	return m
+}
+
+type PisaProxyInjection struct {
+	PisaProxyInjection PisaProxyInjectionMeta
+	PisaController     PisaControllerInjectionMeta
+}
+
+// func getInjections() {
+
+// }
 
 func getPisaProxyDeployedNameFromPod(kind, generatedName string) string {
 	var name string
