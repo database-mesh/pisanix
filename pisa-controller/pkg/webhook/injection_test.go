@@ -172,16 +172,10 @@ func Test_retrievePodFromAdmissionRequest(t *testing.T) {
 	}
 }
 
-type patch struct {
-	OP    string            `json:"op"`
-	Path  string            `json:"path"`
-	Value *corev1.Container `json:"value"`
-}
-
 func Test_buildPatch(t *testing.T) {
 	cases := []struct {
 		pod   *corev1.Pod
-		patch *patch
+		patch *Patch
 	}{
 		{
 			pod: &corev1.Pod{
@@ -190,7 +184,7 @@ func Test_buildPatch(t *testing.T) {
 					GenerateName: "a-b-c-12345678-",
 				},
 			},
-			patch: &patch{
+			patch: &Patch{
 				Value: &corev1.Container{
 					Env: []corev1.EnvVar{
 						{Name: EnvPisaControllerService, Value: DefaultPisaControllerService},
@@ -221,7 +215,7 @@ func Test_buildPatch(t *testing.T) {
 					GenerateName: "a-b-c-12345678-",
 				},
 			},
-			patch: &patch{
+			patch: &Patch{
 				Value: &corev1.Container{
 					Env: []corev1.EnvVar{
 						{Name: EnvPisaControllerService, Value: DefaultPisaControllerService},
@@ -252,7 +246,7 @@ func Test_buildPatch(t *testing.T) {
 					GenerateName: "a-b-",
 				},
 			},
-			patch: &patch{
+			patch: &Patch{
 				Value: &corev1.Container{
 					Env: []corev1.EnvVar{
 						{Name: EnvPisaControllerService, Value: DefaultPisaControllerService},
@@ -274,8 +268,10 @@ func Test_buildPatch(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		pl := []patch{{Value: &corev1.Container{}}}
-		err := json.Unmarshal([]byte(buildPatch(c.pod)), &pl)
+		pl := []Patch{{Value: &corev1.Container{}}}
+		patch, err := buildPatch(c.pod)
+		assert.NoError(t, err, "build patch should not be error")
+		err = json.Unmarshal([]byte(patch), &pl)
 		assert.NoError(t, err, "unmarshal should not be error")
 		assert.ElementsMatch(t, c.patch.Value.Env, pl[0].Value.Env, "sidecar env should be equal[")
 	}
