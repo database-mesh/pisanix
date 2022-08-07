@@ -94,6 +94,7 @@ func retrievePodFromAdmissionRequest(req *v1.AdmissionRequest) *corev1.Pod {
 	return pod
 }
 
+//TODO: fix the fields
 func buildPatch(pod *corev1.Pod) string {
 	var pisaProxyDeployedName string
 
@@ -112,7 +113,7 @@ func buildPatch(pod *corev1.Pod) string {
 		pisaProxyDeployedName,
 		pisaProxyAdminListenHost,
 		pisaProxyAdminListenPort,
-		pisaProxyLoglevel,
+		pisaProxyAdminLoglevel,
 	)
 }
 
