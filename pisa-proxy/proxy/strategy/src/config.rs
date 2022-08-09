@@ -33,6 +33,7 @@ pub struct ReadWriteSplittingStatic {
 #[serde(untagged)]
 pub enum ReadWriteSplittingRule {
     Regex(RegexRule),
+    Generic(GenericRule),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -90,6 +91,14 @@ pub struct RegexRule {
     pub rule_type: String,
     pub regex: Vec<String>,
     pub target: TargetRole,
+    pub algorithm_name: AlgorithmName,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GenericRule {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub rule_type: String,
     pub algorithm_name: AlgorithmName,
 }
 
