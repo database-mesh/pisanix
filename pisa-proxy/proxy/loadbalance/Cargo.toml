@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = "0.4"
+endpoint = { path = "../endpoint" }
+rand = "0.8"
+rand_core = "0.6.0"
+rand_distr = "0.4.3"
 serde = { version = "1.0.133", features = ["derive"] }
 serde_derive = "1.0"
-chrono = "0.4"
-rand = "0.8"
-rand_distr = "0.4.3"
-rand_core = "0.6.0"
-endpoint = {path = "../endpoint"}

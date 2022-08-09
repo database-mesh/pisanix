@@ -2,36 +2,35 @@
 name = "server"
 version = "0.1.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-toml = "0.5"
+api = { path = "../api" }
 async-trait = "0.1"
-tokio = { version = "1.17.0", features = ["full", "tracing"] }
-tokio-util = { version = "0.6.7", features = ["full"] }
-tokio-stream = { version = "0.1" }
+byteorder = "0.5.3"
+chrono = "0.4"
+config = { path = "../config" }
+endpoint = { path = "../../proxy/endpoint" }
+futures = "0.3"
+getopts = "0.2.21"
+lazy_static = "1.4.0"
+mysql_protocol = { path = "../../protocol/mysql" }
+num_cpus = "0.2"
+plugin = { path = "../../plugin" }
+proxy = { path = "../../proxy" }
+rand = "0.8"
+rand_core = "0.6.0"
+rocket = "0.5.0-rc.1"
+runtime_mysql = { path = "../../runtime/mysql" }
+runtime_shardingsphereproxy = { path = "../../runtime/shardingsphereproxy" }
 serde = { version = "1.0.133", default-features = false, features = ["derive"] }
 serde_derive = "1.0"
-num_cpus = "0.2"
+socket2 = { version = "0.4.4", default-features = false }
+tokio = { version = "1.17.0", features = ["full", "tracing"] }
+tokio-stream = { version = "0.1" }
+tokio-util = { version = "0.6.7", features = ["full"] }
+toml = "0.5"
 tracing = "0.1.13"
 tracing-futures = { version = "0.2.3" }
 tracing-subscriber = "0.2.2"
-futures = "0.3"
-byteorder = "0.5.3"
-getopts = "0.2.21"
-chrono = "0.4"
-rand = "0.8"
-rand_core = "0.6.0"
-lazy_static = "1.4.0"
-rocket = "0.5.0-rc.1"
-socket2 = { version = "0.4.4", default-features = false }
-api = {path = "../api"}
-plugin = {path = "../../plugin"}
-mysql_protocol = {path = "../../protocol/mysql"}
 version = { path = "../../version", package = "version" }
-endpoint = {path = "../../proxy/endpoint"}
-proxy = {path = "../../proxy"}
-runtime_mysql = {path = "../../runtime/mysql"}
-runtime_shardingsphereproxy = {path = "../../runtime/shardingsphereproxy"}
-config = {path = "../config"}

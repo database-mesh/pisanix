@@ -4,30 +4,30 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-iota = "0.2"
-tokio = { version = "1.0.0", features = ["full", "tracing"] }
-tokio-util = { version = "0.6.7", features = ["full"] }
-tokio-stream = { version = "0.1" }
-bytes = "1"
-serde = { version = "1.0.133", default-features = false, features = ["derive"] }
-serde_derive = "1.0"
-tracing = "0.1.13"
-tracing-futures = { version = "0.2.3" }
-parking_lot = "0.12.0"
-tracing-subscriber = "0.2.2"
-futures = "0.3.5"
 async-trait = "0.1"
 byteorder = "0.5.3"
-thiserror = "1.0"
-rocket_prometheus = "0.10.0-rc.1"
-once_cell = "1.10.0"
-proxy = {path = "../../proxy"}
+bytes = "1"
+common = { path = "../common" }
 conn_pool = { path = "../../proxy/pool" }
-mysql_protocol = {path = "../../protocol/mysql", package = "mysql_protocol"}
-pisa_error = {path = "../../error", package = "error"}
-loadbalance = {path = "../../proxy/loadbalance"}
-endpoint = {path = "../../proxy/endpoint"}
-mysql_parser = {path = "../../parser/mysql"}
-common = {path = "../common"}
-plugin = {path = "../../plugin" }
-strategy = {path = "../../proxy/strategy"}
+endpoint = { path = "../../proxy/endpoint" }
+futures = "0.3.5"
+iota = "0.2"
+loadbalance = { path = "../../proxy/loadbalance" }
+mysql_parser = { path = "../../parser/mysql" }
+mysql_protocol = { path = "../../protocol/mysql", package = "mysql_protocol" }
+once_cell = "1.10.0"
+parking_lot = "0.12.0"
+pisa_error = { path = "../../error", package = "error" }
+plugin = { path = "../../plugin" }
+proxy = { path = "../../proxy" }
+rocket_prometheus = "0.10.0-rc.1"
+serde = { version = "1.0.133", default-features = false, features = ["derive"] }
+serde_derive = "1.0"
+strategy = { path = "../../proxy/strategy" }
+thiserror = "1.0"
+tokio = { version = "1.0.0", features = ["full", "tracing"] }
+tokio-stream = { version = "0.1" }
+tokio-util = { version = "0.6.7", features = ["full"] }
+tracing = "0.1.13"
+tracing-futures = { version = "0.2.3" }
+tracing-subscriber = "0.2.2"

@@ -9,15 +9,15 @@ anyhow = { version = "1.0", default-features = false }
 vergen = { version = "6", default-features = false, features = ["build", "rustc"] }
 
 [dependencies]
-toml = "0.5"
+api = { path = "../api" }
+clap = { version = "3.2.12", features = ["env"] }
+plugin = { path = "../../plugin" }
+proxy = { path = "../../proxy" }
+reqwest = { version = "0.11.10", features = ["blocking", "json"] }
+runtime_mysql = { path = "../../runtime/mysql" }
 serde = { version = "1.0.133", default-features = false, features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
-api = {path = "../api"}
-plugin = {path = "../../plugin"}
-runtime_mysql = {path = "../../runtime/mysql"}
-proxy = {path = "../../proxy"}
-clap = {version = "3.2.12", features=["env"]}
+toml = "0.5"
 tracing = "0.1.13"
 tracing-subscriber = "0.2.2"
-reqwest = {version = "0.11.10", features = ["blocking", "json"]}
