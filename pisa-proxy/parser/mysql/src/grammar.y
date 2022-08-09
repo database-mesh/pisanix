@@ -32,8 +32,11 @@
 %token LOWER_THEN_TEXT_STRING
 %token LOWER_THEN_SAVEPOINT
 %token LOWER_THEN_COMMA
+%token LOWER_THEN_IDENTIFICATION_WITH_PLUGIN
+%token IDENTIFICATION_WITH_PLUGIN
 
-
+%nonassoc LOWER_THEN_IDENTIFICATION_WITH_PLUGIN
+%nonassoc IDENTIFICATION_WITH_PLUGIN
 
 %nonassoc 'EMPTY'
 %left 'CONDITIONLESS_JOIN'
@@ -7366,7 +7369,17 @@ create_user_list -> Vec<UserWithAuthOption>:
 ;
 
 create_user -> UserWithAuthOption:
-      user identification opt_create_user_with_mfa
+      user identification
+        {
+          UserWithAuthOption::UserIdentification(UserIdentification {
+              span: $span,
+              user: $1,
+              identification: $2,
+              opt_create_user_with_mfa: None,
+          })
+
+        }
+    | user identification create_user_with_mfa
       {
           UserWithAuthOption::UserIdentification(UserIdentification {
               span: $span,
@@ -7375,11 +7388,29 @@ create_user -> UserWithAuthOption:
               opt_create_user_with_mfa: $3,
           })
       }
+    | user identified_with_plugin create_user_with_mfa
+      {
+          UserWithAuthOption::UserIdentification(UserIdentification {
+              span: $span,
+              user: $1,
+              identification: Identification::IdentifiedWithPlugin($2),
+              opt_create_user_with_mfa: $3,
+          })
 
-    /**
-      TODO: There is a grammar conflict, but I can't solve it.
-            If someone can fix it, we can discuss it.
-    | user identified_with_plugin opt_initial_auth
+      }
+
+    | user identified_with_plugin
+      {
+          UserWithAuthOption::UserIdentification(UserIdentification {
+              span: $span,
+              user: $1,
+              identification: Identification::IdentifiedWithPlugin($2),
+              opt_create_user_with_mfa: None,
+          })
+
+      }
+
+    | user identified_with_plugin initial_auth
       {
            UserWithAuthOption::UserIdentifiedWithPlugin(UserIdentifiedWithPlugin {
                span: $span,
@@ -7388,9 +7419,8 @@ create_user -> UserWithAuthOption:
                opt_initial_auth: $3,
            })
       }
-    */
 
-    | user opt_create_user_with_mfa
+    | user create_user_with_mfa
       {
           UserWithAuthOption::UserWithMFA(UserWithMFA {
               span: $span,
@@ -7398,11 +7428,20 @@ create_user -> UserWithAuthOption:
               opt_create_user_with_mfa: $2,
           })
       }
+
+    | user
+      {
+          UserWithAuthOption::UserWithMFA(UserWithMFA {
+              span: $span,
+              user: $1,
+              opt_create_user_with_mfa: None,
+          })
+
+      }
 ;
 
-opt_create_user_with_mfa -> Option<AuthMFA>:
-      /* empty */                          { None }
-    | 'AND' identification
+create_user_with_mfa -> Option<AuthMFA>:
+    'AND' identification
       {
           Some(AuthMFA::Auth2FA(Auth2FA {
               span: $span,
@@ -7422,7 +7461,7 @@ opt_create_user_with_mfa -> Option<AuthMFA>:
 identification -> Identification:
       identified_by_password { Identification::IdentifiedByPassword($1) }
     | identified_by_random_password { Identification::IdentifiedByRandomPassword($1) }
-    | identified_with_plugin { Identification::IdentifiedWithPlugin($1) }
+    //| identified_with_plugin { Identification::IdentifiedWithPlugin($1) }
     | identified_with_plugin_as_auth { Identification::IdentifiedWithPluginAsAuth($1) }
     | identified_with_plugin_by_password { Identification::IdentifiedWithPluginByPassword($1) }
     | identified_with_plugin_by_random_password { Identification::IdentifiedWithPluginByRandomPassword($1) }
@@ -7816,9 +7855,8 @@ opt_user_attribute -> Option<UserAttribute>:
       }
 ;
 
-opt_initial_auth -> Option<InitialAuth>:
-      /* empty */            { None }
-    | 'INITIAL' 'AUTHENTICATION' identified_by_random_password
+initial_auth -> Option<InitialAuth>:
+      'INITIAL' 'AUTHENTICATION' identified_by_random_password
       {
           Some(InitialAuth::IdentifiedByRandomPassword($3))
       }
