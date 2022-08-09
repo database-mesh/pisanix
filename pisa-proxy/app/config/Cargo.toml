@@ -6,7 +6,7 @@ build = "build.rs"
 
 [build-dependencies]
 anyhow = { version = "1.0", default-features = false }
-vergen = { version = "6", default-features = false, features = ["build", "rustc"] }
+vergen = { version = "7.0.0", default-features = false, features = ["build", "rustc"] }
 
 [dependencies]
 api = { path = "../api" }
@@ -20,4 +20,4 @@ serde_derive = "1.0"
 serde_json = "1.0"
 toml = "0.5"
 tracing = "0.1.13"
-tracing-subscriber = "0.2.2"
+tracing-subscriber = "0.3.9"

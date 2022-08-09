@@ -32,5 +32,5 @@ tokio-util = { version = "0.6.7", features = ["full"] }
 toml = "0.5"
 tracing = "0.1.13"
 tracing-futures = { version = "0.2.3" }
-tracing-subscriber = "0.2.2"
+tracing-subscriber = "0.3.9"
 version = { path = "../../version", package = "version" }

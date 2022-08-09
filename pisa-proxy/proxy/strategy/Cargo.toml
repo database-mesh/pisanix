@@ -21,4 +21,4 @@ tokio = { version = "1.0.0", features = ["full", "tracing"] }
 tokio-scoped = "0.2.0"
 tracing = "0.1.13"
 tracing-futures = { version = "0.2.3" }
-tracing-subscriber = "0.2.2"
+tracing-subscriber = "0.3.9"
