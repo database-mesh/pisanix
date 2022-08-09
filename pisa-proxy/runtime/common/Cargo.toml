@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 lru = "0.7.6"
-pisa_error = {path = "../../error", package = "error"}
-mysql_parser = {path = "../../parser/mysql"}
+mysql_parser = { path = "../../parser/mysql" }
+pisa_error = { path = "../../error", package = "error" }

@@ -3,9 +3,8 @@
 name = "metrics"
 version = "0.1.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 rocket_prometheus = "0.10.0-rc.1"
-runtime_mysql = {path = "../../runtime/mysql"}
+runtime_mysql = { path = "../../runtime/mysql" }
