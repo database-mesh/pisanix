@@ -12,15 +12,15 @@ name = "mysql_parser"
 cfgrammar = "0.12.0"
 lrlex = "0.12.0"
 lrpar = "0.12.0"
-syn = { version="1.0.88", features=["full", "extra-traits"]}
+syn = { version = "1.0.88", features = ["full", "extra-traits"] }
 
 [dependencies]
-thiserror = "1.0"
 cfgrammar = "0.12.0"
-lrtable = "0.12.0"
-lrlex = "0.12.0"
-lrpar = "0.12.0"
 enum-as-inner = "0.4.0"
 lazy_static = "1.4.0"
+lrlex = "0.12.0"
+lrpar = "0.12.0"
+lrtable = "0.12.0"
+thiserror = "1.0"
 
 
