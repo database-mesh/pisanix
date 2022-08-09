@@ -34,6 +34,12 @@ pub struct Scanner<'a> {
     is_comment_executable: bool,
     // Ident contains '.'
     is_ident_dot: bool,
+
+    // Used to save uppercase ident's byetes
+    ident_buf: [u8; 512],
+    // Used to save unaligned bytes, because simd requires memory alignment.
+    // We used `sse2`, can be load 16 bytes once, so we deined length is 16 of array.
+    tmp_buf: [u8; 16],
 }
 
 impl<'a> Scanner<'a> {
@@ -46,6 +52,8 @@ impl<'a> Scanner<'a> {
             pos: 0,
             is_comment_executable: false,
             is_ident_dot: false,
+            ident_buf: [0; 512],
+            tmp_buf: [0; 16],
         }
     }
 
@@ -87,6 +95,8 @@ impl<'a> Scanner<'a> {
             pos: 0,
             is_comment_executable: false,
             is_ident_dot: false,
+            ident_buf: [0; 512],
+            tmp_buf: [0; 16],
         };
         let lexemes = scanner.scan_lex_token();
         LRNonStreamingLexer::new(input, lexemes, vec![])
@@ -649,31 +659,50 @@ impl<'a> Scanner<'a> {
             }
         });
 
-        let ident_str = self.text[old_pos..self.pos].to_uppercase();
+        let length = self.pos - old_pos;
 
         // Check whether has the `ident.ident` format.
         if self.is_ident_dot {
             self.pos -= 1;
             // reset is_ident_dot is false
             self.is_ident_dot = false;
-            return DefaultLexeme::new(T_IDENT, old_pos, ident_str.len());
+            return DefaultLexeme::new(T_IDENT, old_pos, length);
         }
 
         self.is_ident_dot = self.peek() == '.';
 
-        if ident_str.starts_with('_') {
-            // check `UNDERSCORE_CHARSET` token
-            if CHARSETS.get(&*ident_str).is_some() {
-                self.pos -= 1;
-                return DefaultLexeme::new(T_UNDERSCORE_CHARSET, old_pos, ident_str.len());
+        if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
+            if is_x86_feature_detected!("sse2") {
+                unsafe {
+                    to_upper(
+                        &mut self.text[old_pos..self.pos].as_bytes(),
+                        &mut self.ident_buf,
+                        &mut self.tmp_buf,
+                    );
+                    let ident_str = std::str::from_utf8_unchecked(&self.ident_buf[0..length]);
+                    self.pos -= 1;
+                    return Scanner::check_ident_return(ident_str, old_pos, length);
+                }
             }
         }
 
-        let kw = KEYWORD.binary_search(&ident_str.as_str());
-
-        let ident_with_size = kw.map_or((T_IDENT, self.pos - old_pos), |x| KEYWORD_SIZE[x]);
-
+        let ident_str = self.text[old_pos..self.pos].to_uppercase();
         self.pos -= 1;
+        Scanner::check_ident_return(ident_str.as_str(), old_pos, length)
+    }
+
+    fn check_ident_return(ident_str: &str, old_pos: usize, length: usize) -> DefaultLexeme<u32> {
+        if ident_str.starts_with('_') {
+            // check `UNDERSCORE_CHARSET` token
+            if CHARSETS.get(&*ident_str).is_some() {
+                return DefaultLexeme::new(T_UNDERSCORE_CHARSET, old_pos, length);
+            }
+        }
+
+        let kw = KEYWORD.binary_search(&ident_str);
+
+        let ident_with_size = kw.map_or((T_IDENT, length), |x| KEYWORD_SIZE[x]);
+
         DefaultLexeme::new(ident_with_size.0, old_pos, ident_with_size.1 as usize)
     }
 
@@ -814,6 +843,74 @@ fn is_oct(ch: char) -> bool {
 
 fn is_bit(ch: char) -> bool {
     matches!(ch, '0' | '1')
+}
+
+#[target_feature(enable = "sse2")]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+// refer to https://github.com/ClickHouse/ClickHouse/blob/master/src/Functions/LowerUpperImpl.h
+unsafe fn to_upper(src: &[u8], dst: &mut [u8; 512], tmp_buf: &mut [u8; 16]) {
+    use std::arch::x86_64::*;
+
+    let flip_case_mark: u8 = b'A' ^ b'a';
+    let not_case_lower_bound: u8 = b'a' - 1;
+    let not_case_upper_bound: u8 = b'z' + 1;
+    let mm_not_case_lower_bound = _mm_set1_epi8(not_case_lower_bound as i8);
+    let mm_not_case_upper_bound = _mm_set1_epi8(not_case_upper_bound as i8);
+    let mm_flip_case_mark = _mm_set1_epi8(flip_case_mark as i8);
+
+    let length = src.len();
+
+    let end = length - (length % 16);
+
+    let mut idx = 0_isize;
+    while end as isize > idx {
+        // Load 16 bytes chars
+        let chars = _mm_loadu_si128(src.as_ptr().offset(idx) as *const _);
+
+        // Find which 8-bit sequences belong to range [case_lower_bound, case_upper_bound].
+        // The 0xFF means match.
+        // The 0x00 means not match.
+        let is_not_case = _mm_and_si128(
+            _mm_cmpgt_epi8(chars, mm_not_case_lower_bound),
+            _mm_cmplt_epi8(chars, mm_not_case_upper_bound),
+        );
+
+        // Keep `flip_case_mask` only where necessary, zero out elsewhere.
+        // If not belong to range [case_lower_bound, case_upper_bound], the `xor_mask` is 0x00, otherwise is mm_flip_case_mark.
+        let xor_mask = _mm_and_si128(mm_flip_case_mark, is_not_case);
+
+        // Lowerchar xor xor_mask, 65 xor 32 to UpperChar.
+        let cased_chars = _mm_xor_si128(chars, xor_mask);
+
+        // Save to dst
+        _mm_storeu_si128(dst.as_mut_ptr().offset(idx) as *mut _, cased_chars);
+
+        idx += 16;
+    }
+
+    if length as isize > idx {
+        let remain = src.len() - idx as usize;
+
+        for i in 0..remain {
+            tmp_buf[i] = src[i + idx as usize]
+        }
+
+        let chars = _mm_loadu_si128(tmp_buf.as_ptr() as *const _);
+        let is_not_case = _mm_and_si128(
+            _mm_cmpgt_epi8(chars, mm_not_case_lower_bound),
+            _mm_cmplt_epi8(chars, mm_not_case_upper_bound),
+        );
+
+        let xor_mask = _mm_and_si128(mm_flip_case_mark, is_not_case);
+        let cased_chars = _mm_xor_si128(chars, xor_mask);
+
+        _mm_storeu_si128(dst.as_mut_ptr().offset(idx) as *mut _, cased_chars);
+
+        // Reset tmp_buf.
+        for i in 0..remain {
+            tmp_buf[i] = 0;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1071,6 +1168,18 @@ mod test {
             let tokens = scanner.scan_lex_token();
             println!("{:?}", tokens);
             assert_eq!(tokens.len(), num);
+        }
+    }
+
+    #[test]
+    fn test_to_upper() {
+        let src = "select aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbb from aaa";
+
+        let mut dst = [0; 512];
+        let mut tmp_buf = [0_u8; 16];
+        unsafe {
+            to_upper(src.as_bytes(), &mut dst, &mut tmp_buf);
+            assert_eq!(src.to_uppercase(), std::str::from_utf8(&dst[0..src.len()]).unwrap())
         }
     }
 }
