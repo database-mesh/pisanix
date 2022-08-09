@@ -183,8 +183,9 @@ mod test {
         let inputs = vec![
             "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin';",
             "CREATE USER IF NOT EXISTS 'jeffrey'@'localhost' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin';",
-            // NOT SUPPORT
-            // "CREATE USER 'jeffrey'@'localhost' IDENTIFIED BY 'auth_string' INITIAL AUTHENTICATION IDENTIFIED BY RANDOM PASSWORD DEFAULT ROLE 'admin';",
+            "CREATE USER 'jeffrey'@'localhost' IDENTIFIED WITH auth_plugin DEFAULT ROLE 'admin';",
+            "CREATE USER 'jeffrey'@'localhost' IDENTIFIED WITH auth_plugin BY RANDOM PASSWORD DEFAULT ROLE 'admin';",
+            "CREATE USER 'jeffrey'@'localhost' IDENTIFIED WITH auth_plugin INITIAL AUTHENTICATION IDENTIFIED BY RANDOM PASSWORD DEFAULT ROLE 'admin';",
             "CREATE USER 'jeffrey'@'localhost' IDENTIFIED BY 'auth_string' AND IDENTIFIED BY RANDOM PASSWORD AND IDENTIFIED WITH auth_plugin BY 'auth_string' DEFAULT ROLE 'admin';",
             "CREATE USER 'jeffrey'@'localhost' IDENTIFIED BY 'auth_string' AND IDENTIFIED BY RANDOM PASSWORD AND IDENTIFIED WITH auth_plugin BY 'auth_string' DEFAULT ROLE 'admin';",
             "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' REQUIRE X509;",
