@@ -40,6 +40,7 @@ pub trait LoadBalance {
     fn remove_all(&mut self);
 }
 
+#[derive(Debug, Clone)]
 pub enum BalanceType {
     Random(RandomWeighted),
     RoundRobin(RoundRobinWeighted),

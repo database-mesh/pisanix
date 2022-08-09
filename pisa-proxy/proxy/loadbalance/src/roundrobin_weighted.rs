@@ -16,7 +16,7 @@ use endpoint::endpoint::Endpoint;
 
 use crate::balance::LoadBalance;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct RoundRobinWeighted {
     pub items: Vec<Endpoint>,
     pub n: i64,
