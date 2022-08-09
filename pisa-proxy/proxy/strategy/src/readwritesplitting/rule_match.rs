@@ -291,27 +291,23 @@ impl RouteRuleMatch for GenericRuleMatchInner {
 impl RouteBalance for GenericRuleMatchInner {
     fn get(&mut self, input: &RouteInput) -> (&mut BalanceType, TargetRole) {
         match input {
-            RouteInput::Statement(sql) => match sql.split_once(" ") {
+            RouteInput::Statement(sql) => match sql.split_once(' ') {
                 Some(key_word) => {
                     let token = key_word.0.to_uppercase();
                     match token.as_str() {
-                        "SELECT" => return (&mut self.r_balance, TargetRole::Read),
-                        "INSERT" => return (&mut self.rw_balance, TargetRole::ReadWrite),
-                        "UPDATE" => return (&mut self.rw_balance, TargetRole::ReadWrite),
-                        "DELETE" => return (&mut self.rw_balance, TargetRole::ReadWrite),
-                        "SET" => return (&mut self.rw_balance, TargetRole::ReadWrite),
-                        "START" => return (&mut self.rw_balance, TargetRole::ReadWrite),
-                        _ => return (&mut self.default_balance, self.default_target_role.clone()),
+                        "SELECT" => (&mut self.r_balance, TargetRole::Read),
+                        "INSERT" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        "UPDATE" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        "DELETE" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        "SET" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        "START" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        _ => (&mut self.default_balance, self.default_target_role.clone()),
                     }
                 }
-                None => return (&mut self.default_balance, self.default_target_role.clone()),
+                None => (&mut self.default_balance, self.default_target_role.clone()),
             },
-            RouteInput::Transaction(_) => {
-                return (&mut self.rw_balance, TargetRole::ReadWrite);
-            }
-            RouteInput::None => {
-                return (&mut self.default_balance, self.default_target_role.clone());
-            }
+            RouteInput::Transaction(_) => (&mut self.rw_balance, TargetRole::ReadWrite),
+            RouteInput::None => (&mut self.default_balance, self.default_target_role.clone()),
         }
     }
 }
