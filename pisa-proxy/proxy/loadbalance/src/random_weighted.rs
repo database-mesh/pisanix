@@ -18,7 +18,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::balance::LoadBalance;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RandomWeighted {
     pub items: Vec<Endpoint>,
     pub n: i64,

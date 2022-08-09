@@ -35,7 +35,7 @@ impl RulesMatchBuilder {
         default_target: TargetRole,
         rw_endpoint: ReadWriteEndpoint,
     ) -> RulesMatch {
-        let (regex_inner, gen_inner) = RulesMatchBuilder::build_rules(
+        let inner = RulesMatchBuilder::build_rules(
             rules.clone(),
             rw_endpoint.clone(),
             default_target.clone(),
@@ -49,8 +49,7 @@ impl RulesMatchBuilder {
         let rules_match = RulesMatch {
             default_target: default_target.clone(),
             default_trans_balance,
-            regex_inner,
-            generic_inner: gen_inner,
+            inner,
             default_balance,
         };
 
@@ -61,24 +60,29 @@ impl RulesMatchBuilder {
         rules: Vec<ReadWriteSplittingRule>,
         rw_endpoint: ReadWriteEndpoint,
         default_target: TargetRole,
-    ) -> (Vec<RulesMatchInner>, Vec<RulesMatchInner>) {
-        let mut instances: Vec<RulesMatchInner> = Vec::with_capacity(rules.len());
-        let mut generic_instances: Vec<RulesMatchInner> = Vec::with_capacity(rules.len());
-        for r in rules {
+    ) -> Vec<RulesMatchInner> {
+        let mut instances: Vec<RulesMatchInner> = Vec::with_capacity(rules.clone().len());
+        let mut generic_instances: Vec<RulesMatchInner> = Vec::with_capacity(rules.clone().len());
+        for r in &rules {
             match r {
                 ReadWriteSplittingRule::Regex(r) => {
-                    let inner = RegexRuleMatchInner::new(r, rw_endpoint.clone()).unwrap();
+                    let inner = RegexRuleMatchInner::new(r.clone(), rw_endpoint.clone()).unwrap();
                     instances.push(RulesMatchInner::Regex(inner));
                 }
                 ReadWriteSplittingRule::Generic(r) => {
-                    let inner =
-                        GenericRuleMatchInner::new(r, default_target.clone(), rw_endpoint.clone());
-                    // instances.push(RulesMatchInner::Generic(inner));
+                    let inner = GenericRuleMatchInner::new(
+                        r.clone(),
+                        default_target.clone(),
+                        rw_endpoint.clone(),
+                    );
                     generic_instances.push(RulesMatchInner::Generic(inner));
                 }
             }
         }
-        (instances, generic_instances)
+
+        instances.extend_from_slice(&generic_instances);
+
+        instances
     }
 
     pub fn build_default_balance(
@@ -101,42 +105,10 @@ pub struct RulesMatch {
     pub default_balance: BalanceType,
     // Default transaction balance
     pub default_trans_balance: BalanceType,
-    pub regex_inner: Vec<RulesMatchInner>,
-    pub generic_inner: Vec<RulesMatchInner>,
+    pub inner: Vec<RulesMatchInner>,
 }
 
-impl RulesMatch {
-    pub async fn start_rules_match_reconcile(
-        rx: crossbeam_channel::Receiver<ReadWriteEndpoint>,
-        inner: Arc<parking_lot::Mutex<RulesMatch>>,
-        rules: Vec<ReadWriteSplittingRule>,
-        default_target: TargetRole,
-    ) {
-        tokio::spawn(async move {
-            loop {
-                let rw_endpoint = rx.clone().recv().unwrap();
-                debug!("reconcile update endpoint: {:#?}", rw_endpoint);
-                inner.clone().lock().default_balance = RulesMatchBuilder::build_default_balance(
-                    &default_target.clone(),
-                    rw_endpoint.clone(),
-                );
-                inner.clone().lock().default_trans_balance =
-                    RulesMatchBuilder::build_default_balance(
-                        &TargetRole::ReadWrite,
-                        rw_endpoint.clone(),
-                    );
-                (inner.clone().lock().regex_inner, inner.clone().lock().generic_inner) =
-                    RulesMatchBuilder::build_rules(
-                        rules.clone(),
-                        rw_endpoint.clone(),
-                        default_target.clone(),
-                    );
-            }
-        });
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RulesMatchInner {
     Regex(RegexRuleMatchInner),
     Generic(GenericRuleMatchInner),
@@ -150,25 +122,18 @@ impl RouteBalance for RulesMatch {
             return (&mut self.default_trans_balance, TargetRole::ReadWrite);
         }
 
-        for rule in self.regex_inner.iter_mut() {
+        for rule in self.inner.iter_mut() {
             match rule {
                 RulesMatchInner::Regex(inner) => {
                     if inner.is_match(input) {
                         return inner.get(input);
                     }
                 }
-                _ => {}
-            }
-        }
-
-        for rule in self.generic_inner.iter_mut() {
-            match rule {
                 RulesMatchInner::Generic(inner) => {
                     if inner.is_match(input) {
                         return inner.get(input);
                     }
                 }
-                _ => {}
             }
         }
 
@@ -176,7 +141,7 @@ impl RouteBalance for RulesMatch {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RegexRuleMatchInner {
     rule: RegexRule,
     regexs: Vec<Regex>,
@@ -249,7 +214,7 @@ fn balance_add_endpoint(balance: &mut BalanceType, endpoints: Vec<Endpoint>) {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GenericRuleMatchInner {
     r_balance: BalanceType,
     rw_balance: BalanceType,
@@ -330,25 +295,15 @@ impl RouteBalance for GenericRuleMatchInner {
                 let str_vec: Vec<&str> = sql.split(" ").collect();
                 let token = str_vec[0].to_uppercase();
 
-                if token.eq("SELECT") {
-                    return (&mut self.r_balance, TargetRole::Read);
+                match token.as_str() {
+                    "SELECT" => return (&mut self.r_balance, TargetRole::Read),
+                    "INSERT" => return (&mut self.rw_balance, TargetRole::ReadWrite),
+                    "UPDATE" => return (&mut self.rw_balance, TargetRole::ReadWrite),
+                    "DELETE" => return (&mut self.rw_balance, TargetRole::ReadWrite),
+                    "SET" => return (&mut self.rw_balance, TargetRole::ReadWrite),
+                    "START" => return (&mut self.rw_balance, TargetRole::ReadWrite),
+                    _ => return (&mut self.default_balance, self.default_target_role.clone()),
                 }
-                if token.eq("INSERT") {
-                    return (&mut self.rw_balance, TargetRole::ReadWrite);
-                }
-                if token.eq("UPDATE") {
-                    return (&mut self.rw_balance, TargetRole::ReadWrite);
-                }
-                if token.eq("DELETE") {
-                    return (&mut self.rw_balance, TargetRole::ReadWrite);
-                }
-                if token.eq("SET") {
-                    return (&mut self.rw_balance, TargetRole::ReadWrite);
-                }
-                if token.eq("START") {
-                    return (&mut self.rw_balance, TargetRole::ReadWrite);
-                }
-                return (&mut self.default_balance, self.default_target_role.clone());
             }
             RouteInput::Transaction(_) => {
                 return (&mut self.rw_balance, TargetRole::ReadWrite);

@@ -15,11 +15,11 @@
 pub mod dynamic_rw;
 pub mod rule_match;
 pub mod static_rw;
+use std::collections::HashMap;
+
 pub use dynamic_rw::*;
 use endpoint::endpoint::Endpoint;
 pub use static_rw::*;
-
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReadWriteEndpoint {
@@ -28,7 +28,12 @@ pub struct ReadWriteEndpoint {
 }
 
 lazy_static! {
-    pub static ref GENERIC_RULE_TOKEN: HashMap<&'static str, u8> =
-        HashMap::from([("SELECT", 1), ("UPDATE", 2), ("INSERT", 3), ("DELETE", 4), ("SET", 5), ("START", 6)]);
+    pub static ref GENERIC_RULE_TOKEN: HashMap<&'static str, u8> = HashMap::from([
+        ("SELECT", 1),
+        ("UPDATE", 2),
+        ("INSERT", 3),
+        ("DELETE", 4),
+        ("SET", 5),
+        ("START", 6)
+    ]);
 }
-
