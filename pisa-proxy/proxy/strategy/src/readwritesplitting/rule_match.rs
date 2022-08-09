@@ -21,12 +21,13 @@ use tracing::debug;
 
 use super::ReadWriteEndpoint;
 use crate::{
-    config::{ReadWriteSplittingRule, RegexRule, TargetRole},
+    config::{GenericRule, ReadWriteSplittingRule, RegexRule, TargetRole},
     route::{RouteBalance, RouteRuleMatch},
     RouteInput,
 };
 
 pub struct RulesMatchBuilder;
+use crate::readwritesplitting::*;
 
 impl RulesMatchBuilder {
     pub fn build(
@@ -34,7 +35,11 @@ impl RulesMatchBuilder {
         default_target: TargetRole,
         rw_endpoint: ReadWriteEndpoint,
     ) -> RulesMatch {
-        let inner = RulesMatchBuilder::build_rules(rules.clone(), rw_endpoint.clone());
+        let (regex_inner, gen_inner) = RulesMatchBuilder::build_rules(
+            rules.clone(),
+            rw_endpoint.clone(),
+            default_target.clone(),
+        );
         let default_balance =
             RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
 
@@ -44,7 +49,8 @@ impl RulesMatchBuilder {
         let rules_match = RulesMatch {
             default_target: default_target.clone(),
             default_trans_balance,
-            inner,
+            regex_inner,
+            generic_inner: gen_inner,
             default_balance,
         };
 
@@ -54,17 +60,25 @@ impl RulesMatchBuilder {
     pub fn build_rules(
         rules: Vec<ReadWriteSplittingRule>,
         rw_endpoint: ReadWriteEndpoint,
-    ) -> Vec<RulesMatchInner> {
+        default_target: TargetRole,
+    ) -> (Vec<RulesMatchInner>, Vec<RulesMatchInner>) {
         let mut instances: Vec<RulesMatchInner> = Vec::with_capacity(rules.len());
+        let mut generic_instances: Vec<RulesMatchInner> = Vec::with_capacity(rules.len());
         for r in rules {
             match r {
                 ReadWriteSplittingRule::Regex(r) => {
                     let inner = RegexRuleMatchInner::new(r, rw_endpoint.clone()).unwrap();
                     instances.push(RulesMatchInner::Regex(inner));
                 }
+                ReadWriteSplittingRule::Generic(r) => {
+                    let inner =
+                        GenericRuleMatchInner::new(r, default_target.clone(), rw_endpoint.clone());
+                    // instances.push(RulesMatchInner::Generic(inner));
+                    generic_instances.push(RulesMatchInner::Generic(inner));
+                }
             }
         }
-        instances
+        (instances, generic_instances)
     }
 
     pub fn build_default_balance(
@@ -78,7 +92,6 @@ impl RulesMatchBuilder {
                 balance_add_endpoint(&mut default_balance, rw_endpoint.readwrite)
             }
         }
-
         default_balance
     }
 }
@@ -88,7 +101,8 @@ pub struct RulesMatch {
     pub default_balance: BalanceType,
     // Default transaction balance
     pub default_trans_balance: BalanceType,
-    pub inner: Vec<RulesMatchInner>,
+    pub regex_inner: Vec<RulesMatchInner>,
+    pub generic_inner: Vec<RulesMatchInner>,
 }
 
 impl RulesMatch {
@@ -102,22 +116,30 @@ impl RulesMatch {
             loop {
                 let rw_endpoint = rx.clone().recv().unwrap();
                 debug!("reconcile update endpoint: {:#?}", rw_endpoint);
-                inner.clone().lock().default_balance =
-                    RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
+                inner.clone().lock().default_balance = RulesMatchBuilder::build_default_balance(
+                    &default_target.clone(),
+                    rw_endpoint.clone(),
+                );
                 inner.clone().lock().default_trans_balance =
                     RulesMatchBuilder::build_default_balance(
                         &TargetRole::ReadWrite,
                         rw_endpoint.clone(),
                     );
-                inner.clone().lock().inner =
-                    RulesMatchBuilder::build_rules(rules.clone(), rw_endpoint.clone());
+                (inner.clone().lock().regex_inner, inner.clone().lock().generic_inner) =
+                    RulesMatchBuilder::build_rules(
+                        rules.clone(),
+                        rw_endpoint.clone(),
+                        default_target.clone(),
+                    );
             }
         });
     }
 }
 
+#[derive(Debug)]
 pub enum RulesMatchInner {
     Regex(RegexRuleMatchInner),
+    Generic(GenericRuleMatchInner),
 }
 
 // Retrun balance when match success, otherwise return default_balance
@@ -128,13 +150,25 @@ impl RouteBalance for RulesMatch {
             return (&mut self.default_trans_balance, TargetRole::ReadWrite);
         }
 
-        for rule in self.inner.iter_mut() {
+        for rule in self.regex_inner.iter_mut() {
             match rule {
                 RulesMatchInner::Regex(inner) => {
                     if inner.is_match(input) {
                         return inner.get(input);
                     }
                 }
+                _ => {}
+            }
+        }
+
+        for rule in self.generic_inner.iter_mut() {
+            match rule {
+                RulesMatchInner::Generic(inner) => {
+                    if inner.is_match(input) {
+                        return inner.get(input);
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -142,6 +176,7 @@ impl RouteBalance for RulesMatch {
     }
 }
 
+#[derive(Debug)]
 pub struct RegexRuleMatchInner {
     rule: RegexRule,
     regexs: Vec<Regex>,
@@ -211,6 +246,117 @@ impl RouteBalance for RegexRuleMatchInner {
 fn balance_add_endpoint(balance: &mut BalanceType, endpoints: Vec<Endpoint>) {
     for ep in endpoints {
         balance.add(ep);
+    }
+}
+
+#[derive(Debug)]
+pub struct GenericRuleMatchInner {
+    r_balance: BalanceType,
+    rw_balance: BalanceType,
+    default_balance: BalanceType,
+    default_target_role: TargetRole,
+}
+
+impl GenericRuleMatchInner {
+    fn new(
+        rule: GenericRule,
+        default_target_role: TargetRole,
+        rw_endpoint: ReadWriteEndpoint,
+    ) -> GenericRuleMatchInner {
+        let r_balance = GenericRuleMatchInner::build_balance(
+            TargetRole::Read,
+            rule.algorithm_name.clone(),
+            rw_endpoint.clone(),
+        );
+        let rw_balance = GenericRuleMatchInner::build_balance(
+            TargetRole::ReadWrite,
+            rule.algorithm_name.clone(),
+            rw_endpoint.clone(),
+        );
+        let default_balance = GenericRuleMatchInner::build_balance(
+            default_target_role.clone(),
+            rule.algorithm_name,
+            rw_endpoint,
+        );
+        GenericRuleMatchInner { r_balance, rw_balance, default_balance, default_target_role }
+    }
+
+    fn build_balance(
+        role: TargetRole,
+        algorithm_name: AlgorithmName,
+        rw_endpoint: ReadWriteEndpoint,
+    ) -> BalanceType {
+        let mut balance = Balance.build_balance(algorithm_name);
+
+        match role {
+            TargetRole::Read => {
+                if rw_endpoint.read.len() == 0 {
+                    balance_add_endpoint(&mut balance, rw_endpoint.readwrite);
+                }
+                balance_add_endpoint(&mut balance, rw_endpoint.read);
+            }
+
+            TargetRole::ReadWrite => {
+                balance_add_endpoint(&mut balance, rw_endpoint.readwrite);
+            }
+        };
+
+        balance
+    }
+}
+
+impl RouteRuleMatch for GenericRuleMatchInner {
+    fn is_match(&self, input: &RouteInput) -> bool {
+        match input {
+            RouteInput::Statement(sql) | RouteInput::Transaction(sql) => {
+                let str_vec: Vec<&str> = sql.split(" ").collect();
+                let token = str_vec[0].to_uppercase();
+                if GENERIC_RULE_TOKEN.contains_key(&*token) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+
+            RouteInput::None => false,
+        }
+    }
+}
+
+impl RouteBalance for GenericRuleMatchInner {
+    fn get(&mut self, input: &RouteInput) -> (&mut BalanceType, TargetRole) {
+        match input {
+            RouteInput::Statement(sql) => {
+                let str_vec: Vec<&str> = sql.split(" ").collect();
+                let token = str_vec[0].to_uppercase();
+
+                if token.eq("SELECT") {
+                    return (&mut self.r_balance, TargetRole::Read);
+                }
+                if token.eq("INSERT") {
+                    return (&mut self.rw_balance, TargetRole::ReadWrite);
+                }
+                if token.eq("UPDATE") {
+                    return (&mut self.rw_balance, TargetRole::ReadWrite);
+                }
+                if token.eq("DELETE") {
+                    return (&mut self.rw_balance, TargetRole::ReadWrite);
+                }
+                if token.eq("SET") {
+                    return (&mut self.rw_balance, TargetRole::ReadWrite);
+                }
+                if token.eq("START") {
+                    return (&mut self.rw_balance, TargetRole::ReadWrite);
+                }
+                return (&mut self.default_balance, self.default_target_role.clone());
+            }
+            RouteInput::Transaction(_) => {
+                return (&mut self.rw_balance, TargetRole::ReadWrite);
+            }
+            RouteInput::None => {
+                return (&mut self.default_balance, self.default_target_role.clone());
+            }
+        }
     }
 }
 

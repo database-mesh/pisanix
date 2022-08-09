@@ -127,8 +127,12 @@ impl Route for ReadWriteSplittingDynamic {
                     &TargetRole::ReadWrite,
                     rw_endpoint.clone(),
                 );
-                self.rules_match.inner =
-                    RulesMatchBuilder::build_rules(self.rules.clone(), rw_endpoint.clone());
+                (self.rules_match.regex_inner, self.rules_match.generic_inner) =
+                    RulesMatchBuilder::build_rules(
+                        self.rules.clone(),
+                        rw_endpoint.clone(),
+                        self.rules_match.default_target.clone(),
+                    );
 
                 let b = self.rules_match.get(input);
                 Ok((b.0.next(), b.1))

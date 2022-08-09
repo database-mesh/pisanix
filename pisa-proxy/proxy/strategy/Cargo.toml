@@ -17,6 +17,7 @@ async-trait = "0.1.56"
 chrono = "0.4"
 tokio = { version = "1.0.0", features = ["full", "tracing"] }
 tokio-scoped = "0.2.0"
+lazy_static = "1.4.0"
 loadbalance = { path = "../loadbalance" }
 endpoint = { path = "../endpoint" }
 conn_pool = { path = "../../proxy/pool" }
