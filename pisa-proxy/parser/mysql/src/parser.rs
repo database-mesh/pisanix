@@ -178,6 +178,28 @@ mod test {
         parser(inputs);
     }
 
+    #[test]
+    fn test_dal_stmt() {
+        let inputs = vec![
+            "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin';",
+            "CREATE USER IF NOT EXISTS 'jeffrey'@'localhost' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin';",
+            "CREATE USER 'jeffrey'@'localhost' IDENTIFIED WITH auth_plugin DEFAULT ROLE 'admin';",
+            "CREATE USER 'jeffrey'@'localhost' IDENTIFIED WITH auth_plugin BY RANDOM PASSWORD DEFAULT ROLE 'admin';",
+            "CREATE USER 'jeffrey'@'localhost' IDENTIFIED WITH auth_plugin INITIAL AUTHENTICATION IDENTIFIED BY RANDOM PASSWORD DEFAULT ROLE 'admin';",
+            "CREATE USER 'jeffrey'@'localhost' IDENTIFIED BY 'auth_string' AND IDENTIFIED BY RANDOM PASSWORD AND IDENTIFIED WITH auth_plugin BY 'auth_string' DEFAULT ROLE 'admin';",
+            "CREATE USER 'jeffrey'@'localhost' IDENTIFIED BY 'auth_string' AND IDENTIFIED BY RANDOM PASSWORD AND IDENTIFIED WITH auth_plugin BY 'auth_string' DEFAULT ROLE 'admin';",
+            "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' REQUIRE X509;",
+            "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' REQUIRE ISSUER 'issuer';",
+            "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' WITH MAX_QUERIES_PER_HOUR 100 MAX_CONNECTIONS_PER_HOUR 10;",
+            "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' PASSWORD HISTORY DEFAULT;",
+            "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' PASSWORD EXPIRE INTERVAL 10 DAY;",
+            "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' ACCOUNT LOCK;",
+            "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' COMMENT 'comment_string';",
+        ];
+
+        parser(inputs);
+    }
+
     fn parser(inputs: Vec<&str>) {
         let p = Parser::new();
         for input in inputs {
@@ -188,7 +210,7 @@ mod test {
                     println!("sql={:?} {:?}", input, e)
                 }
                 Ok(_stmt) => {
-                    //println!("{:#?}", _stmt)
+                    // println!("{:#?}", _stmt)
                 }
             }
         }
