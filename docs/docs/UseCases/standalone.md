@@ -125,6 +125,7 @@ nodes = ["ds001"]
 # 读写分离策略静态模式
 [proxy.config.read_write_splitting.static]
 default_target = "readwrite"
+
 # 读写分离策略静态规则
 [[proxy.config.read_write_splitting.static.rule]]
 name = "read-rule"
