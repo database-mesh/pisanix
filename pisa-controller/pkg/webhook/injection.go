@@ -71,7 +71,6 @@ func injection(ar *v1.AdmissionReview) error {
 
 	patch, err := buildPatch(pod)
 	if err != nil {
-		log.Errorf("patch pod error %v", err)
 		return err
 	}
 
