@@ -104,19 +104,20 @@ type ReadWriteSplittingStatic struct {
 	Rules         []ReadWriteSplittingRule `json:"rules,omitempty"`
 }
 
-// ReadWriteSplittingStaticRule defines static rules
-type ReadWriteSplittingRule struct {
-	Name          string               `json:"name"`
-	Type          RuleType             `json:"type"`
-	Regex         []string             `json:"regex"`
-	Target        string               `json:"target"`
-	AlgorithmName LoadBalanceAlgorithm `json:"algorithmName"`
-}
-
+// ReadWriteSplittingDynamic defines dynamic rules based read-write splitting algorithm
 type ReadWriteSplittingDynamic struct {
 	DefaultTarget string                   `json:"defaultTarget,omitempty"`
 	Rules         []ReadWriteSplittingRule `json:"rules,omitempty"`
 	Discovery     ReadWriteDiscovery       `json:"discovery"`
+}
+
+// ReadWriteSplittingStaticRule defines rules
+type ReadWriteSplittingRule struct {
+	Name          string               `json:"name"`
+	Type          RuleType             `json:"type"`
+	Regex         []string             `json:"regex,omitempty"`
+	Target        string               `json:"target,omitempty"`
+	AlgorithmName LoadBalanceAlgorithm `json:"algorithmName"`
 }
 
 type ReadWriteDiscovery struct {

@@ -50,7 +50,7 @@ func GetVirtualDatabaseWithContext(ctx context.Context, client dynamic.Interface
 	}
 
 	vdb := &VirtualDatabase{}
-	data, err := json.Marshal(raw)
+	data, err := raw.MarshalJSON()
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func GetTrafficStrategyListWithContext(ctx context.Context, client dynamic.Inter
 		return nil, err
 	}
 
-	data, err := json.Marshal(raw)
+	data, err := raw.MarshalJSON()
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func GetDatabaseEndpointListWithContext(ctx context.Context, client dynamic.Inte
 		return nil, err
 	}
 
-	data, err := json.Marshal(raw)
+	data, err := raw.MarshalJSON()
 	if err != nil {
 		return nil, err
 	}
