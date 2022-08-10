@@ -16,7 +16,7 @@ package proxy
 import (
 	"fmt"
 
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
+	"github.com/database-mesh/golang-sdk/client"
 )
 
 type PisaProxyConfig struct {
@@ -144,26 +144,26 @@ func (b *ProxyConfigBuilder) Build() *ProxyConfig {
 }
 
 type ProxyBuilder struct {
-	VirtualDatabaseService kubernetes.VirtualDatabaseService
-	TrafficStrategy        kubernetes.TrafficStrategy
-	DatabaseEndpoints      []kubernetes.DatabaseEndpoint
+	VirtualDatabaseService client.VirtualDatabaseService
+	TrafficStrategy        client.TrafficStrategy
+	DatabaseEndpoints      []client.DatabaseEndpoint
 }
 
 func NewProxyBuilder() *ProxyBuilder {
 	return &ProxyBuilder{}
 }
 
-func (b *ProxyBuilder) SetVirtualDatabaseService(svc kubernetes.VirtualDatabaseService) *ProxyBuilder {
+func (b *ProxyBuilder) SetVirtualDatabaseService(svc client.VirtualDatabaseService) *ProxyBuilder {
 	b.VirtualDatabaseService = svc
 	return b
 }
 
-func (b *ProxyBuilder) SetTrafficStrategy(ts kubernetes.TrafficStrategy) *ProxyBuilder {
+func (b *ProxyBuilder) SetTrafficStrategy(ts client.TrafficStrategy) *ProxyBuilder {
 	b.TrafficStrategy = ts
 	return b
 }
 
-func (b *ProxyBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) *ProxyBuilder {
+func (b *ProxyBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *ProxyBuilder {
 	b.DatabaseEndpoints = dbeps
 	return b
 }
@@ -283,7 +283,7 @@ func (b *ProxyBuilder) Build() *Proxy {
 	return proxy
 }
 
-func BuildMySQLNodesFromDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) []MySQLNode {
+func BuildMySQLNodesFromDatabaseEndpoints(dbeps []client.DatabaseEndpoint) []MySQLNode {
 	nodes := []MySQLNode{}
 	for _, dbep := range dbeps {
 		if dbep.Spec.Database.MySQL != nil {
@@ -321,16 +321,16 @@ func getDbEpRole(annotations map[string]string) (role string) {
 }
 
 type MySQLConfigBuilder struct {
-	VirtualDatabaseService kubernetes.VirtualDatabaseService
-	TrafficStrategy        kubernetes.TrafficStrategy
-	DatabaseEndpoints      []kubernetes.DatabaseEndpoint
+	VirtualDatabaseService client.VirtualDatabaseService
+	TrafficStrategy        client.TrafficStrategy
+	DatabaseEndpoints      []client.DatabaseEndpoint
 }
 
 func NewMySQLConfigBuilder() *MySQLConfigBuilder {
 	return &MySQLConfigBuilder{}
 }
 
-func (b *MySQLConfigBuilder) SetDatabaseEndpoints(dbeps []kubernetes.DatabaseEndpoint) *MySQLConfigBuilder {
+func (b *MySQLConfigBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *MySQLConfigBuilder {
 	b.DatabaseEndpoints = dbeps
 	return b
 }

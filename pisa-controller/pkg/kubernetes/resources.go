@@ -17,6 +17,7 @@ package kubernetes
 import (
 	"context"
 
+	"github.com/database-mesh/golang-sdk/client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -43,13 +44,13 @@ var (
 	}
 )
 
-func GetVirtualDatabaseWithContext(ctx context.Context, client dynamic.Interface, namespace, name string) (*VirtualDatabase, error) {
-	raw, err := client.Resource(VirtualDatabaseSchema).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+func GetVirtualDatabaseWithContext(ctx context.Context, c dynamic.Interface, namespace, name string) (*client.VirtualDatabase, error) {
+	raw, err := c.Resource(VirtualDatabaseSchema).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	vdb := &VirtualDatabase{}
+	vdb := &client.VirtualDatabase{}
 	data, err := json.Marshal(raw)
 	if err != nil {
 		return nil, err
@@ -63,9 +64,9 @@ func GetVirtualDatabaseWithContext(ctx context.Context, client dynamic.Interface
 	return vdb, nil
 }
 
-func GetTrafficStrategyListWithContext(ctx context.Context, client dynamic.Interface, namespace string) (*TrafficStrategyList, error) {
-	tslist := &TrafficStrategyList{}
-	raw, err := client.Resource(TrafficStrategySchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
+func GetTrafficStrategyListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.TrafficStrategyList, error) {
+	tslist := &client.TrafficStrategyList{}
+	raw, err := c.Resource(TrafficStrategySchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -83,9 +84,9 @@ func GetTrafficStrategyListWithContext(ctx context.Context, client dynamic.Inter
 	return tslist, nil
 }
 
-func GetDatabaseEndpointListWithContext(ctx context.Context, client dynamic.Interface, namespace string) (*DatabaseEndpointList, error) {
-	dbeplist := &DatabaseEndpointList{}
-	raw, err := client.Resource(DatabaseEndpointSchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
+func GetDatabaseEndpointListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.DatabaseEndpointList, error) {
+	dbeplist := &client.DatabaseEndpointList{}
+	raw, err := c.Resource(DatabaseEndpointSchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
