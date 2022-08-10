@@ -77,9 +77,29 @@ TargetInstnce: 指由 LoadBalance 模块选出的节点。
 ***defaultTarget 值在真实场景中要配置成 `readwrite`***
 
 ## 读写分离规则说明
-读写分离规则是指 Pisa-Proxy 需要把查询的 SQL 语句和配置的规则做匹配，如果匹配成功，将根据规则把 SQL 语句路由到对应的节点上。如果匹配不成功，SQL 语句将被路由到默认的节点上。
+读写分离规则是指 Pisa-Proxy 需要把查询的 SQL 语句和配置的规则做匹配，如果匹配成功，将根据规则把 SQL 语句路由到对应的节点上。
 
-目前读写分离规则只支持通过正则去匹配。
+目前读写分离规则支持通用规则和正则匹配两种方式。配置通用规则后，Pisa-Proxy 会根据 SQL 自动路由请求。若配置正则规则，则 Pisa-Proxy 会基于正则表达式行路由。此处用户可以同时配置两种路由规则，Pisa-Proxy 会优先根据正则进行路由，若未匹配到则通过通用规则进行路由，若两种规则全未命中，则 SQL 会被路由到默认节点上。
+
+通用规则是基于匹配 SQL 语句进行路由的，Pisa—Proxy 接收到 SQL 语句解析后会以 SQL 字符串起始第一个字段作为判断依据进行路由。当前版本 DML 对应路由规则如下:
+
+|SQL 语句|路由节点|
+|-----|-----|
+|SELECT|read only|
+|INSERT|readwrite|
+|DELETE|readwrite|
+|UPDATE|readwrite|
+|SET|readwrite|
+|START|readwrite|
+|事务相关|readwrite|
+|其他|`defaultTarget` 指定节点|
+
+通用路由规则配置说明:
+| 属性 | 值类型 | 是否依赖 | 默认值 | 含义 |
+|-----|-------|---------|-------|-----|
+|name | string|  是     |  无   | 规则名称|
+|type | string|  是     |  无   | 路由类型为通用规则类型，此处值为 `generic`|
+|algorithName| [enum](#algorithname-enum-值)| 是| 无   | 负载均衡算法的名称，将作用与路由到的 `role` 组中的机器列表|
 
 正则规则配置说明：
 
@@ -101,7 +121,28 @@ TargetInstnce: 指由 LoadBalance 模块选出的节点。
 
 ## 配置示例
 
-一个完整的 `TrafficStrategy` CRD 配置如下：
+基于通用路由规则的 `TrafficStrategy` CRD 配置如下:
+```yaml
+apiVersion: core.database-mesh.io/v1alpha1
+kind: TrafficStrategy
+metadata:
+  name: test 
+  namespace: default 
+spec:
+  selector:
+    matchLabels:
+      source: test
+  loadBalance:
+    readWriteSplitting:
+      static:  
+        defaultTarget: read # or readwrite
+        rules:
+          - name: read-rule
+            type: generic
+            algorithmName: random # lb algorithm
+```
+
+基于正则匹配的 `TrafficStrategy` CRD 配置如下：
 
 ``` yaml
 apiVersion: core.database-mesh.io/v1alpha1

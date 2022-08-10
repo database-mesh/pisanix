@@ -252,6 +252,13 @@ pool_size = 3
 [proxy.config.read_write_splitting.static]
 default_target = "read"
 
+# 通用路由规则
+[[proxy.config.read_write_splitting.static.rule]]
+name = "read-rule"
+type = "generic"
+algorithm_name = "random"
+
+# 基于正则表达式的路由规则
 [[proxy.config.read_write_splitting.static.rule]]
 name = "read-rule"
 type = "regex"
@@ -259,6 +266,7 @@ regex = [".*"]
 target = "read"
 algorithm_name = "random"
 
+# 基于正则表达式的路由规则
 [[proxy.config.read_write_splitting.static.rule]]
 name = "write-rule"
 type = "regex"
@@ -324,6 +332,13 @@ read_only_period = 100
 read_only_timeout = 600
 read_only_failure_threshold = 1
 
+# 通用路由规则
+[[proxy.config.read_write_splitting.static.rule]]
+name = "read-rule"
+type = "generic"
+algorithm_name = "random"
+
+# 基于正则的路由规则
 [[proxy.config.read_write_splitting.dynamic.rule]]
 name = "write-rule"
 type = "regex"
