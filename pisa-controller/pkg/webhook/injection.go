@@ -71,11 +71,12 @@ func injection(ar *v1.AdmissionReview) error {
 
 	patch, err := buildPatch(pod)
 	if err != nil {
+		log.Errorf("patch pod error %v", err)
 		return err
 	}
 
 	resp := buildPodPatchResponse(ar.Request.UID, pod, patch)
-	if resp != nil {
+	if nil == resp {
 		return errors.New("build pod patch response error")
 	}
 
@@ -161,6 +162,7 @@ func buildPatch(pod *corev1.Pod) (string, error) {
 	pl := []Patch{*p}
 	data, err := json.Marshal(&pl)
 	if err != nil {
+		log.Errorf("marshal patch pod data %v", err)
 		return "", err
 	} else {
 		return string(data), nil
