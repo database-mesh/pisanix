@@ -126,6 +126,7 @@ sql_stmt -> SqlStmt:
   | show_create_trigger_stmt { SqlStmt::ShowCreateTriggerStmt($1) }
   | show_create_event_stmt { SqlStmt::ShowCreateEventStmt($1) }
   | show_create_user_stmt { SqlStmt::ShowCreateUserStmt($1) }
+  | show_status_stmt     { SqlStmt::ShowStatusStmt($1) }
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   | create_index_stmt  { SqlStmt::CreateIndexStmt($1) }
@@ -6161,6 +6162,17 @@ show_create_user_stmt -> Box<ShowCreateUserStmt>:
         Box::new(ShowCreateUserStmt {
            span: $span,
            user: $4,
+        })
+    }
+;
+
+show_status_stmt -> Box<ShowStatusStmt>:
+    'SHOW' opt_var_type 'STATUS' opt_wild_or_where
+    {
+        Box::new(ShowStatusStmt {
+           span: $span,
+           opt_var_type: $2,
+           opt_wild_or_where: $4,
         })
     }
 ;
