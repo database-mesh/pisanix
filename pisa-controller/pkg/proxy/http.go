@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"reflect"
 
+	"github.com/database-mesh/golang-sdk/client"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
 	"github.com/gin-gonic/gin"
@@ -28,8 +29,8 @@ import (
 func GetConfig(ctx *gin.Context) {
 	namespace := ctx.Param("namespace")
 	appname := ctx.Param("appname")
-	client := kubernetes.GetClient()
-	proxyConfig, err := getConfig(ctx, client.Client, namespace, appname)
+	c := client.GetClient()
+	proxyConfig, err := getConfig(ctx, c.Client, namespace, appname)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, err)
 		return
@@ -38,18 +39,18 @@ func GetConfig(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, proxyConfig)
 }
 
-func getConfig(ctx context.Context, client dynamic.Interface, namespace, appname string) (interface{}, error) {
-	vdb, err := kubernetes.GetVirtualDatabaseWithContext(ctx, client, namespace, appname)
+func getConfig(ctx context.Context, c dynamic.Interface, namespace, appname string) (interface{}, error) {
+	vdb, err := kubernetes.GetVirtualDatabaseWithContext(ctx, c, namespace, appname)
 	if err != nil {
 		return nil, err
 	}
 
-	tslist, err := kubernetes.GetTrafficStrategyListWithContext(ctx, client, namespace)
+	tslist, err := kubernetes.GetTrafficStrategyListWithContext(ctx, c, namespace)
 	if err != nil {
 		return nil, err
 	}
 
-	dbeplist, err := kubernetes.GetDatabaseEndpointListWithContext(ctx, client, namespace)
+	dbeplist, err := kubernetes.GetDatabaseEndpointListWithContext(ctx, c, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -58,13 +59,13 @@ func getConfig(ctx context.Context, client dynamic.Interface, namespace, appname
 
 }
 
-func build(vdb *kubernetes.VirtualDatabase, tslist *kubernetes.TrafficStrategyList, dbeplist *kubernetes.DatabaseEndpointList) (*PisaProxyConfig, error) {
+func build(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dbeplist *client.DatabaseEndpointList) (*PisaProxyConfig, error) {
 	builder := NewPisaProxyConfigBuilder()
 	builders := []*ProxyBuilder{}
 	for _, service := range vdb.Spec.Services {
 		builder := NewProxyBuilder().SetVirtualDatabaseService(service)
 
-		var tsobj kubernetes.TrafficStrategy
+		var tsobj client.TrafficStrategy
 		for _, ts := range tslist.Items {
 			if ts.Name == service.TrafficStrategy {
 				tsobj = ts
@@ -72,7 +73,7 @@ func build(vdb *kubernetes.VirtualDatabase, tslist *kubernetes.TrafficStrategyLi
 			}
 		}
 
-		dbeps := &kubernetes.DatabaseEndpointList{Items: []kubernetes.DatabaseEndpoint{}}
+		dbeps := &client.DatabaseEndpointList{Items: []client.DatabaseEndpoint{}}
 		for _, dbep := range dbeplist.Items {
 			if reflect.DeepEqual(dbep.Labels, tsobj.Spec.Selector.MatchLabels) {
 				dbeps.Items = append(dbeps.Items, dbep)
