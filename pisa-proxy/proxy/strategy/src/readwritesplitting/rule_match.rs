@@ -21,12 +21,13 @@ use tracing::debug;
 
 use super::ReadWriteEndpoint;
 use crate::{
-    config::{ReadWriteSplittingRule, RegexRule, TargetRole},
+    config::{GenericRule, ReadWriteSplittingRule, RegexRule, TargetRole},
     route::{RouteBalance, RouteRuleMatch},
     RouteInput,
 };
 
 pub struct RulesMatchBuilder;
+use crate::readwritesplitting::*;
 
 impl RulesMatchBuilder {
     pub fn build(
@@ -34,7 +35,11 @@ impl RulesMatchBuilder {
         default_target: TargetRole,
         rw_endpoint: ReadWriteEndpoint,
     ) -> RulesMatch {
-        let inner = RulesMatchBuilder::build_rules(rules.clone(), rw_endpoint.clone());
+        let inner = RulesMatchBuilder::build_rules(
+            rules.clone(),
+            rw_endpoint.clone(),
+            default_target.clone(),
+        );
         let default_balance =
             RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
 
@@ -54,16 +59,29 @@ impl RulesMatchBuilder {
     pub fn build_rules(
         rules: Vec<ReadWriteSplittingRule>,
         rw_endpoint: ReadWriteEndpoint,
+        default_target: TargetRole,
     ) -> Vec<RulesMatchInner> {
-        let mut instances: Vec<RulesMatchInner> = Vec::with_capacity(rules.len());
-        for r in rules {
+        let mut instances: Vec<RulesMatchInner> = Vec::with_capacity(rules.clone().len());
+        let mut generic_instances: Vec<RulesMatchInner> = Vec::with_capacity(rules.clone().len());
+        for r in &rules {
             match r {
                 ReadWriteSplittingRule::Regex(r) => {
-                    let inner = RegexRuleMatchInner::new(r, rw_endpoint.clone()).unwrap();
+                    let inner = RegexRuleMatchInner::new(r.clone(), rw_endpoint.clone()).unwrap();
                     instances.push(RulesMatchInner::Regex(inner));
+                }
+                ReadWriteSplittingRule::Generic(r) => {
+                    let inner = GenericRuleMatchInner::new(
+                        r.clone(),
+                        default_target.clone(),
+                        rw_endpoint.clone(),
+                    );
+                    generic_instances.push(RulesMatchInner::Generic(inner));
                 }
             }
         }
+
+        instances.extend_from_slice(&generic_instances);
+
         instances
     }
 
@@ -78,7 +96,6 @@ impl RulesMatchBuilder {
                 balance_add_endpoint(&mut default_balance, rw_endpoint.readwrite)
             }
         }
-
         default_balance
     }
 }
@@ -91,33 +108,10 @@ pub struct RulesMatch {
     pub inner: Vec<RulesMatchInner>,
 }
 
-impl RulesMatch {
-    pub async fn start_rules_match_reconcile(
-        rx: crossbeam_channel::Receiver<ReadWriteEndpoint>,
-        inner: Arc<parking_lot::Mutex<RulesMatch>>,
-        rules: Vec<ReadWriteSplittingRule>,
-        default_target: TargetRole,
-    ) {
-        tokio::spawn(async move {
-            loop {
-                let rw_endpoint = rx.clone().recv().unwrap();
-                debug!("reconcile update endpoint: {:#?}", rw_endpoint);
-                inner.clone().lock().default_balance =
-                    RulesMatchBuilder::build_default_balance(&default_target, rw_endpoint.clone());
-                inner.clone().lock().default_trans_balance =
-                    RulesMatchBuilder::build_default_balance(
-                        &TargetRole::ReadWrite,
-                        rw_endpoint.clone(),
-                    );
-                inner.clone().lock().inner =
-                    RulesMatchBuilder::build_rules(rules.clone(), rw_endpoint.clone());
-            }
-        });
-    }
-}
-
+#[derive(Debug, Clone)]
 pub enum RulesMatchInner {
     Regex(RegexRuleMatchInner),
+    Generic(GenericRuleMatchInner),
 }
 
 // Retrun balance when match success, otherwise return default_balance
@@ -135,6 +129,11 @@ impl RouteBalance for RulesMatch {
                         return inner.get(input);
                     }
                 }
+                RulesMatchInner::Generic(inner) => {
+                    if inner.is_match(input) {
+                        return inner.get(input);
+                    }
+                }
             }
         }
 
@@ -142,6 +141,7 @@ impl RouteBalance for RulesMatch {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct RegexRuleMatchInner {
     rule: RegexRule,
     regexs: Vec<Regex>,
@@ -211,6 +211,104 @@ impl RouteBalance for RegexRuleMatchInner {
 fn balance_add_endpoint(balance: &mut BalanceType, endpoints: Vec<Endpoint>) {
     for ep in endpoints {
         balance.add(ep);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GenericRuleMatchInner {
+    r_balance: BalanceType,
+    rw_balance: BalanceType,
+    default_balance: BalanceType,
+    default_target_role: TargetRole,
+}
+
+impl GenericRuleMatchInner {
+    fn new(
+        rule: GenericRule,
+        default_target_role: TargetRole,
+        rw_endpoint: ReadWriteEndpoint,
+    ) -> GenericRuleMatchInner {
+        let r_balance = GenericRuleMatchInner::build_balance(
+            TargetRole::Read,
+            rule.algorithm_name.clone(),
+            rw_endpoint.clone(),
+        );
+        let rw_balance = GenericRuleMatchInner::build_balance(
+            TargetRole::ReadWrite,
+            rule.algorithm_name.clone(),
+            rw_endpoint.clone(),
+        );
+        let default_balance = GenericRuleMatchInner::build_balance(
+            default_target_role.clone(),
+            rule.algorithm_name,
+            rw_endpoint,
+        );
+        GenericRuleMatchInner { r_balance, rw_balance, default_balance, default_target_role }
+    }
+
+    fn build_balance(
+        role: TargetRole,
+        algorithm_name: AlgorithmName,
+        rw_endpoint: ReadWriteEndpoint,
+    ) -> BalanceType {
+        let mut balance = Balance.build_balance(algorithm_name);
+
+        match role {
+            TargetRole::Read => {
+                if rw_endpoint.read.len() == 0 {
+                    balance_add_endpoint(&mut balance, rw_endpoint.readwrite);
+                }
+                balance_add_endpoint(&mut balance, rw_endpoint.read);
+            }
+
+            TargetRole::ReadWrite => {
+                balance_add_endpoint(&mut balance, rw_endpoint.readwrite);
+            }
+        };
+
+        balance
+    }
+}
+
+impl RouteRuleMatch for GenericRuleMatchInner {
+    fn is_match(&self, input: &RouteInput) -> bool {
+        match input {
+            RouteInput::Statement(sql) | RouteInput::Transaction(sql) => {
+                let str_vec: Vec<&str> = sql.split(" ").collect();
+                let token = str_vec[0].to_uppercase();
+                if GENERIC_RULE_TOKEN.contains_key(&*token) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+
+            RouteInput::None => false,
+        }
+    }
+}
+
+impl RouteBalance for GenericRuleMatchInner {
+    fn get(&mut self, input: &RouteInput) -> (&mut BalanceType, TargetRole) {
+        match input {
+            RouteInput::Statement(sql) => match sql.split_once(' ') {
+                Some(key_word) => {
+                    let token = key_word.0.to_uppercase();
+                    match token.as_str() {
+                        "SELECT" => (&mut self.r_balance, TargetRole::Read),
+                        "INSERT" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        "UPDATE" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        "DELETE" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        "SET" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        "START" => (&mut self.rw_balance, TargetRole::ReadWrite),
+                        _ => (&mut self.default_balance, self.default_target_role.clone()),
+                    }
+                }
+                None => (&mut self.default_balance, self.default_target_role.clone()),
+            },
+            RouteInput::Transaction(_) => (&mut self.rw_balance, TargetRole::ReadWrite),
+            RouteInput::None => (&mut self.default_balance, self.default_target_role.clone()),
+        }
     }
 }
 

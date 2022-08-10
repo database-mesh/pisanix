@@ -2,20 +2,19 @@
 name = "proxy"
 version = "0.1.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-trait = "0.1.56"
+endpoint = { path = "./endpoint" }
+loadbalance = { path = "./loadbalance" }
+pisa_error = { path = "../error", package = "error" }
+plugin = { path = "../plugin" }
 serde = { version = "1.0.133", default-features = false, features = ["derive"] }
 serde_derive = "1.0"
-pisa_error = { path = "../error", package = "error" }
+strategy = { path = "./strategy" }
 tokio = { version = "1.0.0", features = ["full", "tracing"] }
 tokio-util = { version = "0.7.0", features = ["full"] }
 tracing = "0.1.13"
 tracing-futures = { version = "0.2.3" }
-tracing-subscriber = "0.2.2"
-plugin = { path = "../plugin"}
-loadbalance = {path = "./loadbalance"}
-endpoint = {path = "./endpoint"}
-strategy = {path = "./strategy"}
+tracing-subscriber = "0.3.9"
