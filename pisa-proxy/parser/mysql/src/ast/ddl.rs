@@ -14,13 +14,14 @@
 
 use lrpar::Span;
 
-use crate::ast::{base::*, FieldType, SelectStmt};
+use crate::ast::{base::*, CreateUser, FieldType, SelectStmt};
 
 #[derive(Debug, Clone)]
 pub enum Create {
     CreateDatabase(Box<CreateDatabase>),
     CreateViewOrTriggerOrSpOrEvent(Box<ViewOrTriggerOrSpOrEvent>),
     CreateLogFileGroup(Box<CreateLogFileGroup>),
+    CreateUser(Box<CreateUser>)
 }
 
 #[derive(Debug, Clone)]
