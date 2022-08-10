@@ -37,7 +37,7 @@ var Conf Config
 
 func Handler() http.Handler {
 	r := gin.New()
-	r.Use(gin.Recovery(), gin.Logger())
+	r.Use(gin.Recovery(), gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/apis/admission.database-mesh.io/v1alpha1", "/openapi/v2"}}))
 	g := r.Group("/apis/admission.database-mesh.io/v1alpha1")
 
 	// NOTE: there is not API path in this request
