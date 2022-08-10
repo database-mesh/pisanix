@@ -3152,6 +3152,13 @@ pub struct Channel {
 }
 
 #[derive(Debug, Clone)]
+pub struct ShowStatusStmt {
+    pub span: Span,
+    pub opt_var_type: Option<ShowVariableType>,
+    pub opt_wild_or_where: Option<WildOrWhere>,
+}
+
+#[derive(Debug, Clone)]
 pub struct ShowGrantsStmt {
     pub span: Span,
     pub user: Option<User>,

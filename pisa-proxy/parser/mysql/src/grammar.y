@@ -114,6 +114,7 @@ sql_stmt -> SqlStmt:
   | show_create_table_stmt  { SqlStmt::ShowCreateTableStmt($1) }
   | show_keys_stmt     { SqlStmt::ShowKeysStmt($1) }
   | show_variables_stmt     { SqlStmt::ShowVariablesStmt($1) }
+  | show_status_stmt     { SqlStmt::ShowStatusStmt($1) }
   | show_create_view_stmt     { SqlStmt::ShowCreateViewStmt($1) }
   | show_master_status_stmt { SqlStmt::ShowMasterStatusStmt($1) }
   | show_engines_stmt { SqlStmt::ShowEnginesStmt($1) }
@@ -6037,6 +6038,17 @@ show_variables_stmt -> Box<ShowVariablesStmt>:
     'SHOW' opt_var_type 'VARIABLES' opt_wild_or_where
     {
         Box::new(ShowVariablesStmt {
+           span: $span,
+           opt_var_type: $2,
+           opt_wild_or_where: $4,
+        })
+    }
+;
+
+show_status_stmt -> Box<ShowStatusStmt>:
+    'SHOW' opt_var_type 'STATUS' opt_wild_or_where
+    {
+        Box::new(ShowStatusStmt {
            span: $span,
            opt_var_type: $2,
            opt_wild_or_where: $4,
