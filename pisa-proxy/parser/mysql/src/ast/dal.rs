@@ -184,7 +184,7 @@ pub struct AccountLock {
 }
 
 #[derive(Debug, Clone)]
-pub struct  PasswordExpire {
+pub struct PasswordExpire {
     pub span: Span,
     pub num: Option<String>,
 }
