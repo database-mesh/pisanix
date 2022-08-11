@@ -19,20 +19,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
+	"github.com/database-mesh/golang-sdk/client"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var vdb = kubernetes.VirtualDatabase{
+var vdb = client.VirtualDatabase{
 	ObjectMeta: metav1.ObjectMeta{
 		Name: "catalogue",
 	},
-	Spec: kubernetes.VirtualDatabaseSpec{
-		Services: []kubernetes.VirtualDatabaseService{
+	Spec: client.VirtualDatabaseSpec{
+		Services: []client.VirtualDatabaseService{
 			{
-				DatabaseService: kubernetes.DatabaseService{
-					DatabaseMySQL: &kubernetes.DatabaseMySQL{
+				DatabaseService: client.DatabaseService{
+					DatabaseMySQL: &client.DatabaseMySQL{
 						Host:          "127.0.0.1",
 						Port:          3306,
 						DB:            "socksdb",
@@ -49,7 +49,7 @@ var vdb = kubernetes.VirtualDatabase{
 	},
 }
 
-var dbep = kubernetes.DatabaseEndpoint{
+var dbep = client.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
@@ -60,9 +60,9 @@ var dbep = kubernetes.DatabaseEndpoint{
 			"source": "catalogue",
 		},
 	},
-	Spec: kubernetes.DatabaseEndpointSpec{
-		Database: kubernetes.Database{
-			MySQL: &kubernetes.MySQL{
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
 				DB:       "socksdb",
 				Host:     "catalogue-db.demotest",
 				Password: "fake_password",
@@ -73,7 +73,7 @@ var dbep = kubernetes.DatabaseEndpoint{
 	},
 }
 
-var cbs = []kubernetes.CircuitBreak{
+var cbs = []client.CircuitBreak{
 	{
 		Regex: []string{
 			"^select",
@@ -81,7 +81,7 @@ var cbs = []kubernetes.CircuitBreak{
 	},
 }
 
-var ccs = []kubernetes.ConcurrencyControl{
+var ccs = []client.ConcurrencyControl{
 	{
 		Regex: []string{
 			"^insert",
@@ -91,12 +91,12 @@ var ccs = []kubernetes.ConcurrencyControl{
 	},
 }
 
-var tsSimpleLoadBalance = kubernetes.TrafficStrategy{
+var tsSimpleLoadBalance = client.TrafficStrategy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
 	},
-	Spec: kubernetes.TrafficStrategySpec{
+	Spec: client.TrafficStrategySpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"source": "catalogue",
@@ -104,19 +104,19 @@ var tsSimpleLoadBalance = kubernetes.TrafficStrategy{
 		},
 		CircuitBreaks:       cbs,
 		ConcurrencyControls: ccs,
-		LoadBalance: &kubernetes.LoadBalance{
-			SimpleLoadBalance: &kubernetes.SimpleLoadBalance{
-				Kind: kubernetes.LoadBalanceAlgorithmRoundRobin,
+		LoadBalance: &client.LoadBalance{
+			SimpleLoadBalance: &client.SimpleLoadBalance{
+				Kind: client.LoadBalanceAlgorithmRoundRobin,
 			},
 		},
 	},
 }
-var tsReadWriteSplittingStatic = kubernetes.TrafficStrategy{
+var tsReadWriteSplittingStatic = client.TrafficStrategy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
 	},
-	Spec: kubernetes.TrafficStrategySpec{
+	Spec: client.TrafficStrategySpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"source": "catalogue",
@@ -124,11 +124,11 @@ var tsReadWriteSplittingStatic = kubernetes.TrafficStrategy{
 		},
 		CircuitBreaks:       cbs,
 		ConcurrencyControls: ccs,
-		LoadBalance: &kubernetes.LoadBalance{
-			ReadWriteSplitting: &kubernetes.ReadWriteSplitting{
-				Static: &kubernetes.ReadWriteSplittingStatic{
+		LoadBalance: &client.LoadBalance{
+			ReadWriteSplitting: &client.ReadWriteSplitting{
+				Static: &client.ReadWriteSplittingStatic{
 					DefaultTarget: "readwrite",
-					Rules: []kubernetes.ReadWriteSplittingRule{
+					Rules: []client.ReadWriteSplittingRule{
 						{
 							Name:          "write-rule",
 							Regex:         []string{"^insert"},
@@ -149,12 +149,12 @@ var tsReadWriteSplittingStatic = kubernetes.TrafficStrategy{
 		},
 	},
 }
-var tsReadWriteSplttingDynamic = kubernetes.TrafficStrategy{
+var tsReadWriteSplttingDynamic = client.TrafficStrategy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
 	},
-	Spec: kubernetes.TrafficStrategySpec{
+	Spec: client.TrafficStrategySpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"source": "catalogue",
@@ -162,11 +162,11 @@ var tsReadWriteSplttingDynamic = kubernetes.TrafficStrategy{
 		},
 		CircuitBreaks:       cbs,
 		ConcurrencyControls: ccs,
-		LoadBalance: &kubernetes.LoadBalance{
-			ReadWriteSplitting: &kubernetes.ReadWriteSplitting{
-				Dynamic: &kubernetes.ReadWriteSplittingDynamic{
+		LoadBalance: &client.LoadBalance{
+			ReadWriteSplitting: &client.ReadWriteSplitting{
+				Dynamic: &client.ReadWriteSplittingDynamic{
 					DefaultTarget: "readwrite",
-					Rules: []kubernetes.ReadWriteSplittingRule{
+					Rules: []client.ReadWriteSplittingRule{
 						{
 							Name:          "write-rule",
 							Regex:         []string{"^insert"},
@@ -182,35 +182,35 @@ var tsReadWriteSplttingDynamic = kubernetes.TrafficStrategy{
 							AlgorithmName: "roundrobin",
 						},
 					},
-					Discovery: kubernetes.ReadWriteDiscovery{
-						MasterHighAvailability: &kubernetes.MasterHighAvailability{
+					Discovery: client.ReadWriteDiscovery{
+						MasterHighAvailability: &client.MasterHighAvailability{
 							User:            "monitor",
 							Password:        "monitor",
 							MonitorInterval: 1000,
-							ConnectionProbe: &kubernetes.ConnectionProbe{
-								Probe: &kubernetes.Probe{
+							ConnectionProbe: &client.ConnectionProbe{
+								Probe: &client.Probe{
 									PeriodMilliseconds:  2000,
 									FailureThreshold:    3,
 									TimeoutMilliseconds: 200,
 								},
 							},
-							PingProbe: &kubernetes.PingProbe{
-								Probe: &kubernetes.Probe{
+							PingProbe: &client.PingProbe{
+								Probe: &client.Probe{
 									PeriodMilliseconds:  1000,
 									TimeoutMilliseconds: 100,
 									FailureThreshold:    3,
 								},
 							},
-							ReplicationLagProbe: &kubernetes.ReplicationLagProbe{
-								Probe: &kubernetes.Probe{
+							ReplicationLagProbe: &client.ReplicationLagProbe{
+								Probe: &client.Probe{
 									PeriodMilliseconds:  1000,
 									TimeoutMilliseconds: 3,
 									FailureThreshold:    3,
 								},
 								MaxReplicationLag: 3,
 							},
-							ReadOnlyProbe: &kubernetes.ReadOnlyProbe{
-								Probe: &kubernetes.Probe{
+							ReadOnlyProbe: &client.ReadOnlyProbe{
+								Probe: &client.Probe{
 									PeriodMilliseconds:  1000,
 									TimeoutMilliseconds: 3,
 									FailureThreshold:    3,
@@ -323,17 +323,17 @@ func Test_ProxyBuilder(t *testing.T) {
 		{
 			VirtualDatabaseService: vdb.Spec.Services[0],
 			TrafficStrategy:        tsSimpleLoadBalance,
-			DatabaseEndpoints:      []kubernetes.DatabaseEndpoint{dbep},
+			DatabaseEndpoints:      []client.DatabaseEndpoint{dbep},
 		},
 		{
 			VirtualDatabaseService: vdb.Spec.Services[0],
 			TrafficStrategy:        tsReadWriteSplittingStatic,
-			DatabaseEndpoints:      []kubernetes.DatabaseEndpoint{dbep},
+			DatabaseEndpoints:      []client.DatabaseEndpoint{dbep},
 		},
 		{
 			VirtualDatabaseService: vdb.Spec.Services[0],
 			TrafficStrategy:        tsReadWriteSplttingDynamic,
-			DatabaseEndpoints:      []kubernetes.DatabaseEndpoint{dbep},
+			DatabaseEndpoints:      []client.DatabaseEndpoint{dbep},
 		},
 	}
 
@@ -426,9 +426,9 @@ func assertConcurrencyControls(t *testing.T, act, exp []ConcurrencyControl, msg 
 }
 func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 	builder := &ProxyBuilder{
-		VirtualDatabaseService: kubernetes.VirtualDatabaseService{
-			DatabaseService: kubernetes.DatabaseService{
-				DatabaseMySQL: &kubernetes.DatabaseMySQL{
+		VirtualDatabaseService: client.VirtualDatabaseService{
+			DatabaseService: client.DatabaseService{
+				DatabaseMySQL: &client.DatabaseMySQL{
 					Host:          "127.0.0.1",
 					Port:          3306,
 					DB:            "socksdb",
@@ -441,17 +441,17 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 			Name:            "catalogue",
 			TrafficStrategy: "catalogue",
 		},
-		TrafficStrategy: kubernetes.TrafficStrategy{
+		TrafficStrategy: client.TrafficStrategy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "catalogue",
 				Namespace: "demotest",
 			},
-			Spec: kubernetes.TrafficStrategySpec{
-				LoadBalance: &kubernetes.LoadBalance{
-					ReadWriteSplitting: &kubernetes.ReadWriteSplitting{
-						Dynamic: &kubernetes.ReadWriteSplittingDynamic{
+			Spec: client.TrafficStrategySpec{
+				LoadBalance: &client.LoadBalance{
+					ReadWriteSplitting: &client.ReadWriteSplitting{
+						Dynamic: &client.ReadWriteSplittingDynamic{
 							DefaultTarget: "",
-							Rules: []kubernetes.ReadWriteSplittingRule{
+							Rules: []client.ReadWriteSplittingRule{
 								{
 									Name:          "write-rule",
 									Regex:         []string{"^insert"},
@@ -467,35 +467,35 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 									AlgorithmName: "roundrobin",
 								},
 							},
-							Discovery: kubernetes.ReadWriteDiscovery{
-								MasterHighAvailability: &kubernetes.MasterHighAvailability{
+							Discovery: client.ReadWriteDiscovery{
+								MasterHighAvailability: &client.MasterHighAvailability{
 									User:            "monitor",
 									Password:        "monitor",
 									MonitorInterval: 1000,
-									ConnectionProbe: &kubernetes.ConnectionProbe{
-										Probe: &kubernetes.Probe{
+									ConnectionProbe: &client.ConnectionProbe{
+										Probe: &client.Probe{
 											PeriodMilliseconds:  2000,
 											FailureThreshold:    3,
 											TimeoutMilliseconds: 200,
 										},
 									},
-									PingProbe: &kubernetes.PingProbe{
-										Probe: &kubernetes.Probe{
+									PingProbe: &client.PingProbe{
+										Probe: &client.Probe{
 											PeriodMilliseconds:  1000,
 											TimeoutMilliseconds: 100,
 											FailureThreshold:    3,
 										},
 									},
-									ReplicationLagProbe: &kubernetes.ReplicationLagProbe{
-										Probe: &kubernetes.Probe{
+									ReplicationLagProbe: &client.ReplicationLagProbe{
+										Probe: &client.Probe{
 											PeriodMilliseconds:  1000,
 											TimeoutMilliseconds: 3,
 											FailureThreshold:    3,
 										},
 										MaxReplicationLag: 3,
 									},
-									ReadOnlyProbe: &kubernetes.ReadOnlyProbe{
-										Probe: &kubernetes.Probe{
+									ReadOnlyProbe: &client.ReadOnlyProbe{
+										Probe: &client.Probe{
 											PeriodMilliseconds:  1000,
 											TimeoutMilliseconds: 3,
 											FailureThreshold:    3,
@@ -508,7 +508,7 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 				},
 			},
 		},
-		DatabaseEndpoints: []kubernetes.DatabaseEndpoint{
+		DatabaseEndpoints: []client.DatabaseEndpoint{
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "catalogue",
@@ -517,9 +517,9 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 						"source": "catalogue",
 					},
 				},
-				Spec: kubernetes.DatabaseEndpointSpec{
-					Database: kubernetes.Database{
-						MySQL: &kubernetes.MySQL{
+				Spec: client.DatabaseEndpointSpec{
+					Database: client.Database{
+						MySQL: &client.MySQL{
 							DB:       "socksdb",
 							Host:     "catalogue-db.demotest",
 							Password: "fake_password",

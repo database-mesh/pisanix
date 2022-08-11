@@ -17,7 +17,6 @@ package proxy
 import (
 	"context"
 	"net/http"
-	"reflect"
 
 	"github.com/database-mesh/golang-sdk/client"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
@@ -75,8 +74,10 @@ func build(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dbep
 
 		dbeps := &client.DatabaseEndpointList{Items: []client.DatabaseEndpoint{}}
 		for _, dbep := range dbeplist.Items {
-			if reflect.DeepEqual(dbep.Labels, tsobj.Spec.Selector.MatchLabels) {
-				dbeps.Items = append(dbeps.Items, dbep)
+			for k, v := range tsobj.Spec.Selector.MatchLabels {
+				if dbep.Labels[k] == v {
+					dbeps.Items = append(dbeps.Items, dbep)
+				}
 			}
 		}
 
