@@ -17,18 +17,18 @@ package proxy
 import (
 	"testing"
 
-	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
+	"github.com/database-mesh/golang-sdk/client"
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_build(t *testing.T) {
-	tslist := &kubernetes.TrafficStrategyList{
-		Items: []kubernetes.TrafficStrategy{
+	tslist := &client.TrafficStrategyList{
+		Items: []client.TrafficStrategy{
 			tsReadWriteSplttingDynamic,
 		},
 	}
-	dbeplist := &kubernetes.DatabaseEndpointList{
-		Items: []kubernetes.DatabaseEndpoint{
+	dbeplist := &client.DatabaseEndpointList{
+		Items: []client.DatabaseEndpoint{
 			dbep,
 		},
 	}
