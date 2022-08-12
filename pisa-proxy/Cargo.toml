@@ -7,6 +7,7 @@ members = [
     "app/config",
     "app/metrics",
     "app/server",
+    "audit/aws",
     "cmd/pisa",
     "error",
     "http",
