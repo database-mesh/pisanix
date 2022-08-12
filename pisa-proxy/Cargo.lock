@@ -261,6 +261,9 @@ dependencies = [
  "aws-sdk-cloudwatchlogs",
  "chrono",
  "tokio",
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
 ]
 
 [[package]]

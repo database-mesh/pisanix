@@ -15,6 +15,7 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_cloudwatchlogs::{model::InputLogEvent, Client};
 use chrono::Utc;
+use tracing::trace;
 
 pub struct CloudWatchLog {
     log_group_name: String,
@@ -37,7 +38,6 @@ impl CloudWatchLog {
 
 pub struct CloudWatchSinker {
     pub client: Client,
-    // pub region: String,
 }
 
 impl CloudWatchSinker {
@@ -73,7 +73,7 @@ impl CloudWatchSinker {
                     .log_events(e)
                     .send()
                     .await?;
-                println!("aws resp {:?}", resp);
+                trace!("aws resp {:?}", resp);
                 break;
             }
         }
