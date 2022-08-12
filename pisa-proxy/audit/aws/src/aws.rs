@@ -55,7 +55,8 @@ impl CloudWatchSinker {
 
         let streams =
             self.client.describe_log_streams().log_group_name(input.log_group_name).send().await?;
-        for s in streams.log_streams().unwrap() {
+        // for s in streams.log_streams().unwrap() {
+        for s in streams.log_streams()? {
             if s.log_stream_name().unwrap() == log_stream_name.clone() {
                 let next = s.upload_sequence_token().unwrap();
                 let builder = InputLogEvent::builder();
