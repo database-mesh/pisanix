@@ -671,8 +671,8 @@ impl<'a> Scanner<'a> {
 
         self.is_ident_dot = self.peek() == '.';
 
-        if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
-            if is_x86_feature_detected!("sse2") {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if is_x86_feature_detected!("sse2") {
                 unsafe {
                     to_upper(
                         &mut self.text[old_pos..self.pos].as_bytes(),
@@ -683,7 +683,6 @@ impl<'a> Scanner<'a> {
                     self.pos -= 1;
                     return Scanner::check_ident_return(ident_str, old_pos, length);
                 }
-            }
         }
 
         let ident_str = self.text[old_pos..self.pos].to_uppercase();
