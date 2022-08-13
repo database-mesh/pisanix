@@ -176,6 +176,10 @@ mod test {
             "CREATE FULLTEXT INDEX idx_order_name ON t_order (name) WITH PARSER parser_name LOCK = EXCLUSIVE;",
             "CREATE LOGFILE GROUP logfile_group ADD UNDOFILE 'undo_file' INITIAL_SIZE = 1M UNDO_BUFFER_SIZE = 2M REDO_BUFFER_SIZE = 3M;",
             "CREATE LOGFILE GROUP logfile_group ADD UNDOFILE 'undo_file' NODEGROUP 1234, WAIT, COMMENT 'logfile_group_comment', ENGINE  = 'logfile_group_engine';",
+            "CREATE TABLESPACE `ts1` ADD DATAFILE 'ts1.ibd' ENGINE=INNODB;",
+            "CREATE TABLESPACE `ts2` ADD DATAFILE 'ts2.ibd' FILE_BLOCK_SIZE = 8192 Engine=InnoDB;",
+            "CREATE TABLESPACE myts ADD DATAFILE 'mydata-1.dat' USE LOGFILE GROUP mylg ENGINE=NDB;",
+            r#"CREATE TABLESPACE ts1 ENGINE_ATTRIBUTE='{"key":"value"}';"#,
         ];
 
         parser(inputs);

@@ -6467,7 +6467,18 @@ create -> Create:
                 }
             ))
        }
-
+    | 'CREATE' 'TABLESPACE' ident opt_ts_datafile_name opt_logfile_group_name opt_tablespace_options
+       {
+           Create::CreateTablespace(Box::new(
+               CreateTablespace {
+                   span: $span,
+                   tablespace_name: $3.0,
+                   opt_ts_datafile: $4,
+                   opt_logfile_group: $5,
+                   opt_tablespace_options: $6,
+               }
+           ))
+       }
     /* TODO */
 ;
 
@@ -6859,156 +6870,9 @@ sp_suid -> SpSuid:
           }
         ;
 
-lg_undofile -> UndoFile:
-    'UNDOFILE' 'TEXT_STRING'
-    {
-        UndoFile {
-            span: $span,
-            file_name: String::from($lexer.span_str($2.as_ref().unwrap().span())),
-        }
-    }
-;
-
-opt_logfile_group_options -> Option<Vec<LogFileGroupOption>>:
-      /* empty */ { None }
-    | logfile_group_option_list
-      {
-          Some($1)
-      }
-;
-
-logfile_group_option_list -> Vec<LogFileGroupOption>:
-     logfile_group_option
-     {
-           vec![$1]
-      }
-    | logfile_group_option_list opt_comma logfile_group_option
-      {
-           $1.push($3);
-           $1
-      }
-;
-
 opt_comma -> bool:
       /* empty */  { false }
     | ','          { true }
-;
-
-logfile_group_option -> LogFileGroupOption:
-      ts_option_initial_size { $1 }
-    | ts_option_undo_buffer_size { $1 }
-    | ts_option_redo_buffer_size { $1 }
-    | ts_option_nodegroup { $1 }
-    | ts_option_engine { $1 }
-    | ts_option_wait { $1 }
-    | ts_option_comment { $1 }
-;
-
-ts_option_initial_size -> LogFileGroupOption:
-    'INITIAL_SIZE' opt_equal size_number
-    {
-         let is_equal = match $2 {
-             Some(_) => true,
-             None => false,
-         };
-         LogFileGroupOption::SizeOption(SizeOption {
-             span: $span,
-             is_equal: is_equal,
-             size: $3,
-         })
-    }
-;
-
-ts_option_undo_buffer_size -> LogFileGroupOption:
-    'UNDO_BUFFER_SIZE' opt_equal size_number
-    {
-         let is_equal = match $2 {
-             Some(_) => true,
-             None => false,
-         };
-         LogFileGroupOption::SizeOption(SizeOption {
-             span: $span,
-             is_equal: is_equal,
-             size: $3,
-         })
-    }
-;
-
-ts_option_redo_buffer_size -> LogFileGroupOption:
-    'REDO_BUFFER_SIZE' opt_equal size_number
-    {
-         let is_equal = match $2 {
-             Some(_) => true,
-             None => false,
-         };
-         LogFileGroupOption::SizeOption(SizeOption {
-             span: $span,
-             is_equal: is_equal,
-             size: $3,
-         })
-    }
-;
-
-ts_option_nodegroup -> LogFileGroupOption:
-    'NODEGROUP' opt_equal real_ulong_num
-    {
-         let is_equal = match $2 {
-             Some(_) => true,
-             None => false,
-         };
-         LogFileGroupOption::NodeGroupOption(NodeGroupOption {
-             span: $span,
-             is_equal: is_equal,
-             nodegroup_id: $3,
-         })
-    }
-;
-
-ts_option_comment -> LogFileGroupOption:
-    'COMMENT' opt_equal 'TEXT_STRING'
-    {
-         let is_equal = match $2 {
-             Some(_) => true,
-             None => false,
-         };
-         LogFileGroupOption::CommentOption(CommentOption {
-             span: $span,
-             is_equal: is_equal,
-             comment: String::from($lexer.span_str($3.as_ref().unwrap().span())),
-         })
-    }
-;
-
-ts_option_engine -> LogFileGroupOption:
-    opt_storage 'ENGINE' opt_equal ident_or_text
-    {
-         let is_equal = match $3 {
-             Some(_) => true,
-             None => false,
-         };
-         LogFileGroupOption::EngineOption(EngineOption {
-             span: $span,
-             opt_storage: $1,
-             is_equal: is_equal,
-             engine_name: $4,
-         })
-    }
-;
-
-ts_option_wait -> LogFileGroupOption:
-     'WAIT'
-     {
-          LogFileGroupOption::WaitOption(WaitOption::Wait)
-     }
-    | 'NO_WAIT'
-     {
-          LogFileGroupOption::WaitOption(WaitOption::NoWait)
-     }
-;
-
-size_number -> String:
-      real_ulonglong_num { $1 }
-    | IDENT_sys { $1.0 }
 ;
 
 create_index_stmt -> CreateIndexStmt:
@@ -7876,6 +7740,407 @@ initial_auth -> Option<InitialAuth>:
           Some(InitialAuth::IdentifiedByPassword($3))
       }
 ;
+
+/*
+  This part of the parser contains common code for all TABLESPACE
+  commands.
+  CREATE TABLESPACE_SYM name ...
+  ALTER TABLESPACE_SYM name ADD DATAFILE ...
+  CREATE LOGFILE GROUP_SYM name ...
+  ALTER LOGFILE GROUP_SYM name ADD UNDOFILE ..
+  DROP TABLESPACE_SYM name
+  DROP LOGFILE GROUP_SYM name
+*/
+
+opt_ts_datafile_name -> Option<AddTsDataFile>:
+      /* empty */     { None }
+    | 'ADD' ts_datafile
+      {
+          Some(AddTsDataFile {
+              span: $span,
+              ts_datafile: $2,
+          })
+      }
+;
+
+opt_logfile_group_name -> Option<LogFileGroup>:
+      /* empty */   { None }
+    | 'USE' 'LOGFILE' 'GROUP' ident
+       {
+            Some(LogFileGroup {
+                span: $span,
+                logfile_group: $4.0,
+            })
+       }
+;
+
+opt_tablespace_options -> Option<Vec<TablespaceOption>>:
+      /* empty */     { None }
+    | tablespace_option_list
+      {
+          Some($1)
+      }
+;
+
+tablespace_option_list -> Vec<TablespaceOption>:
+      tablespace_option
+      {
+            vec![$1]
+      }
+    | tablespace_option_list opt_comma tablespace_option
+      {
+            $1.push($3);
+            $1
+      }
+;
+
+tablespace_option -> TablespaceOption:
+      ts_option_initial_size { TablespaceOption::InitialSize($1) }
+    | ts_option_autoextend_size { TablespaceOption::AutoextendSize($1) }
+    | ts_option_max_size { TablespaceOption::MaxSize($1) }
+    | ts_option_extent_size { TablespaceOption::ExtentSize($1) }
+    | ts_option_nodegroup { TablespaceOption::NodeGroup($1) }
+    | ts_option_engine { TablespaceOption::Engine($1) }
+    | ts_option_wait { TablespaceOption::Wait($1) }
+    | ts_option_comment { TablespaceOption::Comment($1) }
+    | ts_option_file_block_size { TablespaceOption::FileBlockSize($1) }
+    | ts_option_encryption { TablespaceOption::Encryption($1) }
+    | ts_option_engine_attribute { TablespaceOption::EngineAttribute($1) }
+;
+
+opt_alter_tablespace_options -> Option<Vec<AlterTablespaceOption>>:
+      /* empty */    { None }
+    | alter_tablespace_option_list { Some($1) }
+;
+
+alter_tablespace_option_list -> Vec<AlterTablespaceOption>:
+      alter_tablespace_option
+      {
+           vec![$1]
+      }
+    | alter_tablespace_option_list opt_comma alter_tablespace_option
+      {
+           $1.push($3);
+           $1
+      }
+;
+
+alter_tablespace_option -> AlterTablespaceOption:
+      ts_option_initial_size { AlterTablespaceOption::InitialSize($1) }
+    | ts_option_autoextend_size { AlterTablespaceOption::AutoextendSize($1) }
+    | ts_option_max_size { AlterTablespaceOption::MaxSize($1) }
+    | ts_option_engine { AlterTablespaceOption::Engine($1) }
+    | ts_option_wait { AlterTablespaceOption::Wait($1) }
+    | ts_option_encryption { AlterTablespaceOption::Encryption($1) }
+    | ts_option_engine_attribute { AlterTablespaceOption::EngineAttribute($1) }
+;
+
+opt_undo_tablespace_options -> Option<Vec<UndoTablespaceOption>>:
+      /* empty */   { None }
+    | undo_tablespace_option_list { Some($1) }
+;
+
+undo_tablespace_option_list -> Vec<UndoTablespaceOption>:
+      undo_tablespace_option
+      {
+           vec![$1]
+      }
+    | undo_tablespace_option_list opt_comma undo_tablespace_option
+      {
+           $1.push($3);
+           $1
+      }
+;
+
+undo_tablespace_option -> UndoTablespaceOption:
+    ts_option_engine { UndoTablespaceOption::Engine($1) }
+;
+
+opt_logfile_group_options -> Option<Vec<LogFileGroupOption>>:
+      /* empty */ { None }
+    | logfile_group_option_list
+      {
+          Some($1)
+      }
+;
+
+logfile_group_option_list -> Vec<LogFileGroupOption>:
+     logfile_group_option
+     {
+           vec![$1]
+      }
+    | logfile_group_option_list opt_comma logfile_group_option
+      {
+           $1.push($3);
+           $1
+      }
+;
+
+logfile_group_option -> LogFileGroupOption:
+      ts_option_initial_size { LogFileGroupOption::InitialSize($1) }
+    | ts_option_undo_buffer_size { LogFileGroupOption::UndoBufferSize($1) }
+    | ts_option_redo_buffer_size { LogFileGroupOption::RedoBufferSize($1) }
+    | ts_option_nodegroup { LogFileGroupOption::NodeGroup($1) }
+    | ts_option_engine { LogFileGroupOption::Engine($1) }
+    | ts_option_wait { LogFileGroupOption::Wait($1) }
+    | ts_option_comment { LogFileGroupOption::Comment($1) }
+;
+
+opt_alter_logfile_group_options -> Option<Vec<AlterLogFileGroupOption>>:
+      /* empty */   { None }
+    | alter_logfile_group_option_list { Some($1) }
+;
+
+alter_logfile_group_option_list -> Vec<AlterLogFileGroupOption>:
+       alter_logfile_group_option
+       {
+            vec![$1]
+       }
+     | alter_logfile_group_option_list opt_comma alter_logfile_group_option
+       {
+            $1.push($3);
+            $1
+       }
+;
+
+alter_logfile_group_option -> AlterLogFileGroupOption:
+      ts_option_initial_size { AlterLogFileGroupOption::InitialSize($1) }
+    | ts_option_engine { AlterLogFileGroupOption::Engine($1) }
+    | ts_option_wait { AlterLogFileGroupOption::Wait($1) }
+;
+
+ts_datafile -> TsDataFile:
+    'DATAFILE' TEXT_STRING_sys
+    {
+        TsDataFile {
+            span: $span,
+            file_name: $2,
+        }
+    }
+;
+
+undo_tablespace_state -> UndoTablespaceState:
+      'ACTIVE'   { UndoTablespaceState::Active }
+    | 'INACTIVE' { UndoTablespaceState::Inactive }
+;
+
+lg_undofile -> UndoFile:
+    'UNDOFILE' TEXT_STRING_sys
+    {
+        UndoFile {
+            span: $span,
+            file_name: $2,
+        }
+    }
+;
+
+ts_option_initial_size -> SizeOption:
+    'INITIAL_SIZE' opt_equal size_number
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         SizeOption {
+             span: $span,
+             is_equal: is_equal,
+             size: $3,
+         }
+    }
+;
+
+ts_option_autoextend_size -> SizeOption:
+    option_autoextend_size
+    {
+         $1
+    }
+;
+
+option_autoextend_size -> SizeOption:
+    'AUTOEXTEND_SIZE' opt_equal size_number
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         SizeOption {
+             span: $span,
+             is_equal: is_equal,
+             size: $3,
+         }
+    }
+;
+
+ts_option_max_size -> SizeOption:
+    'MAX_SIZE' opt_equal size_number
+     {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         SizeOption {
+             span: $span,
+             is_equal: is_equal,
+             size: $3,
+         }
+     }
+;
+
+ts_option_extent_size -> SizeOption:
+    'EXTENT_SIZE' opt_equal size_number
+     {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          SizeOption {
+              span: $span,
+              is_equal: is_equal,
+              size: $3,
+          }
+     }
+;
+
+ts_option_undo_buffer_size -> SizeOption:
+    'UNDO_BUFFER_SIZE' opt_equal size_number
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         SizeOption {
+             span: $span,
+             is_equal: is_equal,
+             size: $3,
+         }
+    }
+;
+
+ts_option_redo_buffer_size -> SizeOption:
+    'REDO_BUFFER_SIZE' opt_equal size_number
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         SizeOption {
+             span: $span,
+             is_equal: is_equal,
+             size: $3,
+         }
+    }
+;
+
+ts_option_nodegroup -> NodeGroupOption:
+    'NODEGROUP' opt_equal real_ulong_num
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         NodeGroupOption {
+             span: $span,
+             is_equal: is_equal,
+             nodegroup_id: $3,
+         }
+    }
+;
+
+ts_option_comment -> CommentOption:
+    'COMMENT' opt_equal 'TEXT_STRING'
+    {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         CommentOption {
+             span: $span,
+             is_equal: is_equal,
+             comment: String::from($lexer.span_str($3.as_ref().unwrap().span())),
+         }
+    }
+;
+
+ts_option_engine -> EngineOption:
+    opt_storage 'ENGINE' opt_equal ident_or_text
+    {
+         let is_equal = match $3 {
+             Some(_) => true,
+             None => false,
+         };
+         EngineOption {
+             span: $span,
+             opt_storage: $1,
+             is_equal: is_equal,
+             engine_name: $4,
+         }
+    }
+;
+
+ts_option_file_block_size -> SizeOption:
+    'FILE_BLOCK_SIZE' opt_equal size_number
+     {
+         let is_equal = match $2 {
+             Some(_) => true,
+             None => false,
+         };
+         SizeOption {
+             span: $span,
+             is_equal: is_equal,
+             size: $3,
+         }
+     }
+;
+
+ts_option_wait -> WaitOption:
+     'WAIT'
+     {
+          WaitOption::Wait
+     }
+    | 'NO_WAIT'
+     {
+          WaitOption::NoWait
+     }
+;
+
+ts_option_encryption -> EncryptionOption:
+    'ENCRYPTION' opt_equal TEXT_STRING_sys
+     {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          EncryptionOption {
+              span: $span,
+              is_equal: is_equal,
+              encryption: $3,
+          }
+     }
+;
+
+ts_option_engine_attribute -> EngineAttributeOption:
+    'ENGINE_ATTRIBUTE' opt_equal json_attribute
+     {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          EngineAttributeOption {
+              span: $span,
+              is_equal: is_equal,
+              attribute: $3,
+          }
+     }
+;
+
+size_number -> String:
+      real_ulonglong_num { $1 }
+    | IDENT_sys { $1.0 }
+;
+
+/*
+  End tablespace part
+*/
 
 %%
 

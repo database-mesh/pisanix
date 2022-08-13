@@ -21,7 +21,8 @@ pub enum Create {
     CreateDatabase(Box<CreateDatabase>),
     CreateViewOrTriggerOrSpOrEvent(Box<ViewOrTriggerOrSpOrEvent>),
     CreateLogFileGroup(Box<CreateLogFileGroup>),
-    CreateUser(Box<CreateUser>)
+    CreateUser(Box<CreateUser>),
+    CreateTablespace(Box<CreateTablespace>),
 }
 
 #[derive(Debug, Clone)]
@@ -344,11 +345,13 @@ pub struct UndoFile {
 
 #[derive(Debug, Clone)]
 pub enum LogFileGroupOption {
-    SizeOption(SizeOption),
-    NodeGroupOption(NodeGroupOption),
-    CommentOption(CommentOption),
-    EngineOption(EngineOption),
-    WaitOption(WaitOption),
+    InitialSize(SizeOption),
+    UndoBufferSize(SizeOption),
+    RedoBufferSize(SizeOption),
+    NodeGroup(NodeGroupOption),
+    Comment(CommentOption),
+    Engine(EngineOption),
+    Wait(WaitOption),
 }
 
 #[derive(Debug, Clone)]
@@ -384,4 +387,89 @@ pub struct EngineOption {
 pub enum WaitOption {
     Wait,
     NoWait,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateTablespace {
+    pub span: Span,
+    pub tablespace_name: String,
+    pub opt_ts_datafile: Option<AddTsDataFile>,
+    pub opt_logfile_group: Option<LogFileGroup>,
+    pub opt_tablespace_options: Option<Vec<TablespaceOption>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AddTsDataFile {
+    pub span: Span,
+    pub ts_datafile: TsDataFile,
+}
+
+#[derive(Debug, Clone)]
+pub struct TsDataFile {
+    pub span: Span,
+    pub file_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct LogFileGroup {
+    pub span: Span,
+    pub logfile_group: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum TablespaceOption {
+    InitialSize(SizeOption),
+    AutoextendSize(SizeOption),
+    MaxSize(SizeOption),
+    ExtentSize(SizeOption),
+    NodeGroup(NodeGroupOption),
+    Engine(EngineOption),
+    Wait(WaitOption),
+    Comment(CommentOption),
+    FileBlockSize(SizeOption),
+    Encryption(EncryptionOption),
+    EngineAttribute(EngineAttributeOption),
+}
+
+#[derive(Debug, Clone)]
+pub struct EncryptionOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub encryption: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct EngineAttributeOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub attribute: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum AlterTablespaceOption {
+    InitialSize(SizeOption),
+    AutoextendSize(SizeOption),
+    MaxSize(SizeOption),
+    Engine(EngineOption),
+    Wait(WaitOption),
+    Encryption(EncryptionOption),
+    EngineAttribute(EngineAttributeOption),
+}
+
+#[derive(Debug, Clone)]
+pub enum UndoTablespaceOption {
+    Engine(EngineOption),
+}
+
+#[derive(Debug, Clone)]
+pub enum AlterLogFileGroupOption {
+    InitialSize(SizeOption),
+    Engine(EngineOption),
+    Wait(WaitOption),
+}
+
+#[derive(Debug, Clone)]
+pub enum UndoTablespaceState {
+    Active,
+    Inactive,
 }
