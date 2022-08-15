@@ -32,7 +32,7 @@ use super::{
     auth::ClientAuth,
     resultset::{write_command_binary, ResultsetCodec},
     stmt::Stmt,
-    stream::{LocalStream, StreamWrapper},
+    stream::LocalStream,
 };
 use crate::{
     err::ProtocolError,
@@ -87,10 +87,7 @@ impl ClientCodec {
             Self::Common(framed) => framed.get_ref(),
         };
 
-        let underly_io = match &local_stream.wrapper {
-            StreamWrapper::Plain(stream) => stream.as_ref().unwrap(),
-            StreamWrapper::Secure(stream) => stream.get_ref().get_ref().get_ref(),
-        };
+        let underly_io = local_stream.get_inner();
 
         let is_ready = underly_io.ready(Interest::READABLE | Interest::WRITABLE).await;
         match is_ready {

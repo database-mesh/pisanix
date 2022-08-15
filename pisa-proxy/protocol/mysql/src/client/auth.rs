@@ -732,8 +732,7 @@ mod test {
     async fn test_handshake_resp(codec: ClientAuth) -> bool {
         let addr = "127.0.0.1:13306";
         let sock = TcpStream::connect(addr).await.unwrap();
-        let stream_wrapper = StreamWrapper::from(sock);
-        let local_stream = LocalStream::new(stream_wrapper);
+        let local_stream = LocalStream::from(sock);
 
         //let mut auth_codec = ClientAuth::new();
 
