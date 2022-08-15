@@ -6479,7 +6479,29 @@ create -> Create:
                }
            ))
        }
-    /* TODO */
+    | 'CREATE' 'UNDO' 'TABLESPACE' ident 'ADD' ts_datafile opt_undo_tablespace_options
+      {
+           Create::CreateUndoTablespace(Box::new(
+               CreateUndoTablespace {
+                   span: $span,
+                   tablespace_name: $4.0,
+                   ts_datafile: $6,
+                   opt_undo_tablespace_options: $7,
+               }
+           ))
+      }
+    | 'CREATE' 'SERVER' ident_or_text 'FOREIGN' 'DATA' 'WRAPPER'
+                ident_or_text 'OPTIONS' '(' server_options_list ')'
+      {
+           Create::CreateServer(Box::new(
+               CreateServer {
+                   span: $span,
+                   server_name: $3,
+                   wrapper_name: $7,
+                   server_options_list: $10,
+               }
+           ))
+      }
 ;
 
 opt_if_not_exists -> bool:
@@ -8141,6 +8163,70 @@ size_number -> String:
 /*
   End tablespace part
 */
+
+server_options_list -> Vec<ServerOption>:
+      server_option
+      {
+           vec![$1]
+      }
+    | server_options_list ',' server_option
+      {
+           $1.push($3);
+           $1
+      }
+;
+
+server_option -> ServerOption:
+      'USER' TEXT_STRING_sys
+      {
+          ServerOption::User(StringOption {
+              span: $span,
+              content: $2,
+          })
+      }
+    | 'HOST' TEXT_STRING_sys
+      {
+          ServerOption::Host(StringOption {
+              span: $span,
+              content: $2,
+          })
+      }
+    | 'DATABASE' TEXT_STRING_sys
+      {
+          ServerOption::Database(StringOption {
+              span: $span,
+              content: $2,
+          })
+      }
+    | 'OWNER' TEXT_STRING_sys
+      {
+          ServerOption::Owner(StringOption {
+              span: $span,
+              content: $2,
+          })
+      }
+    | 'PASSWORD' TEXT_STRING_sys
+      {
+          ServerOption::Password(StringOption {
+              span: $span,
+              content: $2,
+          })
+      }
+    | 'SOCKET' TEXT_STRING_sys
+      {
+          ServerOption::Socket(StringOption {
+              span: $span,
+              content: $2,
+          })
+      }
+    | 'PORT' ulong_num
+      {
+          ServerOption::Port(StringOption {
+              span: $span,
+              content: $2,
+          })
+      }
+;
 
 %%
 
