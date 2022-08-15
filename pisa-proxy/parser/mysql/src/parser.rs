@@ -180,6 +180,8 @@ mod test {
             "CREATE TABLESPACE `ts2` ADD DATAFILE 'ts2.ibd' FILE_BLOCK_SIZE = 8192 Engine=InnoDB;",
             "CREATE TABLESPACE myts ADD DATAFILE 'mydata-1.dat' USE LOGFILE GROUP mylg ENGINE=NDB;",
             r#"CREATE TABLESPACE ts1 ENGINE_ATTRIBUTE='{"key":"value"}';"#,
+            "CREATE UNDO TABLESPACE undo_003 ADD DATAFILE 'undo_003.ibu' ENGINE=INNODB;",
+            "CREATE SERVER s FOREIGN DATA WRAPPER mysql OPTIONS (USER 'Remote', HOST '198.51.100.106', DATABASE 'test');",
         ];
 
         parser(inputs);

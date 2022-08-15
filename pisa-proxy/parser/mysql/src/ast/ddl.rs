@@ -23,6 +23,8 @@ pub enum Create {
     CreateLogFileGroup(Box<CreateLogFileGroup>),
     CreateUser(Box<CreateUser>),
     CreateTablespace(Box<CreateTablespace>),
+    CreateUndoTablespace(Box<CreateUndoTablespace>),
+    CreateServer(Box<CreateServer>),
 }
 
 #[derive(Debug, Clone)]
@@ -457,11 +459,6 @@ pub enum AlterTablespaceOption {
 }
 
 #[derive(Debug, Clone)]
-pub enum UndoTablespaceOption {
-    Engine(EngineOption),
-}
-
-#[derive(Debug, Clone)]
 pub enum AlterLogFileGroupOption {
     InitialSize(SizeOption),
     Engine(EngineOption),
@@ -472,4 +469,42 @@ pub enum AlterLogFileGroupOption {
 pub enum UndoTablespaceState {
     Active,
     Inactive,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateUndoTablespace {
+    pub span: Span,
+    pub tablespace_name: String,
+    pub ts_datafile: TsDataFile,
+    pub opt_undo_tablespace_options: Option<Vec<UndoTablespaceOption>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum UndoTablespaceOption {
+    Engine(EngineOption),
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateServer {
+    pub span: Span,
+    pub server_name: String,
+    pub wrapper_name: String,
+    pub server_options_list: Vec<ServerOption>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ServerOption {
+    User(StringOption),
+    Host(StringOption),
+    Database(StringOption),
+    Owner(StringOption),
+    Password(StringOption),
+    Socket(StringOption),
+    Port(StringOption),
+}
+
+#[derive(Debug, Clone)]
+pub struct StringOption {
+    pub span: Span,
+    pub content: String,
 }
