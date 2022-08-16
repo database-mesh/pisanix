@@ -57,6 +57,25 @@ impl PacketCodec {
 
         self.seq = self.seq.wrapping_add(1)
     }
+
+    #[inline]
+    fn encode_packet(&mut self, item: &[u8], dst: &mut BytesMut) {
+        let mut length = item.len();
+        dst.reserve(length);
+
+        let mut idx: usize = 0;
+        while length >= MAX_PAYLOAD_LEN + 4 {
+            dst.extend_from_slice(&item[idx..idx + MAX_PAYLOAD_LEN + 4]);
+            self.make_packet_header(MAX_PAYLOAD_LEN, dst, idx);
+
+            length -= MAX_PAYLOAD_LEN + 4;
+            idx += MAX_PAYLOAD_LEN + 4;
+        }
+
+        dst.extend_from_slice(&item[idx..]);
+        self.make_packet_header(length - 4, dst, idx);
+    }
+
 }
 
 impl Decoder for PacketCodec {
@@ -99,21 +118,7 @@ impl Encoder<BytesMut> for PacketCodec {
     type Error = ProtocolError;
 
     fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let mut length = item.len() - 4;
-
-        let mut idx: usize = 0;
-        while length >= MAX_PAYLOAD_LEN {
-            self.make_packet_header(MAX_PAYLOAD_LEN, dst, idx);
-
-            dst.extend_from_slice(&item[idx + 4..MAX_PAYLOAD_LEN + 4]);
-
-            length -= MAX_PAYLOAD_LEN;
-            idx += MAX_PAYLOAD_LEN + 4;
-        }
-
-        self.make_packet_header(length, dst, idx);
-        dst.extend_from_slice(&item[idx + 4..]);
-
+        self.encode_packet(&item, dst);
         Ok(())
     }
 }
@@ -122,21 +127,7 @@ impl Encoder<&[u8]> for PacketCodec {
     type Error = ProtocolError;
 
     fn encode(&mut self, item: &[u8], dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let mut length = item.len();
-        dst.reserve(length);
-
-        let mut idx: usize = 0;
-        while length >= MAX_PAYLOAD_LEN + 4 {
-            dst.extend_from_slice(&item[idx..idx + MAX_PAYLOAD_LEN + 4]);
-            self.make_packet_header(MAX_PAYLOAD_LEN, dst, idx);
-
-            length -= MAX_PAYLOAD_LEN + 4;
-            idx += MAX_PAYLOAD_LEN + 4;
-        }
-
-        dst.extend_from_slice(&item[idx..]);
-        self.make_packet_header(length - 4, dst, idx);
-
+        self.encode_packet(item, dst);
         Ok(())
     }
 }
@@ -198,6 +189,6 @@ mod test {
 
         let mut framed_data = framed.next().await.unwrap().unwrap();
 
-        ssert_eq!(data, framed_data);
+        assert_eq!(data, framed_data);
     }
 }
