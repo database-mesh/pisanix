@@ -118,3 +118,17 @@ impl From<TlsStream<TcpStream>> for LocalStream {
         LocalStream::Secure(stream)
     }
 }
+
+impl LocalStream {
+    pub fn get_inner(&self) -> &TcpStream {
+        match self {
+            Self::Plain(stream) => {
+                stream.as_ref().unwrap()
+            },
+
+            Self::Secure(stream) => {
+                stream.get_ref().get_ref().get_ref()
+            }
+        }
+    }
+}
