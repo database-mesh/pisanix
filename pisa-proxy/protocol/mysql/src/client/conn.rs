@@ -27,7 +27,7 @@ use super::{
     codec::{ClientCodec, CommonStream, QueryResultStream, ResultsetStream},
     resultset::ResultSendCommand,
     stmt::Stmt,
-    stream::{LocalStream, StreamWrapper},
+    stream::LocalStream,
 };
 use crate::{
     column::{Column, ColumnInfo},
@@ -64,8 +64,7 @@ impl ClientConn {
         let sock = TcpStream::connect(&self.endpoint).await?;
         sock.set_nodelay(true).unwrap();
 
-        let stream_wrapper = StreamWrapper::from(sock);
-        let local_stream = LocalStream::new(stream_wrapper);
+        let local_stream = LocalStream::from(sock);
 
         let mut auth_codec = ClientAuth::new();
         auth_codec.user = self.user.clone();
