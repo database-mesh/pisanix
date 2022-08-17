@@ -122,7 +122,7 @@ pub struct ProxyConfigSharding {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Auto {
+pub struct AutoSharding {
     sharding_column: String,
     sharding_count: u32,
     sharding_algorithm_name: String,
@@ -138,11 +138,11 @@ pub struct ShardingStandardInline {
     table_name: String,
     sharding_column: String,
     sharding_algorithm_name: String, // mod | crc32
-    tables_strategy: Vec<DatabaseTablesStrategy>
+    table_strategy: Vec<DatabaseTableStrategy>
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct DatabaseTablesStrategy {
+pub struct DatabaseTableStrategy {
     sharding_column: String,
     algorithm_expression: String,
 }
