@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::{collections::HashMap, sync::Arc};
+use strategy::config::ProxyConfigSharding;
 
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
@@ -52,7 +53,6 @@ pub struct ProxyConfig {
     pub server_version: String,
     pub master_slave: Option<ProxyConfigMasterSlave>,
     pub sharding: Option<ProxyConfigSharding>,
-    pub sharding_master_slave: Option<ProxyConfigShardingMasterSlave>,
     pub simple_loadbalance: Option<ProxySimpleLoadBalance>,
     pub plugin: Option<plugin::config::Plugin>,
     // read write splitting config structure
@@ -63,27 +63,6 @@ pub struct ProxyConfig {
 pub struct ProxyConfigMasterSlave {
     master: Option<Vec<String>>,
     slave: Option<Vec<String>>,
-    balance_type: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ProxyConfigSharding {
-    table: Option<String>,
-    sharding_key: Option<String>,
-    sharding_type: Option<String>,
-    nodes: Option<Vec<String>>,
-    shard: Option<HashMap<String, u64>>,
-    defaults: Option<Vec<String>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ProxyConfigShardingMasterSlave {
-    master: Option<Vec<String>>,
-    slave: Option<Vec<String>>,
-    defaults: Option<Vec<String>>,
-    shard: Option<HashMap<String, u64>>,
-    sharding_key: Option<String>,
-    sharding_type: Option<String>,
     balance_type: Option<String>,
 }
 

@@ -109,6 +109,40 @@ pub enum TargetRole {
     ReadWrite,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProxyConfigSharding {
+    binding_tables: Vec<String>,
+    binding_nodes: Vec<String>,
+    standard: Option<StandardSharding>,
+    auto: Option<AutoSharding>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Auto {
+    sharding_column: String,
+    sharding_count: u32,
+    sharding_algorithm_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StandardSharding {
+    inline: Vec<ShardingStandardInline>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ShardingStandardInline {
+    table_name: String,
+    sharding_column: String,
+    sharding_algorithm_name: String, // mod | crc32
+    tables_strategy: Vec<DatabaseTablesStrategy>
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DatabaseTablesStrategy {
+    sharding_column: String,
+    algorithm_expression: String,
+}
+
 impl Default for TargetRole {
     fn default() -> Self {
         Self::ReadWrite
