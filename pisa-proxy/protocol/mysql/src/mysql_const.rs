@@ -80,6 +80,91 @@ iota! {
          ,COM_RESET_CONNECTION
 }
 
+#[allow(non_camel_case_types)]
+#[derive(Debug)]
+#[repr(u8)]
+pub enum ComType {
+    SLEEP,
+    QUIT,
+    INIT_DB,
+    QUERY,
+    FIELD_LIST,
+    CREATE_DB,
+    DROP_DB,
+    REFRESH,
+    SHUTDOWN,
+    STATISTICS,
+    PROCESS_INFO,
+    CONNECT,
+    PROCESS_KILL,
+    DEBUG,
+    PING,
+    TIME,
+    DELAYED_INSERT,
+    CHANGE_USER,
+    BINLOG_DUMP,
+    TABLE_DUMP,
+    CONNECT_OUT,
+    REGISTER_SLAVE,
+    STMT_PREPARE,
+    STMT_EXECUTE,
+    STMT_SEND_LONG_DATA,
+    STMT_CLOSE,
+    STMT_RESET,
+    SET_OPTION,
+    STMT_FETCH,
+    DAEMON,
+    BINLOG_DUMP_GTID,
+    RESET_CONNECTION,
+}
+
+impl From<u8> for ComType {
+    #[inline]
+    fn from(t: u8) -> ComType {
+        unsafe { std::mem::transmute::<u8, ComType>(t) }
+    }
+}
+
+impl AsRef<str> for ComType {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::SLEEP => "sleep",
+            Self::QUIT => "quit",
+            Self::INIT_DB => "init_db",
+            Self::QUERY => "query",
+            Self::FIELD_LIST => "field_list",
+            Self::CREATE_DB => "create_db",
+            Self::DROP_DB => "drop_db",
+            Self::REFRESH => "refresh",
+            Self::SHUTDOWN => "shutdown",
+            Self::STATISTICS => "statistics",
+            Self::PROCESS_INFO => "process_info",
+            Self::CONNECT => "connect",
+            Self::PROCESS_KILL => "process_kill",
+            Self::DEBUG => "debug",
+            Self::PING => "ping",
+            Self::TIME => "time",
+            Self::DELAYED_INSERT => "delayed_insert",
+            Self::CHANGE_USER => "change_user",
+            Self::BINLOG_DUMP => "binlog_dump",
+            Self::TABLE_DUMP => "table_dump",
+            Self::CONNECT_OUT => "connect_out",
+            Self::REGISTER_SLAVE => "register_slave",
+            Self::STMT_PREPARE => "stmt_prepare",
+            Self::STMT_EXECUTE => "stmt_execute",
+            Self::STMT_SEND_LONG_DATA => "stmt_send_long_data",
+            Self::STMT_CLOSE => "stmt_close",
+            Self::STMT_RESET => "stmt_reset",
+            Self::SET_OPTION => "set_option",
+            Self::STMT_FETCH => "stmt_fetch",
+            Self::DAEMON => "daemon",
+            Self::BINLOG_DUMP_GTID => "binlog_dump_gtid",
+            Self::RESET_CONNECTION => "reset_connection",
+        }
+    }
+}
+
 iota! {
     pub const CLIENT_LONG_PASSWORD: u32 = 1 << iota;
          ,CLIENT_FOUND_ROWS

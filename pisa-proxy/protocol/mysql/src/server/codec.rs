@@ -113,20 +113,11 @@ impl Decoder for PacketCodec {
     }
 }
 
-impl Encoder<BytesMut> for PacketCodec {
+impl<I: AsRef<[u8]>> Encoder<I> for PacketCodec {
     type Error = ProtocolError;
 
-    fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        self.encode_packet(&item, dst);
-        Ok(())
-    }
-}
-
-impl Encoder<&[u8]> for PacketCodec {
-    type Error = ProtocolError;
-
-    fn encode(&mut self, item: &[u8], dst: &mut BytesMut) -> Result<(), Self::Error> {
-        self.encode_packet(item, dst);
+    fn encode(&mut self, item: I, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        self.encode_packet(item.as_ref(), dst);
         Ok(())
     }
 }

@@ -650,7 +650,7 @@ mod test {
     use super::{handshake, ClientAuth};
     use crate::client::{
         codec::ClientCodec,
-        stream::{LocalStream, StreamWrapper},
+        stream::LocalStream
     };
 
     #[test]
