@@ -177,4 +177,4 @@ fn default_read_only_failure_threshold() -> u64 {
 
 fn default_read_only_enabled() -> bool { true }
 
-fn replication_lag_enabled() -> bool { true }
+fn default_replication_lag_enabled() -> bool { true }
