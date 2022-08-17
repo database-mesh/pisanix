@@ -17,3 +17,5 @@ pub mod err;
 pub mod packet;
 pub mod stream;
 mod tls;
+pub mod codec;
+pub mod codec_handshake;
