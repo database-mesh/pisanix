@@ -16,11 +16,9 @@ use std::{ptr::copy_nonoverlapping, sync::atomic::AtomicU32};
 
 use bytes::{BufMut, BytesMut};
 use futures::SinkExt;
-use tokio_util::codec::{Decoder, Encoder, Framed};
+use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{
-    charset::COLLATION_NAME_ID_MYSQL5, err::ProtocolError, mysql_const::*, util::get_length,
-};
+use crate::{err::ProtocolError, mysql_const::*, util::get_length};
 
 /// Used to reading packet from client side
 pub struct PacketCodec {
@@ -32,7 +30,7 @@ pub struct PacketCodec {
 }
 
 impl PacketCodec {
-    fn new(init_size: usize) -> Self {
+    pub fn new(init_size: usize) -> Self {
         Self { buf: BytesMut::with_capacity(init_size), is_complete: false, is_max: false, seq: 0 }
     }
 
@@ -75,7 +73,6 @@ impl PacketCodec {
         dst.extend_from_slice(&item[idx..]);
         self.make_packet_header(length - 4, dst, idx);
     }
-
 }
 
 impl Decoder for PacketCodec {
@@ -92,6 +89,8 @@ impl Decoder for PacketCodec {
         if 4 + length > src.len() {
             return Ok(None);
         }
+
+        self.seq = self.seq.wrapping_add(1);
 
         if length < MAX_PAYLOAD_LEN {
             self.is_complete = true;
@@ -149,10 +148,10 @@ mod test {
         data.put_u8(0);
         data.extend_from_slice(&vec![1; 16]);
 
-        let (mut client, mut server) = tokio::io::duplex(128);
+        let (client, server) = tokio::io::duplex(128);
 
         let mut framed = Framed::new(client, packet);
-        framed.send(&data[..]).await;
+        let _ = framed.send(&data[..]).await;
         let mut parts = framed.into_parts();
         parts.io = server;
         let mut framed = Framed::from_parts(parts);
@@ -167,7 +166,7 @@ mod test {
         let packet = PacketCodec::new(8196);
         let length: u32 = MAX_PAYLOAD_LEN as u32 * 2 + 16;
 
-        let (mut client, mut server) = tokio::io::duplex((length + 12) as usize);
+        let (client, server) = tokio::io::duplex((length + 12) as usize);
 
         let mut data = MAX_PAYLOAD_LEN.to_le_bytes()[0..3].to_vec();
         data.put_u8(0);
@@ -182,12 +181,12 @@ mod test {
         data.extend_from_slice(&vec![0; 16]);
 
         let mut framed = Framed::new(client, packet);
-        framed.send(&data[..]).await;
+        let _ = framed.send(&data[..]).await;
         let mut parts = framed.into_parts();
         parts.io = server;
         let mut framed = Framed::from_parts(parts);
 
-        let mut framed_data = framed.next().await.unwrap().unwrap();
+        let framed_data = framed.next().await.unwrap().unwrap();
 
         assert_eq!(data, framed_data);
     }
