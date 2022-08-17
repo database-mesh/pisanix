@@ -72,25 +72,29 @@ impl Discovery for DiscoveryMasterHighAvailability {
             monitor_response_channel.monitor_response_tx.clone(),
             self.rw_endpoint.clone(),
         )));
-        monitors.push(MonitorKind::ReadOnly(MonitorReadOnly::new(
-            self.config.user.clone(),
-            self.config.password.clone(),
-            self.config.read_only_period,
-            self.config.read_only_timeout,
-            self.config.read_only_failure_threshold,
-            monitor_response_channel.monitor_response_tx.clone(),
-            self.rw_endpoint.clone(),
-        )));
-        monitors.push(MonitorKind::ReplicationLag(MonitorReplicationLag::new(
-            self.config.user.clone(),
-            self.config.password.clone(),
-            self.config.replication_lag_period,
-            self.config.replication_lag_timeout,
-            self.config.replication_lag_failure_threshold,
-            self.config.max_replication_lag,
-            monitor_response_channel.monitor_response_tx,
-            self.rw_endpoint.clone(),
-        )));
+        if self.config.read_only_enabled {
+            monitors.push(MonitorKind::ReadOnly(MonitorReadOnly::new(
+                self.config.user.clone(),
+                self.config.password.clone(),
+                self.config.read_only_period,
+                self.config.read_only_timeout,
+                self.config.read_only_failure_threshold,
+                monitor_response_channel.monitor_response_tx.clone(),
+                self.rw_endpoint.clone(),
+            )));
+        }
+        if self.config.replication_lag_enabled {
+            monitors.push(MonitorKind::ReplicationLag(MonitorReplicationLag::new(
+                self.config.user.clone(),
+                self.config.password.clone(),
+                self.config.replication_lag_period,
+                self.config.replication_lag_timeout,
+                self.config.replication_lag_failure_threshold,
+                self.config.max_replication_lag,
+                monitor_response_channel.monitor_response_tx,
+                self.rw_endpoint.clone(),
+            )));
+        }
 
         monitors
     }

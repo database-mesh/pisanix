@@ -92,7 +92,7 @@ impl ReadWriteSplittingDynamicBuilder {
                     MonitorReconcile::new(config.clone(), rw_endpoint.clone());
 
                 reciver = Some(monitor_reconcile.start_monitor_reconcile(
-                    cc.monitor_period,
+                    cc.clone(),
                     monitor_response_channel.clone(),
                     monitors_len,
                 ));
