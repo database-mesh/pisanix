@@ -82,10 +82,10 @@ pub struct MasterHighAvailability {
     pub read_only_timeout: u64,
     #[serde(default = "default_read_only_failure_threshold")]
     pub read_only_failure_threshold: u64,
-    #[serde(default = "default_monitor_readonly_switch")]
-    pub monitor_readonly_switch: bool,
-    #[serde(default = "default_monitor_replication_lag_switch")]
-    pub monitor_replication_lag_switch: bool,
+    #[serde(default = "default_read_only_enabled")]
+    pub read_only_enabled: bool,
+    #[serde(default = "default_replication_lag_enabled")]
+    pub replication_lag_enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -175,6 +175,6 @@ fn default_read_only_failure_threshold() -> u64 {
     1
 }
 
-fn default_monitor_readonly_switch() -> bool { true }
+fn default_read_only_enabled() -> bool { true }
 
-fn default_monitor_replication_lag_switch() -> bool { true }
+fn replication_lag_enabled() -> bool { true }

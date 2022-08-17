@@ -194,7 +194,7 @@ impl MonitorReconcile {
     }
 
     fn change_read_by_lag(master_high_availability: &MasterHighAvailability, rw_endpoint: &ReadWriteEndpoint, replication_lag_monitor_response: &mut &mut Option<ReplicationLagMonitorResponse>, mut curr_rw_endpoint: &mut &mut ReadWriteEndpoint) {
-        if master_high_availability.monitor_replication_lag_switch {
+        if master_high_availability.replication_lag_enabled {
             match replication_lag_monitor_response.clone() {
                 Some(replication_lag_response) => {
                     for (replication_lag_addr, lag_status) in
@@ -235,7 +235,7 @@ impl MonitorReconcile {
 
     fn change_slave_to_master_by_read_only(master_high_availability: &MasterHighAvailability, read_only_monitor_response: &mut &mut Option<ReadOnlyMonitorResponse>, curr_rw_endpoint: &mut &mut ReadWriteEndpoint) {
         for read_endpoint in curr_rw_endpoint.clone().read {
-            if master_high_availability.monitor_readonly_switch {
+            if master_high_availability.read_only_enabled {
                 match read_only_monitor_response.clone() {
                     Some(read_only_response) => {
                         match read_only_response.roles.get(&read_endpoint.addr).unwrap() {

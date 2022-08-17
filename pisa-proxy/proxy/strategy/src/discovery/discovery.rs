@@ -72,7 +72,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
             monitor_response_channel.monitor_response_tx.clone(),
             self.rw_endpoint.clone(),
         )));
-        if self.config.monitor_readonly_switch {
+        if self.config.read_only_enabled {
             monitors.push(MonitorKind::ReadOnly(MonitorReadOnly::new(
                 self.config.user.clone(),
                 self.config.password.clone(),
@@ -83,7 +83,7 @@ impl Discovery for DiscoveryMasterHighAvailability {
                 self.rw_endpoint.clone(),
             )));
         }
-        if self.config.monitor_replication_lag_switch {
+        if self.config.replication_lag_enabled {
             monitors.push(MonitorKind::ReplicationLag(MonitorReplicationLag::new(
                 self.config.user.clone(),
                 self.config.password.clone(),
