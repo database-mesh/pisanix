@@ -18,7 +18,6 @@ use route::*;
 pub mod discovery;
 pub mod monitors;
 pub mod readwritesplitting;
-pub mod sharding;
 
 #[macro_use]
 extern crate lazy_static;
