@@ -115,36 +115,35 @@ pub enum TargetRole {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxyConfigSharding {
-    binding_tables: Vec<String>,
-    binding_nodes: Vec<String>,
-    standard: Option<StandardSharding>,
-    auto: Option<AutoSharding>,
+    tables: Option<Vec<ShardingRule>>,
+    auto_tables: Option<Vec<ShardingRule>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AutoSharding {
+pub struct ShardingRule {
+    key_generate_strategy: Option<Vec<KeyGenerateStrategy>>,
+    database_strategy: Option<StrategyKind>,
+    table_strategy: Option<StrategyKind>,
+}
+
+// v0.3.0 don't need implement
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct KeyGenerateStrategy {
+    column: String,
+    key_generator_name: String
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StrategyKind {
+    standard: Option<Vec<Strategy>>,
+    complex: Option<Vec<Strategy>>,
+    hint: Option<Vec<Strategy>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Strategy {
     sharding_column: String,
-    sharding_count: u32,
-    sharding_algorithm_name: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct StandardSharding {
-    inline: Vec<ShardingStandardInline>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ShardingStandardInline {
-    table_name: String,
-    sharding_column: String,
-    sharding_algorithm_name: String, // mod | crc32
-    table_strategy: Vec<DatabaseTableStrategy>
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct DatabaseTableStrategy {
-    sharding_column: String,
-    algorithm_expression: String,
+    sharding_algorithm_name: String
 }
 
 impl Default for TargetRole {
