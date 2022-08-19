@@ -107,12 +107,14 @@ impl ResultsetCodec {
         self.next_state = DecodeResultsetState::ColumnInfo;
 
         let mut payload = data.split_to(4 + length);
+        let payload_clone = payload.clone();
+
         let _ = payload.split_to(4);
 
         let (col, is_null, _) = payload.get_lenc_int();
         self.col = col;
 
-        (payload, is_null)
+        (payload_clone, is_null)
     }
 
     fn decode_column_info(&mut self, length: usize, data: &mut BytesMut) -> (BytesMut, bool) {
