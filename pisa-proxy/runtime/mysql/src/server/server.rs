@@ -587,7 +587,9 @@ impl MySQLServer {
             return Ok(());
         }
 
-        let (cols, ..) = length_encode_int(&header[4..]);
+        let _ = header.split_to(4);
+        
+        let (cols, ..) = header.get_lenc_int();
         // first clear buf
         self.buf.clear();
 

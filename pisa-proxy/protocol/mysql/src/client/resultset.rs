@@ -19,7 +19,7 @@ use super::{auth::ClientAuth, codec::*};
 use crate::{
     err::ProtocolError,
     mysql_const::ERR_HEADER,
-    util::{get_length, is_eof, is_ok, length_encode_int},
+    util::{get_length, is_eof, is_ok, BufExt},
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -106,9 +106,10 @@ impl ResultsetCodec {
 
         self.next_state = DecodeResultsetState::ColumnInfo;
 
-        let payload = data.split_to(4 + length);
+        let mut payload = data.split_to(4 + length);
+        let _ = payload.split_to(4);
 
-        let (col, is_null, _) = length_encode_int(&payload[4..]);
+        let (col, is_null, _) = payload.get_lenc_int();
         self.col = col;
 
         (payload, is_null)

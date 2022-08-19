@@ -40,7 +40,7 @@ use crate::{
         CLIENT_PROTOCOL_41, CLIENT_SESSION_TRACK, CLIENT_TRANSACTIONS, SERVER_SESSION_STATE_CHANGED,
     },
     row::{Row, RowData, RowDataTyp},
-    util::{get_length, is_eof, length_encode_int, length_encoded_string},
+    util::{get_length, is_eof, length_encoded_string, BufExt},
 };
 
 pub type SendCommand<'a> = (u8, &'a str);
@@ -316,8 +316,8 @@ pub enum SessionState {
 impl SessionState {
     pub fn decode(data: &mut BytesMut) -> SessionState {
         let mut payload = data.split_off(1);
-        let (num, _, pos) = length_encode_int(&payload);
-        let _ = payload.split_to(pos as usize);
+        let (num, _, _) = payload.get_lenc_int();
+
         let mut payload = payload.split_to(num as usize);
 
         match FromPrimitive::from_u8(data[0]) {
@@ -384,13 +384,11 @@ impl ResultOkInfo {
     pub fn decode(auth_info: &ClientAuth, data: &mut BytesMut) -> ResultOkInfo {
         let mut ok_info = ResultOkInfo::new();
 
-        let (affect_rows, _, pos) = length_encode_int(data);
+        let (affect_rows, _, _) = data.get_lenc_int();
         ok_info.affected_rows = affect_rows;
-        let _ = data.split_to(pos as usize);
 
-        let (last_inert_id, _, pos) = length_encode_int(data);
+        let (last_inert_id, _, _) = data.get_lenc_int();
         ok_info.last_insert_id = last_inert_id;
-        let _ = data.split_to(pos as usize);
 
         if auth_info.capability & CLIENT_PROTOCOL_41 > 0 {
             ok_info.status = Some(data.get_u16_le());
@@ -409,8 +407,7 @@ impl ResultOkInfo {
 
             if let Some(status) = ok_info.status {
                 if status & SERVER_SESSION_STATE_CHANGED > 0 {
-                    let (_, _, pos) = length_encode_int(data);
-                    let _ = data.split_to(pos as usize);
+                    let _ = data.get_lenc_int();
                     ok_info.state_info = Some(SessionState::decode(data))
                 }
             }
