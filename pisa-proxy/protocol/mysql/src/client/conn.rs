@@ -34,7 +34,7 @@ use crate::{
     err::ProtocolError,
     mysql_const::*,
     row::{RowDataText, RowDataTyp},
-    util::{is_ok_header, length_encode_int},
+    util::{is_ok_header, BufExt},
 };
 
 #[derive(Debug, Default)]
@@ -235,7 +235,7 @@ impl ClientConn {
     ) -> Result<Option<QueryResultStream<'a, BytesMut>>, ProtocolError> {
         let mut stream = self.send_query(val).await?;
 
-        let header = match stream.next().await {
+        let mut header = match stream.next().await {
             Some(Ok(data)) => data,
             Some(Err(e)) => return Err(e),
             None => return Ok(None),
@@ -245,7 +245,8 @@ impl ClientConn {
             return Ok(None);
         }
 
-        let (cols, ..) = length_encode_int(&header[4..]);
+        let  _ = header.split_to(4);
+        let (cols, ..) = header.get_lenc_int();
 
         let mut col_buf = vec![];
         for _ in 0..cols {

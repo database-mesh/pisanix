@@ -587,11 +587,15 @@ impl MySQLServer {
             return Ok(());
         }
 
-        let (cols, ..) = length_encode_int(&header[4..]);
+        let mut header_clone = header.clone();
+
+        let _ = header.split_to(4);
+        
+        let (cols, ..) = header.get_lenc_int();
         // first clear buf
         self.buf.clear();
 
-        self.client.pkt.construct_packet_buf(&mut header, &mut self.buf).await;
+        self.client.pkt.construct_packet_buf(&mut header_clone, &mut self.buf).await;
 
         for _ in 0..cols {
             let data = stream.next().await;
