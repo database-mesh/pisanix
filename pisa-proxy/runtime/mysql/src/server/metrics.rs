@@ -71,12 +71,14 @@ impl MySQLServerMetricsCollector {
     }
 }
 
+#[macro_export]
 macro_rules! collect_sql_processed_total {
     ($s:expr, $x:expr, $c:expr) => {
         $s.metrics_collector.set_sql_processed_total(&[$s.name.as_str(), $x, $c]);
     };
 }
 
+#[macro_export]
 macro_rules! collect_sql_processed_duration {
     ($s:expr, $x:expr, $c:expr, $e:expr) => {
         let now = SystemTime::now();
@@ -86,12 +88,22 @@ macro_rules! collect_sql_processed_duration {
     };
 }
 
+#[macro_export]
+macro_rules! collect_sql_processed_duration1 {
+    ($s:expr, $x:expr, $c:expr, $e:expr) => {
+        $s.metrics_collector
+            .set_sql_processed_duration(&[$s.name.as_str(), $x, $c], $e.as_secs_f64());
+    };
+}
+
+#[macro_export]
 macro_rules! collect_sql_under_processing_inc {
     ($s:expr, $x:expr, $c:expr) => {
         $s.metrics_collector.set_sql_under_processing_inc(&[$s.name.as_str(), $x, $c]);
     };
 }
 
+#[macro_export]
 macro_rules! collect_sql_under_processing_dec {
     ($s:expr, $x:expr, $c:expr) => {
         $s.metrics_collector.set_sql_under_processing_dec(&[$s.name.as_str(), $x, $c]);

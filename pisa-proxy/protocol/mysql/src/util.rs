@@ -15,6 +15,7 @@
 use std::{cmp::Ordering, io::Read, ptr::copy_nonoverlapping};
 
 use bytes::{Buf, BufMut, BytesMut};
+use byteorder::{LittleEndian, ByteOrder};
 use chrono::prelude::*;
 use crypto::{self, digest::Digest};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -104,6 +105,17 @@ pub fn compare(a: &[u8], b: &[u8]) -> bool {
 
     /* if every single element was equal, compare length */
     a.len().cmp(&b.len()) == Ordering::Equal
+}
+
+#[inline]
+pub fn length_encode_int(data: &[u8]) -> (u64, bool, u64) {
+    match data[0] {
+        0xfb => (0, true, 1),
+        0xfc => (LittleEndian::read_uint(&data[1..], 2), false, 3),
+        0xfd => (LittleEndian::read_uint(&data[1..], 3), false, 4),
+        0xfe => (LittleEndian::read_uint(&data[1..], 8), false, 9),
+        x => (x as u64, false, 1),
+    }
 }
 
 pub trait BufExt: Buf {
