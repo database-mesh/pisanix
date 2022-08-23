@@ -15,10 +15,15 @@
 use std::{ptr::copy_nonoverlapping, sync::atomic::AtomicU32};
 
 use bytes::{BufMut, BytesMut};
+use chrono::offset;
 use futures::SinkExt;
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{err::ProtocolError, mysql_const::*, util::get_length};
+
+pub trait CommonPacket {
+    fn make_packet_header(&mut self, length: usize, data: &mut [u8], offset: usize);
+}
 
 /// Used to reading packet from client side
 pub struct PacketCodec {
@@ -34,17 +39,6 @@ impl PacketCodec {
         Self { buf: BytesMut::with_capacity(init_size), is_complete: false, is_max: false, seq: 0 }
     }
 
-    #[inline]
-    pub fn make_packet_header(&mut self, length: usize, data: &mut [u8], offset: usize) {
-        // we have ensured length is 3bytes, so we can use unsafe block
-        unsafe {
-            let bytes = *(&(length as u64).to_le() as *const u64 as *const [u8; 8]);
-            let data_ptr = data.as_mut_ptr().add(offset);
-            copy_nonoverlapping(bytes.as_ptr(), data_ptr, 3);
-        }
-
-        self.set_seq_id(data, offset)
-    }
 
     #[inline]
     fn set_seq_id(&mut self, buf: &mut [u8], offset: usize) {
@@ -72,6 +66,20 @@ impl PacketCodec {
 
         dst.extend_from_slice(&item[idx..]);
         self.make_packet_header(length - 4, dst, idx);
+    }
+}
+
+impl CommonPacket for PacketCodec {
+    #[inline]
+    fn make_packet_header(&mut self, length: usize, data: &mut [u8], offset: usize) {
+        // we have ensured length is 3bytes, so we can use unsafe block
+        unsafe {
+            let bytes = *(&(length as u64).to_le() as *const u64 as *const [u8; 8]);
+            let data_ptr = data.as_mut_ptr().add(offset);
+            copy_nonoverlapping(bytes.as_ptr(), data_ptr, 3);
+        }
+
+        self.set_seq_id(data, offset)
     }
 }
 
@@ -113,22 +121,42 @@ impl Decoder for PacketCodec {
     }
 }
 
-impl Encoder<BytesMut> for PacketCodec {
+impl<I: AsRef<[u8]>> Encoder<I> for PacketCodec {
     type Error = ProtocolError;
 
-    fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        self.encode_packet(&item, dst);
+    fn encode(&mut self, item: I, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        self.encode_packet(item.as_ref(), dst);
         Ok(())
     }
 }
 
-impl Encoder<&[u8]> for PacketCodec {
-    type Error = ProtocolError;
+//impl Encoder<BytesMut> for PacketCodec {
+//    type Error = ProtocolError;
+//
+//    fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
+//        self.encode_packet(&item, dst);
+//        Ok(())
+//    }
+//}
+//
+//impl Encoder<&[u8]> for PacketCodec {
+//    type Error = ProtocolError;
+//
+//    fn encode(&mut self, item: &[u8], dst: &mut BytesMut) -> Result<(), Self::Error> {
+//        self.encode_packet(item, dst);
+//        Ok(())
+//    }
+//}
 
-    fn encode(&mut self, item: &[u8], dst: &mut BytesMut) -> Result<(), Self::Error> {
-        self.encode_packet(item, dst);
-        Ok(())
-    }
+#[inline]
+pub fn make_eof_packet() -> [u8; 9] {
+    let mut eof = [5, 0, 0, 0, 0xfe, 0, 0, 2, 0];
+    eof
+}
+
+#[inline]
+pub fn ok_packet() -> [u8; 11] {
+    [7, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0]
 }
 
 #[cfg(test)]

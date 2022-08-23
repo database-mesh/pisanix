@@ -111,9 +111,9 @@ pub fn compare(a: &[u8], b: &[u8]) -> bool {
 pub fn length_encode_int(data: &[u8]) -> (u64, bool, u64) {
     match data[0] {
         0xfb => (0, true, 1),
-        0xfc => (LittleEndian::read_uint(data, 2), false, 3),
-        0xfd => (LittleEndian::read_uint(data, 3), false, 4),
-        0xfe => (LittleEndian::read_uint(data, 8), false, 9),
+        0xfc => (LittleEndian::read_uint(&data[1..], 2), false, 3),
+        0xfd => (LittleEndian::read_uint(&data[1..], 3), false, 4),
+        0xfe => (LittleEndian::read_uint(&data[1..], 8), false, 9),
         x => (x as u64, false, 1),
     }
 }

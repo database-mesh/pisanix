@@ -25,9 +25,11 @@ serde = { version = "1.0.133", default-features = false, features = ["derive"] }
 serde_derive = "1.0"
 strategy = { path = "../../proxy/strategy" }
 thiserror = "1.0"
-tokio = { version = "1.0.0", features = ["full", "tracing"] }
+tokio = { version = "1.18.0", features = ["full", "tracing"] }
 tokio-stream = { version = "0.1" }
-tokio-util = { version = "0.6.7", features = ["full"] }
+tokio-util = { version = "0.7.0", features = ["full"] }
 tracing = "0.1.13"
 tracing-futures = { version = "0.2.3" }
 tracing-subscriber = "0.3.9"
+tower = { version = "0.4.13" }
+#mysql-macro = { path = "../macros" }
