@@ -63,7 +63,7 @@ pub enum ServerHandshakeStatus {
 }
 
 pub struct ServerHandshakeCodec {
-    packet_codec: PacketCodec,
+    seq_id: u8,
     server_version: String,
     connection_id: u32,
     capability: u32,
@@ -80,7 +80,6 @@ pub struct ServerHandshakeCodec {
 
 impl ServerHandshakeCodec {
     pub fn new(
-        packet_codec: PacketCodec,
         user: String,
         password: String,
         db: String,
@@ -89,7 +88,7 @@ impl ServerHandshakeCodec {
         CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
 
         Self {
-            packet_codec,
+            seq_id: 0, 
             server_version,
             connection_id: CONNECTION_ID.load(Ordering::Relaxed),
             capability: 0,
@@ -170,7 +169,7 @@ impl ServerHandshakeCodec {
     fn decode_handshake_response(&mut self, data: &mut BytesMut) -> Result<(), ProtocolError> {
         let idx = data.iter().position(|&x| x == 0).unwrap();
         let user = str::from_utf8(&data.split_to(idx)).unwrap().to_string();
-        println!("user: {}, self.user: {}", user, self.user);
+        debug!("user: {}, self.user: {}", user, self.user);
 
         if user != self.user {
             self.user = user;
@@ -336,7 +335,8 @@ impl Decoder for ServerHandshakeCodec {
             return Ok(None);
         }
 
-        src.split_to(4);
+        let _ = src.split_to(4);
+        self.seq_id += 1;
 
         match self.next_handshake_status {
             ServerHandshakeStatus::ReadResponseFirst => {
@@ -381,7 +381,22 @@ impl Encoder<BytesMut> for ServerHandshakeCodec {
         if self.next_handshake_status == ServerHandshakeStatus::WriteAutoSwitch {
             self.next_handshake_status = ServerHandshakeStatus::ReadAutoSwitchResponse;
         }
-        self.packet_codec.encode(item, dst)
+
+        dst.extend_from_slice(&item[..]);
+
+        let length = item.len() - 4;
+        // we have ensured length is 3bytes, so we can use unsafe block
+        unsafe {
+            let bytes = *(&(length as u64).to_le() as *const u64 as *const [u8; 8]);
+            let data_ptr = dst.as_mut_ptr();
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), data_ptr, 3);
+            *data_ptr.add(3) = self.seq_id;
+        }
+
+
+        self.seq_id += 1;
+
+        Ok(())
     }
 }
 
@@ -447,12 +462,12 @@ mod test {
 
     #[tokio::test]
     async fn test_handshake() {
-        let packet_codec = PacketCodec::new(8192);
+        //let packet_codec = PacketCodec::new(8192);
         let user = "root".to_string();
         let password = "123456".to_string();
         let db = "sbtest_pisa".to_string();
         let server_version = "5.7.36".to_string();
-        let hs = ServerHandshakeCodec::new(packet_codec, user, password, db, server_version);
+        let hs = ServerHandshakeCodec::new(user, password, db, server_version);
         
         let (mut client, mut server) = tokio::io::duplex(512);
         let mut framed = Framed::new(client, hs);
@@ -489,12 +504,11 @@ mod test {
 
     #[tokio::test]
     async fn test_handshake_auto_switch() {
-        let packet_codec = PacketCodec::new(8192);
         let user = "root".to_string();
         let password = "123456".to_string();
         let db = "sbtest_pisa".to_string();
         let server_version = "5.7.36".to_string();
-        let hs = ServerHandshakeCodec::new(packet_codec, user, password, db, server_version);
+        let hs = ServerHandshakeCodec::new(user, password, db, server_version);
         
         let (mut client, mut server) = tokio::io::duplex(512);
         let mut framed = Framed::new(client, hs);
