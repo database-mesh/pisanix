@@ -29,6 +29,7 @@ use crate::{
     mysql_const::*,
     util::*,
 };
+use crate::server::codec::ok_packet;
 
 const DEFAULT_CAPABILITY: u32 = CLIENT_LONG_PASSWORD
     | CLIENT_LONG_FLAG
@@ -434,6 +435,8 @@ pub async fn handshake(
                 parts.io.make_tls().await?;
 
                 framed = Framed::from_parts(parts);
+                framed.codec_mut().next_handshake_status = ServerHandshakeStatus::ReadResponse;
+
             }
 
             ServerHandshakeStatus::WriteAutoSwitch => {
@@ -445,7 +448,10 @@ pub async fn handshake(
             }
             _ => {}
         }
+
     }
+
+    framed.send(BytesMut::from(&ok_packet()[..])).await?;
 
     Ok((framed, true))
 }
