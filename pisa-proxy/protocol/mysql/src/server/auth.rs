@@ -26,6 +26,7 @@ use super::{codec::PacketCodec, err::MySQLError, stream::LocalStream};
 use crate::{
     charset::{COLLATION_NAME_ID_MYSQL5, DEFAULT_CHARSET_NAME},
     err::ProtocolError,
+    session::Session,
     mysql_const::*,
     util::*,
 };
@@ -64,7 +65,7 @@ pub enum ServerHandshakeStatus {
 }
 
 pub struct ServerHandshakeCodec {
-    seq_id: u8,
+    seq: u8,
     server_version: String,
     connection_id: u32,
     capability: u32,
@@ -89,7 +90,7 @@ impl ServerHandshakeCodec {
         CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
 
         Self {
-            seq_id: 0, 
+            seq: 0, 
             server_version,
             connection_id: CONNECTION_ID.load(Ordering::Relaxed),
             capability: 0,
@@ -337,7 +338,7 @@ impl Decoder for ServerHandshakeCodec {
         }
 
         let _ = src.split_to(4);
-        self.seq_id += 1;
+        self.seq += 1;
 
         match self.next_handshake_status {
             ServerHandshakeStatus::ReadResponseFirst => {
@@ -391,11 +392,11 @@ impl Encoder<BytesMut> for ServerHandshakeCodec {
             let bytes = *(&(length as u64).to_le() as *const u64 as *const [u8; 8]);
             let data_ptr = dst.as_mut_ptr();
             std::ptr::copy_nonoverlapping(bytes.as_ptr(), data_ptr, 3);
-            *data_ptr.add(3) = self.seq_id;
+            *data_ptr.add(3) = self.seq;
         }
 
 
-        self.seq_id += 1;
+        self.seq += 1;
 
         Ok(())
     }
@@ -413,6 +414,28 @@ pub fn make_err_packet(err: MySQLError) -> Vec<u8> {
     data.extend_from_slice(err.msg.as_bytes());
 
     data.to_vec()
+}
+
+impl Session for ServerHandshakeCodec {
+    fn get_db(&self) -> Option<String> {
+        if self.db.is_empty() {
+            None    
+        } else {
+            Some(self.db.clone())
+        }
+    }
+
+    fn get_charset(&self) -> Option<String> {
+        Some(self.charset.clone())
+    }
+
+    fn set_db(&mut self, db: String) {
+        self.db = db
+    }
+
+    fn set_charset(&mut self, charset: String) {
+       self.charset = charset 
+    }
 }
 
 pub async fn handshake(
