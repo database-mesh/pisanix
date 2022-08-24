@@ -37,8 +37,10 @@ use mysql_protocol::{
     err::ProtocolError,
     mysql_const::{ComType, *},
     server::{
+        auth::{handshake, ServerHandshakeCodec},
         codec::{make_eof_packet, ok_packet, CommonPacket, PacketCodec},
         err::MySQLError,
+        stream::LocalStream,
     },
     util::*,
 };
@@ -154,47 +156,44 @@ impl proxy::factory::Proxy for MySQLProxy {
             let parser = parser.clone();
             let ast_cache = ast_cache.clone();
             let pool = pool.clone();
+            let proxy_name = self.proxy_config.name.clone();
 
-            // let mut mysql_server = MySQLServerBuilder::new(socket, lb, plugin)
-            //     .with_pcfg(pcfg)
-            //     .with_pool(pool)
-            //     .with_buf(BytesMut::with_capacity(8192))
-            //     .with_mysql_parser(parser)
-            //     .with_ast_cache(ast_cache)
-            //     .is_quit(false)
-            //     .with_concurrency_control_rule_idx(None)
-            //     .with_metrics_collector(metrics_collector)
-            //     .with_pisa_version(self.pisa_version.clone())
-            //     .build();
+            let handshake_codec = ServerHandshakeCodec::new(
+                self.proxy_config.user.clone(),
+                self.proxy_config.password.clone(),
+                self.proxy_config.db.clone(),
+                self.proxy_config.server_version.clone(),
+            );
 
-            //if let Err(err) = mysql_server.handshake().await {
-            //    error!("{:?}", err);
-            //    continue;
-            //}
-            let packet_codec = PacketCodec::new(8196);
-            //let framed = Framed::with_capacity(socket, packet_codec, 1<<16);
-            //let inner = PisaMySQLService::new(framed);
-            //let inner = PisaMySQLService::new(framed);
-            //let mut ins:MySQLInstance<PisaMySQLService, tokio::net::TcpStream, PacketCodec, &[u8]> = MySQLInstance::new( PisaMySQLService);
-            //let mut ins:MySQLInstance<PisaMySQLService<tokio::net::TcpStream, PacketCodec>, tokio::net::TcpStream, PacketCodec, &[u8]> = MySQLInstance::new( PisaMySQLService::new());
+            let handshake_framed =
+                Framed::with_capacity(LocalStream::from(socket), handshake_codec, 8196);
+
             let mut ins = MySQLInstance::new(PisaMySQLService::new());
-            let mut context = ReqContext {
-                fsm: TransFsm::new_trans_fsm(lb, pool),
-                ast_cache,
-                plugin,
-                metrics_collector: MySQLServerMetricsCollector,
-                concurrency_control_rule_idx: None,
-                framed: Framed::new(socket, packet_codec),
-                name: self.proxy_config.name.clone(),
-                mysql_parser: parser,
-            };
 
             tokio::spawn(async move {
-                //ins.send(&[1][..]).await;
-                ins.run(context).await;
-                //if let Err(err) = mysql_server.run().await {
-                //    error!("{:?}", err);
-                //}
+                let res = handshake(handshake_framed).await;
+                if let Err(e) = res {
+                    error!("handshake error {:?}", e);
+                    return;
+                }
+
+                let handshake_framed = res.unwrap().0;
+                let packet_codec = PacketCodec::new(8196);
+                let framed = handshake_framed.map_codec(|_| packet_codec);
+                let mut context = ReqContext {
+                    fsm: TransFsm::new_trans_fsm(lb, pool),
+                    ast_cache,
+                    plugin,
+                    metrics_collector: MySQLServerMetricsCollector,
+                    concurrency_control_rule_idx: None,
+                    framed,
+                    name: proxy_name,
+                    mysql_parser: parser,
+                };
+
+                if let Err(e) = ins.run(context).await {
+                    error!("instance run error {:?}", e);
+                }
             });
         }
     }
@@ -215,14 +214,6 @@ pub struct RespContext {
     ep: Option<String>,
     duration: Duration,
 }
-
-//#[async_trait]
-//pub trait MySQLService<T, C> {
-//    async fn init_db(cx: &mut ReqContext, framed: &mut Framed<T, C>) -> Result<RespContext, Error>;
-//    //async fn query(req: ReqContext) -> Result<RespContext, Error>;
-//    //async fn prepare(req: ReqContext) -> Result<RespContext, Error>;
-//    //async fn execute(req: ReqContext) -> Result<RespContext, Error>;
-//}
 
 #[async_trait]
 pub trait MySQLService<T, C> {
