@@ -43,6 +43,7 @@ use mysql_protocol::{
         stream::LocalStream,
     },
     util::*,
+    session::Session,
 };
 use parking_lot::Mutex;
 use pisa_error::error::{Error, ErrorKind};
@@ -177,8 +178,12 @@ impl proxy::factory::Proxy for MySQLProxy {
                 }
 
                 let handshake_framed = res.unwrap().0;
-                let packet_codec = PacketCodec::new(8196);
-                let framed = handshake_framed.map_codec(|_| packet_codec);
+                let parts = handshake_framed.into_parts(); 
+
+                let packet_codec = PacketCodec::new(parts.codec, 8196);
+                let io = parts.io;
+
+                let framed = Framed::with_capacity(io, packet_codec, 16384); 
                 let context = ReqContext {
                     fsm: TransFsm::new_trans_fsm(lb, pool),
                     ast_cache,
@@ -235,7 +240,7 @@ impl<S, T, C> MySQLInstance<S, T, C>
 where
     S: MySQLService<T, C>,
     T: AsyncRead + AsyncWrite + Unpin,
-    C: Decoder<Item = BytesMut, Error = ProtocolError> + Encoder<PacketSend<Box<[u8]>>, Error = ProtocolError>,
+    C: Decoder<Item = BytesMut, Error = ProtocolError> + Encoder<PacketSend<Box<[u8]>>, Error = ProtocolError> + CommonPacket,
 {
     fn new(inner: S) -> Self {
         Self { inner, is_quit: false, _phat: PhantomData }
@@ -245,6 +250,9 @@ where
     where
         C: Decoder<Item = BytesMut, Error = ProtocolError> + Encoder<PacketSend<Box<[u8]>>> + CommonPacket,
     {
+        let db = cx.framed.codec_mut().get_session().get_db();
+        cx.fsm.set_db(db);
+
         while let Some(data) = cx.framed.next().await {
             match data {
                 Ok(data) => {
@@ -389,11 +397,9 @@ where
     ) -> Result<(), Error> {
         let db = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
-        req.fsm.set_db(db.to_string());
+        req.fsm.set_db(Some(db.to_string()));
 
         let res = client_conn.send_use_db(db).await.map_err(ErrorKind::from)?;
-
-        //req.fsm.put_conn(client_conn);
 
         if res.1 {
             req.framed.send(PacketSend::Encode(ok_packet()[..].into())).await.map_err(ErrorKind::from)?;
@@ -405,7 +411,7 @@ where
                 "42000".as_bytes().to_vec(),
                 String::from_utf8_lossy(&res.0[13..]).to_string(),
             ));
-            req.framed.send(PacketSend::Encode(Box::from(err_info))).await.map_err(ErrorKind::from)?;
+            req.framed.send(PacketSend::Encode(err_info[4..].into())).await.map_err(ErrorKind::from)?;
         }
 
         Ok(())
@@ -510,7 +516,7 @@ where
 
             Ok(stmt) => match &stmt[0] {
                 SqlStmt::Set(stmt) => {
-                    Self::handle_set_stmt(&mut req.fsm, stmt, sql).await;
+                    Self::handle_set_stmt( req, stmt, sql).await;
                     req.fsm.get_conn().await.unwrap()
                 }
                 //TODO: split sql stmt for sql audit
@@ -562,14 +568,16 @@ where
     }
 
     // Set charset name
-    async fn handle_set_stmt(fsm: &mut TransFsm, stmt: &SetOptValues, input: &str) {
+    async fn handle_set_stmt(req: &mut ReqContext<T, C>, stmt: &SetOptValues, input: &str) {
         match stmt {
             SetOptValues::OptValues(vals) => match &vals.opt {
                 SetOpts::SetNames(name) => {
                     if let Some(name) = &name.charset_name {
                         //self.client.charset = name.clone();
-                        fsm.set_charset(name.clone());
-                        let _ = fsm.reset_fsm_state(RouteInput::Statement(input)).await;
+                        //self.client.charset = name.clone();
+                        //self.trans_fsm.set_charset(name.clone());
+                        req.fsm.set_charset(name.clone());
+                        let _ = req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                         return;
                     }
                 }
@@ -580,7 +588,7 @@ where
                                 Expr::LiteralExpr(Value::Num { value, .. })
                                 | Expr::SimpleIdentExpr(Value::Ident { value, .. }) => {
                                     if value == "0" || value.to_uppercase() == "OFF" {
-                                        fsm.trigger(
+                                        req.fsm.trigger(
                                             TransEventName::SetSessionEvent,
                                             RouteInput::Transaction(input),
                                         )
@@ -590,19 +598,19 @@ where
 
                                     if value == "1" {
                                         let _ =
-                                            fsm.reset_fsm_state(RouteInput::Statement(input)).await;
+                                            req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                                     }
 
                                     //self.client.autocommit = Some(value.clone());
-                                    fsm.set_autocommit(value.clone());
+                                    req.fsm.set_autocommit(value.clone());
                                     return;
                                 }
                                 _ => {}
                             },
                             ExprOrDefault::On => {
                                 //self.client.autocommit = Some(String::from("ON"));
-                                fsm.set_autocommit(String::from("ON"));
-                                let _ = fsm.reset_fsm_state(RouteInput::Statement(input)).await;
+                                req.fsm.set_autocommit(String::from("ON"));
+                                let _ = req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                                 return;
                             }
 
@@ -616,7 +624,7 @@ where
             _ => {}
         }
 
-        fsm.trigger(TransEventName::SetSessionEvent, RouteInput::Statement(input)).await.unwrap();
+        req.fsm.trigger(TransEventName::SetSessionEvent, RouteInput::Statement(input)).await.unwrap();
     }
 
     fn get_ast(req: &mut ReqContext<T, C>, sql: &str) -> Result<Vec<SqlStmt>, Error> {

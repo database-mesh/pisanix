@@ -22,13 +22,17 @@ use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{err::ProtocolError, mysql_const::*, util::get_length};
 
+use super::auth::ServerHandshakeCodec;
+
 pub trait CommonPacket {
     fn make_packet_header(&mut self, length: usize, data: &mut [u8], offset: usize);
     fn reset_seq(&mut self);
+    fn get_session(&mut self) -> &mut ServerHandshakeCodec;
 }
 
 /// Used to reading packet from client side
 pub struct PacketCodec {
+    session: ServerHandshakeCodec,
     buf: BytesMut,
     is_complete: bool,
     // Whether the payload is greater than MAX_PAYLOAD_LEN
@@ -37,8 +41,14 @@ pub struct PacketCodec {
 }
 
 impl PacketCodec {
-    pub fn new(init_size: usize) -> Self {
-        Self { buf: BytesMut::with_capacity(init_size), is_complete: false, is_max: false, seq: 0 }
+    pub fn new(session: ServerHandshakeCodec, init_size: usize) -> Self {
+        Self { 
+            session,
+            buf: BytesMut::with_capacity(init_size), 
+            is_complete: false, 
+            is_max: false, 
+            seq: 0 
+        }
     }
 
 
@@ -97,6 +107,10 @@ impl CommonPacket for PacketCodec {
     #[inline]
     fn reset_seq(&mut self) {
         self.seq = 0
+    }
+
+    fn get_session(&mut self) -> &mut ServerHandshakeCodec {
+        &mut self.session
     }
 }
 

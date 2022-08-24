@@ -334,8 +334,8 @@ impl TransFsm {
     }
 
     // Set current db.
-    pub fn set_db(&mut self, db: String) {
-        self.db = Some(db)
+    pub fn set_db(&mut self, db: Option<String>) {
+        self.db = db
     }
 
     // Set current charset

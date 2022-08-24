@@ -184,7 +184,7 @@ impl MySQLServer {
 
     pub async fn run(&mut self) -> Result<(), Error> {
         // set db to trans_fsm
-        self.trans_fsm.set_db(self.client.db.clone());
+        //self.trans_fsm.set_db(self.client.db.clone());
 
         let mut buf = BytesMut::with_capacity(4096);
 
@@ -270,7 +270,7 @@ impl MySQLServer {
             client_conn.get_endpoint().unwrap().as_str()
         );
 
-        self.trans_fsm.set_db(sql.to_string());
+        self.trans_fsm.set_db(Some(sql.to_string()));
 
         let res = match client_conn.send_use_db(sql).await {
             Ok(res) => res,
