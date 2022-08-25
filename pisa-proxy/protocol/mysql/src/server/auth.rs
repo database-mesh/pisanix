@@ -22,7 +22,7 @@ use futures::{SinkExt, StreamExt};
 use tokio_util::codec::{Decoder, Encoder, Framed};
 use tracing::debug;
 
-use super::{codec::PacketCodec, err::MySQLError, stream::LocalStream};
+use super::{err::MySQLError, stream::LocalStream};
 use crate::{
     charset::{COLLATION_NAME_ID_MYSQL5, DEFAULT_CHARSET_NAME},
     err::ProtocolError,
@@ -31,6 +31,7 @@ use crate::{
     util::*,
 };
 use crate::server::codec::ok_packet;
+use crate::server::codec::make_err_packet;
 
 const DEFAULT_CAPABILITY: u32 = CLIENT_LONG_PASSWORD
     | CLIENT_LONG_FLAG
@@ -402,20 +403,6 @@ impl Encoder<BytesMut> for ServerHandshakeCodec {
 
         Ok(())
     }
-}
-
-#[inline]
-pub fn make_err_packet(err: MySQLError) -> Vec<u8> {
-    let mut data = BytesMut::with_capacity(128);
-    data.extend_from_slice(&[0; 4]);
-    data.put_u8(0xff);
-    data.extend_from_slice(&[err.code as u8, (err.code >> 8) as u8]);
-    data.put_u8(b'#');
-    data.extend_from_slice(&err.state);
-    data.put_u8(b' ');
-    data.extend_from_slice(err.msg.as_bytes());
-
-    data.to_vec()
 }
 
 impl Session for ServerHandshakeCodec {
