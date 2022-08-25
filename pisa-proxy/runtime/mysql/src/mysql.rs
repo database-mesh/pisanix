@@ -12,29 +12,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{
+    marker::PhantomData,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use bytes::BytesMut;
+use async_trait::async_trait;
+use bytes::{Buf, BytesMut};
 use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
 use endpoint::endpoint::Endpoint;
+use futures::{SinkExt, StreamExt};
 use loadbalance::balance::{Balance, LoadBalance};
-use mysql_parser::parser::Parser;
-use mysql_protocol::client::conn::ClientConn;
+use mysql_parser::{
+    parser::Parser,
+};
+use mysql_protocol::{
+    client::conn::ClientConn,
+    err::ProtocolError,
+    mysql_const::ComType,
+    server::{
+        auth::{handshake, ServerHandshakeCodec},
+        codec::{ok_packet, CommonPacket, PacketCodec, PacketSend},
+        err::MySQLError,
+        stream::LocalStream,
+    },
+    session::Session,
+};
 use parking_lot::Mutex;
 use pisa_error::error::{Error, ErrorKind};
-use plugin::build_phase::PluginPhase;
+use plugin::{
+    build_phase::PluginPhase,
+    err::BoxError,
+};
 use proxy::{
     listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
-use strategy::{config::TargetRole, readwritesplitting::ReadWriteEndpoint, route::RouteStrategy};
+use strategy::{
+    config::TargetRole,
+    readwritesplitting::ReadWriteEndpoint,
+    route::RouteStrategy,
+};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio_util::codec::{Decoder, Encoder, Framed};
 use tracing::error;
 
-use crate::server::{
-    metrics::MySQLServerMetricsCollector,
-    server::{MySQLServer, MySQLServerBuilder},
+use crate::{
+    server::{
+        metrics::*
+    },
+    transaction_fsm::*,
 };
+use plugin::layer::Service;
+use crate::server::PisaMySQLService;
+use mysql_protocol::server::codec::make_err_packet;
 
 #[derive(Default)]
 pub struct MySQLProxy {
@@ -108,7 +141,7 @@ impl proxy::factory::Proxy for MySQLProxy {
         };
 
         let parser = Arc::new(Parser::new());
-        let metrics_collector = MySQLServerMetricsCollector::new();
+        //let metrics_collector = MySQLServerMetricsCollector::new();
 
         loop {
             // TODO: need refactor
@@ -116,33 +149,226 @@ impl proxy::factory::Proxy for MySQLProxy {
 
             let lb = Arc::clone(&lb);
             let plugin = plugin.clone();
-            let pcfg = self.proxy_config.clone();
+            let _pcfg = self.proxy_config.clone();
             let parser = parser.clone();
             let ast_cache = ast_cache.clone();
             let pool = pool.clone();
+            let proxy_name = self.proxy_config.name.clone();
 
-            let mut mysql_server = MySQLServerBuilder::new(socket, lb, plugin)
-                .with_pcfg(pcfg)
-                .with_pool(pool)
-                .with_buf(BytesMut::with_capacity(8192))
-                .with_mysql_parser(parser)
-                .with_ast_cache(ast_cache)
-                .is_quit(false)
-                .with_concurrency_control_rule_idx(None)
-                .with_metrics_collector(metrics_collector)
-                .with_pisa_version(self.pisa_version.clone())
-                .build();
+            let handshake_codec = ServerHandshakeCodec::new(
+                self.proxy_config.user.clone(),
+                self.proxy_config.password.clone(),
+                self.proxy_config.db.clone(),
+                self.proxy_config.server_version.clone(),
+            );
 
-            if let Err(err) = mysql_server.handshake().await {
-                error!("{:?}", err);
-                continue;
-            }
+            let handshake_framed =
+                Framed::with_capacity(LocalStream::from(socket), handshake_codec, 8196);
+
+            let mut ins = MySQLInstance::new(PisaMySQLService::new());
 
             tokio::spawn(async move {
-                if let Err(err) = mysql_server.run().await {
-                    error!("{:?}", err);
+                let res = handshake(handshake_framed).await;
+                if let Err(e) = res {
+                    error!("handshake error {:?}", e);
+                    return;
+                }
+
+                let handshake_framed = res.unwrap().0;
+                let parts = handshake_framed.into_parts(); 
+
+                let packet_codec = PacketCodec::new(parts.codec, 8196);
+                let io = parts.io;
+
+                let framed = Framed::with_capacity(io, packet_codec, 16384); 
+                let context = ReqContext {
+                    fsm: TransFsm::new_trans_fsm(lb, pool),
+                    ast_cache,
+                    plugin,
+                    metrics_collector: MySQLServerMetricsCollector,
+                    concurrency_control_rule_idx: None,
+                    framed,
+                    name: proxy_name,
+                    mysql_parser: parser,
+                };
+
+                if let Err(e) = ins.run(context).await {
+                    error!("instance run error {:?}", e);
                 }
             });
         }
     }
 }
+
+/// The Context arg required to handle the command
+pub struct ReqContext<T, C> {
+    pub name: String,
+    pub fsm: TransFsm,
+    pub mysql_parser: Arc<Parser>,
+    pub ast_cache: Arc<Mutex<ParserAstCache>>,
+    pub plugin: Option<PluginPhase>,
+    pub metrics_collector: MySQLServerMetricsCollector,
+    // `concurrency_control_rule_idx` is index of concurrency_control rules
+    // `concurrency_control_rule_idx` is required to add permits when the
+    //  concurrency_control layer service is enabled
+    pub concurrency_control_rule_idx: Option<usize>,
+    // The codc for MySQL Protocol
+    pub framed: Framed<T, C>,
+}
+
+/// Handle the return value of the command
+pub struct RespContext {
+    // The endpoint of the backend dababase
+    pub ep: Option<String>,
+    // The duration of handle the command
+    pub duration: Duration,
+}
+
+/// The MySQLService trait is used to handle the mysql command,
+/// Its can be implemeneted by third-party service.
+/// The PisaMySQLService is default implementation in the Pisa-Proxy.
+#[async_trait]
+pub trait MySQLService<T, C> {
+    async fn init_db(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error>;
+    async fn query(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error>;
+    async fn prepare(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error>;
+    async fn execute(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error>;
+    async fn stmt_close(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error>;
+    async fn quit(cx: &mut ReqContext<T, C>) -> Result<RespContext, Error>;
+    async fn field_list(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error>;
+}
+
+/// Start an instance of the `MySQLService`, its used to execute method 
+/// of the `MySQLService` trait 
+pub struct MySQLInstance<S, T, C> {
+    // A service implementing the MySQLSerivce trait to handle mysql command
+    _inner: S,
+    // Mark whether the instance quit
+    is_quit: bool,
+    _phat: PhantomData<(T, C)>,
+}
+
+impl<S, T, C> MySQLInstance<S, T, C>
+where
+    S: MySQLService<T, C>,
+    T: AsyncRead + AsyncWrite + Unpin,
+    C: Decoder<Item = BytesMut, Error = ProtocolError> + Encoder<PacketSend<Box<[u8]>>, Error = ProtocolError> + CommonPacket,
+{
+    fn new(inner: S) -> Self {
+        Self { _inner: inner, is_quit: false, _phat: PhantomData }
+    }
+
+    async fn run(&mut self, mut cx: ReqContext<T, C>) -> Result<(), Error>
+    where
+        C: Decoder<Item = BytesMut, Error = ProtocolError> + Encoder<PacketSend<Box<[u8]>>> + CommonPacket,
+    {
+        let db = cx.framed.codec_mut().get_session().get_db();
+        cx.fsm.set_db(db);
+
+        while let Some(data) = cx.framed.next().await {
+            match data {
+                Ok(data) => {
+                    if let Err(err) = self.handle_command(&mut cx, data).await {
+                        let err_info = make_err_packet(MySQLError::new(
+                            2002,
+                            "HY000".as_bytes().to_vec(),
+                            String::from("There is no healthy backend to connect."),
+                        ));
+                        cx.framed
+                            .send(PacketSend::Encode(err_info.into_boxed_slice()))
+                            .await
+                            .map_err(ErrorKind::from)?;
+                        error!("exec command err: {:?}", err);
+                    };
+
+                    cx.framed.codec_mut().reset_seq();
+
+                    if let Some(idx) = &cx.concurrency_control_rule_idx {
+                        cx.plugin.as_mut().unwrap().concurrency_control.add_permits(*idx);
+                        cx.concurrency_control_rule_idx = None;
+                    }
+
+                    if self.is_quit {
+                        return Ok(());
+                    }
+                }
+
+                Err(e) => return Err(Error::from(ErrorKind::from(e))),
+            }
+        }
+
+        return Ok(());
+    }
+
+    async fn handle_command(
+        &mut self,
+        cx: &mut ReqContext<T, C>,
+        mut data: BytesMut,
+    ) -> Result<RespContext, Error> {
+        let now = Instant::now();
+        let com = data.get_u8();
+        let payload = data.split();
+
+        if let Err(err) = self.plugin_run(cx, &payload) {
+            let err_info = make_err_packet(MySQLError::new(
+                1047,
+                "08S01".as_bytes().to_vec(),
+                err.to_string(),
+            ));
+            cx.framed.send(PacketSend::Encode(err_info.into_boxed_slice())).await.map_err(ErrorKind::from)?;
+            return Ok(RespContext { ep: None, duration: now.elapsed() });
+        }
+
+        match ComType::from(com) {
+            ComType::QUIT => {
+                self.is_quit = true;
+                S::quit(cx).await
+            }
+            ComType::INIT_DB => S::init_db(cx, &payload).await,
+            ComType::QUERY => S::query(cx, &payload).await,
+            ComType::FIELD_LIST => S::field_list(cx, &payload).await,
+            ComType::PING => {
+                cx.framed.send(PacketSend::Encode(ok_packet()[..].into())).await.map_err(ErrorKind::from)?;
+                return Ok(RespContext { ep: None, duration: now.elapsed() });
+            }
+            ComType::STMT_PREPARE => S::prepare(cx, &payload).await,
+            ComType::STMT_EXECUTE => S::execute(cx, &payload).await,
+            ComType::STMT_CLOSE => S::stmt_close(cx, &payload).await,
+            ComType::STMT_RESET => {
+                cx.framed.send(PacketSend::Encode(ok_packet()[..].into())).await.map_err(ErrorKind::from)?;
+                return Ok(RespContext { ep: None, duration: now.elapsed() });
+            }
+            x => {
+                let err_info = make_err_packet(MySQLError::new(
+                    1047,
+                    "08S01".as_bytes().to_vec(),
+                    format!("command {} not support", x.as_ref()),
+                ));
+                cx.framed.send(PacketSend::Encode(err_info.into_boxed_slice())).await.map_err(ErrorKind::from)?;
+                return Ok(RespContext { ep: None, duration: now.elapsed() });
+            }
+        }
+    }
+
+    fn plugin_run(&mut self, cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<(), BoxError> {
+        if let Some(plugin) = cx.plugin.as_mut() {
+            let input = unsafe { std::str::from_utf8_unchecked(payload).to_string() };
+
+            plugin.circuit_break.handle(input.clone())?;
+
+            let res = plugin.concurrency_control.handle(input);
+
+            match res {
+                Ok(data) => {
+                    cx.concurrency_control_rule_idx = data.0;
+                    return Ok(());
+                }
+
+                Err(err) => return Err(err),
+            }
+        }
+
+        Ok(())
+    }
+}
+
