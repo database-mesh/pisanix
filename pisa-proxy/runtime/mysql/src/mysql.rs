@@ -397,6 +397,7 @@ where
     ) -> Result<(), Error> {
         let db = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
+        req.framed.codec_mut().get_session().set_db(db.to_string());
         req.fsm.set_db(Some(db.to_string()));
 
         let res = client_conn.send_use_db(db).await.map_err(ErrorKind::from)?;
