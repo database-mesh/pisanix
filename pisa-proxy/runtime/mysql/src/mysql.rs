@@ -43,7 +43,7 @@ use mysql_protocol::{
         stream::LocalStream,
     },
     util::*,
-    session::Session,
+    session::{Session, SessionMut},
 };
 use parking_lot::Mutex;
 use pisa_error::error::{Error, ErrorKind};
@@ -573,9 +573,7 @@ where
             SetOptValues::OptValues(vals) => match &vals.opt {
                 SetOpts::SetNames(name) => {
                     if let Some(name) = &name.charset_name {
-                        //self.client.charset = name.clone();
-                        //self.client.charset = name.clone();
-                        //self.trans_fsm.set_charset(name.clone());
+                        req.framed.codec_mut().get_session().set_charset(name.clone());
                         req.fsm.set_charset(name.clone());
                         let _ = req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                         return;
@@ -601,14 +599,14 @@ where
                                             req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                                     }
 
-                                    //self.client.autocommit = Some(value.clone());
+                                    req.framed.codec_mut().get_session().set_autocommit(value.clone());
                                     req.fsm.set_autocommit(value.clone());
                                     return;
                                 }
                                 _ => {}
                             },
                             ExprOrDefault::On => {
-                                //self.client.autocommit = Some(String::from("ON"));
+                                req.framed.codec_mut().get_session().set_autocommit(String::from("ON"));
                                 req.fsm.set_autocommit(String::from("ON"));
                                 let _ = req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                                 return;

@@ -26,7 +26,7 @@ use super::{codec::PacketCodec, err::MySQLError, stream::LocalStream};
 use crate::{
     charset::{COLLATION_NAME_ID_MYSQL5, DEFAULT_CHARSET_NAME},
     err::ProtocolError,
-    session::Session,
+    session::{Session, SessionMut},
     mysql_const::*,
     util::*,
 };
@@ -77,6 +77,7 @@ pub struct ServerHandshakeCodec {
     password: String,
     auth_data: BytesMut,
     auth_plugin_name: String,
+    autocommit: Option<String>,
     next_handshake_status: ServerHandshakeStatus,
 }
 
@@ -102,6 +103,7 @@ impl ServerHandshakeCodec {
             password,
             auth_data: BytesMut::with_capacity(20),
             auth_plugin_name: "".to_string(),
+            autocommit: None,
             next_handshake_status: ServerHandshakeStatus::ReadResponseFirst,
         }
     }
@@ -429,12 +431,22 @@ impl Session for ServerHandshakeCodec {
         Some(self.charset.clone())
     }
 
+    fn get_autocommit(&self) -> Option<String> {
+        self.autocommit.clone()
+    }
+}
+
+impl SessionMut for ServerHandshakeCodec { 
     fn set_db(&mut self, db: String) {
         self.db = db
     }
 
     fn set_charset(&mut self, charset: String) {
        self.charset = charset 
+    }
+
+    fn set_autocommit(&mut self, autocommit: String) {
+        self.autocommit = Some(autocommit)
     }
 }
 
