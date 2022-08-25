@@ -320,7 +320,7 @@ where
                 return Ok(RespContext { ep: None, duration: now.elapsed() });
             }
             ComType::STMT_PREPARE => S::prepare(cx, &payload).await,
-            ComType::STMT_EXECUTE => S::prepare(cx, &payload).await,
+            ComType::STMT_EXECUTE => S::execute(cx, &payload).await,
             ComType::STMT_CLOSE => S::stmt_close(cx, &payload).await,
             ComType::STMT_RESET => {
                 cx.framed.send(PacketSend::Encode(ok_packet()[..].into())).await.map_err(ErrorKind::from)?;
@@ -655,7 +655,6 @@ where
             None => return Ok(()),
         };
 
-        println!("header {:?}", header);
     
         let ok_or_err = header[4];
 
@@ -670,7 +669,6 @@ where
 
         let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(header[4..].into(), 0), &mut buf);
         //self.client.pkt.construct_packet_buf(&mut header, &mut self.buf).await;
-        println!("header {:?}, buf {:?}", &header, &buf[..]);
 
         for _ in 0..cols {
             let data = stream.next().await;
@@ -680,10 +678,7 @@ where
                 None => break,
             };
 
-            println!("data {:?}", &data[..]);
-            println!("buf len {:?}", buf.len());
             let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(data[4..].into(), buf.len()), &mut buf);
-            println!("buf {:?}", &buf[..]);
         }
 
 
@@ -710,7 +705,6 @@ where
 
         let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(make_eof_packet()[4..].into(), buf.len()), &mut buf);
 
-        println!("buf {:?}", &buf[..]);
         req.framed.send(PacketSend::Origin(buf[..].into())).await?;
 
         Ok(())
@@ -786,8 +780,6 @@ where
         let now = Instant::now();
         let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
         let mut client_conn = Self::query_inner_get_conn(cx, sql).await;
-
-        println!("sql {:?}", sql);
 
         let ep = client_conn.get_endpoint();
         crate::collect_sql_processed_total!(cx, "COM_QUERY", ep.as_ref().unwrap());
