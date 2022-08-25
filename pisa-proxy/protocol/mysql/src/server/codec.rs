@@ -17,9 +17,8 @@ use std::ptr::copy_nonoverlapping;
 use bytes::{BufMut, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{err::ProtocolError, mysql_const::*, util::get_length};
-use crate::server::err::MySQLError;
 use super::auth::ServerHandshakeCodec;
+use crate::{err::ProtocolError, mysql_const::*, server::err::MySQLError, util::get_length};
 
 pub trait CommonPacket {
     fn make_packet_header(&mut self, length: usize, data: &mut [u8], offset: usize);
@@ -38,14 +37,8 @@ pub struct PacketCodec {
 
 impl PacketCodec {
     pub fn new(session: ServerHandshakeCodec, init_size: usize) -> Self {
-        Self { 
-            session,
-            buf: BytesMut::with_capacity(init_size), 
-            is_max: false, 
-            seq: 0 
-        }
+        Self { session, buf: BytesMut::with_capacity(init_size), is_max: false, seq: 0 }
     }
-
 
     #[inline]
     fn set_seq_id(&mut self, buf: &mut [u8], offset: usize) {
@@ -71,16 +64,16 @@ impl PacketCodec {
         let remain = length % MAX_PAYLOAD_LEN;
         let mut offset = offset;
 
-        for i in 0 .. num {
+        for i in 0..num {
             dst.put_bytes(0, 4);
-            dst.extend_from_slice(&item[i * MAX_PAYLOAD_LEN .. (i + 1) * MAX_PAYLOAD_LEN]);
+            dst.extend_from_slice(&item[i * MAX_PAYLOAD_LEN..(i + 1) * MAX_PAYLOAD_LEN]);
             self.make_packet_header(MAX_PAYLOAD_LEN, dst, offset);
 
             offset += MAX_PAYLOAD_LEN + 4;
         }
 
         dst.put_bytes(0, 4);
-        dst.extend_from_slice(&item[num * MAX_PAYLOAD_LEN ..]);
+        dst.extend_from_slice(&item[num * MAX_PAYLOAD_LEN..]);
 
         self.make_packet_header(remain, dst, offset);
     }
@@ -137,12 +130,11 @@ impl Decoder for PacketCodec {
         }
 
         self.decode(src)
-
     }
 }
 
 pub enum SendType {
-    Origin
+    Origin,
 }
 pub enum PacketSend<T> {
     Origin(T),
@@ -157,30 +149,14 @@ impl<T: AsRef<[u8]>> Encoder<PacketSend<T>> for PacketCodec {
         match item {
             PacketSend::Origin(data) => dst.extend_from_slice(data.as_ref()),
             PacketSend::Encode(data) => self.encode_packet(data.as_ref(), dst),
-            PacketSend::EncodeOffset(data, offset) => self.encode_packet_offset(data.as_ref(), dst, offset),
+            PacketSend::EncodeOffset(data, offset) => {
+                self.encode_packet_offset(data.as_ref(), dst, offset)
+            }
         };
 
         Ok(())
     }
 }
-
-//impl Encoder<BytesMut> for PacketCodec {
-//    type Error = ProtocolError;
-//
-//    fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
-//        self.encode_packet(&item, dst);
-//        Ok(())
-//    }
-//}
-//
-//impl Encoder<&[u8]> for PacketCodec {
-//    type Error = ProtocolError;
-//
-//    fn encode(&mut self, item: &[u8], dst: &mut BytesMut) -> Result<(), Self::Error> {
-//        self.encode_packet(item, dst);
-//        Ok(())
-//    }
-//}
 
 #[inline]
 pub fn make_eof_packet() -> [u8; 9] {
@@ -206,16 +182,18 @@ pub fn make_err_packet(err: MySQLError) -> Vec<u8> {
     data.to_vec()
 }
 
-
 #[cfg(test)]
 mod test {
     use bytes::{BufMut, BytesMut};
     use futures::{SinkExt, StreamExt};
-    use tokio::io::{AsyncWriteExt, AsyncReadExt};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio_util::codec::Framed;
 
     use super::PacketCodec;
-    use crate::{mysql_const::MAX_PAYLOAD_LEN, server::codec::{PacketSend, CommonPacket}};
+    use crate::{
+        mysql_const::MAX_PAYLOAD_LEN,
+        server::codec::{CommonPacket, PacketSend},
+    };
 
     #[tokio::test]
     async fn test_packetcodec_normal() {
@@ -267,12 +245,12 @@ mod test {
 
         let mut framed = Framed::new(client, packet);
         let mut buf = BytesMut::with_capacity(10);
-        let data = vec![1,2,3,4,5];
+        let data = vec![1, 2, 3, 4, 5];
 
         let length = buf.len();
         framed.codec_mut().encode_packet_offset(&data[..], &mut buf, length);
 
-        let data = vec![7,8,9];
+        let data = vec![7, 8, 9];
         let length = buf.len();
         framed.codec_mut().encode_packet_offset(&data[..], &mut buf, length);
 

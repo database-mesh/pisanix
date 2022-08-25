@@ -200,6 +200,7 @@ impl proxy::factory::Proxy for MySQLProxy {
     }
 }
 
+/// The Context arg required to handle the command
 pub struct ReqContext<T, C> {
     pub name: String,
     pub fsm: TransFsm,
@@ -208,16 +209,24 @@ pub struct ReqContext<T, C> {
     pub plugin: Option<PluginPhase>,
     pub metrics_collector: MySQLServerMetricsCollector,
     // `concurrency_control_rule_idx` is index of concurrency_control rules
-    // `concurrency_control_rule_idx` is required to add permits when the concurrency_control layer service is enabled
+    // `concurrency_control_rule_idx` is required to add permits when the
+    //  concurrency_control layer service is enabled
     pub concurrency_control_rule_idx: Option<usize>,
+    // The codc for MySQL Protocol
     pub framed: Framed<T, C>,
 }
 
+/// Handle the return value of the command
 pub struct RespContext {
+    // The endpoint of the backend dababase
     pub ep: Option<String>,
+    // The duration of handle the command
     pub duration: Duration,
 }
 
+/// The MySQLService trait is used to handle the mysql command,
+/// Its can be implemeneted by third-party service.
+/// The PisaMySQLService is default implementation in the Pisa-Proxy.
 #[async_trait]
 pub trait MySQLService<T, C> {
     async fn init_db(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error>;
@@ -229,8 +238,12 @@ pub trait MySQLService<T, C> {
     async fn field_list(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error>;
 }
 
+/// Start an instance of the `MySQLService`, its used to execute method 
+/// of the `MySQLService` trait 
 pub struct MySQLInstance<S, T, C> {
+    // A service implementing the MySQLSerivce trait to handle mysql command
     _inner: S,
+    // Mark whether the instance quit
     is_quit: bool,
     _phat: PhantomData<(T, C)>,
 }
