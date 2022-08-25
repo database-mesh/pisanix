@@ -12,44 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{marker::PhantomData, time::Instant};
 
-use pisa_error::error::Error;
-use crate::mysql::ReqContext;
-use crate::mysql::RespContext;
-use std::time::Instant;
-use byteorder::LittleEndian;
-use mysql_protocol::server::codec::PacketSend;
-use strategy::route::RouteInput;
-use bytes::BytesMut;
-use tokio_util::codec::Encoder;
-use tokio_util::codec::Decoder;
-use tokio::io::AsyncRead;
-use crate::mysql::MySQLService;
-use mysql_protocol::util::is_eof;
-use pisa_error::error::ErrorKind;
-use mysql_protocol::mysql_const::*;
-use conn_pool::PoolConn;
-use mysql_protocol::client::conn::ClientConn;
-use mysql_protocol::server::codec::make_eof_packet;
-use mysql_protocol::util::length_encode_int;
-use mysql_protocol::err::ProtocolError;
-use mysql_protocol::client::codec::ResultsetStream;
-use mysql_parser::ast::*;
-use mysql_protocol::server::err::MySQLError;
-use mysql_protocol::server::codec::make_err_packet;
-use mysql_protocol::server::codec::ok_packet;
-use crate::transaction_fsm::TransEventName;
-use crate::transaction_fsm::TransFsm;
-use std::marker::PhantomData;
-use mysql_protocol::server::codec::CommonPacket;
-use tokio::io::AsyncWrite;
-use futures::SinkExt;
-use byteorder::ByteOrder;
-use futures::StreamExt;
-use mysql_protocol::session::SessionMut;
 use async_trait::async_trait;
-use tracing::error;
-use tracing::debug;
+use byteorder::{ByteOrder, LittleEndian};
+use bytes::BytesMut;
+use conn_pool::PoolConn;
+use futures::{SinkExt, StreamExt};
+use mysql_parser::ast::*;
+use mysql_protocol::{
+    client::{codec::ResultsetStream, conn::ClientConn},
+    err::ProtocolError,
+    mysql_const::*,
+    server::{
+        codec::{make_eof_packet, make_err_packet, ok_packet, CommonPacket, PacketSend},
+        err::MySQLError,
+    },
+    session::SessionMut,
+    util::{is_eof, length_encode_int},
+};
+use pisa_error::error::{Error, ErrorKind};
+use strategy::route::RouteInput;
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio_util::codec::{Decoder, Encoder};
+use tracing::{debug, error};
+
+use crate::{
+    mysql::{MySQLService, ReqContext, RespContext},
+    transaction_fsm::{TransEventName, TransFsm},
+};
 
 pub struct PisaMySQLService<T, C> {
     _phat: PhantomData<(T, C)>,
@@ -58,7 +49,10 @@ pub struct PisaMySQLService<T, C> {
 impl<T, C> PisaMySQLService<T, C>
 where
     T: AsyncRead + AsyncWrite + Unpin + Send,
-    C: Decoder<Item = BytesMut> + Encoder<PacketSend<Box<[u8]>>, Error = ProtocolError> + Send + CommonPacket,
+    C: Decoder<Item = BytesMut>
+        + Encoder<PacketSend<Box<[u8]>>, Error = ProtocolError>
+        + Send
+        + CommonPacket,
 {
     pub fn new() -> Self {
         Self { _phat: PhantomData }
@@ -85,7 +79,10 @@ where
         let res = client_conn.send_use_db(db).await.map_err(ErrorKind::from)?;
 
         if res.1 {
-            req.framed.send(PacketSend::Encode(ok_packet()[..].into())).await.map_err(ErrorKind::from)?;
+            req.framed
+                .send(PacketSend::Encode(ok_packet()[..].into()))
+                .await
+                .map_err(ErrorKind::from)?;
         } else {
             // supports CLIENT_PROTOCOL_41 default
             // skip sql_state_marker and sql_state packet
@@ -94,7 +91,10 @@ where
                 "42000".as_bytes().to_vec(),
                 String::from_utf8_lossy(&res.0[13..]).to_string(),
             ));
-            req.framed.send(PacketSend::Encode(err_info[4..].into())).await.map_err(ErrorKind::from)?;
+            req.framed
+                .send(PacketSend::Encode(err_info[4..].into()))
+                .await
+                .map_err(ErrorKind::from)?;
         }
 
         Ok(())
@@ -108,51 +108,45 @@ where
         let stmt = client_conn.send_prepare(payload).await.map_err(ErrorKind::from)?;
 
         let mut buf = BytesMut::with_capacity(128);
-        //let mut data = BytesMut::from(&vec![0; 4][..]);
         let mut data = vec![0];
-        //data.put_u8(0);
         data.extend_from_slice(&u32::to_le_bytes(stmt.stmt_id));
         data.extend_from_slice(&u16::to_le_bytes(stmt.cols_count));
         data.extend_from_slice(&u16::to_le_bytes(stmt.params_count));
 
         data.extend_from_slice(&[0, 0, 0]);
 
-        //self.client.pkt.make_packet_header(data.len() - 4, &mut data);
         let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(data.into(), 0), &mut buf);
-        //req.framed.codec_mut().make_packet_header(data.len() - 4, &mut data, 0);
 
         if !stmt.params_data.is_empty() {
             for param_data in stmt.params_data {
-                let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(param_data[4..].into(), buf.len()), &mut buf);
-                //req.framed.codec_mut().make_packet_header(param_data.len() - 4, &mut param_data, 0);
-                //data.extend_from_slice(&param_data);
+                let _ = req
+                    .framed
+                    .codec_mut()
+                    .encode(PacketSend::EncodeOffset(param_data[4..].into(), buf.len()), &mut buf);
             }
 
             let eof_packet = make_eof_packet();
-            let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(eof_packet[4..].into(), buf.len()), &mut buf);
-            //req.framed.codec_mut().make_packet_header(5, &mut eof_packet, 0);
-            //data.extend_from_slice(&eof_packet);
+            let _ = req
+                .framed
+                .codec_mut()
+                .encode(PacketSend::EncodeOffset(eof_packet[4..].into(), buf.len()), &mut buf);
         }
 
         if !stmt.cols_data.is_empty() {
             for col_data in stmt.cols_data {
-                let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(col_data[4..].into(), buf.len()), &mut buf);
-                //req.framed.codec_mut().make_packet_header(col_data.len() - 4, &mut col_data, 0);
-                //data.extend_from_slice(&col_data);
+                let _ = req
+                    .framed
+                    .codec_mut()
+                    .encode(PacketSend::EncodeOffset(col_data[4..].into(), buf.len()), &mut buf);
             }
 
             let eof_packet = make_eof_packet();
-            let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(eof_packet[4..].into(), buf.len()), &mut buf);
-            //req.framed.codec_mut().make_packet_header(5, &mut eof_packet, 0);
-            //data.extend_from_slice(&eof_packet);
+            let _ = req
+                .framed
+                .codec_mut()
+                .encode(PacketSend::EncodeOffset(eof_packet[4..].into(), buf.len()), &mut buf);
         }
 
-        //req.framed
-        //    .get_mut()
-        //    .write_all(&data[..])
-        //    .await
-        //    .map_err(|e| Error::from(ErrorKind::from(e)))?;
-        //req.framed.get_mut().flush().await.map_err(|e| Error::from(ErrorKind::from(e)))?;
         req.framed.send(PacketSend::Origin(buf[..].into())).await.map_err(ErrorKind::from)?;
 
         Ok(())
@@ -185,7 +179,10 @@ where
         Ok(())
     }
 
-    async fn query_inner_get_conn(req: &mut ReqContext<T, C>, sql: &str) -> Result<PoolConn<ClientConn>, Error> {
+    async fn query_inner_get_conn(
+        req: &mut ReqContext<T, C>,
+        sql: &str,
+    ) -> Result<PoolConn<ClientConn>, Error> {
         match Self::get_ast(req, sql) {
             Err(err) => {
                 error!("err: {:?}", err);
@@ -199,7 +196,7 @@ where
 
             Ok(stmt) => match &stmt[0] {
                 SqlStmt::Set(stmt) => {
-                    Self::handle_set_stmt( req, stmt, sql).await;
+                    Self::handle_set_stmt(req, stmt, sql).await;
                     req.fsm.get_conn().await
                 }
                 //TODO: split sql stmt for sql audit
@@ -269,27 +266,36 @@ where
                                 Expr::LiteralExpr(Value::Num { value, .. })
                                 | Expr::SimpleIdentExpr(Value::Ident { value, .. }) => {
                                     if value == "0" || value.to_uppercase() == "OFF" {
-                                        req.fsm.trigger(
-                                            TransEventName::SetSessionEvent,
-                                            RouteInput::Transaction(input),
-                                        )
-                                        .await
-                                        .unwrap();
+                                        req.fsm
+                                            .trigger(
+                                                TransEventName::SetSessionEvent,
+                                                RouteInput::Transaction(input),
+                                            )
+                                            .await
+                                            .unwrap();
                                     }
 
                                     if value == "1" {
-                                        let _ =
-                                            req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
+                                        let _ = req
+                                            .fsm
+                                            .reset_fsm_state(RouteInput::Statement(input))
+                                            .await;
                                     }
 
-                                    req.framed.codec_mut().get_session().set_autocommit(value.clone());
+                                    req.framed
+                                        .codec_mut()
+                                        .get_session()
+                                        .set_autocommit(value.clone());
                                     req.fsm.set_autocommit(value.clone());
                                     return;
                                 }
                                 _ => {}
                             },
                             ExprOrDefault::On => {
-                                req.framed.codec_mut().get_session().set_autocommit(String::from("ON"));
+                                req.framed
+                                    .codec_mut()
+                                    .get_session()
+                                    .set_autocommit(String::from("ON"));
                                 req.fsm.set_autocommit(String::from("ON"));
                                 let _ = req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
                                 return;
@@ -305,7 +311,10 @@ where
             _ => {}
         }
 
-        req.fsm.trigger(TransEventName::SetSessionEvent, RouteInput::Statement(input)).await.unwrap();
+        req.fsm
+            .trigger(TransEventName::SetSessionEvent, RouteInput::Statement(input))
+            .await
+            .unwrap();
     }
 
     fn get_ast(req: &mut ReqContext<T, C>, sql: &str) -> Result<Vec<SqlStmt>, Error> {
@@ -336,7 +345,6 @@ where
             None => return Ok(()),
         };
 
-    
         let ok_or_err = header[4];
 
         if ok_or_err == OK_HEADER || ok_or_err == ERR_HEADER {
@@ -348,7 +356,10 @@ where
 
         let mut buf = BytesMut::with_capacity(1 << 16);
 
-        let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(header[4..].into(), 0), &mut buf);
+        let _ = req
+            .framed
+            .codec_mut()
+            .encode(PacketSend::EncodeOffset(header[4..].into(), 0), &mut buf);
 
         for _ in 0..cols {
             let data = stream.next().await;
@@ -358,14 +369,19 @@ where
                 None => break,
             };
 
-            let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(data[4..].into(), buf.len()), &mut buf);
+            let _ = req
+                .framed
+                .codec_mut()
+                .encode(PacketSend::EncodeOffset(data[4..].into(), buf.len()), &mut buf);
         }
-
 
         // read eof
         let _ = stream.next().await;
 
-        let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(make_eof_packet()[4..].into(), buf.len()), &mut buf);
+        let _ = req
+            .framed
+            .codec_mut()
+            .encode(PacketSend::EncodeOffset(make_eof_packet()[4..].into(), buf.len()), &mut buf);
 
         loop {
             let data = stream.next().await;
@@ -380,10 +396,16 @@ where
                 break;
             }
 
-            let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(row[4..].into(), buf.len()), &mut buf);
+            let _ = req
+                .framed
+                .codec_mut()
+                .encode(PacketSend::EncodeOffset(row[4..].into(), buf.len()), &mut buf);
         }
 
-        let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(make_eof_packet()[4..].into(), buf.len()), &mut buf);
+        let _ = req
+            .framed
+            .codec_mut()
+            .encode(PacketSend::EncodeOffset(make_eof_packet()[4..].into(), buf.len()), &mut buf);
 
         req.framed.send(PacketSend::Origin(buf[..].into())).await?;
 
@@ -417,7 +439,6 @@ where
         }
 
         req.framed.send(PacketSend::Origin(buf[..].into())).await.map_err(ErrorKind::from)?;
-        //self.client.pkt.write_buf(&buf).await.map_err(|e| Error::new(ErrorKind::Protocol(e)))?;
 
         Ok(())
     }
@@ -427,7 +448,10 @@ where
 impl<'a, T, C> MySQLService<T, C> for PisaMySQLService<T, C>
 where
     T: AsyncRead + AsyncWrite + Unpin + Send,
-    C: Decoder<Item = BytesMut> + Encoder<PacketSend<Box<[u8]>>, Error = ProtocolError> + Send + CommonPacket,
+    C: Decoder<Item = BytesMut>
+        + Encoder<PacketSend<Box<[u8]>>, Error = ProtocolError>
+        + Send
+        + CommonPacket,
 {
     async fn init_db(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
@@ -438,20 +462,15 @@ where
                 .await?;
         let ep = client_conn.get_endpoint();
 
-        crate::collect_sql_processed_total!(cx, "COM_INIT_DB", ep.as_ref().unwrap());
-        crate::collect_sql_under_processing_inc!(cx, "COM_INIT_DB", ep.as_ref().unwrap());
+        collect_sql_processed_total!(cx, "COM_INIT_DB", ep.as_ref().unwrap());
+        collect_sql_under_processing_inc!(cx, "COM_INIT_DB", ep.as_ref().unwrap());
 
         Self::init_db_inner(cx, &mut client_conn, payload).await?;
 
         cx.fsm.put_conn(client_conn);
 
-        crate::collect_sql_under_processing_dec!(cx, "COM_INIT_DB", ep.as_ref().unwrap());
-        crate::collect_sql_processed_duration1!(
-            cx,
-            "COM_INIT_DB",
-            ep.as_ref().unwrap(),
-            now.elapsed()
-        );
+        collect_sql_under_processing_dec!(cx, "COM_INIT_DB", ep.as_ref().unwrap());
+        collect_sql_processed_duration!(cx, "COM_INIT_DB", ep.as_ref().unwrap(), now.elapsed());
 
         Ok(RespContext { ep, duration: now.elapsed() })
     }
@@ -462,20 +481,15 @@ where
         let mut client_conn = Self::query_inner_get_conn(cx, sql).await?;
 
         let ep = client_conn.get_endpoint();
-        crate::collect_sql_processed_total!(cx, "COM_QUERY", ep.as_ref().unwrap());
-        crate::collect_sql_under_processing_inc!(cx, "COM_QUERY", ep.as_ref().unwrap());
+        collect_sql_processed_total!(cx, "COM_QUERY", ep.as_ref().unwrap());
+        collect_sql_under_processing_inc!(cx, "COM_QUERY", ep.as_ref().unwrap());
 
         let _ = Self::query_inner(cx, &mut client_conn, payload).await?;
 
         cx.fsm.put_conn(client_conn);
 
-        crate::collect_sql_under_processing_dec!(cx, "COM_QUERY", ep.as_ref().unwrap());
-        crate::collect_sql_processed_duration1!(
-            cx,
-            "COM_QUERY",
-            ep.as_ref().unwrap(),
-            now.elapsed()
-        );
+        collect_sql_under_processing_dec!(cx, "COM_QUERY", ep.as_ref().unwrap());
+        collect_sql_processed_duration!(cx, "COM_QUERY", ep.as_ref().unwrap(), now.elapsed());
 
         Ok(RespContext { ep, duration: now.elapsed() })
     }
@@ -491,23 +505,21 @@ where
         .await?;
         let ep = client_conn.get_endpoint();
 
-        crate::collect_sql_processed_total!(cx, "COM_PREPARE", ep.as_ref().unwrap());
-        crate::collect_sql_under_processing_inc!(cx, "COM_PREPARE", ep.as_ref().unwrap());
+        collect_sql_processed_total!(cx, "COM_PREPARE", ep.as_ref().unwrap());
+        collect_sql_under_processing_inc!(cx, "COM_PREPARE", ep.as_ref().unwrap());
 
         let res = Self::prepare_inner(cx, &mut client_conn, payload).await;
         cx.fsm.put_conn(client_conn);
 
-        crate::collect_sql_under_processing_dec!(cx, "COM_PREPARE", ep.as_ref().unwrap());
-        crate::collect_sql_processed_duration1!(
-            cx,
-            "COM_PREPARE",
-            ep.as_ref().unwrap(),
-            now.elapsed()
-        );
+        collect_sql_under_processing_dec!(cx, "COM_PREPARE", ep.as_ref().unwrap());
+        collect_sql_processed_duration!(cx, "COM_PREPARE", ep.as_ref().unwrap(), now.elapsed());
 
         if let Err(ref err) = res {
             if let ErrorKind::Protocol(ProtocolError::PrepareError(data)) = err.kind() {
-                cx.framed.send(PacketSend::Encode(data[4..].into())).await.map_err(ErrorKind::from)?;
+                cx.framed
+                    .send(PacketSend::Encode(data[4..].into()))
+                    .await
+                    .map_err(ErrorKind::from)?;
             }
         }
 
@@ -519,19 +531,14 @@ where
         let mut client_conn = cx.fsm.get_conn().await?;
         let ep = client_conn.get_endpoint();
 
-        crate::collect_sql_processed_total!(cx, "COM_EXECUTE", ep.as_ref().unwrap());
-        crate::collect_sql_under_processing_inc!(cx, "COM_EXECUTE", ep.as_ref().unwrap());
+        collect_sql_processed_total!(cx, "COM_EXECUTE", ep.as_ref().unwrap());
+        collect_sql_under_processing_inc!(cx, "COM_EXECUTE", ep.as_ref().unwrap());
 
         let _ = Self::execute_inner(cx, &mut client_conn, payload).await;
         cx.fsm.put_conn(client_conn);
 
-        crate::collect_sql_under_processing_dec!(cx, "COM_EXECUTE", ep.as_ref().unwrap());
-        crate::collect_sql_processed_duration1!(
-            cx,
-            "COM_EXECUTE",
-            ep.as_ref().unwrap(),
-            now.elapsed()
-        );
+        collect_sql_under_processing_dec!(cx, "COM_EXECUTE", ep.as_ref().unwrap());
+        collect_sql_processed_duration!(cx, "COM_EXECUTE", ep.as_ref().unwrap(), now.elapsed());
 
         Ok(RespContext { ep, duration: now.elapsed() })
     }
@@ -555,20 +562,15 @@ where
             Self::fsm_trigger(&mut cx.fsm, TransEventName::QueryEvent, RouteInput::None).await?;
         let ep = client_conn.get_endpoint();
 
-        crate::collect_sql_processed_total!(cx, "COM_FIELD_LIST", ep.as_ref().unwrap());
-        crate::collect_sql_under_processing_inc!(cx, "COM_FIELD_LIST", ep.as_ref().unwrap());
+        collect_sql_processed_total!(cx, "COM_FIELD_LIST", ep.as_ref().unwrap());
+        collect_sql_under_processing_inc!(cx, "COM_FIELD_LIST", ep.as_ref().unwrap());
 
         Self::field_list_inner(cx, &mut client_conn, payload).await?;
 
         cx.fsm.put_conn(client_conn);
 
-        crate::collect_sql_under_processing_dec!(cx, "COM_FIELD_LIST", ep.as_ref().unwrap());
-        crate::collect_sql_processed_duration1!(
-            cx,
-            "COM_FIELD_LIST",
-            ep.as_ref().unwrap(),
-            now.elapsed()
-        );
+        collect_sql_under_processing_dec!(cx, "COM_FIELD_LIST", ep.as_ref().unwrap());
+        collect_sql_processed_duration!(cx, "COM_FIELD_LIST", ep.as_ref().unwrap(), now.elapsed());
 
         Ok(RespContext { ep, duration: now.elapsed() })
     }
