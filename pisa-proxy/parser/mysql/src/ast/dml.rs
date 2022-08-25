@@ -888,10 +888,14 @@ impl SingleTable {
     pub fn format(&self) -> String {
         let mut single = vec![
             self.table_name.clone(),
-            "PARTITION (".to_string(),
-            self.partition_names.join(","),
-            ")".to_string(),
+
         ];
+
+        if !self.partition_names.is_empty() {
+            single.push("PARTITION (".to_string());
+            single.push(self.partition_names.join(","));
+            single.push(")".to_string());
+        }
 
         if let Some(name) = &self.alias_name {
             single.push("AS".to_string());
@@ -1418,6 +1422,7 @@ pub struct LimitClause {
 impl LimitClause {
     pub fn format(&self) -> String {
         let mut clause = Vec::with_capacity(self.opts.len() + 1);
+        clause.push("LIMIT".to_string());
         clause.push(self.opts[0].to_string());
 
         if self.offset {
