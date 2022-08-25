@@ -15,3 +15,4 @@
 #[macro_use]
 pub mod metrics;
 pub mod server;
+pub use server::*;

@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{ptr::copy_nonoverlapping, sync::atomic::AtomicU32};
+use std::ptr::copy_nonoverlapping;
 
-use bytes::{BufMut, BytesMut, Buf};
-use chrono::offset;
-use futures::SinkExt;
-use rsa::rand_core::le;
+use bytes::{BufMut, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{err::ProtocolError, mysql_const::*, util::get_length};
-
+use crate::server::err::MySQLError;
 use super::auth::ServerHandshakeCodec;
 
 pub trait CommonPacket {
@@ -34,7 +31,6 @@ pub trait CommonPacket {
 pub struct PacketCodec {
     session: ServerHandshakeCodec,
     buf: BytesMut,
-    is_complete: bool,
     // Whether the payload is greater than MAX_PAYLOAD_LEN
     is_max: bool,
     seq: u8,
@@ -45,7 +41,6 @@ impl PacketCodec {
         Self { 
             session,
             buf: BytesMut::with_capacity(init_size), 
-            is_complete: false, 
             is_max: false, 
             seq: 0 
         }
@@ -69,7 +64,7 @@ impl PacketCodec {
 
     #[inline]
     fn encode_packet_offset(&mut self, item: &[u8], dst: &mut BytesMut, offset: usize) {
-        let mut length = item.len();
+        let length = item.len();
         dst.reserve(length);
 
         let num = length / MAX_PAYLOAD_LEN;
@@ -189,14 +184,28 @@ impl<T: AsRef<[u8]>> Encoder<PacketSend<T>> for PacketCodec {
 
 #[inline]
 pub fn make_eof_packet() -> [u8; 9] {
-    let mut eof = [5, 0, 0, 0, 0xfe, 0, 0, 2, 0];
-    eof
+    [5, 0, 0, 0, 0xfe, 0, 0, 2, 0]
 }
 
 #[inline]
 pub fn ok_packet() -> [u8; 11] {
     [7, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0]
 }
+
+#[inline]
+pub fn make_err_packet(err: MySQLError) -> Vec<u8> {
+    let mut data = BytesMut::with_capacity(128);
+    data.extend_from_slice(&[0; 4]);
+    data.put_u8(0xff);
+    data.extend_from_slice(&[err.code as u8, (err.code >> 8) as u8]);
+    data.put_u8(b'#');
+    data.extend_from_slice(&err.state);
+    data.put_u8(b' ');
+    data.extend_from_slice(err.msg.as_bytes());
+
+    data.to_vec()
+}
+
 
 #[cfg(test)]
 mod test {
