@@ -134,9 +134,6 @@ impl Decoder for PacketCodec {
     }
 }
 
-pub enum SendType {
-    Origin,
-}
 pub enum PacketSend<T> {
     Origin(T),
     Encode(T),
