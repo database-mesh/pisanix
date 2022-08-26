@@ -80,7 +80,7 @@ where
 
         if res.1 {
             req.framed
-                .send(PacketSend::Encode(ok_packet()[..].into()))
+                .send(PacketSend::Encode(ok_packet()[4..].into()))
                 .await
                 .map_err(ErrorKind::from)?;
         } else {
