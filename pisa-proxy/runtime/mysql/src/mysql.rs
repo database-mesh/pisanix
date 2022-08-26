@@ -275,7 +275,7 @@ where
                             String::from("There is no healthy backend to connect."),
                         ));
                         cx.framed
-                            .send(PacketSend::Encode(err_info.into_boxed_slice()))
+                            .send(PacketSend::Encode(err_info[4..].into()))
                             .await
                             .map_err(ErrorKind::from)?;
                         error!("exec command err: {:?}", err);
@@ -315,7 +315,7 @@ where
                 "08S01".as_bytes().to_vec(),
                 err.to_string(),
             ));
-            cx.framed.send(PacketSend::Encode(err_info.into_boxed_slice())).await.map_err(ErrorKind::from)?;
+            cx.framed.send(PacketSend::Encode(err_info[4..].into())).await.map_err(ErrorKind::from)?;
             return Ok(RespContext { ep: None, duration: now.elapsed() });
         }
 
@@ -328,14 +328,14 @@ where
             ComType::QUERY => S::query(cx, &payload).await,
             ComType::FIELD_LIST => S::field_list(cx, &payload).await,
             ComType::PING => {
-                cx.framed.send(PacketSend::Encode(ok_packet()[..].into())).await.map_err(ErrorKind::from)?;
+                cx.framed.send(PacketSend::Encode(ok_packet()[4..].into())).await.map_err(ErrorKind::from)?;
                 return Ok(RespContext { ep: None, duration: now.elapsed() });
             }
             ComType::STMT_PREPARE => S::prepare(cx, &payload).await,
             ComType::STMT_EXECUTE => S::execute(cx, &payload).await,
             ComType::STMT_CLOSE => S::stmt_close(cx, &payload).await,
             ComType::STMT_RESET => {
-                cx.framed.send(PacketSend::Encode(ok_packet()[..].into())).await.map_err(ErrorKind::from)?;
+                cx.framed.send(PacketSend::Encode(ok_packet()[4..].into())).await.map_err(ErrorKind::from)?;
                 return Ok(RespContext { ep: None, duration: now.elapsed() });
             }
             x => {
@@ -344,7 +344,7 @@ where
                     "08S01".as_bytes().to_vec(),
                     format!("command {} not support", x.as_ref()),
                 ));
-                cx.framed.send(PacketSend::Encode(err_info.into_boxed_slice())).await.map_err(ErrorKind::from)?;
+                cx.framed.send(PacketSend::Encode(err_info[4..].into())).await.map_err(ErrorKind::from)?;
                 return Ok(RespContext { ep: None, duration: now.elapsed() });
             }
         }
