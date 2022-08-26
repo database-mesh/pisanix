@@ -17,7 +17,7 @@ use std::{collections::HashMap, sync::Arc};
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
 use serde::{Deserialize, Serialize};
-use strategy::config::{ReadWriteSplitting, TargetRole};
+use strategy::config::{ReadWriteSplitting, TargetRole, Sharding};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::Mutex,
@@ -50,9 +50,7 @@ pub struct ProxyConfig {
     pub strategy: String,
     #[serde(default = "default_auto_server_version")]
     pub server_version: String,
-    pub master_slave: Option<ProxyConfigMasterSlave>,
-    pub sharding: Option<ProxyConfigSharding>,
-    pub sharding_master_slave: Option<ProxyConfigShardingMasterSlave>,
+    pub sharding: Option<Vec<Sharding>>,
     pub simple_loadbalance: Option<ProxySimpleLoadBalance>,
     pub plugin: Option<plugin::config::Plugin>,
     // read write splitting config structure
@@ -63,27 +61,6 @@ pub struct ProxyConfig {
 pub struct ProxyConfigMasterSlave {
     master: Option<Vec<String>>,
     slave: Option<Vec<String>>,
-    balance_type: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ProxyConfigSharding {
-    table: Option<String>,
-    sharding_key: Option<String>,
-    sharding_type: Option<String>,
-    nodes: Option<Vec<String>>,
-    shard: Option<HashMap<String, u64>>,
-    defaults: Option<Vec<String>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ProxyConfigShardingMasterSlave {
-    master: Option<Vec<String>>,
-    slave: Option<Vec<String>>,
-    defaults: Option<Vec<String>>,
-    shard: Option<HashMap<String, u64>>,
-    sharding_key: Option<String>,
-    sharding_type: Option<String>,
     balance_type: Option<String>,
 }
 
