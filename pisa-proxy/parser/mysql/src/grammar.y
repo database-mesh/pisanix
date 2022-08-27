@@ -208,9 +208,9 @@ select_stmt_with_into -> SelectStmt:
   | query_expression_parens into_clause
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.into_clause = Some($2);
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $1
@@ -233,24 +233,29 @@ query_expression -> SelectStmt:
     }
   | with_clause query_expression_body opt_order_clause opt_limit_clause
     {
-      match $2 {
+      let newq = match $2 {
         SelectStmt::Query(mut q) => {
-          q.with_clause = Some($1);
           q.order_clause = $3;
           q.limit_clause = $4;
           SelectStmt::Query(q)
         }
-
         _ => $2
-      }
+      };
+
+      SelectStmt::With(
+        Box::new(WithQuery {
+          with_clause: $1,
+          expr_body: newq,
+        })
+      )
     }
   | query_expression_parens order_clause opt_limit_clause
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.order_clause = Some($2);
           q.limit_clause = $3;
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $1
@@ -258,23 +263,29 @@ query_expression -> SelectStmt:
     }
   | with_clause query_expression_parens order_clause opt_limit_clause
     {
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.with_clause = Some($1);
+      let newq = match $2 {
+        SelectStmt::SubQuery(mut q) => {
           q.order_clause = Some($3);
           q.limit_clause = $4;
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $2
-      }
+      };
+
+      SelectStmt::With(
+        Box::new(WithQuery {
+          with_clause: $1,
+          expr_body: newq,
+        })
+      )
     }
   | query_expression_parens limit_clause
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.limit_clause = Some($2);
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $1
@@ -282,26 +293,30 @@ query_expression -> SelectStmt:
     }
   | with_clause query_expression_parens limit_clause
     {
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.with_clause = Some($1);
+      let newq = match $2 {
+        SelectStmt::SubQuery(mut q) => {
           q.limit_clause = Some($3);
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $2
-      }
+      };
+
+      SelectStmt::With(
+        Box::new(WithQuery {
+          with_clause: $1,
+          expr_body: newq,
+        })
+      )
     }
   | with_clause query_expression_parens
     {
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.with_clause = Some($1);
-          SelectStmt::Query(q)
-        }
-
-        _ => $2
-      }
+      SelectStmt::With(
+        Box::new(WithQuery {
+          with_clause: $1,
+          expr_body: $2,
+        })
+      )
     }
   ;
 
@@ -324,10 +339,10 @@ query_expression_body -> SelectStmt:
   | query_expression_parens 'UNION' union_option query_primary
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.union_opt = $3;
           q.union_query = Some(Box::new($4));
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
         _ => $1
       }
@@ -346,10 +361,10 @@ query_expression_body -> SelectStmt:
   | query_expression_parens 'UNION' union_option query_expression_parens
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.union_opt = $3;
           q.union_query = Some(Box::new($4));
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
         _ => $1
       }
@@ -359,37 +374,56 @@ query_expression_body -> SelectStmt:
 query_expression_parens -> SelectStmt:
     '(' query_expression_parens ')'
     { 
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.is_embd = true;
-          SelectStmt::Query(q)
-        },
+    	SelectStmt::SubQuery(Box::new(
+		SubQuery {
+			span: $span,
+			query: $2,
+			into_clause: None,
+			union_opt: None,
+			union_query: None,
+			order_clause: None,
+			limit_clause: None,
+		}
 
-        _ => $2
-      }
+	))
     }
   | '(' query_expression ')'
     { 
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.is_parens = true;
-          SelectStmt::Query(q)
-        },
+    	SelectStmt::SubQuery(Box::new(
+		SubQuery {
+			span: $span,
+			query: $2,
+			into_clause: None,
+			union_opt: None,
+			union_query: None,
+			order_clause: None,
+			limit_clause: None,
+		}
 
-        _ => $2
-      }
+	))
     }
   | '(' query_expression locking_clause_list ')'
     {
-      match $2 {
+      let newq = match $2 {
         SelectStmt::Query(mut q) => {
-          q.is_parens = true;
       	  q.lock_clauses = $3;
           SelectStmt::Query(q)
         },
 
         _ => $2
-      }
+      };
+
+      SelectStmt::SubQuery(Box::new(
+	SubQuery {
+		span: $span,
+		query: newq,
+		into_clause: None,
+		union_opt: None,
+		union_query: None,
+		order_clause: None,
+		limit_clause: None,
+	}
+      ))
     }
   ;
 
@@ -429,14 +463,11 @@ query_specification -> SelectStmt:
         group_clause: $7,
         having_clause: $8,
         window_clause: $9,
-        is_parens: false,
         limit_clause: None,
         lock_clauses: vec![],
-        with_clause: None,
         order_clause: None,
         union_opt: None,
         union_query: None,
-        is_embd: false,
       }))
     }
   | "SELECT"
@@ -457,15 +488,12 @@ query_specification -> SelectStmt:
         group_clause: $6,
         having_clause: $7,
         window_clause: $8,
-        is_parens: false,
         limit_clause: None,
         lock_clauses: vec![],
         into_clause: None,
-        with_clause: None,
         order_clause: None,
         union_opt: None,
         union_query: None,
-        is_embd: false,
       }))
     }
   ;
@@ -2897,11 +2925,11 @@ index_hints_list -> Span:
 
 opt_index_hints_list -> Option<String>:
     /* empty */       { None }
-  | index_hints_list  { Some(String::from($lexer.span_str($span))) }
+  | index_hints_list  { Some(String::from($lexer.span_str($1))) }
   ;
 
-opt_key_definition -> String:
-  opt_index_hints_list { String::from($lexer.span_str($span)) }
+opt_key_definition -> Option<String>:
+  opt_index_hints_list { $1 }
   ;
 
 opt_key_usage_list -> Span:
@@ -5437,7 +5465,7 @@ update_stmt -> Box<UpdateStmt>:
     {
       Box::new(UpdateStmt {
 	      span: $span,
-	      with_clause: $1,
+        with_clause: $1,
 	      low_priority: $3,
 	      ignore: $4,
 	      table_refs: $5,
@@ -5531,7 +5559,7 @@ delete_stmt -> Box<DeleteStmt>:
     {
       Box::new(DeleteStmt {
 	      span: $span,
-	      with_clause: $1,
+        with_clause: $1,
         quick: $3,
         low_priority: $4,
         ignore: $5,
