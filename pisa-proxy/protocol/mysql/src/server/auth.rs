@@ -473,14 +473,12 @@ pub async fn handshake(
 mod test {
     use bytes::BytesMut;
     use futures::{SinkExt, StreamExt};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
     use tokio_util::codec::Framed;
 
     use crate::{
         err::ProtocolError,
         server::{
             auth::{ServerHandshakeCodec, ServerHandshakeStatus},
-            codec::PacketCodec,
         },
     };
 
@@ -493,7 +491,7 @@ mod test {
         let server_version = "5.7.36".to_string();
         let hs = ServerHandshakeCodec::new(user, password, db, server_version);
 
-        let (mut client, mut server) = tokio::io::duplex(512);
+        let (client, server) = tokio::io::duplex(512);
         let mut framed = Framed::new(client, hs);
 
         let client_reponse_data = [
@@ -512,10 +510,9 @@ mod test {
             0x66, 0x6f, 0x72, 0x6d, 0x06, 0x78, 0x38, 0x36, 0x5f, 0x36, 0x34,
         ];
 
-        framed.send(BytesMut::from(&client_reponse_data[..])).await;
+        let _ = framed.send(BytesMut::from(&client_reponse_data[..])).await;
 
         let mut parts = framed.into_parts();
-        client = parts.io;
         parts.io = server;
 
         framed = Framed::from_parts(parts);
@@ -554,14 +551,14 @@ mod test {
             0x38, 0x36, 0x5f, 0x36, 0x34,
         ];
 
-        framed.send(BytesMut::from(&client_reponse_data[..])).await;
+        let _ = framed.send(BytesMut::from(&client_reponse_data[..])).await;
 
         let mut parts = framed.into_parts();
         client = parts.io;
         parts.io = server;
         framed = Framed::from_parts(parts);
 
-        let res = framed.next().await.unwrap();
+        let _res = framed.next().await.unwrap();
 
         assert_eq!(framed.codec().next_handshake_status, ServerHandshakeStatus::WriteAutoSwitch);
 
@@ -577,10 +574,9 @@ mod test {
             0xe9, 0x43, 0x36, 0x24, 0x4c, 0x71, 0xef, 0x32, 0x1a, 0x5d,
         ];
 
-        framed.send(BytesMut::from(&auto_switch_response_data[..])).await;
+        let _ = framed.send(BytesMut::from(&auto_switch_response_data[..])).await;
 
         let mut parts = framed.into_parts();
-        client = parts.io;
         parts.io = server;
         framed = Framed::from_parts(parts);
 

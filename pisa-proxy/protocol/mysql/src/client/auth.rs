@@ -252,7 +252,7 @@ impl ClientAuth {
 
         // length-encode-integer
         let mut auth_resp_length_integer = Vec::with_capacity(9);
-        auth_resp_length_integer.put_lenc_int(auth_data.len() as u64);
+        auth_resp_length_integer.put_lenc_int(auth_data.len() as u64, false);
 
         //append_length_encoded_integer1(&mut auth_resp_length_integer, auth_data.len() as u64);
 

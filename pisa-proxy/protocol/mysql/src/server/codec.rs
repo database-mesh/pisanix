@@ -182,20 +182,25 @@ pub fn make_err_packet(err: MySQLError) -> Vec<u8> {
 
 #[cfg(test)]
 mod test {
-    use bytes::{BufMut, BytesMut};
+    use bytes::BytesMut;
     use futures::{SinkExt, StreamExt};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio_util::codec::Framed;
 
     use super::PacketCodec;
     use crate::{
         mysql_const::MAX_PAYLOAD_LEN,
-        server::codec::{CommonPacket, PacketSend},
+        server::{codec::PacketSend, auth::ServerHandshakeCodec},
     };
 
     #[tokio::test]
     async fn test_packetcodec_normal() {
-        let packet = PacketCodec::new(8196);
+        let handshake_codec = ServerHandshakeCodec::new(
+            "root".to_string(),
+            "123456".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        let packet = PacketCodec::new(handshake_codec, 8196);
         //let mut data = 16_u32.to_le_bytes()[0..3].to_vec();
         //data.put_u8(0);
         let data = vec![3; 16];
@@ -215,10 +220,16 @@ mod test {
 
     #[tokio::test]
     async fn test_packetcodec_max() {
-        let packet = PacketCodec::new(8196);
+        let handshake_codec = ServerHandshakeCodec::new(
+            "root".to_string(),
+            "123456".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        let packet = PacketCodec::new(handshake_codec, 8196);
         let length: u32 = MAX_PAYLOAD_LEN as u32 * 2 + 16 + 12;
 
-        let (client, mut server) = tokio::io::duplex(length as usize);
+        let (client, server) = tokio::io::duplex(length as usize);
 
         let mut payload_data: Vec<u8> = vec![];
         payload_data.extend_from_slice(&vec![1; MAX_PAYLOAD_LEN]);
@@ -238,7 +249,13 @@ mod test {
 
     #[test]
     fn test_encode_offset() {
-        let packet = PacketCodec::new(8196);
+        let handshake_codec = ServerHandshakeCodec::new(
+            "root".to_string(),
+            "123456".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        let packet = PacketCodec::new(handshake_codec, 8196);
         let (client, _) = tokio::io::duplex(100);
 
         let mut framed = Framed::new(client, packet);

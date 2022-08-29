@@ -40,7 +40,7 @@ use crate::{
         CLIENT_PROTOCOL_41, CLIENT_SESSION_TRACK, CLIENT_TRANSACTIONS, SERVER_SESSION_STATE_CHANGED,
     },
     row::{Row, RowData, RowDataTyp},
-    util::{get_length, is_eof, length_encoded_string, BufExt},
+    util::{get_length, is_eof, length_encoded_string, BufMutExt, BufExt},
 };
 
 pub type SendCommand<'a> = (u8, &'a str);
@@ -366,7 +366,7 @@ pub struct ResultOkInfo {
     status: Option<u16>,
     warnings: Option<u16>,
     info: Option<Vec<u8>>,
-    state_info: Option<SessionState>,
+    state_changes: Option<SessionState>,
 }
 
 impl ResultOkInfo {
@@ -377,7 +377,7 @@ impl ResultOkInfo {
             status: None,
             warnings: None,
             info: None,
-            state_info: None,
+            state_changes: None,
         }
     }
 
@@ -408,7 +408,7 @@ impl ResultOkInfo {
             if let Some(status) = ok_info.status {
                 if status & SERVER_SESSION_STATE_CHANGED > 0 {
                     let _ = data.get_lenc_int();
-                    ok_info.state_info = Some(SessionState::decode(data))
+                    ok_info.state_changes = Some(SessionState::decode(data))
                 }
             }
         } else {
@@ -417,6 +417,35 @@ impl ResultOkInfo {
         }
 
         ok_info
+    }
+
+    pub fn encode(&self, capability: u32) -> Box<[u8]> {
+        let mut data = BytesMut::with_capacity(64);
+        data.put_u8(0x00);
+
+        data.put_lenc_int(self.affected_rows, true);
+        data.put_lenc_int(self.last_insert_id, true);
+
+        if capability & CLIENT_PROTOCOL_41 > 0 {
+            if let Some(status) = &self.status {
+                data.put_u16_le(*status);
+            }
+
+            if let Some(warnings) = &self.warnings {
+                data.put_u16_le(*warnings);
+            }
+
+        } else if capability & CLIENT_TRANSACTIONS > 0 {
+            if let Some(status) = &self.status {
+                data.put_u16_le(*status);
+            }
+        }
+
+        if let Some(info) = &self.info {
+            data.put_lenc_int(info.len() as u64, false);
+            data.put_slice(&info);
+        }
+        data[..].into()
     }
 }
 
@@ -495,7 +524,7 @@ mod test {
         let auth_info = driver.framed.as_ref().unwrap();
         let info = ResultOkInfo::decode(auth_info, &mut packet);
 
-        if let Some(SessionState::Schema(schema)) = info.state_info {
+        if let Some(SessionState::Schema(schema)) = info.state_changes {
             assert_eq!(b"test"[..], schema)
         }
     }
@@ -523,7 +552,7 @@ mod test {
         let auth_info = driver.framed.as_ref().unwrap();
         let info = ResultOkInfo::decode(auth_info, &mut packet);
 
-        if let Some(SessionState::SystemVariables(vars)) = info.state_info {
+        if let Some(SessionState::SystemVariables(vars)) = info.state_changes {
             assert_eq!(b"autocommit"[..], vars[0].0);
             assert_eq!(b"OFF"[..], vars[0].1);
         }
@@ -545,6 +574,39 @@ mod test {
 
         let auth_info = driver.framed.as_ref().unwrap();
         let info = ResultOkInfo::decode(auth_info, &mut packet);
-        assert_eq!(info.state_info.is_none(), true);
+        assert_eq!(info.state_changes.is_none(), true);
+    } 
+
+     #[tokio::test]
+     async fn test_ok_packet_encode() {
+         let driver = ClientConn::test_conn(
+             "root".to_string(),
+             "123456".to_string(),
+             "127.0.0.1:13306".to_string(),
+         )
+         .await
+         .unwrap();
+         let auth_info = driver.framed.as_ref().unwrap();
+         let ok_info = ResultOkInfo {
+             affected_rows: 256,
+             last_insert_id: 0,
+             status: Some(0x0022),
+             warnings: Some(0),
+             info: Some(b"Records: 256  Duplicates: 0  Warnings: 0".to_vec()),
+             state_changes: None,
+
+         };
+
+         let expected = [ 
+             0x00, 0xfc, 0x00, 0x01, 0x00, 0x22, 0x00, 0x00, 0x00, 0x28, 0x52, 0x65,
+             0x63, 0x6f, 0x72, 0x64, 0x73, 0x3a, 0x20, 0x32, 0x35, 0x36, 0x20, 0x20, 0x44, 0x75, 0x70, 0x6c,
+             0x69, 0x63, 0x61, 0x74, 0x65, 0x73, 0x3a, 0x20, 0x30, 0x20, 0x20, 0x57, 0x61, 0x72, 0x6e, 0x69,
+             0x6e, 0x67, 0x73, 0x3a, 0x20, 0x30,
+         ];
+
+         let res = ok_info.encode(auth_info.capability);
+
+         assert_eq!(&expected[..], &res[..])
     }
+
 }
