@@ -19,6 +19,8 @@ use crate::ast::{api::*, base::*};
 #[derive(Debug, Clone)]
 pub enum SelectStmt {
     Query(Box<Query>),
+    SubQuery(Box<SubQuery>),
+    With(Box<WithQuery>),
     ValueConstructor(Vec<Vec<Expr>>),
     ExplicitTable(String),
     None,
@@ -28,11 +30,15 @@ impl SelectStmt {
     pub fn format(&self) -> String {
         match self {
             Self::Query(val) => {
-                if val.is_embd {
-                    vec!["(".to_string(), val.format(), ")".to_string()].join(" ")
-                } else {
-                    val.format()
-                }
+                val.format()
+            }
+
+            Self::SubQuery(val) => {
+                val.format()
+            }
+
+            Self::With(val) => {
+                val.format()
             }
 
             Self::ValueConstructor(val) => {
@@ -70,6 +76,24 @@ impl Visitor for SelectStmt {
 
                 let new_node = node.into_query().unwrap().visit(tf);
                 Self::Query(Box::new(new_node))
+            
+            }
+
+            Self::SubQuery(query) => {
+                let mut node = Node::SubQuery(*query.clone());
+                tf.trans(&mut node);
+
+                let new_node = node.into_sub_query().unwrap().visit(tf);
+                Self::SubQuery(Box::new(new_node))
+            
+            }
+
+            Self::With(query) => {
+                let mut node = Node::WithQuery(*query.clone());
+                tf.trans(&mut node);
+
+                let new_node = node.into_with_query().unwrap().visit(tf);
+                Self::With(Box::new(new_node))
             }
 
             Self::ValueConstructor(exprs) => {
@@ -109,29 +133,18 @@ pub struct Query {
     pub group_clause: Option<GroupClause>,
     pub having_clause: Option<HavingClause>,
     pub window_clause: Option<WindowClause>,
-    pub order_clause: Option<OrderClause>,
-    pub limit_clause: Option<LimitClause>,
-    pub with_clause: Option<WithClause>,
-    pub lock_clauses: Vec<LockClause>,
-
     pub union_opt: Option<UnionOpt>,
     pub union_query: Option<Box<SelectStmt>>,
-    pub is_embd: bool,
-    pub is_parens: bool,
+    pub lock_clauses: Vec<LockClause>,
+    pub order_clause: Option<OrderClause>,
+    pub limit_clause: Option<LimitClause>,
 }
 
 impl Query {
     pub fn format(&self) -> String {
         let mut query = Vec::with_capacity(15);
+
         query.push("SELECT".to_string());
-
-        if let Some(with) = &self.with_clause {
-            query.push(with.format())
-        }
-
-        if self.is_parens {
-            query.push("(".to_string());
-        }
 
         query.push(self.opts.iter().map(|x| x.format()).collect::<Vec<String>>().join(" "));
         query.push(self.items.format());
@@ -172,10 +185,6 @@ impl Query {
             let lock =
                 self.lock_clauses.iter().map(|x| x.format()).collect::<Vec<String>>().join(" ");
             query.push(lock);
-        }
-
-        if self.is_parens {
-            query.push(")".to_string())
         }
 
         if let Some(opt) = &self.union_opt {
@@ -250,12 +259,6 @@ impl Visitor for Query {
             let mut node = Node::LimitClause(v.clone());
             tf.trans(&mut node);
             self.limit_clause = Some(node.into_limit_clause().unwrap().visit(tf));
-        }
-
-        if let Some(v) = &self.with_clause {
-            let mut node = Node::WithClause(v.clone());
-            tf.trans(&mut node);
-            self.with_clause = Some(node.into_with_clause().unwrap().visit(tf));
         }
 
         let mut new_locks = Vec::with_capacity(self.lock_clauses.len());
@@ -453,7 +456,8 @@ impl ItemExpr {
         item.push(self.expr.format());
 
         if let Some(name) = &self.alias_name {
-            item.push(name.to_string())
+            item.push("AS".to_string());
+            item.push(name.to_string());
         }
 
         item.join(" ")
@@ -880,7 +884,7 @@ pub struct SingleTable {
     pub partition_names: Vec<String>,
     pub alias_name: Option<String>,
     //field `index_hints` unused yet
-    pub index_hints: String,
+    pub index_hints: Option<String>,
     pub is_parens: bool,
 }
 
@@ -902,7 +906,9 @@ impl SingleTable {
             single.push(name.to_string());
         }
 
-        single.push(self.index_hints.to_string());
+        if let Some(index) = &self.index_hints {
+            single.push(index.to_string());
+        }
 
         single.join(" ")
     }
@@ -1451,7 +1457,23 @@ impl Visitor for LimitClause {
 pub struct SubQuery {
     pub span: Span,
     pub query: SelectStmt,
-    pub lock_clauses: Vec<Value>,
+    pub union_opt: Option<UnionOpt>,
+    pub union_query: Option<Box<SelectStmt>>,
+    pub into_clause: Option<IntoClause>,
+    pub order_clause: Option<OrderClause>,
+    pub limit_clause: Option<LimitClause>,
+}
+
+impl SubQuery {
+    pub fn format(&self) -> String {
+        let query = self.query.format();
+        let mut subquery = Vec::with_capacity(query.len() + 2);
+        subquery.push("(".to_string());
+        subquery.push(query);
+        subquery.push(")".to_string());
+        
+        subquery.join(" ")
+    }
 }
 
 impl Visitor for SubQuery {
@@ -1461,17 +1483,59 @@ impl Visitor for SubQuery {
         let mut new_node = node.into_select_stmt().unwrap();
         self.query = new_node.visit(tf);
 
-        let mut new_locks = Vec::with_capacity(self.lock_clauses.len());
-        for v in &self.lock_clauses {
-            let mut node = Node::Value(v.clone());
+        if let Some(union) = &self.union_query {
+            let mut node = Node::SelectStmt(*union.clone());
             tf.trans(&mut node);
-            let mut new_node = node.into_value().unwrap();
-            new_locks.push(new_node.visit(tf));
+            let new_node = node.into_select_stmt().unwrap().visit(tf);
+            self.union_query = Some(Box::new(new_node));
         }
 
-        if !new_locks.is_empty() {
-            self.lock_clauses = new_locks
+        if let Some(v) = &self.into_clause {
+            let mut node = Node::IntoClause(v.clone());
+            tf.trans(&mut node);
+            self.into_clause = Some(node.into_into_clause().unwrap().visit(tf));
         }
+
+        if let Some(v) = &self.order_clause {
+            let mut node = Node::OrderClause(v.clone());
+            tf.trans(&mut node);
+            self.order_clause = Some(node.into_order_clause().unwrap().visit(tf));
+        }
+
+        if let Some(v) = &self.limit_clause {
+            let mut node = Node::LimitClause(v.clone());
+            tf.trans(&mut node);
+            self.limit_clause = Some(node.into_limit_clause().unwrap().visit(tf));
+        }
+
+        self.clone()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WithQuery {
+    pub with_clause: WithClause,
+    pub expr_body: SelectStmt,
+}
+
+impl WithQuery {
+    pub fn format(&self) -> String {
+        let mut with = vec![self.with_clause.format()];
+        with.push(self.expr_body.format());
+
+        with.join(" ")
+    }
+}
+
+impl Visitor for WithQuery {
+    fn visit<T: Transformer>(&mut self, tf: &mut T) -> Self {
+        let mut node = Node::WithClause(self.with_clause.clone());
+        tf.trans(&mut node);
+        self.with_clause = node.into_with_clause().unwrap().visit(tf);
+
+        let mut node = Node::SelectStmt(self.expr_body.clone());
+        tf.trans(&mut node);
+        self.expr_body = node.into_select_stmt().unwrap().visit(tf);
 
         self.clone()
     }
