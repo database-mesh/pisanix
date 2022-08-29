@@ -160,12 +160,21 @@ impl BufExt for &[u8] {}
 impl BufExt for BytesMut {}
 
 pub trait BufMutExt: BufMut {
-    fn put_lenc_int(&mut self, n: u64) {
+    fn put_lenc_int(&mut self, n: u64, is_num: bool) {
+        if n == 0 {
+            if is_num {
+                self.put_u8(0);
+            } else {
+                self.put_u8(0xfb);
+            }
+            return;
+        }
+
         if n <= 250 {
             self.put_u8(n as u8);
         } else if n <= 0xffff {
             self.put_u8(0xfc);
-            self.put_uint(n, 2);
+            self.put_uint_le(n, 2);
         } else if n <= 0xffffff {
             self.put_u8(0xfd);
             self.put_uint_le(n, 3);
@@ -177,6 +186,7 @@ pub trait BufMutExt: BufMut {
 }
 
 impl BufMutExt for Vec<u8> {}
+impl BufMutExt for BytesMut {}
 
 pub fn length_encoded_string(data: &mut BytesMut) -> (Vec<u8>, bool) {
     let (num, is_null, _) = data.get_lenc_int();
