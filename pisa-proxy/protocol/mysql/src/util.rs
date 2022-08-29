@@ -161,6 +161,7 @@ impl BufExt for BytesMut {}
 
 pub trait BufMutExt: BufMut {
     fn put_lenc_int(&mut self, n: u64, is_num: bool) {
+        // See https://dev.mysql.com/doc/internals/en/integer.html#length-encoded-integer
         if n == 0 {
             if is_num {
                 self.put_u8(0);
