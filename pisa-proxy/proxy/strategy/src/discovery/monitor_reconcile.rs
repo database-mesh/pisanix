@@ -22,7 +22,7 @@ use crate::{
 use crate::config::MasterHighAvailability;
 
 pub struct MonitorReconcile {
-    config: crate::config::Discovery,
+    _config: crate::config::Discovery,
     rw_endpoint: ReadWriteEndpoint,
 }
 
@@ -34,7 +34,7 @@ use crate::monitors::{
 
 impl MonitorReconcile {
     pub fn new(config: ReadWriteSplittingDynamic, rw_endpoint: ReadWriteEndpoint) -> Self {
-        MonitorReconcile { config: config.discovery, rw_endpoint }
+        MonitorReconcile { _config: config.discovery, rw_endpoint }
     }
 
     pub fn start_monitor_reconcile(
@@ -116,7 +116,7 @@ impl MonitorReconcile {
 
     fn change_read_write_if_necessary(master_high_availability: &MasterHighAvailability,
                                       connect_monitor_response: &mut Option<ConnectMonitorResponse>,
-                                      mut ping_monitor_response: &mut Option<PingMonitorResponse>,
+                                      ping_monitor_response: &mut Option<PingMonitorResponse>,
                                       mut read_only_monitor_response: &mut Option<ReadOnlyMonitorResponse>,
                                       mut curr_rw_endpoint: &mut ReadWriteEndpoint) {
         for (_read_write_connect_addr, read_write_connect_status) in
@@ -152,7 +152,7 @@ impl MonitorReconcile {
     fn change_read_if_necessary(master_high_availability: &MasterHighAvailability,
                                 rw_endpoint: &ReadWriteEndpoint,
                                 connect_monitor_response: &mut Option<ConnectMonitorResponse>,
-                                mut ping_monitor_response: &mut Option<PingMonitorResponse>,
+                                ping_monitor_response: &mut Option<PingMonitorResponse>,
                                 mut replication_lag_monitor_response: &mut Option<ReplicationLagMonitorResponse>,
                                 mut curr_rw_endpoint: &mut ReadWriteEndpoint) {
         for (read_addr, read_connect_status) in
@@ -193,7 +193,7 @@ impl MonitorReconcile {
         }
     }
 
-    fn change_read_by_lag(master_high_availability: &MasterHighAvailability, rw_endpoint: &ReadWriteEndpoint, replication_lag_monitor_response: &mut &mut Option<ReplicationLagMonitorResponse>, mut curr_rw_endpoint: &mut &mut ReadWriteEndpoint) {
+    fn change_read_by_lag(master_high_availability: &MasterHighAvailability, rw_endpoint: &ReadWriteEndpoint, replication_lag_monitor_response: &mut &mut Option<ReplicationLagMonitorResponse>, curr_rw_endpoint: &mut &mut ReadWriteEndpoint) {
         if master_high_availability.replication_lag_enabled {
             match replication_lag_monitor_response.clone() {
                 Some(replication_lag_response) => {

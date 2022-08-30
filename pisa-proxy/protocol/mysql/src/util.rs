@@ -133,12 +133,10 @@ pub trait BufExt: Buf {
     fn get_lenc_str_bytes(&mut self) -> (Vec<u8>, bool) {
         let (length, is_null, _) = self.get_lenc_int();
 
-        if length < 1 {
-            return (vec![0], is_null);
-        }
-
-        if !self.has_remaining() {
-            return (vec![], false);
+        // When length < 1 means that the origin bytes is 0x00 or 0xfb, 
+        // In the str context, means the str is null, so return true here.
+        if length < 1 || is_null || !self.has_remaining() {
+            return (vec![0], true);
         }
 
         let mut data = vec![0; length as usize];

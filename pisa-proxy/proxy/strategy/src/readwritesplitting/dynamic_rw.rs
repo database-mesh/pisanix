@@ -72,10 +72,8 @@ impl ReadWriteSplittingDynamicBuilder {
 
         let monitor_response_channel = MonitorResponseChannel::build();
 
-        let mut reciver: Option<crossbeam_channel::Receiver<ReadWriteEndpoint>> = None;
-
         // Match discovery type
-        match config.clone().discovery {
+        let reciver = match config.clone().discovery {
             // Use Master High Availability Discovery
             crate::config::Discovery::Mha(cc) => {
                 let monitors =
@@ -91,15 +89,15 @@ impl ReadWriteSplittingDynamicBuilder {
                 let mut monitor_reconcile =
                     MonitorReconcile::new(config.clone(), rw_endpoint.clone());
 
-                reciver = Some(monitor_reconcile.start_monitor_reconcile(
+                monitor_reconcile.start_monitor_reconcile(
                     cc.clone(),
                     monitor_response_channel.clone(),
                     monitors_len,
-                ));
+                )
             }
         };
 
-        ReadWriteSplittingDynamic { rx: reciver.unwrap(), rules: config.clone().rules, rules_match }
+        ReadWriteSplittingDynamic { rx: reciver, rules: config.clone().rules, rules_match }
     }
 }
 

@@ -101,8 +101,8 @@ impl MonitorReadOnly {
             .unwrap();
         while let Some(data) = res.next().await {
             let mut row = data.unwrap();
-            let read_only_status = row.decode_with_name::<String>("Variable_name").unwrap();
-            let read_only_values = row.decode_with_name::<String>("Value").unwrap();
+            let read_only_status = row.decode_with_name::<String>("Variable_name").unwrap().unwrap();
+            let read_only_values = row.decode_with_name::<String>("Value").unwrap().unwrap();
 
             if read_only_status.eq("read_only") && read_only_values.eq("ON") {
                 return Ok(NodeRole::Slave);
