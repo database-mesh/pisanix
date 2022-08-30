@@ -37,7 +37,7 @@ pub trait Column: BufExt {
 
         while self.has_remaining() {
             self.advance(4);
-            columns.push(self.decode_column())
+            columns.push(self.decode_column());
         }
 
         columns
@@ -54,8 +54,8 @@ pub trait Column: BufExt {
         //Table -- virtual table-name
         let mut table_name: Option<String> = None;
         let (str_bytes, is_null) = self.get_lenc_str_bytes();
-        // Exclude 0x00
-        if !is_null && !(str_bytes.len() == 1 && str_bytes[0] == 0) {
+
+        if !is_null {
             table_name = Some(String::from_utf8(str_bytes).unwrap());
         }
 

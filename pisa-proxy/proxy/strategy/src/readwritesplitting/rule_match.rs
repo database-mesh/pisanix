@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{error::Error, sync::Arc};
+use std::error::Error;
 
 use endpoint::endpoint::Endpoint;
 use loadbalance::balance::{AlgorithmName, Balance, BalanceType, LoadBalance};
 use regex::Regex;
-use tracing::debug;
 
 use super::ReadWriteEndpoint;
 use crate::{
