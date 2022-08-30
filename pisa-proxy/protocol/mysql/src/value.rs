@@ -16,9 +16,9 @@ use bytes::Buf;
 
 pub type Result<T> = std::result::Result<Option<T>, Box<dyn std::error::Error>>;
 
-pub trait Value: Sized {
+pub trait Value<T>: Sized {
     type Item: Convert<Self>;
-    fn from(val: Vec<u8>) -> Result<Self>;
+    fn from(val: T) -> Result<Self>;
 }
 
 impl Value for String {
