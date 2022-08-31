@@ -19,8 +19,9 @@ use bytes::BytesMut;
 use crate::{
     column::ColumnInfo,
     err::DecodeRowError,
-    util::BufExt,
+    util::{BufExt, length_encode_int},
     value::{self, Value},
+    mysql_const::*,
 };
 
 pub trait Row: BufExt {
@@ -35,7 +36,7 @@ pub trait Row: BufExt {
             return Ok(None);
         }
 
-        Value::from(row_data)
+        Value::from(&row_data)
     }
 
     fn decode_row_with_range_idx<T: Value>(
@@ -54,7 +55,7 @@ pub trait Row: BufExt {
             if is_null {
                 values.push(Ok(None))
             } else {
-                values.push(Value::from(row_data))
+                values.push(Value::from(&row_data))
             }
         }
 
@@ -71,7 +72,7 @@ pub trait RowData<T: Row> {
 }
 
 #[derive(Clone)]
-pub enum RowDataTyp<T: Row> {
+pub enum RowDataTyp<T: Row + AsRef<[u8]>> {
     Text(RowDataText<T>),
 }
 
@@ -115,19 +116,19 @@ impl RowDataCommon {
 
 // For ProtocolText::ResultsetRow
 #[derive(Debug, Clone)]
-pub struct RowDataText<T: Row> {
+pub struct RowDataText<T: Row + AsRef<[u8]>> {
     common: RowDataCommon,
     buf: T,
 }
 
-impl<T: Row> RowDataText<T> {
+impl<T: Row + AsRef<[u8]>> RowDataText<T> {
     pub fn new(columns: Arc<[ColumnInfo]>, buf: T) -> RowDataText<T> {
         let common = RowDataCommon::new(columns);
         RowDataText { common, buf }
     }
 }
 
-impl<T: Row> RowData<T> for RowDataText<T> {
+impl<T: Row + AsRef<[u8]>> RowData<T> for RowDataText<T> {
     fn with_buf(&mut self, buf: T) {
         self.buf = buf;
     }
@@ -136,6 +137,108 @@ impl<T: Row> RowData<T> for RowDataText<T> {
         self.buf.decode_row_with_idx::<V>(self.common.get_idx(name)?)
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct RowDataBinary<T: Row + AsRef<[u8]>> {
+    common: RowDataCommon,
+    null_map: Vec<u8>,
+    buf: T,
+}
+
+impl< T: Row + AsRef<[u8]>> RowDataBinary<T> {
+    pub fn new(columns: Arc<[ColumnInfo]>, mut buf: T) -> RowDataBinary<T> {
+        let column_length = columns.len();
+        let common = RowDataCommon::new(columns);
+        // See https://dev.mysql.com/doc/internals/en/binary-protocol-resultset-row.html
+        // Eat packet header
+        let _ = buf.get_u8();
+        let null_map_length = (column_length + 7 + 2) >> 3;
+        // NULL Bitmap length: (column-count + 7 + 2) / 8
+
+        let mut null_map = vec![0; null_map_length];
+        buf.copy_to_slice(&mut null_map);
+
+        RowDataBinary { common, null_map, buf }
+    }
+}
+
+impl<T: Row + AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
+    fn with_buf(&mut self, buf: T) {
+        self.buf = buf;
+    }
+    // The method must be called in column order
+    fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
+        let mut start_pos = 0;
+        let mut end_pos = 0;
+        let mut is_null: bool;
+        let mut length: u64;
+
+        for (idx, info) in self.common.columns.iter().enumerate() {
+            if self.null_map[(idx + 2) / 8] & (1 << (idx + 2) as u8 % 8) > 0 {
+                continue;
+            }
+
+            let (length, pos) = match info.column_type {
+                ColumnType::MYSQL_TYPE_STRING | ColumnType::MYSQL_TYPE_VARCHAR | ColumnType::MYSQL_TYPE_VAR_STRING | ColumnType::MYSQL_TYPE_ENUM | ColumnType::MYSQL_TYPE_SET
+                | ColumnType::MYSQL_TYPE_LONG_BLOB | ColumnType::MYSQL_TYPE_MEDIUM_BLOB | ColumnType::MYSQL_TYPE_BLOB | ColumnType::MYSQL_TYPE_TINY_BLOB | ColumnType::MYSQL_TYPE_GEOMETRY
+                | ColumnType::MYSQL_TYPE_BIT | ColumnType::MYSQL_TYPE_DECIMAL | ColumnType::MYSQL_TYPE_NEWDECIMAL => {
+                    let (length, _, pos) = length_encode_int(&self.buf.as_ref()[start_pos..]);
+                    (length, pos)
+                }
+
+                ColumnType::MYSQL_TYPE_LONGLONG => {
+                    (8, 8)
+                }
+
+                ColumnType::MYSQL_TYPE_LONG | ColumnType::MYSQL_TYPE_INT24 => {
+                    (4, 4)
+                }
+
+                ColumnType::MYSQL_TYPE_SHORT | ColumnType::MYSQL_TYPE_YEAR => {
+                    (2, 2)
+                }
+
+                ColumnType::MYSQL_TYPE_TINY => {
+                    (1, 1)
+                }
+
+                ColumnType::MYSQL_TYPE_DOUBLE => {
+                    (8, 8)
+                }
+
+                ColumnType::MYSQL_TYPE_FLOAT => {
+                    (4, 4)
+                }
+
+                ColumnType::MYSQL_TYPE_DATE | ColumnType::MYSQL_TYPE_DATETIME | ColumnType::MYSQL_TYPE_TIMESTAMP => {
+                    let (length, _, pos) = length_encode_int(&self.buf.as_ref()[start_pos..]);
+                    (length, pos)
+                }
+
+                ColumnType::MYSQL_TYPE_TIME => {
+                    let (length, _, pos) = length_encode_int(&self.buf.as_ref()[start_pos..]);
+                    (length, pos)
+                }
+
+                ColumnType::MYSQL_TYPE_NULL => {
+                    (0, 0)
+                }
+
+                _ => return Err(DecodeRowError::ColumnTypeNotFound(info.column_type.as_ref().to_string()).into())
+            };
+
+            if info.column_name != name {
+                start_pos += pos as usize;
+            } else {
+                let row_data = &self.buf.as_ref()[start_pos .. (start_pos + length as usize)];
+                return Value::from(row_data)
+            }
+        }
+
+        return Ok(None)
+    }
+}
+
 
 #[cfg(test)]
 mod test {

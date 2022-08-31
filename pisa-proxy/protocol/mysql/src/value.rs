@@ -16,38 +16,38 @@ use bytes::Buf;
 
 pub type Result<T> = std::result::Result<Option<T>, Box<dyn std::error::Error>>;
 
-pub trait Value<T>: Sized {
+pub trait Value: Sized {
     type Item: Convert<Self>;
-    fn from(val: T) -> Result<Self>;
+    fn from(val: &[u8]) -> Result<Self>;
 }
 
 impl Value for String {
     type Item = String;
-    fn from(val: Vec<u8>) -> Result<Self> {
+    fn from(val: &[u8]) -> Result<Self> {
         <Self::Item as Convert<String>>::new(val)
     }
 }
 
 impl Value for u64 {
     type Item = u64;
-    fn from(val: Vec<u8>) -> Result<Self> {
+    fn from(val: &[u8]) -> Result<Self> {
         <Self::Item as Convert<u64>>::new(val)
     }
 }
 
 pub trait Convert<T> {
-    fn new(val: Vec<u8>) -> Result<T>;
+    fn new(val: &[u8]) -> Result<T>;
 }
 
 impl Convert<String> for String {
-    fn new(val: Vec<u8>) -> Result<String> {
-        Ok(Some(String::from_utf8(val)?))
+    fn new(val: &[u8]) -> Result<String> {
+        Ok(Some(String::from_utf8(val.to_vec())?))
     }
 }
 
 impl Convert<u64> for u64 {
-    fn new(val: Vec<u8>) -> Result<u64> {
-        Ok(Some(val.as_slice().get_uint_le(val.len())))
+    fn new(mut val: &[u8]) -> Result<u64> {
+        Ok(Some(val.get_uint_le(val.len())))
     }
 }
 
@@ -55,7 +55,7 @@ impl Convert<u64> for u64 {
 mod test {
     use super::Value;
 
-    fn to_string<T: Value>(val: Vec<u8>) -> Option<T> {
+    fn to_string<T: Value>(val: &[u8]) -> Option<T> {
         Value::from(val).unwrap()
     }
 
@@ -63,7 +63,9 @@ mod test {
     fn test_to_string() {
         let data: Vec<u8> = vec![78, 111];
 
-        let res = to_string::<String>(data);
+        let res = to_string::<String>(&data);
         assert_eq!(res, Some("No".to_string()));
+
+    
     }
 }
