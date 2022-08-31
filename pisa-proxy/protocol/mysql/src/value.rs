@@ -120,8 +120,17 @@ impl Convert<NaiveDateTime> for NaiveDateTime  {
     fn new(mut val: &[u8]) -> Result<NaiveDateTime> {
         let length = val.len();
         match length {
-            0 | 4  => {
+            0 => {
                 Ok(None)
+            }
+
+            4 => {
+                let year = val.get_uint_le(2) as i32;
+                let month = val.get_u8();
+                let day = val.get_u8();
+                let d = NaiveDate::from_ymd(year, month.into(), day.into());
+                let dt = d.and_hms(0, 0, 0);
+                Ok(Some(dt))
             }
 
             7 | 11 => {
