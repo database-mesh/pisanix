@@ -49,7 +49,8 @@ jobs:
           image: pisanixio/controller
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
-          build_file: pisa-controller/hack/Dockerfile 
+          build_file: pisa-controller/hack/Dockerfile
+          tag: ${{ steps.vars.outputs.tags }}
           tag_with_latest: true
           extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
 
@@ -82,5 +83,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           build_file: pisa-proxy/hack/Dockerfile
+          tag: ${{ steps.vars.outputs.tags }}
           tag_with_latest: true
           extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
