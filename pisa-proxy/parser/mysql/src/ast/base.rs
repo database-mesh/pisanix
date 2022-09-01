@@ -224,7 +224,9 @@ impl Expr {
                 }
 
                 in_expr.push("IN".to_string());
-                in_expr.push(exprs_str.join(","));
+                in_expr.push("(".to_string());
+                in_expr.push(exprs_str.join(", "));
+                in_expr.push(")".to_string());
 
                 in_expr.join(" ")
             }
@@ -940,6 +942,7 @@ impl Value {
                 }
 
                 value.push_str(table);
+                value.push('.');
                 value.push_str(field);
 
                 value

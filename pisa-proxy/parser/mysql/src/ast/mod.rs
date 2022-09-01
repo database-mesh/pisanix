@@ -71,6 +71,27 @@ pub enum SqlStmt {
     None,
 }
 
+impl SqlStmt {
+    pub fn format(&self) -> String {
+        match self {
+            Self::SelectStmt(stmt) => {
+                stmt.format()
+            }
+
+            Self::InsertStmt(stmt) => {
+                stmt.format()
+            }
+
+            Self::UpdateStmt(stmt) => {
+                stmt.format()
+            }
+
+            // Implements the format method when developing sharding in the future
+            _x => todo!(),
+        }
+    }
+}
+
 impl Visitor for SqlStmt {
     fn visit<T>(&mut self, tf: &mut T) -> Self
     where
