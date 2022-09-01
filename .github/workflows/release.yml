@@ -15,10 +15,14 @@
 ##
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 name: release
 =======
 name: build
 >>>>>>> 6e0bfdd (Create release.yml)
+=======
+name: release
+>>>>>>> 6135d2e (Update release.yml)
 
 on:
   push:
