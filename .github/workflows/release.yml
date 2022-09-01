@@ -60,11 +60,16 @@ jobs:
           image: pisanixio/controller
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
+<<<<<<< HEAD
           build_file: pisa-controller/hack/Dockerfile 
 <<<<<<< HEAD
           tag: ${{ steps.vars.outputs.tags }}
 =======
 >>>>>>> 6e0bfdd (Create release.yml)
+=======
+          build_file: pisa-controller/hack/Dockerfile
+          tag: ${{ steps.vars.outputs.tags }}
+>>>>>>> ca0b1ff (Update release.yml)
           tag_with_latest: true
           extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
 
@@ -101,6 +106,9 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           build_file: pisa-proxy/hack/Dockerfile
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> ca0b1ff (Update release.yml)
           tag: ${{ steps.vars.outputs.tags }}
           tag_with_latest: true
           extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
