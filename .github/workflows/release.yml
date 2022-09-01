@@ -14,7 +14,7 @@
 ## limitations under the License.
 ##
 
-name: build
+name: release
 
 on:
   push:
