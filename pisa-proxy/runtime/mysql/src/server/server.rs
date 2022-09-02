@@ -431,7 +431,7 @@ where
                 None => break,
             };
 
-            let _ = req.framed.codec_mut().encode(PacketSend::Encode(data[..].into()), &mut buf);
+            let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(data[4..].into(), buf.len()), &mut buf);
 
             if is_eof(&data) {
                 break;
