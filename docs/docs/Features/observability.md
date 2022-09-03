@@ -9,6 +9,7 @@ Pisanix 目前在 Pisa-Proxy 处理 SQL 命令的时候采集相关指标，并�
 ## 已支持指标
 - SQL_PROCESSED_TOTAL: 统计所有执行的 SQL 数量
 - SQL_PROCESSED_DURATION: 统计所有 SQL 的执行时间
+- SQL_UNDER_PROCESSING: 记录当前正在执行的 SQL 数量
 
 测试效果如下图：
 
