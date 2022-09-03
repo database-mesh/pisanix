@@ -1,0 +1,15 @@
+apiVersion: core.database-mesh.io/v1alpha1
+kind: DatabaseEndpoint
+metadata:
+  name: catalogue-db
+  namespace: demotest
+  labels:
+    source: catalogue
+spec:
+  database:
+    MySQL:
+      host: "catalogue-db.demotest"
+      port: 3306
+      user: "root"
+      password: "fake_password"
+      db: "socksdb"

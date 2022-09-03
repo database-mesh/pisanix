@@ -1,0 +1,15 @@
+apiVersion: core.database-mesh.io/v1alpha1
+kind: VirtualDatabase
+metadata:
+  name: catalogue
+  namespace: demotest
+spec:
+  services:
+    - name: "mysql"
+      databaseMySQL:
+        host: "127.0.0.1"
+        port: 3306
+        user: "catalogue_user"
+        password: "default_password"
+        db: "socksdb"
+      trafficStrategy: "catalogue"

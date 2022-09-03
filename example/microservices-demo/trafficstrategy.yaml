@@ -1,0 +1,12 @@
+apiVersion: core.database-mesh.io/v1alpha1
+kind: TrafficStrategy
+metadata:
+  name: catalogue
+  namespace: demotest
+spec:
+  selector:
+    matchLabels:
+      source: catalogue
+  loadBalance:
+    simpleLoadBalance:
+      kind: "random"
