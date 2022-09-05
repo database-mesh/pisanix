@@ -39,7 +39,7 @@ use crate::{
     mysql_const::{
         CLIENT_PROTOCOL_41, CLIENT_SESSION_TRACK, CLIENT_TRANSACTIONS, SERVER_SESSION_STATE_CHANGED,
     },
-    row::{Row, RowData, RowDataTyp},
+    row::{RowData, RowDataTyp},
     util::{get_length, is_eof, length_encoded_string, BufMutExt, BufExt},
 };
 
@@ -151,19 +151,19 @@ impl<'a> Stream for ResultsetStream<'a> {
 }
 
 #[pin_project]
-pub struct QueryResultStream<'a, T: Row + AsRef<[u8]>> {
+pub struct QueryResultStream<'a, T: AsRef<[u8]>> {
     #[pin]
     rs: ResultsetStream<'a>,
     row_data: RowDataTyp<T>,
 }
 
-impl<'a, T: Row + AsRef<[u8]>> QueryResultStream<'a, T> {
+impl<'a, T: AsRef<[u8]>> QueryResultStream<'a, T> {
     pub fn new(rs: ResultsetStream<'a>, row_data: RowDataTyp<T>) -> Self {
         QueryResultStream { rs, row_data }
     }
 }
 
-impl<'a, T: Row + AsRef<[u8]> + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
+impl<'a, T: AsRef<[u8]> + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
     type Item = Result<RowDataTyp<T>, ProtocolError>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
