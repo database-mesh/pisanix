@@ -198,7 +198,6 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
 mod test {
     use std::sync::Arc;
 
-    use bytes::BytesMut;
     use chrono::{Duration, naive::NaiveDateTime, NaiveDate, NaiveTime};
 
     use super::RowDataBinary;
