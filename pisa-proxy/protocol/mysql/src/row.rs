@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{ops::Range, sync::Arc};
-
-use bytes::BytesMut;
+use std::sync::Arc;
 
 use crate::{
     column::ColumnInfo,
@@ -24,55 +22,13 @@ use crate::{
     mysql_const::*,
 };
 
-pub trait Row: BufExt {
-    fn decode_row_with_idx<T: Value>(&mut self, idx: usize) -> value::Result<T> {
-        for _ in 0..idx {
-            let (length, ..) = self.get_lenc_int();
-            self.advance(length as usize)
-        }
-
-        let (row_data, is_null) = self.get_lenc_str_bytes();
-        if is_null {
-            return Ok(None);
-        }
-
-        Value::from(&row_data)
-    }
-
-    fn decode_row_with_range_idx<T: Value>(
-        &mut self,
-        range: Range<usize>,
-    ) -> Vec<value::Result<T>> {
-        for _ in 1..range.start {
-            let (length, ..) = self.get_lenc_int();
-            self.advance(length as usize)
-        }
-
-        let mut values = vec![];
-
-        for _ in range {
-            let (row_data, is_null) = self.get_lenc_str_bytes();
-            if is_null {
-                values.push(Ok(None))
-            } else {
-                values.push(Value::from(&row_data))
-            }
-        }
-
-        values
-    }
-}
-
-impl Row for BytesMut {}
-impl Row for &[u8] {}
-
-pub trait RowData<T: Row> {
+pub trait RowData<T: AsRef<[u8]>> {
     fn with_buf(&mut self, buf: T);
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V>;
 }
 
 #[derive(Clone)]
-pub enum RowDataTyp<T: Row + AsRef<[u8]>> {
+pub enum RowDataTyp<T: AsRef<[u8]>> {
     Text(RowDataText<T>),
     Binary(RowDataBinary<T>)
 }
@@ -82,71 +38,65 @@ crate::gen_row_data!(RowDataTyp, Text(RowDataText), Binary(RowDataBinary));
 #[derive(Debug, Clone)]
 pub struct RowDataCommon {
     columns: Arc<[ColumnInfo]>,
-    // Save consumed column idx, when call decode, buf data will removed,
-    // so th data index will drift.
-    consumed_idx: Vec<usize>,
 }
 
 impl RowDataCommon {
     fn new(columns: Arc<[ColumnInfo]>) -> RowDataCommon {
-        RowDataCommon { columns, consumed_idx: vec![] }
+        RowDataCommon { columns }
     }
 
     fn get_idx(&mut self, name: &str) -> std::result::Result<usize, DecodeRowError> {
-        let try_idx = self.columns.iter().position(|x| x.column_name == name);
-        if try_idx.is_none() {
-            return Err(DecodeRowError::ColumnNotFound(name.to_string()));
-        }
-
-        let idx = try_idx.unwrap();
-
-        if self.consumed_idx.contains(&idx) {
-            return Err(DecodeRowError::ColumnAlreadyConsumed(name.to_string()).into());
-        }
-
-        self.consumed_idx.push(idx);
-        self.consumed_idx.sort_unstable();
-
-        // Find all data less then idx in consumed_idx and save count.
-        // The corrent idx should be minus lt_idx_count when `lt_idx_count > 0`.
-        let lt_idx_count = self.consumed_idx.iter().filter(|x| *x < &idx).count();
-
-        Ok(idx - lt_idx_count)
+        self.columns.iter().position(|x| x.column_name == name)
+            .ok_or_else(|| DecodeRowError::ColumnNotFound(name.to_string()))
     }
 }
 
 // For ProtocolText::ResultsetRow
 #[derive(Debug, Clone)]
-pub struct RowDataText<T: Row + AsRef<[u8]>> {
+pub struct RowDataText<T: AsRef<[u8]>> {
     common: RowDataCommon,
     buf: T,
 }
 
-impl<T: Row + AsRef<[u8]>> RowDataText<T> {
+impl<T: AsRef<[u8]>> RowDataText<T> {
     pub fn new(columns: Arc<[ColumnInfo]>, buf: T) -> RowDataText<T> {
         let common = RowDataCommon::new(columns);
         RowDataText { common, buf }
     }
 }
 
-impl<T: Row + AsRef<[u8]>> RowData<T> for RowDataText<T> {
+impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
     fn with_buf(&mut self, buf: T) {
         self.buf = buf;
     }
     // The method must be called in column order
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
-        self.buf.decode_row_with_idx::<V>(self.common.get_idx(name)?)
+        let name_idx = self.common.get_idx(name)?;
+        let mut idx: usize = 0;
+        for _ in 0..name_idx {
+            let (length, _, pos) = length_encode_int(&self.buf.as_ref()[idx..]);
+            idx += (length + pos) as usize;
+        }
+
+        let (length, is_null, pos) = length_encode_int(&self.buf.as_ref()[idx..]);
+        if is_null || length == 0 {
+            return Ok(None);
+        }
+
+        let row_data = &self.buf.as_ref()[idx + pos as usize .. idx + (pos + length) as usize];
+
+        Value::from(row_data)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct RowDataBinary<T: Row + AsRef<[u8]>> {
+pub struct RowDataBinary<T: AsRef<[u8]>> {
     common: RowDataCommon,
     null_map: Vec<u8>,
     buf: T,
 }
 
-impl< T: Row + AsRef<[u8]>> RowDataBinary<T> {
+impl< T: BufExt + AsRef<[u8]>> RowDataBinary<T> {
     pub fn new(columns: Arc<[ColumnInfo]>, mut buf: T) -> RowDataBinary<T> {
         let column_length = columns.len();
         let common = RowDataCommon::new(columns);
@@ -164,7 +114,7 @@ impl< T: Row + AsRef<[u8]>> RowDataBinary<T> {
 
 }
 
-impl<T: Row + AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
+impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
     fn with_buf(&mut self, buf: T) {
         self.buf = buf;
     }
@@ -251,7 +201,7 @@ mod test {
     use bytes::BytesMut;
     use chrono::{Duration, naive::NaiveDateTime, NaiveDate, NaiveTime};
 
-    use super::{Row, RowDataBinary};
+    use super::RowDataBinary;
     use crate::{
         column::{Column, ColumnInfo},
         row::{RowData, RowDataText},
@@ -346,52 +296,6 @@ mod test {
         vec![
             0x0a, 0x00, 0x00, 0x04, 0x00, 0x08, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ]
-    }
-
-    #[test]
-    fn test_decodec_row_with_idx() {
-        let data = vec![
-            0x14, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6e, 0x67, 0x20, 0x74, 0x6f,
-            0x20, 0x6d, 0x61, 0x73, 0x74, 0x65, 0x72, 0x0d, 0x31, 0x39, 0x32, 0x2e, 0x31, 0x36,
-            0x38, 0x2e, 0x33, 0x33, 0x2e, 0x31, 0x30, 0x04, 0x72, 0x6f, 0x6f, 0x74, 0x04, 0x33,
-            0x33, 0x30, 0x38, 0x02, 0x36, 0x30, 0x0e, 0x6c, 0x6f, 0x67, 0x2d, 0x62, 0x69, 0x6e,
-            0x2e, 0x30, 0x30, 0x30, 0x30, 0x31, 0x35, 0x03, 0x31, 0x35, 0x34, 0x1e, 0x63, 0x65,
-            0x6e, 0x74, 0x6f, 0x73, 0x2d, 0x64, 0x65, 0x76, 0x30, 0x30, 0x31, 0x2d, 0x72, 0x65,
-            0x6c, 0x61, 0x79, 0x2d, 0x62, 0x69, 0x6e, 0x2e, 0x30, 0x30, 0x30, 0x30, 0x38, 0x33,
-            0x01, 0x34, 0x0e, 0x6c, 0x6f, 0x67, 0x2d, 0x62, 0x69, 0x6e, 0x2e, 0x30, 0x30, 0x30,
-            0x30, 0x31, 0x35, 0x0a, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6e, 0x67,
-            0x03, 0x59, 0x65, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x30, 0x00, 0x01,
-            0x30, 0x03, 0x31, 0x35, 0x34, 0x04, 0x31, 0x30, 0x32, 0x34, 0x04, 0x4e, 0x6f, 0x6e,
-            0x65, 0x00, 0x01, 0x30, 0x02, 0x4e, 0x6f, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfb, 0x02,
-            0x4e, 0x6f, 0x04, 0x31, 0x30, 0x34, 0x35, 0xac, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x20,
-            0x63, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6e, 0x67, 0x20, 0x74, 0x6f, 0x20,
-            0x6d, 0x61, 0x73, 0x74, 0x65, 0x72, 0x20, 0x27, 0x72, 0x6f, 0x6f, 0x74, 0x40, 0x31,
-            0x39, 0x32, 0x2e, 0x31, 0x36, 0x38, 0x2e, 0x33, 0x33, 0x2e, 0x31, 0x30, 0x3a, 0x33,
-            0x33, 0x30, 0x38, 0x27, 0x20, 0x2d, 0x20, 0x72, 0x65, 0x74, 0x72, 0x79, 0x2d, 0x74,
-            0x69, 0x6d, 0x65, 0x3a, 0x20, 0x36, 0x30, 0x20, 0x20, 0x6d, 0x61, 0x78, 0x69, 0x6d,
-            0x75, 0x6d, 0x2d, 0x72, 0x65, 0x74, 0x72, 0x69, 0x65, 0x73, 0x3a, 0x20, 0x31, 0x30,
-            0x30, 0x30, 0x30, 0x30, 0x20, 0x20, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x3a,
-            0x20, 0x41, 0x63, 0x63, 0x65, 0x73, 0x73, 0x20, 0x64, 0x65, 0x6e, 0x69, 0x65, 0x64,
-            0x20, 0x66, 0x6f, 0x72, 0x20, 0x75, 0x73, 0x65, 0x72, 0x20, 0x27, 0x72, 0x6f, 0x6f,
-            0x74, 0x27, 0x40, 0x27, 0x31, 0x39, 0x32, 0x2e, 0x31, 0x36, 0x38, 0x2e, 0x33, 0x33,
-            0x2e, 0x31, 0x30, 0x27, 0x20, 0x28, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x20, 0x70, 0x61,
-            0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x3a, 0x20, 0x59, 0x45, 0x53, 0x29, 0x01, 0x30,
-            0x00, 0x00, 0x01, 0x30, 0x00, 0x00, 0x02, 0x4e, 0x6f, 0x00, 0x00, 0x00, 0x0a, 0x6f,
-            0x70, 0x74, 0x69, 0x6d, 0x69, 0x73, 0x74, 0x69, 0x63, 0x01, 0x30, 0xfb, 0x36, 0x53,
-            0x6c, 0x61, 0x76, 0x65, 0x20, 0x68, 0x61, 0x73, 0x20, 0x72, 0x65, 0x61, 0x64, 0x20,
-            0x61, 0x6c, 0x6c, 0x20, 0x72, 0x65, 0x6c, 0x61, 0x79, 0x20, 0x6c, 0x6f, 0x67, 0x3b,
-            0x20, 0x77, 0x61, 0x69, 0x74, 0x69, 0x6e, 0x67, 0x20, 0x66, 0x6f, 0x72, 0x20, 0x6d,
-            0x6f, 0x72, 0x65, 0x20, 0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x73, 0x01, 0x30, 0x01,
-            0x30, 0x01, 0x30,
-        ];
-
-        let mut buf = BytesMut::from(&data[..]);
-        let res = buf.decode_row_with_idx::<String>(33).unwrap();
-        assert_eq!(res, Some("No".to_string()));
-
-        let mut buf: &[u8] = &data;
-        let res = buf.decode_row_with_idx::<String>(33).unwrap();
-        assert_eq!(res, Some("No".to_string()));
     }
 
     #[test]
