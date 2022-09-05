@@ -48,7 +48,7 @@ include!(concat!(env!("OUT_DIR"), "/ast_api.rs"));
 ///}
 ///```
 pub trait Transformer {
-    fn trans(&mut self, node: &mut Node) -> Self
+    fn trans(&mut self, node: &mut Node) -> &mut Self
     where
         Self: Sized;
 }

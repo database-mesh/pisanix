@@ -1454,7 +1454,7 @@ mod test {
     #[test]
     fn test_value() {
         impl Transformer for S {
-            fn trans(&mut self, node: &mut Node) -> Self {
+            fn trans(&mut self, node: &mut Node) -> &mut Self {
                 match node {
                     Node::Value(Value::Text { span: _, value }) => {
                         if self.is_default {
@@ -1473,7 +1473,7 @@ mod test {
                     _ => {}
                 };
 
-                self.clone()
+                self
             }
         }
 
