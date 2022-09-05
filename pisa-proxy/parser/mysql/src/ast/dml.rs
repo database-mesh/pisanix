@@ -2391,18 +2391,22 @@ impl InsertStmt {
         }
 
         insert.push(self.table_name.clone());
-        insert.push(
-            vec![
-                "PARTITION (".to_string(),
-                self.partition_names
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<String>>()
-                    .join(","),
-                ")".to_string(),
-            ]
-            .join(" "),
-        );
+
+        if !self.partition_names.is_empty() {
+            insert.push(
+                vec![
+                    "PARTITION (".to_string(),
+                    self.partition_names
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<String>>()
+                        .join(","),
+                    ")".to_string(),
+                ]
+                .join(" "),
+            );
+        }
+        
 
         if self.is_set {
             insert.push("SET".to_string())
