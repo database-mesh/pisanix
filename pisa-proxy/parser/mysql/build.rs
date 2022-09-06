@@ -906,8 +906,8 @@ fn gen_node_enum() -> Result<(), Box<dyn Error>> {
     writeln!(f, "use enum_as_inner::EnumAsInner;\n")?;
     writeln!(f, "use crate::ast::*;\n")?;
 
-    writeln!(f, "#[derive(EnumAsInner, Debug, Clone)]")?;
-    writeln!(f, "pub enum Node {{")?;
+    writeln!(f, "#[derive(EnumAsInner, Debug)]")?;
+    writeln!(f, "pub enum Node<'a> {{")?;
 
     let mut variants = list_rs_file("src/ast")
         .into_iter()
@@ -918,7 +918,7 @@ fn gen_node_enum() -> Result<(), Box<dyn Error>> {
 
     variants.sort();
     for item in variants {
-        writeln!(f, "  {}({}),", item.0, item.1)?
+        writeln!(f, "  {}(&'a mut {}),", item.0, item.1)?
     }
 
     writeln!(f, "}}")?;

@@ -99,7 +99,7 @@ impl Visitor for SqlStmt {
     {
         match self {
             Self::SelectStmt(stmt) => {
-                let mut node = Node::SelectStmt(stmt.clone());
+                let mut node = Node::SelectStmt(stmt);
                 tf.trans(&mut node);
 
                 let new_node = node.into_select_stmt().unwrap().visit(tf);
@@ -107,7 +107,7 @@ impl Visitor for SqlStmt {
             }
 
             Self::InsertStmt(stmt) => {
-                let mut node = Node::InsertStmt(*stmt.clone());
+                let mut node = Node::InsertStmt(stmt);
                 tf.trans(&mut node);
 
                 let new_node = node.into_insert_stmt().unwrap().visit(tf);
@@ -115,7 +115,7 @@ impl Visitor for SqlStmt {
             }
 
             Self::UpdateStmt(stmt) => {
-                let mut node = Node::UpdateStmt(*stmt.clone());
+                let mut node = Node::UpdateStmt(stmt);
                 tf.trans(&mut node);
 
                 let new_node = node.into_update_stmt().unwrap().visit(tf);
@@ -123,7 +123,7 @@ impl Visitor for SqlStmt {
             }
 
             Self::Set(stmt) => {
-                let mut node = Node::SetOptValues(*stmt.clone());
+                let mut node = Node::SetOptValues(stmt);
                 tf.trans(&mut node);
 
                 let new_node = node.into_set_opt_values().unwrap().visit(tf);
@@ -149,7 +149,7 @@ mod test {
         }
 
         impl Transformer for S {
-            fn trans(&mut self, node: &mut Node) -> &mut Self {
+            fn trans(&mut self, node: &mut Node<'_>) -> &mut Self {
                 match node {
                     Node::Value(Value::Text { span, value }) => {
                         *span = Span::new(1, 1);
@@ -177,7 +177,7 @@ mod test {
 
         let mut s = S { a: "a".to_string() };
         let new_v = res[0].visit(&mut s);
-        println!("new value {:?}", new_v);
+        println!("new value {:?}", new_v.clone());
         assert_eq!(s.a, "11111")
         //println!("new s value {:?}", s);
     }
