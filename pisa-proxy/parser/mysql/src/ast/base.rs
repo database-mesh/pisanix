@@ -741,11 +741,6 @@ impl Visitor for Expr {
     }
 }
 
-#[derive(Debug)]
-pub enum Node1<'a> {
-    T(&'a mut Expr)
-}
-
 #[derive(Debug, Clone)]
 pub struct WhenExpr {
     pub span: Span,
