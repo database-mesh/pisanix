@@ -14,11 +14,6 @@
 
 package webhook
 
-// var (
-// 	pisaProxyImage, pisaControllerService, pisaControllerNamespace, pisaProxyAdminListenHost, pisaProxyLoglevel string
-// 	pisaProxyAdminListenPort                                                                                    uint32
-// )
-
 const (
 	EnvPisaProxyAdminListenHost   = "PISA_PROXY_ADMIN_LISTEN_HOST"
 	EnvPisaProxyAdminListenPort   = "PISA_PROXY_ADMIN_LISTEN_PORT"
