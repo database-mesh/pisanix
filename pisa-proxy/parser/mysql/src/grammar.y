@@ -3590,8 +3590,6 @@ IDENT_sys -> (String, bool):
 table_wild -> TableWild:
     ident '.' '*'
     {
-   
-      println!("{:?}", "111");
       TableWild {
         span: $span,
         table: $1.0,
