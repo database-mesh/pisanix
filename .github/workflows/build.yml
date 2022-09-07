@@ -52,6 +52,8 @@ jobs:
           build_file: pisa-controller/hack/Dockerfile 
           tag_with_latest: true
           extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+          cache: true
+          cache_registry: pisanixio/controller-cache
 
 
   pisa-proxy:
@@ -83,4 +85,6 @@ jobs:
           build_file: pisa-proxy/hack/Dockerfile
           tag_with_latest: true
           extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+          cache: true
+          cache_registry: pisanixio/proxy-cache
 
