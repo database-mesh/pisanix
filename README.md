@@ -49,6 +49,7 @@ Pisanix now supports `TrafficStrategy` of [Database Mesh Specificiation](https:/
     - [x] Read Write Splitting
       - [x] Static 
       - [x] Dynamic
+        - [x] Master-Slave Replication
         - [x] MHA
   - Sharding
     - [ ] Sharding with keys  
