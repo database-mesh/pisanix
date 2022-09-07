@@ -341,15 +341,16 @@ impl UnionOpt {
 
 #[derive(Debug, Clone)]
 pub enum Items {
-    Wild,
+    Wild(ItemWild),
     Items(Vec<Item>),
     None,
 }
 
+
 impl Items {
     pub fn format(&self) -> String {
         match self {
-            Self::Wild => "*".to_string(),
+            Self::Wild(_) => "*".to_string(),
             Self::None => "".to_string(),
             Self::Items(val) => val.iter().map(|x| x.format()).collect::<Vec<String>>().join(","),
         }
@@ -376,6 +377,11 @@ impl Visitor for Items {
             x => x.clone(),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ItemWild {
+    pub span: Span
 }
 
 #[derive(Debug, Clone)]
@@ -418,7 +424,7 @@ impl Visitor for Item {
 #[derive(Debug, Clone)]
 pub struct TableWild {
     pub span: Span,
-    pub scheme: Option<String>,
+    pub schema: Option<String>,
     pub table: String,
 }
 
@@ -426,8 +432,8 @@ impl TableWild {
     pub fn format(&self) -> String {
         let mut wild = Vec::with_capacity(3);
 
-        if let Some(scheme) = &self.scheme {
-            wild.push(scheme.to_string())
+        if let Some(schema) = &self.schema {
+            wild.push(schema.to_string())
         }
 
         wild.push(self.table.to_string());

@@ -17,5 +17,13 @@ mod ident;
 mod charsets;
 pub mod lex;
 pub mod parser;
-
 pub mod ast;
+
+pub use lrpar::lex_api;
+pub use lrpar::Span;
+pub use lrlex;
+
+pub mod lex_token {
+    lrlex::lrlex_mod!("token_map");
+    pub use token_map::*;
+}

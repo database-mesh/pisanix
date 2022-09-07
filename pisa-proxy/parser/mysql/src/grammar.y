@@ -674,7 +674,7 @@ select_items -> Items:
     }
   | '*'
     {
-      Items::Wild
+      Items::Wild( ItemWild { span: $span } )
     }
   ;
 
@@ -3590,17 +3590,19 @@ IDENT_sys -> (String, bool):
 table_wild -> TableWild:
     ident '.' '*'
     {
+   
+      println!("{:?}", "111");
       TableWild {
         span: $span,
         table: $1.0,
-        scheme: None
+        schema: None
       }
     }
   | ident '.' ident '.' '*'
     {
       TableWild {
         span: $span,
-        scheme: Some($1.0),
+        schema: Some($1.0),
         table: $3.0
       }
     }
