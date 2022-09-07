@@ -22,7 +22,7 @@ pub enum SelectStmt {
     SubQuery(Box<SubQuery>),
     With(Box<WithQuery>),
     ValueConstructor(Vec<Vec<Expr>>),
-    ExplicitTable(String),
+    ExplicitTable(TableIdent),
     None,
 }
 
@@ -57,7 +57,7 @@ impl SelectStmt {
                 vec!["VALUES".to_string(), cons.join(",")].join(" ")
             }
 
-            Self::ExplicitTable(val) => vec!["TABLE".to_string(), val.clone()].join(" "),
+            Self::ExplicitTable(val) => vec!["TABLE".to_string(), val.format()].join(" "),
 
             Self::None => "".to_string(),
         }
@@ -436,7 +436,7 @@ impl TableWild {
             wild.push(schema.to_string())
         }
 
-        wild.push(self.table.to_string());
+        wild.push(self.table.clone());
         wild.push(".*".to_string());
 
         wild.join("")
@@ -879,7 +879,7 @@ impl Visitor for TableFactor {
 #[derive(Debug, Clone)]
 pub struct SingleTable {
     pub span: Span,
-    pub table_name: String,
+    pub table_name: TableIdent,
     pub partition_names: Vec<String>,
     pub alias_name: Option<String>,
     //field `index_hints` unused yet
@@ -890,7 +890,7 @@ pub struct SingleTable {
 impl SingleTable {
     pub fn format(&self) -> String {
         let mut single = vec![
-            self.table_name.clone(),
+            self.table_name.format(),
 
         ];
 
@@ -928,6 +928,35 @@ impl Visitor for SingleTable {
         self.clone()
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct TableIdent {
+    pub span: Span,
+    pub schema: Option<String>,
+    pub name: String
+}
+
+impl TableIdent {
+    pub fn format(&self) -> String {
+        let mut table = String::with_capacity(self.name.len());
+
+        if let Some(schema) = &self.schema {
+            table.push_str(schema);
+            table.push('.');
+        }
+
+        table.push_str(&self.name);
+
+        table
+    }
+}
+
+impl Visitor for TableIdent {
+    fn visit<T: Transformer>(&mut self, _tf: &mut T) -> Self {
+        self.clone()
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub enum SingleTableParens {
@@ -2364,7 +2393,7 @@ pub struct InsertStmt {
     pub lock: InsertLockOpt,
     pub ignore: bool,
     pub into: bool,
-    pub table_name: String,
+    pub table_name: TableIdent,
     pub partition_names: Vec<String>,
     pub is_set: bool,
     pub from_construct: Option<InsertFromConstruct>,
@@ -2389,7 +2418,7 @@ impl InsertStmt {
             insert.push("INTO".to_string())
         }
 
-        insert.push(self.table_name.clone());
+        insert.push(self.table_name.format());
 
         if !self.partition_names.is_empty() {
             insert.push(
@@ -2896,7 +2925,7 @@ pub struct DeleteStmt {
     pub ignore: bool,
     pub low_priority: bool,
     pub is_using: bool,
-    pub table_name: Option<String>,
+    pub table_name: Option<TableIdent>,
     pub alias_name: Option<String>,
     pub partition_names: Vec<String>,
     pub where_clause: Option<WhereClause>,
@@ -2930,7 +2959,7 @@ impl DeleteStmt {
 
         if let Some(name) = &self.table_name {
             delete.push("FROM".to_string());
-            delete.push(name.clone());
+            delete.push(name.format());
             if let Some(name) = &self.alias_name {
                 delete.push((*name).to_string());
             }
@@ -3148,7 +3177,7 @@ pub struct ShowTableDb {
 #[derive(Debug, Clone)]
 pub struct ShowCreateTableStmt {
     pub span: Span,
-    pub table: String,
+    pub table: TableIdent,
 }
 
 #[derive(Debug, Clone)]
@@ -3184,7 +3213,7 @@ pub enum ShowVariableType {
 #[derive(Debug, Clone)]
 pub struct ShowCreateViewStmt {
     pub span: Span,
-    pub view_name: String,
+    pub view_name: TableIdent,
 }
 
 #[derive(Debug, Clone)]

@@ -540,7 +540,7 @@ table_value_constructor -> Vec<Vec<Expr>>:
       }
   ;
 
-explicit_table -> String:
+explicit_table -> TableIdent:
     "TABLE" table_ident
     {
       $2
@@ -3520,18 +3520,22 @@ row_value_explicit -> Vec<Expr>:
     }
   ;
 
-table_ident -> String:
+table_ident -> TableIdent:
     ident
     {
-        $1.0
+    	TableIdent {
+	  span: $span,
+	  schema: None,
+	  name: $1.0,
+	}
     }
   | ident '.' ident
     {
-      let mut s = String::with_capacity($1.0.len()+1+$3.0.len());
-      s.push_str(&$1.0);
-      s.push('.');
-      s.push_str(&$3.0);
-      s
+    	TableIdent {
+          span: $span,
+          schema: Some($1.0),
+          name: $3.0,
+        }
     }
   ;
 
