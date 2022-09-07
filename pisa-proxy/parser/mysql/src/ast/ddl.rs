@@ -14,7 +14,7 @@
 
 use lrpar::Span;
 
-use crate::ast::{base::*, CreateUser, FieldType, SelectStmt};
+use crate::ast::{base::*, dml::TableIdent, CreateUser, FieldType, SelectStmt};
 
 #[derive(Debug, Clone)]
 pub enum Create {
@@ -91,7 +91,7 @@ pub struct ViewQueryBlock {
 pub struct ViewTail {
     pub span: Span,
     pub view_suid: ViewSuid,
-    pub view_name: String,
+    pub view_name: TableIdent,
     pub columns: Vec<Value>,
     pub view_query_block: ViewQueryBlock,
 }
@@ -141,7 +141,7 @@ pub struct TriggerTail {
     pub sp_name: String,
     pub trg_action_time: TrgActionTime,
     pub trg_event: TrgEvent,
-    pub table_name: String,
+    pub table_name: TableIdent,
     pub trigger_follows_precedes_clause: TriggerFollowsPrecedesClause,
     pub sp_proc_stmt: Option<String>,
 }
@@ -207,7 +207,7 @@ pub struct CreateCommonIndexStmt {
     pub opt_unique: bool,
     pub index_name: String,
     pub opt_index_type_clause: Option<IndexTypeClause>,
-    pub table_name: String,
+    pub table_name: TableIdent,
     pub key_list_with_expression: Vec<KeyPartWithExpression>,
     pub opt_index_options: Option<Vec<IndexOption>>,
     pub opt_index_lock_and_algorithm: Option<IndexLockAndAlgorithm>,
@@ -217,7 +217,7 @@ pub struct CreateCommonIndexStmt {
 pub struct CreateFullTextIndexStmt {
     pub span: Span,
     pub index_name: String,
-    pub table_name: String,
+    pub table_name: TableIdent,
     pub key_list_with_expression: Vec<KeyPartWithExpression>,
     pub opt_fulltext_index_options: Option<Vec<FullTextIndexOption>>,
     pub opt_index_lock_and_algorithm: Option<IndexLockAndAlgorithm>,
@@ -227,7 +227,7 @@ pub struct CreateFullTextIndexStmt {
 pub struct CreateSpatialIndexStmt {
     pub span: Span,
     pub index_name: String,
-    pub table_name: String,
+    pub table_name: TableIdent,
     pub key_list_with_expression: Vec<KeyPartWithExpression>,
     pub opt_spatial_index_options: Option<Vec<SpatialIndexOption>>,
     pub opt_index_lock_and_algorithm: Option<IndexLockAndAlgorithm>,

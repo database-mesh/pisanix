@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lrlex::{lrlex_mod, DefaultLexeme, LRNonStreamingLexer};
+use lrlex::{DefaultLexeme, LRNonStreamingLexer};
 use lrpar::{LexError, Lexeme, Span};
 
 use super::charsets::CHARSETS;
 
-lrlex_mod!("token_map");
-
-use token_map::*;
+use super::lex_token::*;
 
 keyword_size!();
 
@@ -149,6 +147,10 @@ impl<'a> Scanner<'a> {
                 '*' => {
                     if !self.is_comment_executable {
                         lexemes.push(Ok(DefaultLexeme::new(T_ASTERISK, self.pos, 1)));
+                    }
+
+                    if self.is_ident_dot {
+                        self.is_ident_dot = false
                     }
                 }
 
@@ -666,6 +668,7 @@ impl<'a> Scanner<'a> {
             self.pos -= 1;
             // reset is_ident_dot is false
             self.is_ident_dot = false;
+
             return DefaultLexeme::new(T_IDENT, old_pos, length);
         }
 
