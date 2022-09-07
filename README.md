@@ -8,6 +8,8 @@
 
 `Pisanix` [Pi-sanics] is a modern database governance framework for Kubernetes. Pisanix adds SQL-aware traffic control, audit, security and extension abilities to help manage various databases in the [Database Mesh](https://www.database-mesh.io) way.
 
+> Briefly, if applications want a MySQL, just access `localhost:3306`.
+
 # Highlights
 
 `Pisanix` has the following goals:
@@ -39,15 +41,21 @@ For DBAs who could and would like to solve problems with programming. Pisanix su
 
 # Current Status 
 
-Pisanix now supports `TrafficStrategy` of [Database Mesh Specificiation](https://github.com/database-mesh/database-mesh), besides `VirtualDatabase`, `DatabaseEndpoint`:
+Pisanix now supports `TrafficStrategy` of [Database Mesh Specificiation](https://github.com/database-mesh/database-mesh), besides `VirtualDatabase`, `DatabaseEndpoint`, and other features like `AuditRequest` and `AccessControl` are also on the way:
 
 - TrafficStrategy
   - Load Balance  
     - [x] Simple LoadBalance 
-    - Read Write Splitting
+    - [x] Read Write Splitting
       - [x] Static 
-      - Dynamic
+      - [x] Dynamic
         - [x] MHA
+  - Sharding
+    - [ ] Sharding with keys  
+  - Auditing
+    - [ ] Audit with AWS    
+  - AccessControl
+    - [ ] Fine-Grained Access Control   
   - Plugins
     - [x] Circuit Break
     - [x] Concurrency Control
