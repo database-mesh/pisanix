@@ -149,7 +149,7 @@ mod test {
         }
 
         impl Transformer for S {
-            fn trans(&mut self, node: &mut Node<'_>) -> &mut Self {
+            fn trans(&mut self, node: &mut Node<'_>) -> bool {
                 match node {
                     Node::Value(Value::Text { span, value }) => {
                         *span = Span::new(1, 1);
@@ -165,7 +165,7 @@ mod test {
 
                 self.a = "11111".to_string();
 
-                self
+                false
             }
         }
 
