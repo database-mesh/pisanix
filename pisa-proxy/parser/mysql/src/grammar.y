@@ -3247,6 +3247,7 @@ limit_clause -> LimitClause:
 limit_options -> LimitClause:
     limit_option
     {
+      
       LimitClause {
         span: $span,
         opts: vec![$1],
@@ -3271,30 +3272,46 @@ limit_options -> LimitClause:
     }
   ;
 
-limit_option -> String:
+limit_option -> LimitOption:
     ident
     {
-      $1.0
+      LimitOption {
+        span: $span,
+        opt: $1.0,
+      }
     }
   | param_marker
     {
-      $1
+      LimitOption {
+        span: $span,
+        opt: $1,
+      }
     }
   | 'ULONGLONG_NUM'
     {
-      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+      LimitOption {
+        span: $span,
+        opt: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+      }
+      
     }
   | 'LONG_NUM'
     {
-      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+      LimitOption {
+        span: $span,
+        opt: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+      }
     }
   | 'NUM'
     {
-      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+      LimitOption {
+        span: $span,
+        opt: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+      }
     }
   ;
 
-opt_simple_limit -> Option<String>:
+opt_simple_limit -> Option<LimitOption>:
     /* empty */        { None }
   | 'LIMIT' limit_option { Some($2)  }
   ;
