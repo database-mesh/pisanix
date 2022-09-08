@@ -1449,7 +1449,7 @@ impl Visitor for OrderClause {
 #[derive(Debug, Clone)]
 pub struct LimitClause {
     pub span: Span,
-    pub opts: Vec<String>,
+    pub opts: Vec<LimitOption>,
     pub offset: bool,
 }
 
@@ -1457,17 +1457,17 @@ impl LimitClause {
     pub fn format(&self) -> String {
         let mut clause = Vec::with_capacity(self.opts.len() + 1);
         clause.push("LIMIT".to_string());
-        clause.push(self.opts[0].to_string());
+        clause.push(self.opts[0].opt.clone());
 
         if self.offset {
             clause.push("OFFSET".to_string());
-            clause.push(self.opts[1].to_string());
+            clause.push(self.opts[1].opt.clone());
 
             return clause.join(" ");
         }
 
         if let Some(opt) = self.opts.get(1) {
-            clause.push(opt.to_string());
+            clause.push(opt.opt.clone());
             return clause.join(", ");
         }
 
@@ -1479,6 +1479,12 @@ impl Visitor for LimitClause {
     fn visit<T: Transformer>(&mut self, _tf: &mut T) -> Self {
         self.clone()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct LimitOption {
+    pub span: Span,
+    pub opt: String,
 }
 
 #[derive(Debug, Clone)]
@@ -2829,7 +2835,7 @@ pub struct UpdateStmt {
     pub updates: Vec<UpdateElem>,
     pub where_clause: Option<WhereClause>,
     pub order_clause: Option<OrderClause>,
-    pub simple_limit: Option<String>,
+    pub simple_limit: Option<LimitOption>,
 }
 
 impl UpdateStmt {
@@ -2865,7 +2871,7 @@ impl UpdateStmt {
 
         if let Some(limit) = &self.simple_limit {
             update.push("LIMIT".to_string());
-            update.push((*limit).to_string())
+            update.push(limit.opt.clone())
         }
 
         update.join(" ")
@@ -2930,7 +2936,7 @@ pub struct DeleteStmt {
     pub partition_names: Vec<String>,
     pub where_clause: Option<WhereClause>,
     pub order_clause: Option<OrderClause>,
-    pub simple_limit: Option<String>,
+    pub simple_limit: Option<LimitOption>,
     pub table_alias_refs: Vec<String>,
     pub table_refs: Vec<TableRef>,
 }
@@ -2985,7 +2991,7 @@ impl DeleteStmt {
 
             if let Some(limit) = &self.simple_limit {
                 delete.push("LIMIT".to_string());
-                delete.push((*limit).to_string())
+                delete.push(limit.opt.clone())
             }
 
             return delete.join(" ");
