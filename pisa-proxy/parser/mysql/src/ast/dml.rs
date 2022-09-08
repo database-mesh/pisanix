@@ -72,20 +72,36 @@ impl Visitor for SelectStmt {
         match self {
             Self::Query(query) => {
                 let mut node = Node::Query(query);
-                tf.trans(&mut node);
+                let is_skip = tf.trans(&mut node);
 
-                let new_node = node.into_query().unwrap().visit(tf);
-                Self::Query(Box::new(new_node))
-            
+                let new_node = node.into_query().unwrap(); 
+                if is_skip {
+                    *self = Self::Query(Box::new(new_node.clone()));
+                    tf.complete(&mut Node::SelectStmt(self));
+                    return self.clone();
+                }
+
+                let new_node = new_node.visit(tf);
+                *self = Self::Query(Box::new(new_node));
+                tf.complete(&mut Node::SelectStmt(self));
+                self.clone()
             }
 
             Self::SubQuery(query) => {
                 let mut node = Node::SubQuery(query);
-                tf.trans(&mut node);
+                let is_skip = tf.trans(&mut node);
 
-                let new_node = node.into_sub_query().unwrap().visit(tf);
-                Self::SubQuery(Box::new(new_node))
-            
+                let new_node = node.into_sub_query().unwrap(); 
+                if is_skip {
+                    *self = Self::SubQuery(Box::new(new_node.clone()));
+                    tf.complete(&mut Node::SelectStmt(self));
+                    return self.clone();
+                }
+
+                let new_node = new_node.visit(tf);
+                *self = Self::SubQuery(Box::new(new_node));
+                tf.complete(&mut Node::SelectStmt(self));
+                self.clone()
             }
 
             Self::With(query) => {

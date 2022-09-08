@@ -27,7 +27,7 @@ include!(concat!(env!("OUT_DIR"), "/ast_api.rs"));
 /// }
 ///
 ///impl Transformer for S {
-///     fn trans(&mut self, node: &mut Node) -> Self {
+///     fn trans(&mut self, node: &mut Node) -> bool {
 ///         match node {
 ///            Node::Value(Value::Text { span, value }) => {
 ///                *span = Span::new(1, 1);
@@ -43,14 +43,16 @@ include!(concat!(env!("OUT_DIR"), "/ast_api.rs"));
 ///
 ///        self.a = "11111".to_string();
 ///
-///        self.clone()
+///        false
 ///    }
 ///}
 ///```
 pub trait Transformer {
-    fn trans(&mut self, node: &mut Node) -> &mut Self
-    where
-        Self: Sized;
+    // When return is true means that skip visit to other struct, otherwise continue visit.
+    fn trans(&mut self, node: &mut Node) -> bool;
+
+    //The `complete` means that visit the struct has completed, normally  its used to execute some `reset` logic.
+    fn complete(&mut self, node: &mut Node)  {}
 }
 
 ///Used to visit the structure, so that the visit ast tree can be traversed.
