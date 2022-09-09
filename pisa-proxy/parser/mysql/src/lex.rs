@@ -649,13 +649,13 @@ impl<'a> Scanner<'a> {
 
                 '_' | '$' | '\\' | '\t' => false,
 
-                '.' => {
-                    // If is_ident_dot is true, continue scanning until there is an  exit condition.
-                    match scanner.is_ident_dot {
-                        true => false,
-                        false => true,
-                    }
-                }
+                //'.' => {
+                //    // If is_ident_dot is true, continue scanning until there is an  exit condition.
+                //    match scanner.is_ident_dot {
+                //        true => false,
+                //        false => true,
+                //    }
+                //}
 
                 _ => true,
             }
@@ -665,9 +665,9 @@ impl<'a> Scanner<'a> {
 
         // Check whether has the `ident.ident` format.
         if self.is_ident_dot {
-            self.pos -= 1;
             // reset is_ident_dot is false
-            self.is_ident_dot = false;
+            self.is_ident_dot = self.peek() == '.';
+            self.pos -= 1;
 
             return DefaultLexeme::new(T_IDENT, old_pos, length);
         }
