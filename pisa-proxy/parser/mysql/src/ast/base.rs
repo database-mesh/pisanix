@@ -174,14 +174,16 @@ pub enum Expr {
     InSumExpr {
         span: Span,
         expr: Box<Expr>,
-        opt: Option<String>,
+        opt: bool,
     },
-    SetFuncSpecExpr(Vec<Expr>),
+    SetFuncSpecExpr(Box<Expr>),
 
     //Note: Currently, 'None' represent empty rule
     None,
 
     Ori(String),
+
+    AggExpr(AggExpr)
 }
 
 impl Expr {
@@ -403,8 +405,8 @@ impl Expr {
 
             Self::InSumExpr { span: _, expr, opt } => {
                 let mut in_sum = Vec::with_capacity(2);
-                if let Some(opt) = opt {
-                    in_sum.push(opt.clone())
+                if *opt {
+                    in_sum.push("ALL".to_string())
                 }
 
                 in_sum.push(expr.format());
@@ -412,13 +414,12 @@ impl Expr {
                 in_sum.join(" ")
             }
 
-            Self::SetFuncSpecExpr(val) => {
-                val.iter().map(|x| x.format()).collect::<Vec<String>>().join(" ")
-            }
+            Self::SetFuncSpecExpr(val) => val.format(),
 
             Self::None => "".to_string(),
 
             Self::Ori(val) => (*val).to_string(),
+            Self::AggExpr(val) => val.format(),
         }
     }
 }
@@ -667,7 +668,7 @@ impl Visitor for Expr {
                 Self::InSumExpr {
                     span: *span,
                     expr: Box::new(new_expr.into_expr().unwrap().visit(tf)),
-                    opt: opt.clone(),
+                    opt: *opt,
                 }
             }
 
@@ -717,15 +718,10 @@ impl Visitor for Expr {
             }
 
             Self::SetFuncSpecExpr(val) => {
-                let mut new_exprs = Vec::with_capacity(val.len());
-                for v in val {
-                    let mut node = Node::Expr(v);
-                    tf.trans(&mut node);
+                let mut node = Node::Expr(val);
+                tf.trans(&mut node);
 
-                    new_exprs.push(node.into_expr().unwrap().visit(tf));
-                }
-
-                Self::SetFuncSpecExpr(new_exprs)
+                Self::SetFuncSpecExpr(Box::new(node.into_expr().unwrap().visit(tf)))
             }
 
             Self::TimeIntervalUnit(val) => Self::TimeIntervalUnit(val.clone()),
@@ -737,6 +733,13 @@ impl Visitor for Expr {
             Self::None => Self::None,
 
             Self::Ori(val) => Self::Ori(val.clone()),
+
+            Self::AggExpr(val) => {
+                let mut node = Node::AggExpr(val);
+                tf.trans(&mut node);
+
+                Self::AggExpr(node.into_agg_expr().unwrap().visit(tf))
+            }
         }
     }
 }
@@ -1440,6 +1443,155 @@ impl Visitor for OptTypeFollowing {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum User {
+    CurrentUser,
+    UserIdentOrText(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct OrderExpr {
+    pub span: Span,
+    pub expr: Expr,
+    pub direction: Option<String>,
+}
+
+impl OrderExpr {
+    pub fn format(&self) -> String {
+        let mut order = Vec::with_capacity(2);
+
+        order.push(self.expr.format());
+
+        if let Some(direct) = &self.direction {
+            order.push(direct.to_string())
+        }
+
+        order.join(" ")
+    }
+}
+
+impl Visitor for OrderExpr {
+    fn visit<T: Transformer>(&mut self, tf: &mut T) -> Self {
+        let mut node_expr = Node::Expr(&mut self.expr);
+        tf.trans(&mut node_expr);
+        let new_node_expr = node_expr.into_expr().unwrap();
+        self.expr = new_node_expr.visit(tf);
+        self.clone()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AggFuncName {
+    Avg,
+    Count,
+    BitAnd,
+    BitOr,
+    BitXor,
+    JsonArrayAgg,
+    JsonObjectAgg,
+    StCollect,
+    Min,
+    Max,
+    Variance,
+    Std,
+    StdDev,
+    StdDevPop,
+    StdDevSamp,
+    VarPop,
+    VarSamp,
+    Sum,
+    GroupConcat,
+}
+
+impl AsRef<str> for AggFuncName {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Avg               => "AVG",
+            Self::Count             => "COUNT",
+            Self::BitAnd            => "BIT_AND",
+            Self::BitOr             => "BIT_OR",
+            Self::BitXor            => "BIT_XOR",
+            Self::JsonArrayAgg      => "JSON_ARRAYAGG",
+            Self::JsonObjectAgg     => "JSON_OBJECTAGG",
+            Self::StCollect         => "ST_COLLECT",
+            Self::Min               => "MIN",
+            Self::Max               => "MAX",
+            Self::Variance          => "VARIANCE",
+            Self::Std               => "Std",
+            Self::StdDev            => "STDDEV",
+            Self::StdDevPop         => "STDDEV_POP",
+            Self::StdDevSamp        => "STDDEV_SAMP",
+            Self::VarPop            => "VAR_POP",
+            Self::VarSamp           => "VAR_SAMP",
+            Self::Sum               => "SUM",
+            Self::GroupConcat       => "GROUP_CONCAT",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AggExpr {
+    pub span: Span,
+    pub name: AggFuncName,
+    pub distinct: bool,
+    pub exprs: Vec<Expr>,
+
+    // GroupConcat info 
+    pub group_concat_distinct: Option<String>,
+    pub gorder_clause: Vec<OrderExpr>,
+    pub gconcat_separator: Option<String>,
+}
+
+impl AggExpr {
+    pub fn format(&self) -> String {
+        let mut agg = Vec::with_capacity(10);
+        agg.push(self.name.as_ref().to_string());
+        agg.push("(".to_string());
+
+        let exprs = self.exprs.iter().map(|x| x.format()).collect::<Vec<_>>().join(", ");
+        
+        if self.name != AggFuncName::GroupConcat {
+            if self.distinct {
+                agg.push("DISTINCT".to_string());
+            }
+
+            agg.push(exprs);
+
+        } else {
+            if let Some(opt) = &self.group_concat_distinct {
+                agg.push(opt.clone());
+            }
+
+            agg.push(exprs);
+
+            agg.push(self.gorder_clause.iter().map(|x| x.format()).collect::<Vec<_>>().join(", "));
+
+            if let Some(opt) = &self.gconcat_separator {
+                agg.push(opt.clone());
+            }
+        }
+
+        agg.push(")".to_string());
+        agg.join(" ")
+    }
+}
+
+impl Visitor for AggExpr {
+    fn visit<T: Transformer>(&mut self, tf: &mut T) -> Self {
+        let mut new_exprs = Vec::with_capacity(self.exprs.len());
+        for v in self.exprs.iter_mut() {
+            let mut node = Node::Expr(v);
+            tf.trans(&mut node);
+
+            new_exprs.push(node.into_expr().unwrap().visit(tf));
+        }
+
+        self.exprs = new_exprs;
+        self.clone()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use lrpar::Span;
@@ -1515,42 +1667,5 @@ mod test {
                 assert_eq!(value, "default")
             }
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum User {
-    CurrentUser,
-    UserIdentOrText(String),
-}
-
-#[derive(Debug, Clone)]
-pub struct OrderExpr {
-    pub span: Span,
-    pub expr: Expr,
-    pub direction: Option<String>,
-}
-
-impl OrderExpr {
-    pub fn format(&self) -> String {
-        let mut order = Vec::with_capacity(2);
-
-        order.push(self.expr.format());
-
-        if let Some(direct) = &self.direction {
-            order.push(direct.to_string())
-        }
-
-        order.join(" ")
-    }
-}
-
-impl Visitor for OrderExpr {
-    fn visit<T: Transformer>(&mut self, tf: &mut T) -> Self {
-        let mut node_expr = Node::Expr(&mut self.expr);
-        tf.trans(&mut node_expr);
-        let new_node_expr = node_expr.into_expr().unwrap();
-        self.expr = new_node_expr.visit(tf);
-        self.clone()
     }
 }

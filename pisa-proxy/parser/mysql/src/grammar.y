@@ -1251,7 +1251,7 @@ simple_expr -> Expr:
     }
   | set_func_specification
     {
-      Expr::SetFuncSpecExpr($1)
+      Expr::SetFuncSpecExpr(Box::new($1))
     }
   | window_func_call
     {
@@ -1818,121 +1818,336 @@ udf_expr -> Expr:
       }
     ;
 
-set_func_specification -> Vec<Expr>:
+set_func_specification -> Expr:
       sum_expr            
       { 
-        vec![Expr::Ori(String::from($lexer.span_str($1)))]
+        $1
       }
     | grouping_operation  
       { 
-        vec![Expr::Ori(String::from($lexer.span_str($span)))]
+        Expr::Ori(String::from($lexer.span_str($span)))
       }
     ;
 
-sum_expr -> Span:
+sum_expr -> Expr:
     'AVG' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Avg,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'AVG' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Avg,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'BIT_AND'  '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::BitAnd,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'BIT_OR'  '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::BitOr,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'JSON_ARRAYAGG' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::JsonArrayAgg,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'JSON_OBJECTAGG' '(' in_sum_expr ',' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::JsonObjectAgg,
+        distinct: false,
+        exprs: vec![$3, $5],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'ST_COLLECT' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StCollect,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'ST_COLLECT' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StCollect,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'BIT_XOR' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::BitXor,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'COUNT' '(' opt_all '*' ')' opt_windowing_clause
     {
-      $span
+      let mut opt = String::with_capacity(4);
+      if $3 {
+        opt.push_str("ALL ");
+      }
+
+      opt.push('*');
+
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Count,
+        distinct: false,
+        exprs: vec![Expr::Ori(opt)],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'COUNT' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Count,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'COUNT' '(' 'DISTINCT' expr_list ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Count,
+        distinct: true,
+        exprs: $4,
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'MIN' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Min,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'MIN' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Min,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'MAX' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Max,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'MAX' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Max,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'STD' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Std,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'VARIANCE' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Variance,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'STDDEV' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StdDev,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'STDDEV_POP' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StdDevPop,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'STDDEV_SAMP' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StdDevSamp,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'VAR_POP' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::VarPop,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'VAR_SAMP' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::VarSamp,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'SUM' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Sum,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'SUM' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Sum,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'GROUP_CONCAT' '(' opt_distinct expr_list opt_gorder_clause opt_gconcat_separator ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::GroupConcat,
+        distinct: false,
+        group_concat_distinct: $3,
+        exprs: $4,
+        gorder_clause: $5,
+        gconcat_separator: $6,
+      })
     }
   ;
 
@@ -3022,9 +3237,9 @@ opt_table_alias -> Option<String>:
   | opt_as ident { Some($2.0) }
   ;
 
-opt_all -> Option<String>:
-  /* empty */ { None }
-| 'ALL' { Some(String::from("ALL")) }
+opt_all -> bool :
+  /* empty */ { false }
+| 'ALL' { true }
 ;
 
 opt_where_clause -> Option<WhereClause>:
