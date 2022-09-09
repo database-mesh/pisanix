@@ -52,7 +52,7 @@ pub trait Transformer {
     fn trans(&mut self, node: &mut Node) -> bool;
 
     //The `complete` means that visit the struct has completed, normally  its used to execute some `reset` logic.
-    fn complete(&mut self, node: &mut Node)  {}
+    fn complete(&mut self, _node: &mut Node)  {}
 }
 
 ///Used to visit the structure, so that the visit ast tree can be traversed.
