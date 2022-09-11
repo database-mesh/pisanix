@@ -130,6 +130,7 @@ sql_stmt -> SqlStmt:
   | start               { SqlStmt::Start($1) }
   | create        { SqlStmt::Create($1) }
   | create_index_stmt  { SqlStmt::CreateIndexStmt($1) }
+  | create_table_stmt  { SqlStmt::CreateTableStmt($1) }
   
   ;
 
@@ -6529,39 +6530,40 @@ create_database_options -> Vec<CreateDatabaseOption>:
 create_database_option -> CreateDatabaseOption:
           default_collation
           {
-            $1
+            CreateDatabaseOption::DefaultCollation($1)
           }
         | default_charset
           {
-            $1
+            CreateDatabaseOption::DefaultCharset($1)
           }
         | default_encryption
           {
-            $1
+            CreateDatabaseOption::DefaultEncryption($1)
           }
         ;
 
-default_collation -> CreateDatabaseOption:
-          opt_default 'COLLATE' opt_equal collation_name {
-          	let is_default = match $1 {
-          		Some(_) => true,
-          		None => false,
-          	};
-          	let is_equal = match $3 {
-          		Some(_) => true,
-          		None => false,
-          	};
-		CreateDatabaseOption::DefaultCollation(DefaultCollation{
+default_collation -> DefaultCollation:
+    opt_default 'COLLATE' opt_equal collation_name
+    {
+        let is_default = match $1 {
+            Some(_) => true,
+          	None => false,
+        };
+        let is_equal = match $3 {
+          	Some(_) => true,
+          	None => false,
+        };
+		DefaultCollation {
 		    is_default: is_default,
 		    is_equal: is_equal,
 		    collation_name: $4,
-		})
-          }
-        ;
+		}
+    }
+;
 
-default_charset -> CreateDatabaseOption:
-          opt_default character_set opt_equal charset_name
-          {
+default_charset -> DefaultCharset:
+    opt_default character_set opt_equal charset_name
+    {
 		let is_default = match $1 {
 			Some(_) => true,
 			None => false,
@@ -6570,17 +6572,17 @@ default_charset -> CreateDatabaseOption:
 			Some(_) => true,
 			None => false,
 		};
-		CreateDatabaseOption::DefaultCharset(DefaultCharset{
+		DefaultCharset {
 		    is_default: is_default,
 		    is_equal: is_equal,
 		    charset_name: $4,
-		})
-          }
-        ;
+		}
+    }
+;
 
-default_encryption -> CreateDatabaseOption:
-          opt_default 'ENCRYPTION' opt_equal 'TEXT_STRING'
-          {
+default_encryption -> DefaultEncryption:
+    opt_default 'ENCRYPTION' opt_equal 'TEXT_STRING'
+    {
 		let is_default = match $1 {
 			Some(_) => true,
 			None => false,
@@ -6589,13 +6591,13 @@ default_encryption -> CreateDatabaseOption:
 			Some(_) => true,
 			None => false,
 		};
-		CreateDatabaseOption::DefaultEncryption(DefaultEncryption{
+		DefaultEncryption {
 		    is_default: is_default,
 		    is_equal: is_equal,
 		    encryption: String::from($lexer.span_str($4.as_ref().unwrap().span())),
-		})
-          }
-        ;
+		}
+    }
+;
 
 view_or_trigger_or_sp_or_event -> ViewOrTriggerOrSpOrEvent:
           definer init_lex_create_info definer_tail
@@ -6897,6 +6899,1187 @@ opt_comma -> bool:
     | ','          { true }
 ;
 
+create_table_stmt -> CreateTableStmt:
+      'CREATE' opt_temporary 'TABLE' opt_if_not_exists table_ident '(' table_element_list ')' opt_create_table_options_etc
+      {
+           CreateTableStmt {
+               span: $span,
+               is_temporary: $2,
+               is_not_exists: $4,
+               table_name: $5,
+               table_element_list: $7,
+               opt_create_table_options_etc: $9,
+               like_table_name: None,
+           }
+      }
+    | 'CREATE' opt_temporary 'TABLE' opt_if_not_exists table_ident opt_create_table_options_etc
+      {
+           CreateTableStmt {
+               span: $span,
+               is_temporary: $2,
+               is_not_exists: $4,
+               table_name: $5,
+               table_element_list: None,
+               opt_create_table_options_etc: $6,
+               like_table_name: None,
+           }
+      }
+    | 'CREATE' opt_temporary 'TABLE' opt_if_not_exists table_ident 'LIKE' table_ident
+      {
+           CreateTableStmt {
+               span: $span,
+               is_temporary: $2,
+               is_not_exists: $4,
+               table_name: $5,
+               table_element_list: None,
+               opt_create_table_options_etc: None,
+               like_table_name: $7,
+           }
+      }
+    | 'CREATE' opt_temporary 'TABLE' opt_if_not_exists table_ident '(' 'LIKE' table_ident ')'
+      {
+           CreateTableStmt {
+               span: $span,
+               is_temporary: $2,
+               is_not_exists: $4,
+               table_name: $5,
+               table_element_list: None,
+               opt_create_table_options_etc: None,
+               like_table_name: $8,
+           }
+      }
+;
+
+opt_temporary -> bool:
+      /* empty */   { false }
+    | 'TEMPORARY'   { true }
+;
+
+table_element_list -> Vec<TableElement>:
+      table_element
+      {
+            vec![$1]
+      }
+    | table_element_list ',' table_element
+      {
+            $1.push($3);
+            $1
+      }
+;
+
+table_element -> TableElement:
+      column_def            { TableElement::ColumnDef($1) }
+    | table_constraint_def  { TableElement::TableConstraintDef($1) }
+;
+
+column_def -> ColumnDef:
+    ident field_def opt_references
+    {
+         ColumnDef {
+             span: $span,
+             column_name: $1.0,
+             field_def: $2,
+             opt_references: $3,
+         }
+    }
+;
+
+opt_references -> Option<References>:
+      /* empty */   { None }
+    | references    { Some($1) }
+;
+
+table_constraint_def -> TableConstraintDef:
+      key_or_index opt_index_name_and_type '(' key_list_with_expression ')' opt_index_options
+      {
+           TableConstraintDef::InlineIndex(InlineIndexDefinition {
+               span: $span,
+               key_type: KeyType::Multiple,
+               index_name: $2.0,
+               index_type: $2.1,
+               key_list_with_expression: $4,
+               opt_index_options: $6,
+           })
+      }
+    | 'FULLTEXT' opt_key_or_index opt_ident '(' key_list_with_expression ')' opt_fulltext_index_options
+      {
+           TableConstraintDef::InlineIndex(InlineIndexDefinition {
+               span: $span,
+               key_type: KeyType::FullText,
+               index_name: $3,
+               index_type: None,
+               key_list_with_expression: $5,
+               opt_index_options: $7,
+           })
+      }
+    | 'SPATIAL' opt_key_or_index opt_ident '(' key_list_with_expression ')' opt_spatial_index_options
+      {
+           TableConstraintDef::InlineIndex(InlineIndexDefinition {
+               span: $span,
+               key_type: KeyType::Spatial,
+               index_name: $3,
+               index_type: None,
+               key_list_with_expression: $5,
+               opt_index_options: $7,
+           })
+      }
+    | opt_constraint_name constraint_key_type opt_index_name_and_type '(' key_list_with_expression ')' opt_index_options
+      {
+           let (name, type) = $3;
+           if name.is_none {
+               name = $1;
+           }
+           TableConstraintDef::InlineIndex(InlineIndexDefinition {
+               span: $span,
+               key_type: $2,
+               index_name: name,
+               index_type: type,
+               key_list_with_expression: $5,
+               opt_index_options: $7,
+           })
+      }
+    | opt_constraint_name 'FOREIGN' 'KEY' opt_ident '(' key_list ')' references
+      {
+           TableConstraintDef::ForeignKey(ForeignKeyDefinition {
+               span: $span,
+               constraint_name: $1,
+               key_name: $4,
+               key_list_with_expression: $6,
+               references: $8,
+           })
+      }
+    | opt_constraint_name check_constraint opt_constraint_enforcement
+      {
+           TableConstraintDef::Check(CheckDefinition {
+               span: $span,
+               name: $1,
+               check_expr: $2,
+               is_enforced: $3,
+           })
+      }
+;
+
+check_constraint -> Expr:
+    'CHECK' '(' expr ')' { $3 }
+;
+
+opt_constraint_name -> Option<String>:
+      /* empty */            { None }
+    | 'CONSTRAINT' opt_ident { $2 }
+;
+
+opt_not -> bool:
+      /* empty */  { false }
+    | 'NOT'        { true }
+;
+
+opt_constraint_enforcement -> bool:
+      /* empty */            { true }
+    | constraint_enforcement { $1 }
+;
+
+constraint_enforcement -> bool:
+    opt_not 'ENFORCED'  { !($1) }
+;
+
+field_def -> FieldDef:
+      type opt_column_attribute_list
+      {
+           FieldDef {
+               span: $span,
+               data_type: $1,
+               opt_collate: None,
+               is_generated_always: false,
+               expr: None,
+               opt_stored_attribute: None,
+               opt_column_attribute_list: None,
+           }
+      }
+    | type opt_collate opt_generated_always AS '(' expr ')' opt_stored_attribute opt_column_attribute_list
+      {
+           FieldDef {
+               span: $span,
+               data_type: $1,
+               opt_collate: $2,
+               is_generated_always: $3,
+               expr: $6,
+               opt_stored_attribute: $8,
+               opt_column_attribute_list: $9,
+           }
+      }
+;
+
+opt_generated_always -> bool:
+      /* empty */           { false }
+    | 'GENERATED' 'ALWAYS'  { true }
+;
+
+opt_stored_attribute -> Option<StoredAttribute>:
+      /* empty */ { Some(StoredAttribute::Virtual) }
+    | 'VIRTUAL' { Some(StoredAttribute::Virtual) }
+    | 'STORED'  { Some(StoredAttribute::Stored) }
+;
+
+references -> References:
+    'REFERENCES' table_ident opt_ref_list opt_match_clause opt_on_update_delete
+    {
+         References {
+             span: $span,
+             table_name: $2,
+             opt_ref_list: $3,
+             opt_match_clause: $4,
+             opt_on_update_delete: $5,
+         }
+    }
+;
+
+opt_ref_list -> Option<Vec<String>>:
+      /* empty */      { None }
+    | '(' reference_list ')' { Some($2) }
+;
+
+reference_list -> Vec<String>:
+      reference_list ',' ident
+      {
+           s1.push($3.0);
+           $1
+      }
+    | ident
+      {
+           vec![$1.0]
+      }
+;
+
+opt_match_clause -> Option<MatchClause>:
+      /* empty */          { None }
+    | 'MATCH' 'FULL'       { Some(MatchClause::Full) }
+    | 'MATCH' 'PARTIAL'    { Some(MatchClause::Partial) }
+    | 'MATCH' 'SIMPLE'     { Some(MatchClause::Simple) }
+;
+
+opt_on_update_delete -> Option<OnUpdateDelete>:
+      /* empty */
+      {
+           None
+      }
+    | 'ON' 'UPDATE' delete_option
+      {
+           Some(OnUpdateDelete {
+               span: $span,
+               update_option: $3,
+               delete_option: None,
+           })
+      }
+    | 'ON' 'DELETE' delete_option
+      {
+           Some(OnUpdateDelete {
+               span: $span,
+               update_option: None,
+               delete_option: $3,
+           })
+      }
+    | 'ON' 'UPDATE' delete_option 'ON' 'DELETE' delete_option
+      {
+           Some(OnUpdateDelete {
+               span: $span,
+               update_option: $3,
+               delete_option: $6,
+           })
+      }
+    | 'ON' 'DELETE' delete_option 'ON' 'UPDATE' delete_option
+      {
+           Some(OnUpdateDelete {
+               span: $span,
+               update_option: $6,
+               delete_option: $3,
+           })
+      }
+;
+
+delete_option -> ReferenceOption:
+      'RESTRICT'      { ReferenceOption::Restrict }
+    | 'CASCADE'       { ReferenceOption::Cascade }
+    | 'SET' 'NULL'    { ReferenceOption::SetNull }
+    | 'NO' 'ACTION'   { ReferenceOption::NoAction }
+    | 'SET' 'DEFAULT' { ReferenceOption::SetDefault  }
+;
+
+constraint_key_type -> KetType:
+      'PRIMARY' 'KEY' { KetType::Primary }
+    | 'UNIQUE' opt_key_or_index { PRIMARY::Unique }
+;
+
+opt_key_or_index -> Option<KeysOrIndex>:
+      /* empty */ { None }
+    | key_or_index { $1 }
+;
+
+opt_column_attribute_list -> Option<Vec<ColumnAttribute>>:
+      /* empty */      { None }
+    | column_attribute_list   { $1 }
+;
+
+column_attribute_list -> Vec<ColumnAttribute>:
+      column_attribute_list column_attribute
+      {
+           $1.push($2);
+           $1
+      }
+    | column_attribute
+      {
+           vec![$1]
+      }
+;
+
+column_attribute -> ColumnAttribute:
+      'NULL'
+      {
+           ColumnAttribute::Null
+      }
+    | not 'NULL'
+      {
+           ColumnAttribute::NotNull
+      }
+    | not 'SECONDARY'
+      {
+           ColumnAttribute::NotSecondary
+      }
+    | 'DEFAULT' now_or_signed_literal
+      {
+           ColumnAttribute::DefaultLiteral($2)
+      }
+    | 'DEFAULT' '(' expr ')'
+      {
+           ColumnAttribute::DefaultExpr($3)
+      }
+    | 'ON' 'UPDATE' now
+      {
+           ColumnAttribute::OnUpdate($3)
+      }
+    | 'AUTO_INC'
+      {
+            ColumnAttribute::AutoInc
+      }
+    | 'SERIAL' 'DEFAULT' 'VALUE'
+      {
+            ColumnAttribute::SerialDefaultValue
+      }
+    | opt_primary 'KEY'
+      {
+            ColumnAttribute::PrimaryKey
+      }
+    | 'UNIQUE'
+      {
+            ColumnAttribute::Unique
+      }
+    | 'UNIQUE' 'KEY'
+      {
+            ColumnAttribute::Unique
+      }
+    | 'COMMENT' TEXT_STRING_sys
+      {
+            ColumnAttribute::Comment($2)
+      }
+    | 'COLLATE' collation_name
+      {
+            ColumnAttribute::Collate($2)
+      }
+    | 'COLUMN_FORMAT' column_format
+      {
+            ColumnAttribute::ColumnFormat($2)
+      }
+    | 'STORAGE' storage_media
+      {
+            ColumnAttribute::StorageMedia($2)
+      }
+    | 'SRID' real_ulonglong_num
+      {
+            ColumnAttribute::Srid($2)
+      }
+    | opt_constraint_name check_constraint
+      {
+            ColumnAttribute::check(CheckDefinition {
+                span: $span,
+                name: $1,
+                check_expr: $2,
+                is_enforced: true,
+            })
+      }
+    | constraint_enforcement
+      {
+            ColumnAttribute::check($1)
+      }
+    | 'ENGINE_ATTRIBUTE' opt_equal json_attribute
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            ColumnAttribute::Engine(AttributeOption {
+                span: $span,
+                is_equal: is_equal,
+                attribute: $3,
+            })
+      }
+    | 'SECONDARY_ENGINE_ATTRIBUTE' opt_equal json_attribute
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            ColumnAttribute::SecondaryEngine(AttributeOption {
+                span: $span,
+                is_equal: is_equal,
+                attribute: $3,
+            })
+      }
+    | visibility
+      {
+            ColumnAttribute::Visibility
+      }
+;
+
+column_format -> ColumnFormat:
+      'DEFAULT' { ColumnFormat::Default }
+    | 'FIXED'   { ColumnFormat::Fixed }
+    | 'DYNAMIC' { ColumnFormat::Dynamic }
+;
+
+storage_media -> StorageMedia:
+      'DEFAULT' { StorageMedia::Default }
+    | 'DISK'    { StorageMedia::Disk }
+    | 'MEMORY'  { StorageMedia::Memory }
+;
+
+now_or_signed_literal -> String:
+      now  { $1 }
+    | signed_literal_or_null { $1 }
+;
+
+signed_literal_or_null -> Value:
+      signed_literal    { $1 }
+    | null_as_literal   { $1 }
+;
+
+null_as_literal -> Value:
+    'NULL'
+    {
+         Value::null
+    }
+;
+
+opt_ident -> Option<String>:
+      /* empty */    { None }
+    | ident          { Some($1.0) }
+;
+
+opt_create_table_options_etc -> CreateTableOptions:
+      create_table_options opt_create_partitioning_etc
+      {
+           CreateTableOptions {
+               opt_create_table_options: Some($1),
+               opt_partitioning: $2.opt_partitioning,
+               on_duplicate: $2.on_duplicate,
+               opt_query_expression: $2.opt_query_expression,
+           }
+            $$= $2;
+            $$.opt_create_table_options= $1;
+      }
+    | opt_create_partitioning_etc { $1 }
+;
+
+opt_create_partitioning_etc -> CreateTableOptions:
+      partition_clause opt_duplicate_as_qe
+      {
+           CreateTableOptions {
+               opt_create_table_options: $2.opt_create_table_options,
+               opt_partitioning: $1,
+               on_duplicate: $2.on_duplicate,
+               opt_query_expression: $2.opt_query_expression,
+           }
+      }
+    | opt_duplicate_as_qe { $1 }
+;
+
+opt_duplicate_as_qe -> CreateTableOptions:
+      /* empty */
+      {
+           CreateTableOptions {
+               opt_create_table_options: None,
+               opt_partitioning: None,
+               on_duplicate: OnDuplicate::Error,
+               opt_query_expression: None,
+           }
+      }
+    | duplicate as_create_query_expression
+      {
+           CreateTableOptions {
+               opt_create_table_options: None,
+               opt_partitioning: None,
+               on_duplicate: $1,
+               opt_query_expression: $2,
+           }
+      }
+    | as_create_query_expression
+      {
+           CreateTableOptions {
+               opt_create_table_options: None,
+               opt_partitioning: None,
+               on_duplicate: OnDuplicate::Error,
+               opt_query_expression: $1,
+           }
+      }
+;
+
+opt_duplicate -> OnDuplicate:
+      /* empty */ { OnDuplicate::Error }
+    | duplicate
+;
+
+duplicate -> OnDuplicate:
+      'REPLACE' { OnDuplicate::Replace }
+    | 'IGNORE'  { OnDuplicate::Ignore }
+;
+
+as_create_query_expression -> SelectStmt:
+      'AS' query_expression_or_parens { $2 }
+    | query_expression_or_parens    { $1 }
+;
+
+partition_clause -> Partition:
+    'PARTITION' 'BY' part_type_def opt_num_parts opt_sub_part opt_part_defs
+    {
+         Partition {
+             span: $span,
+             part_type_def: $3,
+             opt_num_parts: $4,
+             opt_sub_part: $5,
+             opt_part_defs: $6,
+         }
+    }
+;
+
+part_type_def -> PartTypeDef:
+      opt_linear 'KEY' opt_key_algo '(' opt_name_list ')'
+      {
+            PartTypeDef::Key {
+                span: $span,
+                is_linear: $1,
+                opt_key_algo: $3,
+                opt_name_list: $5,
+            }
+      }
+    | opt_linear 'HASH' '(' bit_expr ')'
+      {
+            PartTypeDef::Hash {
+                span: $span,
+                is_linear: $1,
+                bit_expr: $4,
+            }
+      }
+    | 'RANGE' '(' bit_expr ')'
+      {
+            PartTypeDef::Range {
+                span: $span,
+                bit_expr: $3,
+            }
+      }
+    | 'RANGE' 'COLUMNS' '(' name_list ')'
+      {
+            PartTypeDef::RangeColumns {
+                span: $span,
+                name_list: $4,
+            }
+      }
+    | 'LIST' '(' bit_expr ')'
+      {
+            PartTypeDef::List {
+                span: $span,
+                bit_expr: $3,
+            }
+      }
+    | 'LIST' 'COLUMNS' '(' name_list ')'
+      {
+            PartTypeDef::List {
+                span: $span,
+                name_list: $4,
+            }
+      }
+;
+
+opt_linear -> bool:
+      /* empty */ { false }
+    | 'LINEAR'    { true }
+;
+
+opt_key_algo -> Option<KeyAlgorithm>:
+       /* empty */   { None }
+    | 'ALGORITHM' EQ real_ulong_num
+      {
+            Some(KeyAlgorithm {
+               span: $span,
+               eq: Op::EQ,
+               num: $3,
+            })
+      }
+;
+
+opt_num_parts -> String:
+      /* empty */ { String::from("0") }
+    | 'PARTITIONS' real_ulong_num
+      {
+            $2
+      }
+;
+
+opt_sub_part -> Option<SubPartition>:
+      /* empty */ { None }
+    | 'SUBPARTITION' 'BY' opt_linear 'HASH' '(' bit_expr ')' opt_num_subparts
+      {
+            Some(SubPartition::Hash {
+                span: $span,
+                is_linear: $3,
+                bit_expr: $6,
+                opt_num_subparts: $8,
+            })
+      }
+    | 'SUBPARTITION' 'BY' opt_linear 'KEY' opt_key_algo '(' name_list ')' opt_num_subparts
+      {
+            Some(SubPartition::Hash {
+                span: $span,
+                is_linear: $3,
+                opt_key_algo: $5,
+                name_list: $7,
+                opt_num_subparts: $8,
+            })
+      }
+;
+
+opt_name_list -> Option<String>:
+      /* empty */ { None }
+    | name_list  { $1 }
+;
+
+
+name_list -> Vec<String>:
+      ident
+      {
+           vec![$1.0]
+      }
+    | name_list ',' ident
+      {
+           $1.push($3);
+           $1
+      }
+;
+
+opt_num_subparts -> String:
+       /* empty */   { String::from("0") }
+    | 'SUBPARTITIONS' real_ulong_num
+      {
+            $2
+      }
+;
+
+opt_part_defs:
+      /* empty */           { $$= NULL; }
+    | '(' part_def_list ')' { $$= $2; }
+;
+
+part_def_list:
+      part_definition
+      {
+            $$= NEW_PTN Mem_root_array<PT_part_definition*>(YYMEM_ROOT);
+            if ($$ == NULL || $$->push_back($1))
+              MYSQL_YYABORT; // OOM
+      }
+    | part_def_list ',' part_definition
+      {
+            $$= $1;
+            if ($$->push_back($3))
+              MYSQL_YYABORT; // OOM
+      }
+;
+
+part_definition:
+    PARTITION_SYM ident opt_part_values opt_part_options opt_sub_partition
+    {
+            $$= NEW_PTN PT_part_definition(@0, $2, $3.type, $3.values, @3,
+                                           $4, $5, @5);
+    }
+;
+
+opt_part_values:
+      /* empty */
+      {
+            $$.type= partition_type::HASH;
+      }
+    | 'VALUES' 'LESS' 'THAN' part_func_max
+      {
+            $$.type= partition_type::RANGE;
+            $$.values= $4;
+      }
+    | 'VALUES' 'IN' part_values_in
+      {
+            $$.type= partition_type::LIST;
+            $$.values= $3;
+      }
+;
+
+part_func_max:
+      'MAX_VALUE'   { $$= NULL; }
+    | part_value_item_list_paren
+;
+
+part_value_item_list_paren:
+    '('
+     {
+            /*
+              This empty action is required because it resolves 2 reduce/reduce
+              conflicts with an anonymous row expression:
+
+              simple_expr:
+                        ...
+                      | '(' expr ',' expr_list ')'
+            */
+     }
+     part_value_item_list ')'
+     {
+            $$= NEW_PTN PT_part_value_item_list_paren($3, @4);
+     }
+;
+
+create_table_options -> Vec<CreateTableOption>:
+      create_table_option
+      {
+            vec![$1]
+      }
+    | create_table_options opt_comma create_table_option
+      {
+            $1.push($3);
+            $1
+      }
+;
+
+create_table_option -> CreateTableOption:
+      'ENGINE' opt_equal ident_or_text
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::Engine {
+                span: $span,
+                is_equal: is_equal,
+                engine_name: $3,
+           }
+      }
+    | 'SECONDARY_ENGINE' opt_equal 'NULL'
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::SecondaryEngine {
+               span: $span,
+               is_equal: is_equal,
+               engine_name: None,
+           }
+      }
+    | 'SECONDARY_ENGINE' opt_equal ident_or_text
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::SecondaryEngine {
+               span: $span,
+               is_equal: is_equal,
+               engine_name: Some($3),
+           }
+      }
+    | 'MAX_ROWS' opt_equal ulonglong_num
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::MaxRows {
+               span: $span,
+               is_equal: is_equal,
+               value: $3,
+           }
+      }
+    | 'MIN_ROWS' opt_equal ulonglong_num
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::MinRows {
+               span: $span,
+               is_equal: is_equal,
+               value: $3,
+           }
+      }
+    | 'AVG_ROW_LENGTH' opt_equal ulonglong_num
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::AvgRowLength {
+               span: $span,
+               is_equal: is_equal,
+               value: $3,
+           }
+      }
+    | 'PASSWORD' opt_equal TEXT_STRING_sys
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::Password {
+               span: $span,
+               is_equal: is_equal,
+               content: $3,
+           }
+      }
+    | 'COMMENT' opt_equal TEXT_STRING_sys
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::Comment {
+               span: $span,
+               is_equal: is_equal,
+               content: $3,
+           }
+      }
+    | 'COMPRESSION' opt_equal TEXT_STRING_sys
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::Compression {
+               span: $span,
+               is_equal: is_equal,
+               value: $3,
+           }
+      }
+    | 'ENCRYPTION' opt_equal TEXT_STRING_sys
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::Encryption {
+               span: $span,
+               is_equal: is_equal,
+               value: $3,
+           }
+      }
+    | 'AUTO_INC' opt_equal ulonglong_num
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::AutoInc {
+               span: $span,
+               is_equal: is_equal,
+               value: $3,
+           }
+      }
+    | 'PACK_KEYS' opt_equal ternary_option
+      {
+           let is_equal = match $2 {
+               Some(_) => true,
+               None => false,
+           };
+           CreateTableOption::PackKeys {
+               span: $span,
+               is_equal: is_equal,
+               option: $3,
+           }
+      }
+    | 'STATS_AUTO_RECALC' opt_equal ternary_option
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::StatsAutoRecalc {
+                span: $span,
+                is_equal: is_equal,
+                option: $3,
+            }
+      }
+    | 'STATS_PERSISTENT' opt_equal ternary_option
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::StatsPersistent {
+                span: $span,
+                is_equal: is_equal,
+                option: $3,
+            }
+      }
+    | 'STATS_SAMPLE_PAGES' opt_equal ulong_num
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::StatsSamplePages {
+                span: $span,
+                is_equal: is_equal,
+                value: $3,
+            }
+      }
+    | 'STATS_SAMPLE_PAGES' opt_equal 'DEFAULT'
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::StatsSamplePages {
+                span: $span,
+                is_equal: is_equal,
+                value: $3,
+            }
+      }
+    | 'CHECKSUM' opt_equal ulong_num
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::Checksum {
+                span: $span,
+                is_equal: is_equal,
+                value: $3,
+            }
+      }
+    | 'TABLE_CHECKSUM' opt_equal ulong_num
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::TableChecksum {
+                span: $span,
+                is_equal: is_equal,
+                value: $3,
+            }
+      }
+    | 'DELAY_KEY_WRITE' opt_equal ulong_num
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::DelayKeyWrite {
+                span: $span,
+                is_equal: is_equal,
+                value: $3,
+            }
+      }
+    | 'ROW_FORMAT' opt_equal row_types
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::DelayKeyWrite {
+                span: $span,
+                is_equal: is_equal,
+                row_types: $3,
+            }
+      }
+    | 'UNION' opt_equal '(' opt_table_list ')'
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::Union {
+                span: $span,
+                is_equal: is_equal,
+                opt_table_list: $3,
+            }
+      }
+    | default_charset
+      {
+            CreateTableOption::DefaultCharset($1);
+      }
+    | default_collation
+      {
+            CreateTableOption::DefaultCollation($1);
+      }
+    | 'INSERT_METHOD' opt_equal merge_insert_types
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::InsertMethod {
+                span: $span,
+                is_equal: is_equal,
+                merge_insert_types: $3,
+            }
+      }
+    | 'DATA' 'DIRECTORY' opt_equal TEXT_STRING_sys
+      {
+            let is_equal = match $3 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::DataDirectory {
+                span: $span,
+                is_equal: is_equal,
+                value: $4,
+            }
+      }
+    | 'INDEX' 'DIRECTORY' opt_equal TEXT_STRING_sys
+      {
+            let is_equal = match $3 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::IndexDirectory {
+                span: $span,
+                is_equal: is_equal,
+                value: $4,
+            }
+      }
+    | 'TABLESPACE' opt_equal ident
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::Tablespace {
+                span: $span,
+                is_equal: is_equal,
+                value: $3.0,
+            }
+      }
+    | 'STORAGE' 'DISK'
+      {
+            CreateTableOption::StorageDisk
+      }
+    | 'STORAGE' 'MEMORY'
+      {
+            CreateTableOption::StorageMemory
+      }
+    | 'CONNECTION' opt_equal TEXT_STRING_sys
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::Connection {
+                span: $span,
+                is_equal: is_equal,
+                value: $3,
+            }
+      }
+    | 'KEY_BLOCK_SIZE' opt_equal ulonglong_num
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::KeyBlockSize {
+                span: $span,
+                is_equal: is_equal,
+                value: $3,
+            }
+      }
+    | 'START' 'TRANSACTION'
+      {
+            CreateTableOption::StartTransaction
+	  }
+    | 'ENGINE_ATTRIBUTE' opt_equal json_attribute
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::EngineAttribute {
+                span: $span,
+                is_equal: is_equal,
+                json_attribute: $3,
+            }
+      }
+    | 'SECONDARY_ENGINE_ATTRIBUTE' opt_equal json_attribute
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            CreateTableOption::EngineAttribute {
+                span: $span,
+                is_equal: is_equal,
+                json_attribute: $3,
+            }
+      }
+    | option_autoextend_size
+      {
+            CreateTableOption::OptionAutoextendSize($1);
+      }
+;
+
+ternary_option -> Ternary:
+      ulong_num
+      {
+           match($1) {
+               0 => Ternary::OFF,
+               1 => Ternary::ON,
+               _ => panic!("unsupport"),
+            }
+      }
+    | 'DEFAULT' { Ternary::Default }
+;
+
+row_types -> RowTypes:
+      'DEFAULT'    { RowTypes::Default }
+    | 'FIXED'      { RowTypes::Fixed }
+    | 'DYNAMIC'    { RowTypes::Dynamic }
+    | 'COMPRESSED' { RowTypes::Compressed }
+    | 'REDUNDANT'  { RowTypes::Redundant }
+    | 'COMPACT'    { RowTypes::Compact }
+;
+
+opt_table_list -> Option<Vec<String>>:
+      /* empty */  { None }
+    | table_list   { Some($1) }
+;
+
+table_list -> Vec<String>:
+      table_ident
+      {
+            vec![$1]
+      }
+    | table_list ',' table_ident
+      {
+            $1.push($3);
+            $1
+      }
+;
+
+merge_insert_types -> MergeInsertTypes:
+      NO_SYM          { MergeInsertTypes::Disabled }
+    | FIRST_SYM       { MergeInsertTypes::First }
+    | LAST_SYM        { MergeInsertTypes::Last }
+;
+
 create_index_stmt -> CreateIndexStmt:
       'CREATE' opt_unique 'INDEX' ident opt_index_type_clause 'ON' table_ident '(' key_list_with_expression ')'
       opt_index_options opt_index_lock_and_algorithm
@@ -6999,6 +8182,12 @@ fulltext_index_option -> FullTextIndexOption:
       {
           FullTextIndexOption::WithParserIdent($3.0)
       }
+;
+
+opt_index_name_and_type -> (Option<String>, Option<IndexType>):
+      opt_ident                      { ($1, None) }
+    | opt_ident 'USING' index_type   { ($1, Some($3)) }
+    | ident 'TYPE' index_type        { (Some($1), Some($3)) }
 ;
 
 opt_index_type_clause -> Option<IndexTypeClause>:
@@ -8177,55 +9366,13 @@ server_options_list -> Vec<ServerOption>:
 ;
 
 server_option -> ServerOption:
-      'USER' TEXT_STRING_sys
-      {
-          ServerOption::User(StringOption {
-              span: $span,
-              content: $2,
-          })
-      }
-    | 'HOST' TEXT_STRING_sys
-      {
-          ServerOption::Host(StringOption {
-              span: $span,
-              content: $2,
-          })
-      }
-    | 'DATABASE' TEXT_STRING_sys
-      {
-          ServerOption::Database(StringOption {
-              span: $span,
-              content: $2,
-          })
-      }
-    | 'OWNER' TEXT_STRING_sys
-      {
-          ServerOption::Owner(StringOption {
-              span: $span,
-              content: $2,
-          })
-      }
-    | 'PASSWORD' TEXT_STRING_sys
-      {
-          ServerOption::Password(StringOption {
-              span: $span,
-              content: $2,
-          })
-      }
-    | 'SOCKET' TEXT_STRING_sys
-      {
-          ServerOption::Socket(StringOption {
-              span: $span,
-              content: $2,
-          })
-      }
-    | 'PORT' ulong_num
-      {
-          ServerOption::Port(StringOption {
-              span: $span,
-              content: $2,
-          })
-      }
+      'USER' TEXT_STRING_sys { ServerOption::User($2) }
+    | 'HOST' TEXT_STRING_sys { ServerOption::Host($2) }
+    | 'DATABASE' TEXT_STRING_sys { ServerOption::Database($2) }
+    | 'OWNER' TEXT_STRING_sys { ServerOption::Owner($2) }
+    | 'PASSWORD' TEXT_STRING_sys { ServerOption::Password($2) }
+    | 'SOCKET' TEXT_STRING_sys { ServerOption::Socket($2) }
+    | 'PORT' ulong_num { ServerOption::Port($2) }
 ;
 
 %%

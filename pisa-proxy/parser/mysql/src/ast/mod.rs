@@ -68,6 +68,7 @@ pub enum SqlStmt {
     Rollback(Rollback),
     Create(Create),
     CreateIndexStmt(CreateIndexStmt),
+    CreateTableStmt(CreateTableStmt),
     None,
 }
 
