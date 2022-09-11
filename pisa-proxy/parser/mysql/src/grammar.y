@@ -7044,7 +7044,7 @@ table_constraint_def -> TableConstraintDef:
                span: $span,
                constraint_name: $1,
                key_name: $4,
-               key_list_with_expression: $6,
+               key_list: $6,
                references: $8,
            })
       }
@@ -7092,7 +7092,7 @@ field_def -> FieldDef:
                is_generated_always: false,
                expr: None,
                opt_stored_attribute: None,
-               opt_column_attribute_list: None,
+               opt_column_attribute_list: $2,
            }
       }
     | type opt_collate opt_generated_always AS '(' expr ')' opt_stored_attribute opt_column_attribute_list
@@ -7339,6 +7339,11 @@ column_attribute -> ColumnAttribute:
       }
 ;
 
+opt_primary -> bool:
+      /* empty */   { false }
+    | 'PRIMARY'   { true }
+;
+
 column_format -> ColumnFormat:
       'DEFAULT' { ColumnFormat::Default }
     | 'FIXED'   { ColumnFormat::Fixed }
@@ -7382,8 +7387,6 @@ opt_create_table_options_etc -> CreateTableOptions:
                on_duplicate: $2.on_duplicate,
                opt_query_expression: $2.opt_query_expression,
            }
-            $$= $2;
-            $$.opt_create_table_options= $1;
       }
     | opt_create_partitioning_etc { $1 }
 ;
@@ -7581,72 +7584,251 @@ opt_num_subparts -> String:
       }
 ;
 
-opt_part_defs:
-      /* empty */           { $$= NULL; }
-    | '(' part_def_list ')' { $$= $2; }
+opt_part_defs -> Option<Vec<PartDefinition>>:
+      /* empty */           { None }
+    | '(' part_def_list ')' { $2 }
 ;
 
-part_def_list:
+part_def_list -> Vec<PartDefinition>:
       part_definition
       {
-            $$= NEW_PTN Mem_root_array<PT_part_definition*>(YYMEM_ROOT);
-            if ($$ == NULL || $$->push_back($1))
-              MYSQL_YYABORT; // OOM
+            vec![$1]
       }
     | part_def_list ',' part_definition
       {
-            $$= $1;
-            if ($$->push_back($3))
-              MYSQL_YYABORT; // OOM
+            $1.push($3);
+            $1
       }
 ;
 
-part_definition:
-    PARTITION_SYM ident opt_part_values opt_part_options opt_sub_partition
+part_definition -> PartDefinition:
+    'PARTITION' ident opt_part_values opt_part_options opt_sub_partition
     {
-            $$= NEW_PTN PT_part_definition(@0, $2, $3.type, $3.values, @3,
-                                           $4, $5, @5);
+         PartDefinition {
+             span: $span,
+             partition_name: $2,
+             partition_type: $3.0,
+             partition_value: $3.1,
+             opt_part_options: $4,
+             opt_sub_partition: $5,
+         }
     }
 ;
 
-opt_part_values:
+opt_part_values -> (PartitionType, Option<Vec<PartValueItem>>):
       /* empty */
       {
-            $$.type= partition_type::HASH;
+            (PartitionType::Hash, None)
       }
     | 'VALUES' 'LESS' 'THAN' part_func_max
       {
-            $$.type= partition_type::RANGE;
-            $$.values= $4;
+            (PartitionType::Range, $4)
       }
     | 'VALUES' 'IN' part_values_in
       {
-            $$.type= partition_type::LIST;
-            $$.values= $3;
+            (PartitionType::List, Some($3))
       }
 ;
 
-part_func_max:
-      'MAX_VALUE'   { $$= NULL; }
-    | part_value_item_list_paren
+part_func_max -> Option<Vec<PartValueItem>>:
+      'MAX_VALUE'   { None }
+    | part_value_item_list_paren { Some($1) }
 ;
 
-part_value_item_list_paren:
-    '('
-     {
-            /*
-              This empty action is required because it resolves 2 reduce/reduce
-              conflicts with an anonymous row expression:
+part_values_in -> Vec<PartValueItem>:
+       part_value_item_list_paren
+       {
+            $1
+       }
+    | '(' part_value_list ')'
+       {
+            $2
+       }
+;
 
-              simple_expr:
-                        ...
-                      | '(' expr ',' expr_list ')'
-            */
-     }
-     part_value_item_list ')'
+part_value_list -> Vec<PartValueItem>:
+      part_value_item_list_paren
+      {
+            $1
+      }
+    | part_value_list ',' part_value_item_list_paren
+      {
+            $1.push($3);
+            $1
+      }
+;
+
+part_value_item_list_paren -> Vec<PartValueItem>:
+    '(' part_value_item_list ')'
      {
-            $$= NEW_PTN PT_part_value_item_list_paren($3, @4);
+           $2
      }
+;
+
+part_value_item_list -> Vec<PartValueItem>:
+     part_value_item
+      {
+            vec![$1]
+      }
+    | part_value_item_list ',' part_value_item
+      {
+            $1.push($3);
+            $1
+      }
+;
+
+part_value_item -> PartValueItem:
+      'MAX_VALUE'   { PartValueItem::MaxValue }
+    | bit_expr      { PartValueItem::BitExpr }
+;
+
+opt_sub_partition -> Option<Vec<SubPartDefinition>>:
+      /* empty */           { None }
+    | '(' sub_part_list ')' { Some($2) }
+;
+
+sub_part_list -> Vec<SubPartDefinition>:
+      sub_part_definition
+      {
+            vec![$1]
+      }
+    | sub_part_list ',' sub_part_definition
+      {
+            $1.push($3);
+            $1
+      }
+;
+
+sub_part_definition -> SubPartDefinition:
+    'SUBPARTITION' ident_or_text opt_part_options
+    {
+         SubPartDefinition {
+             span: $span,
+             name: $2,
+             opt_part_options: $3,
+         }
+    }
+;
+
+opt_part_options -> Option<Vec<PartitionOption>>:
+      /* empty */ { None }
+    | part_option_list { Some($1) }
+;
+
+part_option_list -> Vec<PartitionOption>:
+      part_option_list part_option
+      {
+            $1.push($2);
+            $1
+      }
+    | part_option
+      {
+            vec![$1]
+      }
+;
+
+part_option -> PartitionOption:
+      'TABLESPACE' opt_equal ident
+      {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          PartitionOption::Tablespace {
+              span: Span,
+              is_equal: is_equal,
+              tablespace_name: $3.0,
+          }
+      }
+    | opt_storage 'ENGINE' opt_equal ident_or_text
+      {
+          let is_storage = match $1 {
+              Some(_) => true,
+              None => false,
+          };
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          PartitionOption::Tablespace {
+              span: Span,
+              is_storage: is_storage,
+              is_equal: is_equal,
+              engine_name: $4,
+          }
+      }
+    | 'NODEGROUP' opt_equal real_ulong_num
+      {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          PartitionOption::NodeGroup {
+              span: Span,
+              is_equal: is_equal,
+              group_num: $3,
+          }
+      }
+    | 'MAX_ROWS' opt_equal real_ulonglong_num
+      {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          PartitionOption::MaxRows {
+              span: Span,
+              is_equal: is_equal,
+              rows_num: $3,
+          }
+      }
+    | 'MIN_ROWS' opt_equal real_ulonglong_num
+      {
+          let is_equal = match $2 {
+              Some(_) => true,
+              None => false,
+          };
+          PartitionOption::MinRows {
+              span: Span,
+              is_equal: is_equal,
+              rows_num: $3,
+          }
+      }
+    | 'DATA' 'DIRECTORY' opt_equal TEXT_STRING_sys
+      {
+          let is_equal = match $3 {
+              Some(_) => true,
+              None => false,
+          };
+          PartitionOption::DataDirectory {
+              span: Span,
+              is_equal: is_equal,
+              data_dir: $4,
+          }
+      }
+    | 'INDEX' 'DIRECTORY' opt_equal TEXT_STRING_sys
+      {
+          let is_equal = match $3 {
+              Some(_) => true,
+              None => false,
+          };
+          PartitionOption::IndexDirectory {
+              span: Span,
+              is_equal: is_equal,
+              index_dir: $4,
+          }
+      }
+    | 'COMMENT' opt_equal TEXT_STRING_sys
+      {
+          let is_equal = match $3 {
+              Some(_) => true,
+              None => false,
+          };
+          PartitionOption::Comment {
+              span: Span,
+              is_equal: is_equal,
+              comment: $4,
+          }
+      }
 ;
 
 create_table_options -> Vec<CreateTableOption>:
@@ -8075,9 +8257,9 @@ table_list -> Vec<String>:
 ;
 
 merge_insert_types -> MergeInsertTypes:
-      NO_SYM          { MergeInsertTypes::Disabled }
-    | FIRST_SYM       { MergeInsertTypes::First }
-    | LAST_SYM        { MergeInsertTypes::Last }
+      'NO'          { MergeInsertTypes::Disabled }
+    | 'FIRST'       { MergeInsertTypes::First }
+    | 'LAST'        { MergeInsertTypes::Last }
 ;
 
 create_index_stmt -> CreateIndexStmt:
@@ -8242,6 +8424,18 @@ key_part_with_expression -> KeyPartWithExpression:
                expr: $2,
                direction: $4
            })
+      }
+;
+
+key_list -> Vec<KeyPart>:
+      key_list ',' key_part
+      {
+            $1.push($3);
+            $1
+      }
+    | key_part
+      {
+            vec![$1]
       }
 ;
 

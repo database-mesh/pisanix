@@ -630,7 +630,7 @@ pub struct ForeignKeyDefinition {
     pub span: Span,
     pub constraint_name: String,
     pub key_name: String,
-    pub key_list_with_expression: Vec<KeyPartWithExpression>,
+    pub key_list: Vec<KeyPart>,
     pub references: References,
 }
 
@@ -931,7 +931,9 @@ pub struct PartDefinition {
     pub span: Span,
     pub partition_name: String,
     pub partition_type: PartitionType,
-    pub
+    pub partition_value: Option<Vec<PartValueItem>>,
+    pub opt_part_options: Option<Vec<PartitionOption>>,
+    pub opt_sub_partition: SubPartDefinition,
 }
 
 #[derive(Debug, Clone)]
@@ -939,4 +941,62 @@ pub enum PartitionType {
     Hash,
     Range,
     List,
+}
+
+#[derive(Debug, Clone)]
+pub enum PartValueItem {
+    MaxValue,
+    BitExpr(Expr),
+}
+
+#[derive(Debug, Close)]
+pub enum PartitionOption {
+    Tablespace {
+        span: Span,
+        is_equal: bool,
+        tablespace_name: String,
+    },
+    Engine {
+        span: Span,
+        is_storage: bool,
+        is_equal: bool,
+        engine_name: String,
+    },
+    NodeGroup {
+        span: Span,
+        is_equal: bool,
+        group_num: String,
+    },
+    MaxRows {
+        span: Span,
+        is_equal: bool,
+        rows_num: String,
+    },
+    MinRows {
+        span: Span,
+        is_equal: bool,
+        rows_num: String,
+    },
+    DataDirectory {
+        span: Span,
+        is_equal: bool,
+        data_dir: String,
+    },
+    IndexDirectory {
+        span: Span,
+        is_equal: bool,
+        index_dir: String,
+    },
+    Comment {
+        span: Span,
+        is_equal: bool,
+        comment: String,
+    }
+}
+
+#[derive(Debug, Close)]
+pub struct SubPartDefinition {
+    pub span: Span,
+    pub name: String,
+    pub opt_part_options: Option<Vec<PartitionOption>>,
 }
