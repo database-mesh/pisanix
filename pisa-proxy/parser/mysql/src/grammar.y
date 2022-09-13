@@ -3704,10 +3704,13 @@ opt_equal -> Option<&'input str>:
   | equal       { Some($1) }
   ;
 
-row_value -> Vec<Expr>:
+row_value -> RowValue:
   '(' opt_values ')' 
   { 
-    $2
+    RowValue {
+      span: $span,
+      values: $2,
+    }
   }
   ;
 
@@ -5607,7 +5610,7 @@ value_or_values -> ValOrVals:
   | VALUES    { ValOrVals::Values }
   ;
 
-values_list -> Vec<Vec<Expr>>:
+values_list -> Vec<RowValue>:
     values_list ','  row_value
     {
       $1.push($3);

@@ -2714,7 +2714,7 @@ impl ValOrVals {
 pub struct InsertVals {
     pub span: Span,
     pub val_ident: ValOrVals,
-    pub values: Vec<Vec<Expr>>,
+    pub values: Vec<RowValue>,
 }
 
 impl InsertVals {
@@ -2722,13 +2722,7 @@ impl InsertVals {
         let mut values = Vec::with_capacity(3);
 
         for v in &self.values {
-            let row = vec![
-                "(".to_string(),
-                v.iter().map(|x| x.format()).collect::<Vec<String>>().join(","),
-                ")".to_string(),
-            ];
-
-            values.push(row.join(" "))
+            values.push(v.format())
         }
 
         vec![self.val_ident.format(), values.join(",")].join(" ")
@@ -2740,19 +2734,52 @@ impl Visitor for InsertVals {
         let mut new_values = Vec::with_capacity(self.values.len());
 
         for v in self.values.iter_mut() {
-            let mut sub_new_exprs = Vec::with_capacity(v.len());
-            for vv in v.iter_mut() {
-                let mut node = Node::Expr(vv);
-                tf.trans(&mut node);
-
-                let new_node = node.into_expr().unwrap().visit(tf);
-                sub_new_exprs.push(new_node);
-            }
-
-            new_values.push(sub_new_exprs);
+            let mut node = Node::RowValue(v);
+            tf.trans(&mut node);
+            let new_node = node.into_row_value().unwrap().visit(tf);
+            new_values.push(new_node);
         }
 
         self.values = new_values;
+
+        self.clone()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RowValue {
+    pub span: Span,
+    pub values: Vec<Expr>
+}
+
+impl RowValue {
+    fn format(&self) -> String {
+        let values = vec![ 
+            "(".to_string(),
+            self.values.iter().map(|x| x.format()).collect::<Vec<String>>().join(","),
+            ")".to_string(),
+        ];
+
+        values.join(" ")
+    }
+}
+
+
+impl Visitor for RowValue {
+    fn visit<T: Transformer>(&mut self, tf: &mut T) -> Self {
+        let mut new_values = Vec::with_capacity(self.values.len());
+
+        for v in self.values.iter_mut() {
+            let mut node = Node::Expr(v);
+            tf.trans(&mut node);
+
+            let new_node = node.into_expr().unwrap().visit(tf);
+            new_values.push(new_node);
+        }
+
+        self.values = new_values;
+
+        tf.complete(&mut Node::RowValue(self));
 
         self.clone()
     }
