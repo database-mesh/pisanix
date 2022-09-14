@@ -4491,6 +4491,7 @@ NUM_literal -> Value:
       Value::Num {
         span: $span,
         value: $1,
+        signed: false,
       }
     }
   | 'DECIMAL_NUM'
@@ -4498,6 +4499,7 @@ NUM_literal -> Value:
       Value::Num {
         span: $span,
         value: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+        signed: false,
       }
     }
   | 'FLOAT_NUM'
@@ -4505,6 +4507,7 @@ NUM_literal -> Value:
       Value::FloatNum {
         span: $span,
         value: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+        signed: false,
       }
     }
   ;
@@ -4727,7 +4730,13 @@ signed_literal -> Value:
     }
   | '-' NUM_literal
     {
-      $2
+      match $2 {
+        Value::Num { span, value, signed:_ } => {
+          Value::Num { span, value, signed: true}
+        },
+
+        _ => unreachable!()
+      }
     }
   ;
 

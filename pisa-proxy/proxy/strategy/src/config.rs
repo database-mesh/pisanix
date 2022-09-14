@@ -125,9 +125,9 @@ pub struct Sharding {
     pub actual_datanodes: Vec<String>,
     pub binding_tables: Option<Vec<String>>,
     pub broadcast_tables: Option<Vec<String>>,
-    pub database_strategy: Option<Vec<StrategyType>>,
-    pub table_strategy: Option<Vec<StrategyType>>,
-    pub database_table_strategy: Option<Vec<StrategyType>>,
+    pub database_strategy: Option<StrategyType>,
+    pub table_strategy: Option<StrategyType>,
+    pub database_table_strategy: Option<StrategyType>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

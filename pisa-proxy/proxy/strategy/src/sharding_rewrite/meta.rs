@@ -71,7 +71,15 @@ pub struct LimitMeta {
 #[non_exhaustive]
 pub enum WhereMeta {
     // left: Field right: value
-    Binary { left: String, right: String }
+    BinaryExpr { left: String, right: WhereMetaRightDataType }
+}
+
+#[derive(Debug)]
+pub enum WhereMetaRightDataType {
+    String(String),
+    Num(String),
+    SignedNum(String),
+    FloatNum(String),
 }
 
 #[derive(Debug)]
@@ -156,7 +164,7 @@ macro_rules! gen_push_func {
                     self.$field.entry(self.query_id).or_insert(vec![]).push(meta);
                 }
 
-                pub fn $get_func_name(&mut self) -> &IndexMap<u8, Vec<$meta_typ>> {
+                pub fn $get_func_name(&self) -> &IndexMap<u8, Vec<$meta_typ>> {
                     &self.$field
                 }
             )*
@@ -244,27 +252,6 @@ impl Transformer for RewriteMetaData {
                 }
             }
 
-            //Node::InsertFromConstruct(val) => {
-            //    let mut values: Vec<Vec<InsertValue>> = Vec::with_capacity(val.values.values.len());
-            //    for v in val.values.values.iter() {
-            //        let mut tmpv = Vec::with_capacity(v.values.len());
-            //        for row_v in v.values.iter() {
-            //            if let Expr::LiteralExpr(Value::Num { span, value }) = row_v {
-            //                let insert_value = InsertValue {
-            //                    span: *span,
-            //                    value: value.clone(),
-            //                };
-            //                tmpv.push(insert_value);
-            //            }
-            //            
-            //        }
-
-            //        values.push(tmpv)
-            //    }
-
-            //    println!("values {:?}", values);
-            //}
-
             Node::InsertIdent(val) => {
                 match val {
                     InsertIdent::Ident(val) => {
@@ -330,6 +317,23 @@ impl Transformer for RewriteMetaData {
                     
                 }
 
+                Expr::BinaryOperationExpr { span:_, operator, left:_, right} => {
+                    match &mut self.state {
+                        ScanState::Where(args) => {
+                            if let Expr::LiteralExpr(_) = **right {
+                                let op = operator.format();
+                                if op.as_str() == "=" {
+                                    args.push(op);
+                                }
+                            }
+                            
+                            
+                        },
+
+                        _ => {}
+                    }
+                }
+
                 Expr::AggExpr(e) => {
                     if e.name == AggFuncName::Avg {
                         self.state = ScanState::Avg(e.span, e.distinct);
@@ -350,11 +354,21 @@ impl Transformer for RewriteMetaData {
                     self.prev_expr_type = None
                 }
 
-                Expr::LiteralExpr(Value::Num { span, value }) => {
+                Expr::LiteralExpr(Value::Num { span, value, signed}) => {
                     match &mut self.state {
                         ScanState::Where(args)=>  {
-                            let where_meta = WhereMeta::Binary { left: args[0].clone(), right: value.to_string() };
-                            self.push_where(where_meta);
+                            //println!("args {:?}", args);
+                            if args.len() > 1 && args[0] == "=" {
+                                let right_value = if *signed {
+                                    WhereMetaRightDataType::SignedNum(value.to_string())
+                                } else {
+                                    WhereMetaRightDataType::Num(value.to_string())
+                                };
+
+                                let where_meta = WhereMeta::BinaryExpr { left: args[1].clone(), right: right_value };
+                                self.push_where(where_meta);
+                                
+                            }
                             self.state = ScanState::Empty;
                         }
 
@@ -374,8 +388,9 @@ impl Transformer for RewriteMetaData {
     }
 
     fn complete(&mut self, _node: &mut Node) {
-        if let ScanState::InsertRowValue(args) = &self.state {
-            self.push_insert_value(args.clone());
+        if let ScanState::InsertRowValue(args) = &mut self.state {
+            let args = args.clone();
+            self.push_insert_value(args);
         }
     }
 }
@@ -392,45 +407,46 @@ mod test {
     fn get_meta() {
         let inputs: Vec<(&str, Vec<&str>, Vec<&str>, Vec<&str>, Vec<&str>, usize)> = vec![
             (
-                "SELECT order_id FROM d.t_order WHERE order_id=1;",
+                //"SELECT order_id FROM d.t_order WHERE order_id=1 and order_id in (SELECT order_id FROM d.t_order WHERE order_id = 2);",
+                "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)",
                 vec!["t_order"], // table
                 vec!["order_id"],  // field
                 vec![],                        // group
                 vec![],                        // order
                 1,                              // tables count
             ),
-            (
-                "SELECT a.* FROM t_order o JOIN t_order_item i ON o.order_id=i.order_id  WHERE order_id IN (1, 2)",
-                vec!["t_order", "t_order_item"],
-                vec!["a.*"],
-                vec![],
-                vec![],
-                1,              
-            ),
-            (
-                "SELECT order_id FROM t_order WHERE order_id IN (SELECT order_id1 from t_order1  where id in ( SELECT order_id1 from t_order2) group by id order by id) group by id1 limit 1,2",
-                vec!["t_order", "t_order1", "t_order2"],                // table
-                vec!["order_id", "order_id1", "order_id1"],             // field
-                vec!["id", "id1"],                                      // group
-                vec!["id"],                                             // order
-                3,                                                      // tables count
-            ),
-            (
-                "SELECT AVG(price) FROM t_order WHERE order_id = 1 and order_id1 IN (SELECT AVG(distinct price), order_id1 from t_order1)",
-                vec!["t_order", "t_order1"],                            // table
-                vec![],                                                 // field
-                vec![],                                                 // group
-                vec![],                                                 // order
-                2,                                                      // tables count
-            ),
-            (
-                "INSERT INTO t(`id`) VALUES (111, 112),(222)",
-                vec!["t"],
-                vec!["id"],
-                vec![],
-                vec![],
-                1,
-            )
+            //(
+            //    "SELECT a.* FROM t_order o JOIN t_order_item i ON o.order_id=i.order_id  WHERE order_id IN (1, 2)",
+            //    vec!["t_order", "t_order_item"],
+            //    vec!["a.*"],
+            //    vec![],
+            //    vec![],
+            //    1,              
+            //),
+            //(
+            //    "SELECT order_id FROM t_order WHERE order_id IN (SELECT order_id1 from t_order1  where id in ( SELECT order_id1 from t_order2) group by id order by id) group by id1 limit 1,2",
+            //    vec!["t_order", "t_order1", "t_order2"],                // table
+            //    vec!["order_id", "order_id1", "order_id1"],             // field
+            //    vec!["id", "id1"],                                      // group
+            //    vec!["id"],                                             // order
+            //    3,                                                      // tables count
+            //),
+            //(
+            //    "SELECT AVG(price) FROM t_order WHERE order_id = 1 and order_id1 IN (SELECT AVG(distinct price), order_id1 from t_order1)",
+            //    vec!["t_order", "t_order1"],                            // table
+            //    vec![],                                                 // field
+            //    vec![],                                                 // group
+            //    vec![],                                                 // order
+            //    2,                                                      // tables count
+            //),
+            //(
+            //    "INSERT INTO t(`id`) VALUES (111, 112),(222)",
+            //    vec!["t"],
+            //    vec!["id"],
+            //    vec![],
+            //    vec![],
+            //    1,
+            //)
         ];
 
         let parser = Parser::new();

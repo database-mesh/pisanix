@@ -14,21 +14,91 @@
 
 mod meta;
 
-use mysql_parser::ast::{SqlStmt, Visitor};
+use std::{vec, collections::HashMap};
 
-use crate::{config::Sharding, rewrite::ShardingRewriter};
+use endpoint::endpoint::Endpoint;
+use indexmap::IndexMap;
+use mysql_parser::ast::{SqlStmt, Visitor, TableIdent};
 
-use self::meta::RewriteMetaData;
+use crate::{config::{Sharding, StrategyType, ShardingAlgorithmName}, rewrite::ShardingRewriter};
 
-pub struct ShardingRewrite<'a> {
-    rule: &'a Sharding,
-    // Raw sql
-    raw_sql: &'a str,
+use self::meta::{RewriteMetaData, WhereMeta, WhereMetaRightDataType};
+
+pub trait CalcShardingIdx<I> {
+    fn calc(self, algo: &ShardingAlgorithmName, id: I) -> Option<u64>;
 }
 
+impl CalcShardingIdx<u64> for u64 {
+    fn calc(self, algo: &ShardingAlgorithmName, id: u64) -> Option<u64> {
+        match algo {
+            ShardingAlgorithmName::Mod => {
+                Some(self.wrapping_rem(id))
+            },
+
+            _ => None
+        }
+    }
+}
+
+impl CalcShardingIdx<i64> for i64 {
+    fn calc(self, algo: &ShardingAlgorithmName, id: i64) -> Option<u64> {
+        match algo {
+            ShardingAlgorithmName::Mod => {
+                Some(self.wrapping_rem(id) as u64)
+            },
+
+            _ => None
+        }
+    }
+}
+
+impl CalcShardingIdx<f64> for f64 {
+    fn calc(self, algo: &ShardingAlgorithmName, id: f64) -> Option<u64> {
+        match algo {
+            ShardingAlgorithmName::Mod => {
+                Some((self % id).round() as u64)
+            },
+
+            _ => None
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum RewriteChange {
+    DatabaseChange(DatabaseChange)
+}
+
+#[derive(Debug)]
+pub struct DatabaseChange {
+    pub span: mysql_parser::Span,
+    pub target: String,
+    pub shard_idx: u64,
+}
+
+#[derive(Debug)]
+pub struct ShardingRewriteOutput {
+    pub change: RewriteChange,
+    pub target_sql: String,
+    pub endpoint: Endpoint,
+}
+
+
+#[derive(Debug)]
+pub struct ShardingRewrite<'a> {
+    rules: Vec<Sharding>,
+    // Raw sql
+    raw_sql: &'a str,
+
+    // Endpoints
+    endpoints: Vec<Endpoint>,
+}
+
+
+
 impl<'a> ShardingRewrite<'a> {
-    pub fn new(rule: &'a Sharding, raw_sql: &'a str) -> Self {
-        ShardingRewrite { rule, raw_sql }
+    pub fn new(rules: Vec<Sharding>, raw_sql: &'a str, endpoints: Vec<Endpoint>) -> Self {
+        ShardingRewrite { rules, raw_sql, endpoints }
     }
 
     fn parse_rule(&self) {
@@ -36,7 +106,236 @@ impl<'a> ShardingRewrite<'a> {
 
     }
 
-    fn get_meta(&self, mut ast: SqlStmt) -> RewriteMetaData {
+    fn table_strategy(&self, rule: &Sharding, mut meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>> {
+        let strategy = match &rule.table_strategy {
+            Some(StrategyType::TableStrategyConfig(strategy)) => {
+                strategy
+            }
+
+            _ => return Ok(vec![])
+        };
+
+        let algo = &strategy.table_sharding_algorithm_name;
+        let tables = meta.get_tables();
+        let try_tables = Self::find_table(&tables, |idx, meta| {
+            (idx, meta.name == rule.table_name && meta.schema.is_some())
+        });
+
+
+        let wheres = meta.get_wheres();
+        if try_tables.is_empty() {
+            return Ok(vec![]);
+        }
+
+        if wheres.is_empty() {
+            //return Ok(self.database_strategy_iproduct(rule, try_tables));
+            return Ok(vec![])
+        }
+        
+
+        Ok(vec![])
+    }
+
+    fn database_strategy(&self, rule: &Sharding, meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>>{
+        let strategy = match &rule.database_strategy {
+            Some(StrategyType::DatabaseStrategyConfig(strategy)) => {
+                strategy
+            }
+
+            _ => return Ok(vec![]),
+        };
+
+        let algo = &strategy.database_sharding_algorithm_name;
+
+        let tables = meta.get_tables();
+
+        let try_tables = Self::find_table(&tables, |idx, meta| {
+            (idx, meta.name == rule.table_name && meta.schema.is_some())
+        });
+
+
+        let actual_nodes_length  = rule.actual_datanodes.len() as u64;
+        let wheres = meta.get_wheres();
+        println!("wheres {:?}", wheres);
+
+        if try_tables.is_empty() {
+            return Ok(vec![]);
+        }
+
+        if wheres.is_empty() {
+            //return Ok(self.database_strategy_iproduct(rule, try_tables));
+        }
+
+
+        let try_where = Self::find_where(wheres, |idx, meta| {
+            match meta {
+                WhereMeta::BinaryExpr { left, right }  => {
+                    if left != &strategy.database_sharding_column {
+                        return Ok(None);
+                    }
+
+                    let num = match right {
+                        WhereMetaRightDataType::Num(val) => {
+                            let val = val.parse::<u64>()?;
+                            val.calc(algo, actual_nodes_length)
+                        },
+
+                        WhereMetaRightDataType::SignedNum(val) => {
+                            let val = val.parse::<i64>()?;
+                            val.calc(algo, actual_nodes_length as i64)
+                        },
+
+                        WhereMetaRightDataType::FloatNum(val) => {
+                            let val = val.parse::<f64>()?;
+                            val.calc(algo, actual_nodes_length as f64)
+                        }
+                        _ => return Ok(None)
+                    };
+
+                    if let Some(num) = num {
+                        return Ok(Some((idx, num, meta)))
+                    }
+
+                    Ok(None)
+                }                      
+            }
+        });
+
+        let mut wheres = Vec::with_capacity(try_where.len());
+        for v in try_where {
+            let v = v?;
+            match v {
+                Some((idx, num, _)) => wheres.push((idx, num)),
+                None => continue
+            }
+        }
+
+        wheres.iter().map(|x| x.1).sum();
+        println!("try_tables {:?}", try_tables);
+        println!("wheres {:?}", wheres);
+
+        let would_changes:Vec<DatabaseChange> = try_tables.iter().filter_map(|x| {
+            let w = wheres.iter().find(|w| w.0 == x.0);
+            if let Some(w) = w {
+                let target = self.change_table(x.1, &rule.actual_datanodes[w.1 as usize]);
+                Some(
+                    DatabaseChange {
+                        span: x.1.span,
+                        shard_idx: w.1,
+                        target,
+                    }
+                )
+            } else {
+                None
+            }
+            
+        }).collect::<Vec<_>>();
+
+        let output_draft = would_changes.into_iter().map(|x| { 
+            
+            let mut endpoint = self.endpoints.iter().find(|e| e.name == rule.actual_datanodes[x.shard_idx as usize]);
+            if endpoint.is_none() {
+                return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "endpoint not found"));
+            }
+
+            Ok(ShardingRewriteOutput {
+                change: RewriteChange::DatabaseChange(x),
+                target_sql,
+                endpoint: endpoint.take().unwrap().clone(),
+            })
+        }).collect::<Vec<_>>();
+
+        let mut output = Vec::with_capacity(output_draft.len());
+        for i in output_draft {
+            output.push(i?);
+        }
+        Ok(output)
+
+    }
+
+    fn find_table<F>(tables: &IndexMap<u8, Vec<TableIdent>>, calc_fn: F) -> Vec<(u8, &TableIdent)> 
+    where F: Fn(u8, &TableIdent) -> (u8, bool)
+    {
+        tables.iter().filter_map(|(k, v)| {
+            let res = v.iter().filter_map(|x| {
+                    let res = calc_fn(*k, x);
+                    if res.1 {
+                        Some((res.0, x))
+                    } else {
+                        None
+                    }
+                }).collect::<Vec<_>>();
+            
+            if res.is_empty() {
+                None
+            } else {
+                Some(res)
+            }
+        }).flatten().collect::<Vec<_>>()
+    }
+
+    fn find_where<F>(wheres: &IndexMap<u8, Vec<WhereMeta>>, calc_fn: F) -> Vec<Result<Option<(u8, u64, &WhereMeta)>, Box<dyn std::error::Error>>>
+    where F: Fn(u8, &WhereMeta) -> Result<Option<(u8, u64, &WhereMeta)>, Box<dyn std::error::Error>>
+    {
+        wheres.iter().filter_map(|(k, v)| 
+            Some(
+                v.iter().filter_map(|x| {
+                    let res = calc_fn(*k, x);
+                    match res {
+                        Ok(None) => None,
+                        _ => Some(res),
+                    }
+                }).collect::<Vec<_>>()
+            )
+        ).flatten().collect::<Vec<_>>()
+    }
+
+    fn database_strategy_iproduct(&self, rule: &Sharding, tables: Vec<&TableIdent>) -> Vec<ShardingRewriteOutput> {
+        let products = itertools::iproduct!(0..rule.actual_datanodes.len(), tables.iter());
+        let mut output = vec![];
+
+        for (i, j) in products.into_iter() {
+            let target = self.change_table(j, &rule.actual_datanodes[i]);
+
+            let mut target_sql = self.raw_sql.to_string();
+            Self::change_sql(&mut target_sql, j.span, &target);
+            
+            let endpoint = self.endpoints[i].clone();
+
+            let change = DatabaseChange {
+                span: j.span,
+                target,
+                shard_idx: i as u64,
+            };
+
+            output.push(ShardingRewriteOutput {
+                change: RewriteChange::DatabaseChange(change),
+                target_sql,
+                endpoint,
+            })
+        }
+
+        output
+    }
+
+    fn change_table(&self, table: &TableIdent, actual_node: &str) -> String {
+        let schema = table.schema.as_ref().unwrap();
+        let mut target = String::with_capacity(schema.len());
+        target.push_str(actual_node);
+        target.push('.'); 
+        target.push_str(&table.name);
+        target
+    }
+
+    fn change_sql(target_sql: &mut String, span: mysql_parser::Span, target: &str) {
+        for _ in 0 .. span.len() {
+            target_sql.remove(span.start());
+        }
+
+        target_sql.insert_str(span.start(), target);
+    }
+
+    fn get_meta(&self, ast: &mut SqlStmt) -> RewriteMetaData {
         let mut meta = RewriteMetaData::default();
         let _ = ast.visit(&mut meta);
         meta
@@ -44,11 +343,88 @@ impl<'a> ShardingRewrite<'a> {
 }
 
 impl<'a> ShardingRewriter<SqlStmt> for ShardingRewrite<'a> {
-    fn rewrite(&mut self, ast: SqlStmt) {
-       let meta = self.get_meta(ast);
+    fn rewrite(&mut self, mut ast: SqlStmt) {
+       let meta = self.get_meta(&mut ast);
 
     }
 }
 
 
 
+#[cfg(test)]
+mod test {
+    use endpoint::endpoint::Endpoint;
+    use mysql_parser::parser::Parser;
+
+    use crate::config::{Sharding, DatabaseStrategyConfig, StrategyType, ShardingAlgorithmName};
+
+    use super::ShardingRewrite;
+
+    fn get_database_sharding_config() -> (Vec<Sharding>, Vec<Endpoint>) {
+        (
+            vec![
+                Sharding { 
+                    table_name: "tshard".to_string(), 
+                    actual_datanodes: vec!["ds0".to_string(), "ds1".to_string()], 
+                    binding_tables: None, 
+                    broadcast_tables: None, 
+                    database_strategy: Some(
+                        StrategyType::DatabaseStrategyConfig(
+                            DatabaseStrategyConfig { 
+                                database_sharding_algorithm_name: ShardingAlgorithmName::Mod, 
+                                database_sharding_column: "idx".to_string()
+                            }
+                        )
+                    ), 
+                    table_strategy: None, 
+                    database_table_strategy: None, 
+                }
+            ],
+        
+            vec![
+                Endpoint {
+                    weight: 1,
+                    name: String::from("ds0"),
+                    db: String::from("db"),
+                    user: String::from("user"),
+                    password: String::from("password"),
+                    addr: String::from("127.0.0.1"),
+                },
+                
+                Endpoint {
+                    weight: 1,
+                    name: String::from("ds1"),
+                    db: String::from("db"),
+                    user: String::from("user"),
+                    password: String::from("password"),
+                    addr: String::from("127.0.0.2"),
+                },
+            ]
+        )
+    }
+
+    #[test]
+    fn test_database_sharding_strategy() {
+        let config = get_database_sharding_config();
+        let raw_sql = "SELECT idx from db.tshard where idx = 3";
+        let parser = Parser::new();
+        let mut ast = parser.parse(raw_sql).unwrap();
+        let sr = ShardingRewrite::new(config.0.clone(), raw_sql, config.1.clone());
+        let meta = sr.get_meta(&mut ast[0]);
+
+        let res = sr.database_strategy(&config.0[0], meta).unwrap();
+        assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3");
+        println!("{:?}", res);
+        let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)";
+        let sr = ShardingRewrite::new(config.0.clone(), raw_sql, config.1);
+        let mut ast = parser.parse(raw_sql).unwrap();
+        let meta = sr.get_meta(&mut ast[0]);
+
+        let res = sr.database_strategy(&config.0[0], meta).unwrap();
+        println!("res {:?}", res);
+        //assert_eq!(
+        //    res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
+        //    vec!["SELECT idx from ds0.tshard", "SELECT idx from ds1.tshard"],
+        //)
+    }
+}
