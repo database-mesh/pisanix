@@ -407,46 +407,45 @@ mod test {
     fn get_meta() {
         let inputs: Vec<(&str, Vec<&str>, Vec<&str>, Vec<&str>, Vec<&str>, usize)> = vec![
             (
-                //"SELECT order_id FROM d.t_order WHERE order_id=1 and order_id in (SELECT order_id FROM d.t_order WHERE order_id = 2);",
-                "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)",
-                vec!["t_order"], // table
-                vec!["order_id"],  // field
+                "SELECT order_id FROM d.t_order WHERE order_id=1 and order_id in (SELECT order_id FROM d.t_order WHERE order_id = 2);",
+                vec!["t_order", "t_order"], // table
+                vec!["order_id", "order_id"],  // field
                 vec![],                        // group
                 vec![],                        // order
-                1,                              // tables count
+                2,                              // tables count
             ),
-            //(
-            //    "SELECT a.* FROM t_order o JOIN t_order_item i ON o.order_id=i.order_id  WHERE order_id IN (1, 2)",
-            //    vec!["t_order", "t_order_item"],
-            //    vec!["a.*"],
-            //    vec![],
-            //    vec![],
-            //    1,              
-            //),
-            //(
-            //    "SELECT order_id FROM t_order WHERE order_id IN (SELECT order_id1 from t_order1  where id in ( SELECT order_id1 from t_order2) group by id order by id) group by id1 limit 1,2",
-            //    vec!["t_order", "t_order1", "t_order2"],                // table
-            //    vec!["order_id", "order_id1", "order_id1"],             // field
-            //    vec!["id", "id1"],                                      // group
-            //    vec!["id"],                                             // order
-            //    3,                                                      // tables count
-            //),
-            //(
-            //    "SELECT AVG(price) FROM t_order WHERE order_id = 1 and order_id1 IN (SELECT AVG(distinct price), order_id1 from t_order1)",
-            //    vec!["t_order", "t_order1"],                            // table
-            //    vec![],                                                 // field
-            //    vec![],                                                 // group
-            //    vec![],                                                 // order
-            //    2,                                                      // tables count
-            //),
-            //(
-            //    "INSERT INTO t(`id`) VALUES (111, 112),(222)",
-            //    vec!["t"],
-            //    vec!["id"],
-            //    vec![],
-            //    vec![],
-            //    1,
-            //)
+            (
+                "SELECT a.* FROM t_order o JOIN t_order_item i ON o.order_id=i.order_id  WHERE order_id IN (1, 2)",
+                vec!["t_order", "t_order_item"],
+                vec!["a.*"],
+                vec![],
+                vec![],
+                1,              
+            ),
+            (
+                "SELECT order_id FROM t_order WHERE order_id IN (SELECT order_id1 from t_order1  where id in ( SELECT order_id1 from t_order2) group by id order by id) group by id1 limit 1,2",
+                vec!["t_order", "t_order1", "t_order2"],                // table
+                vec!["order_id", "order_id1", "order_id1"],             // field
+                vec!["id", "id1"],                                      // group
+                vec!["id"],                                             // order
+                3,                                                      // tables count
+            ),
+            (
+                "SELECT AVG(price) FROM t_order WHERE order_id = 1 and order_id1 IN (SELECT AVG(distinct price), order_id1 from t_order1)",
+                vec!["t_order", "t_order1"],                            // table
+                vec![],                                                 // field
+                vec![],                                                 // group
+                vec![],                                                 // order
+                2,                                                      // tables count
+            ),
+            (
+                "INSERT INTO t(`id`) VALUES (111, 112),(222)",
+                vec!["t"],
+                vec!["id"],
+                vec![],
+                vec![],
+                1,
+            )
         ];
 
         let parser = Parser::new();
