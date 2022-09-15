@@ -110,9 +110,22 @@ where
         let conn = self.factory.as_ref().unwrap().build_conn().await?;
         Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
     }
+    
+    pub async fn rebuild_conn_with_session(&self, attrs: Vec<<T as ConnAttrMut>::Item>) -> Result<PoolConn<T>, T::Error> {
+        let mut conn = self.factory.as_ref().unwrap().build_conn().await?;
+        self.reinit_session(&mut conn, attrs).await;
+        Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
+    }
+
+    pub async fn get_conn_with_endpoint_session(&self, endpoint: &str, attrs: Vec<<T as ConnAttrMut>::Item>) -> Result<PoolConn<T>, T::Error> {
+        let mut conn = self.get_conn_with_endpoint(endpoint).await?;
+        self.reinit_session(&mut conn, attrs).await;
+
+        Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
+    }
 
     // Get connection by endpoint attribute
-    pub async fn get_conn_with_endpoint(&self, endpoint: &str) -> Result<PoolConn<T>, T::Error> {
+    pub async fn get_conn_with_endpoint(&self, endpoint: &str) -> Result<T, T::Error> {
         let conn = self.pool.get(endpoint);
         let conn = match conn {
             Some(val) => val.get_conn(),
@@ -129,7 +142,12 @@ where
             }
         };
 
-        Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
+        Ok(conn)
+        //Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
+    }
+
+    async fn reinit_session(&self, conn: &mut T, attrs: Vec<<T as ConnAttrMut>::Item>) {
+        conn.init(attrs).await
     }
 
     pub fn len(&self, endpoint: &str) -> usize {

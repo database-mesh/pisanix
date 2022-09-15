@@ -78,7 +78,7 @@ pub struct DatabaseChange {
 
 #[derive(Debug)]
 pub struct ShardingRewriteOutput {
-    pub change: RewriteChange,
+    pub changes: Vec<RewriteChange>,
     pub target_sql: String,
     pub endpoint: Endpoint,
 }
@@ -163,42 +163,11 @@ impl<'a> ShardingRewrite<'a> {
         }
 
         if wheres.is_empty() {
-            //return Ok(self.database_strategy_iproduct(rule, try_tables));
+            return Ok(self.database_strategy_iproduct(rule, try_tables));
         }
 
-
-        let try_where = Self::find_where(wheres, |idx, meta| {
-            match meta {
-                WhereMeta::BinaryExpr { left, right }  => {
-                    if left != &strategy.database_sharding_column {
-                        return Ok(None);
-                    }
-
-                    let num = match right {
-                        WhereMetaRightDataType::Num(val) => {
-                            let val = val.parse::<u64>()?;
-                            val.calc(algo, actual_nodes_length)
-                        },
-
-                        WhereMetaRightDataType::SignedNum(val) => {
-                            let val = val.parse::<i64>()?;
-                            val.calc(algo, actual_nodes_length as i64)
-                        },
-
-                        WhereMetaRightDataType::FloatNum(val) => {
-                            let val = val.parse::<f64>()?;
-                            val.calc(algo, actual_nodes_length as f64)
-                        }
-                        _ => return Ok(None)
-                    };
-
-                    if let Some(num) = num {
-                        return Ok(Some((idx, num, meta)))
-                    }
-
-                    Ok(None)
-                }                      
-            }
+        let try_where = Self::find_where(wheres, |query_id, meta| {
+            Self::parse_where(meta, algo, actual_nodes_length, query_id, &strategy.database_sharding_column)    
         });
 
         let mut wheres = Vec::with_capacity(try_where.len());
@@ -210,7 +179,13 @@ impl<'a> ShardingRewrite<'a> {
             }
         }
 
-        wheres.iter().map(|x| x.1).sum();
+        let expect_sum = wheres[0].1 as usize * wheres.len();
+        let sum: usize = wheres.iter().map(|x| x.1).sum::<u64>() as usize;
+        
+        if expect_sum != sum {
+            return Ok(self.database_strategy_iproduct(rule, try_tables));
+        }
+
         println!("try_tables {:?}", try_tables);
         println!("wheres {:?}", wheres);
 
@@ -231,26 +206,31 @@ impl<'a> ShardingRewrite<'a> {
             
         }).collect::<Vec<_>>();
 
-        let output_draft = would_changes.into_iter().map(|x| { 
-            
-            let mut endpoint = self.endpoints.iter().find(|e| e.name == rule.actual_datanodes[x.shard_idx as usize]);
-            if endpoint.is_none() {
-                return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "endpoint not found"));
-            }
+        let mut target_sql = self.raw_sql.to_string();
+        let mut offset  = 0;
+        let shard_idx = would_changes[0].shard_idx;
 
-            Ok(ShardingRewriteOutput {
-                change: RewriteChange::DatabaseChange(x),
-                target_sql,
-                endpoint: endpoint.take().unwrap().clone(),
-            })
+        let changes = would_changes.into_iter().map(|x| { 
+            Self::change_sql(&mut target_sql, x.span, &x.target, offset);
+            offset = x.target.len() - x.span.len();
+
+            RewriteChange::DatabaseChange(x)
         }).collect::<Vec<_>>();
 
-        let mut output = Vec::with_capacity(output_draft.len());
-        for i in output_draft {
-            output.push(i?);
+        let mut ep = self.endpoints.iter().find(|e| e.name == rule.actual_datanodes[shard_idx as usize]);
+        if ep.is_none() {
+            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::NotFound, "endpoint not found")))
         }
-        Ok(output)
 
+        Ok(
+            vec![
+                ShardingRewriteOutput { 
+                    changes, 
+                    target_sql, 
+                    endpoint: ep.take().unwrap().clone(), 
+                }
+            ]
+        )
     }
 
     fn find_table<F>(tables: &IndexMap<u8, Vec<TableIdent>>, calc_fn: F) -> Vec<(u8, &TableIdent)> 
@@ -290,26 +270,66 @@ impl<'a> ShardingRewrite<'a> {
         ).flatten().collect::<Vec<_>>()
     }
 
-    fn database_strategy_iproduct(&self, rule: &Sharding, tables: Vec<&TableIdent>) -> Vec<ShardingRewriteOutput> {
-        let products = itertools::iproduct!(0..rule.actual_datanodes.len(), tables.iter());
+    fn parse_where<'b>(meta: &'b WhereMeta, algo: &ShardingAlgorithmName, actual_nodes_length: u64, query_id: u8, sharding_column: &str) -> Result<Option<(u8, u64, &'b WhereMeta)>, Box<dyn std::error::Error>> {
+        match meta {
+            WhereMeta::BinaryExpr { left, right }  => {
+                if left != sharding_column {
+                    return Ok(None);
+                }
+
+                let num = match right {
+                    WhereMetaRightDataType::Num(val) => {
+                        let val = val.parse::<u64>()?;
+                        val.calc(algo, actual_nodes_length)
+                    },
+
+                    WhereMetaRightDataType::SignedNum(val) => {
+                        let val = val.parse::<i64>()?;
+                        val.calc(algo, actual_nodes_length as i64)
+                    },
+
+                    WhereMetaRightDataType::FloatNum(val) => {
+                        let val = val.parse::<f64>()?;
+                        val.calc(algo, actual_nodes_length as f64)
+                    }
+                    _ => return Ok(None)
+                };
+
+                if let Some(num) = num {
+                    return Ok(Some((query_id, num, meta)))
+                }
+
+                Ok(None)
+            }                      
+        }
+    }
+
+    fn database_strategy_iproduct(&self, rule: &Sharding, tables: Vec<(u8, &TableIdent)>) -> Vec<ShardingRewriteOutput> {
+        //let products = itertools::iproduct!(0..rule.actual_datanodes.len(), tables.iter());
         let mut output = vec![];
 
-        for (i, j) in products.into_iter() {
-            let target = self.change_table(j, &rule.actual_datanodes[i]);
-
+        for (idx, node) in rule.actual_datanodes.iter().enumerate() {
+            let mut changes = Vec::with_capacity(tables.len());
+            let mut offset: usize = 0;
             let mut target_sql = self.raw_sql.to_string();
-            Self::change_sql(&mut target_sql, j.span, &target);
-            
-            let endpoint = self.endpoints[i].clone();
 
-            let change = DatabaseChange {
-                span: j.span,
-                target,
-                shard_idx: i as u64,
-            };
+            for t in tables.iter() {
+                let target = self.change_table(t.1, node);
+                Self::change_sql(&mut target_sql, t.1.span, &target, offset);
+                offset = target.len() - t.1.span.len();
+
+                let change = DatabaseChange {
+                    span: t.1.span,
+                    target,
+                    shard_idx: idx as u64,
+                };
+                changes.push(RewriteChange::DatabaseChange(change));
+            }
+            
+            let endpoint = self.endpoints[idx].clone();
 
             output.push(ShardingRewriteOutput {
-                change: RewriteChange::DatabaseChange(change),
+                changes,
                 target_sql,
                 endpoint,
             })
@@ -324,15 +344,16 @@ impl<'a> ShardingRewrite<'a> {
         target.push_str(actual_node);
         target.push('.'); 
         target.push_str(&table.name);
+        //target.push(' ');
         target
     }
 
-    fn change_sql(target_sql: &mut String, span: mysql_parser::Span, target: &str) {
+    fn change_sql(target_sql: &mut String, span: mysql_parser::Span, target: &str, offset: usize) {
         for _ in 0 .. span.len() {
-            target_sql.remove(span.start());
+            target_sql.remove(span.start() + offset);
         }
 
-        target_sql.insert_str(span.start(), target);
+        target_sql.insert_str(span.start() + offset, target);
     }
 
     fn get_meta(&self, ast: &mut SqlStmt) -> RewriteMetaData {
@@ -415,16 +436,26 @@ mod test {
         let res = sr.database_strategy(&config.0[0], meta).unwrap();
         assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3");
         println!("{:?}", res);
+
+        let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
+        let sr = ShardingRewrite::new(config.0.clone(), raw_sql, config.1.clone());
+        let mut ast = parser.parse(raw_sql).unwrap();
+        let meta = sr.get_meta(&mut ast[0]);
+        let res = sr.database_strategy(&config.0[0], meta).unwrap();
+        assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3 and idx = (SELECT idx from ds1.tshard where idx = 3)");
+
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)";
         let sr = ShardingRewrite::new(config.0.clone(), raw_sql, config.1);
         let mut ast = parser.parse(raw_sql).unwrap();
         let meta = sr.get_meta(&mut ast[0]);
-
         let res = sr.database_strategy(&config.0[0], meta).unwrap();
-        println!("res {:?}", res);
-        //assert_eq!(
-        //    res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
-        //    vec!["SELECT idx from ds0.tshard", "SELECT idx from ds1.tshard"],
-        //)
+        println!("res {:#?}", res);
+        assert_eq!(
+            res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
+            vec![
+                "SELECT idx from ds0.tshard where idx = 3 and idx = (SELECT idx from ds0.tshard where idx = 4)", 
+                "SELECT idx from ds1.tshard where idx = 3 and idx = (SELECT idx from ds1.tshard where idx = 4)", 
+            ],
+        )
     }
 }
