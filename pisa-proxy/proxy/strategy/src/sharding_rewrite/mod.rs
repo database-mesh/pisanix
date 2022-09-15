@@ -107,50 +107,14 @@ impl<'a> ShardingRewrite<'a> {
 
     }
 
-    //fn table_strategy(&self, rule: &Sharding, mut meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>> {
-    //    let strategy = match &rule.table_strategy {
-    //        Some(StrategyType::TableStrategyConfig(strategy)) => {
-    //            strategy
-    //        }
-
-    //        _ => return Ok(vec![])
-    //    };
-
-    //    let algo = &strategy.table_sharding_algorithm_name;
-    //    let tables = meta.get_tables();
-    //    let try_tables = Self::find_table(&tables, |idx, meta| {
-    //        (idx, meta.name == rule.table_name && meta.schema.is_some())
-    //    });
-
-
-    //    let wheres = meta.get_wheres();
-    //    if try_tables.is_empty() {
-    //        return Ok(vec![]);
-    //    }
-
-    //    if wheres.is_empty() {
-    //        //return Ok(self.database_strategy_iproduct(rule, try_tables));
-    //        return Ok(vec![])
-    //    }
+    //fn table_strategy(&self, mut meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>> {
     //    
-
+    //
     //    Ok(vec![])
     //}
 
     fn database_strategy(&self, meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>>{
-        //let strategy = match &rule.database_strategy {
-        //    Some(StrategyType::DatabaseStrategyConfig(strategy)) => {
-        //        strategy
-        //    }
-
-        //    _ => return Ok(vec![]),
-        //};
-
-        //let algo = &strategy.database_sharding_algorithm_name;
-
         let tables = meta.get_tables();
-
-        let rules = &self.rules;
         let try_tables = self.find_table_rule(tables);
         
         if try_tables.is_empty() {
