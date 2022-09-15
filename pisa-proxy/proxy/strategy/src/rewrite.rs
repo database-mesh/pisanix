@@ -22,5 +22,6 @@ pub struct ShardingRewriteInput<'a> {
 }
 
 pub trait ShardingRewriter<I> {
-    fn rewrite(&mut self, ast: I);
+    type Output;
+    fn rewrite(&mut self, ast: I) -> Self::Output;
 }
