@@ -108,6 +108,7 @@ mod test {
 
         let config = super::config::ReadWriteSplitting {
             statics: Some(super::config::ReadWriteSplittingStatic { default_target, rules }),
+            dynamic: None,
         };
 
         let mut rws = ReadWriteSplittingStaticBuilder::build(config.statics.unwrap(), rw_endpoint);
