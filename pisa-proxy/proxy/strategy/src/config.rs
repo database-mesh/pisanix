@@ -15,6 +15,28 @@
 use loadbalance::balance::AlgorithmName;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NodeGroup {
+    #[serde(rename = "member")]
+    pub members: Vec<Member>,
+}
+
+impl Default for NodeGroup {
+    fn default() -> Self {
+       Self { 
+        members: vec![] 
+       } 
+    } 
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Member {
+    pub name: String,
+    pub readwrite: String,
+    pub reads: Vec<String>,
+}
+
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
@@ -96,6 +118,7 @@ pub struct RegexRule {
     pub regex: Vec<String>,
     pub target: TargetRole,
     pub algorithm_name: AlgorithmName,
+    pub node_group_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

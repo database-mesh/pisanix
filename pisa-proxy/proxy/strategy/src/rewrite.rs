@@ -18,7 +18,6 @@ use crate::config::Sharding;
 
 pub struct ShardingRewriteInput<'a> {
     rule: &'a Sharding,
-
 }
 
 pub trait ShardingRewriter<I> {

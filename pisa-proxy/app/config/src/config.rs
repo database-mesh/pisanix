@@ -18,6 +18,7 @@ use std::{env, fs::File, io::prelude::*};
 use api::config::Admin;
 use clap::{value_parser, Arg, Command};
 use proxy::proxy::{MySQLNode, MySQLNodes, ProxiesConfig, ProxyConfig};
+use strategy::config::NodeGroup;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
@@ -243,6 +244,7 @@ pub struct PisaProxyConfig {
     pub admin: Admin,
     pub proxy: Option<ProxiesConfig>,
     pub mysql: Option<MySQLNodes>,
+    pub nodegroup: Option<NodeGroup>,
     pub shardingsphere_proxy: Option<MySQLNodes>,
     pub version: Option<String>,
 }

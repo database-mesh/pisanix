@@ -51,7 +51,7 @@ use proxy::{
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
 use strategy::{
-    config::TargetRole,
+    config::{TargetRole, NodeGroup},
     readwritesplitting::ReadWriteEndpoint,
     route::RouteStrategy,
 };
@@ -72,12 +72,13 @@ use mysql_protocol::server::codec::make_err_packet;
 #[derive(Default)]
 pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,
+    pub node_group: Option<NodeGroup>,
     pub mysql_nodes: Vec<MySQLNode>,
     pub pisa_version: String,
 }
 
 impl MySQLProxy {
-    fn build_route(&self) -> RouteStrategy {
+    fn build_route(&self) -> Result<RouteStrategy, Error> {
         let length = self.mysql_nodes.len();
         let (mut rw, mut ro) = (Vec::with_capacity(length), Vec::with_capacity(length));
         for node in &self.mysql_nodes {
@@ -97,15 +98,16 @@ impl MySQLProxy {
                 balance.add(ep)
             }
 
-            return RouteStrategy::new_with_simple_route(balance);
+            return Ok(RouteStrategy::new_with_simple_route(balance));
         }
 
         let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
 
         RouteStrategy::new(
             self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
+            &self.node_group,
             rw_endpoint,
-        )
+        ).map_err(|e| Error::new(ErrorKind::Runtime(e.into())))
     }
 }
 
@@ -133,7 +135,7 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         // TODO: using a loadbalancer factory for different load balance strategy.
         // Currently simple_loadbalancer purely provide a list of nodes without any strategy.
-        let lb = Arc::new(tokio::sync::Mutex::new(self.build_route()));
+        let lb = Arc::new(tokio::sync::Mutex::new(self.build_route()?));
 
         let mut plugin: Option<PluginPhase> = None;
         if let Some(config) = &self.proxy_config.plugin {

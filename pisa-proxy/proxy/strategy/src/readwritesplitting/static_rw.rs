@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use endpoint::endpoint::Endpoint;
+use indexmap::IndexMap;
 use loadbalance::balance::LoadBalance;
 
 use super::{
@@ -31,10 +32,11 @@ pub struct ReadWriteSplittingStaticBuilder;
 impl ReadWriteSplittingStaticBuilder {
     pub fn build(
         config: config::ReadWriteSplittingStatic,
+        endpoint_group: IndexMap<String, ReadWriteEndpoint>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> ReadWriteSplittingStatic {
         let rules_match =
-            RulesMatchBuilder::build(config.rules, config.default_target, rw_endpoint);
+            RulesMatchBuilder::build(config.rules, config.default_target, endpoint_group, rw_endpoint);
 
         ReadWriteSplittingStatic { rules_match }
     }
@@ -58,6 +60,7 @@ impl Route for ReadWriteSplittingStatic {
 #[cfg(test)]
 mod test {
     use endpoint::endpoint::Endpoint;
+    use indexmap::IndexMap;
     use loadbalance::balance::AlgorithmName;
 
     use crate::{
@@ -111,7 +114,8 @@ mod test {
             dynamic: None,
         };
 
-        let mut rws = ReadWriteSplittingStaticBuilder::build(config.statics.unwrap(), rw_endpoint);
+        let endpoint_group: IndexMap<String, ReadWriteEndpoint> = IndexMap::new();
+        let mut rws = ReadWriteSplittingStaticBuilder::build(config.statics.unwrap(), endpoint_group, rw_endpoint);
         let input = RouteInput::Statement("insert");
         let res = rws.dispatch(&input).unwrap();
         assert_eq!(res.0.unwrap().addr, "127.0.0.2");

@@ -30,9 +30,9 @@ dependencies = [
 
 [[package]]
 name = "aho-corasick"
-version = "0.7.18"
+version = "0.7.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e37cfd5e7657ada45f742d6e99ca5788580b5c529dc78faf11ece6dc702656f"
+checksum = "b4f55bd91a0978cbfd91c457a164bab8b4001c833b7f323132c0a4e1922dd44e"
 dependencies = [
  "memchr",
 ]
@@ -798,6 +798,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "strategy",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -1636,12 +1637,12 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.8.1"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
+checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg",
- "hashbrown 0.11.2",
+ "hashbrown 0.12.1",
  "serde",
 ]
 
@@ -3029,7 +3030,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "tokio-util 0.6.9",
+ "tokio-util 0.7.1",
+ "tower",
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
@@ -3580,6 +3582,7 @@ dependencies = [
  "endpoint",
  "error",
  "futures",
+ "indexmap",
  "lazy_static",
  "loadbalance",
  "mysql_protocol",
@@ -3587,6 +3590,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_derive",
+ "thiserror",
  "tokio",
  "tokio-scoped",
  "tracing",

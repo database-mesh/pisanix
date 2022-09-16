@@ -27,3 +27,4 @@ mysql_parser = { path = "../../parser/mysql" }
 indexmap = "1.9.1"
 aho-corasick = "0.7.19"
 itertools = "0.10.4"
+thiserror = "1.0"
