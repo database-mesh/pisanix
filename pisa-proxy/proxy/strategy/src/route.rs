@@ -45,7 +45,8 @@ pub enum RouteInput<'a> {
     Statement(&'a str),
     Transaction(&'a str),
     Sharding(Endpoint),
-    ShardingReadWriteSplitting(&'a str, String),
+    ShardingStatement(&'a str, String),
+    ShardingTransaction(&'a str, String),
     None,
 }
 

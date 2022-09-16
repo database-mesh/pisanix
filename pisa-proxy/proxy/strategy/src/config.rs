@@ -36,7 +36,6 @@ pub struct Member {
     pub reads: Vec<String>,
 }
 
-
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
@@ -118,7 +117,8 @@ pub struct RegexRule {
     pub regex: Vec<String>,
     pub target: TargetRole,
     pub algorithm_name: AlgorithmName,
-    pub node_group_name: Option<String>,
+    #[serde(default)]
+    pub node_group_name: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -127,6 +127,8 @@ pub struct GenericRule {
     #[serde(rename = "type")]
     pub rule_type: String,
     pub algorithm_name: AlgorithmName,
+    #[serde(default)]
+    pub node_group_name: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

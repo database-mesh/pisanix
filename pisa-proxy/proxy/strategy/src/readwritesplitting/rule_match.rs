@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::error::Error;
+use std::{error::Error, vec};
 
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
@@ -149,7 +149,7 @@ impl RouteBalance for RulesMatch {
 pub struct RegexRuleMatchInner {
     rule: RegexRule,
     regexs: Vec<Regex>,
-    balance: BalanceType,
+    balance: IndexMap<String, BalanceType>,
 }
 
 impl RegexRuleMatchInner {
@@ -178,30 +178,34 @@ impl RegexRuleMatchInner {
         algorithm_name: AlgorithmName,
         endpoint_group: IndexMap<String, ReadWriteEndpoint>,
         rw_endpoint: ReadWriteEndpoint,
-    ) -> Result<BalanceType, Box<dyn Error>> {
+    ) -> Result<IndexMap<String, BalanceType>, Box<dyn Error>> {
         let target = &rule.target;
-        let mut balance = Balance.build_balance(algorithm_name);
-        
-        match &rule.node_group_name {
-            Some(group) => {
-                let rw_endpoint = endpoint_group.get(group);
-                match rw_endpoint {
-                    Some(rw) => {
-                        Self::build_balance_inner(&mut balance, target, rw.clone())
-                    },
+        let mut balances = IndexMap::<String, BalanceType>::new();
+        // Global endpoint
+        if endpoint_group.is_empty() || rule.node_group_name.is_empty() {
+            let mut balance = Balance.build_balance(algorithm_name);
+            Self::build_balance_inner(&mut balance, target, rw_endpoint);
+            balances.insert("GLOBAL".to_string(), balance);    
+            return Ok(balances)
+        }
 
-                    None => {
-                        return Err(Box::new(StragegyError::NodeGroupNotFound(group.clone())));
-                    }
+        for group in rule.node_group_name.iter() {
+            let mut balance = Balance.build_balance(algorithm_name.clone());
+            let rw_endpoint = endpoint_group.get(group);
+            match rw_endpoint {
+                Some(rw) => {
+                    Self::build_balance_inner(&mut balance, target, rw.clone());
+                },
+
+                None => {
+                    return Err(Box::new(StragegyError::NodeGroupNotFound(group.clone())));
                 }
             }
 
-            None => {
-                Self::build_balance_inner(&mut balance, target, rw_endpoint)
-            }
-        };
+            balances.insert(group.to_string(), balance);
+        }
 
-        Ok(balance)
+        Ok(balances)
     }
 
     fn build_balance_inner(balance: &mut BalanceType, target: &TargetRole, rw_endpoint: ReadWriteEndpoint) {
@@ -209,8 +213,25 @@ impl RegexRuleMatchInner {
             TargetRole::Read => {
                 if rw_endpoint.read.len() == 0 {
                     balance_add_endpoint(balance, rw_endpoint.readwrite);
+                } else {
+                    balance_add_endpoint(balance, rw_endpoint.read);
                 }
-                balance_add_endpoint(balance, rw_endpoint.read);
+            }
+
+            TargetRole::ReadWrite => {
+                balance_add_endpoint(balance, rw_endpoint.readwrite);
+            }
+        }
+    }
+
+    fn build_balance_group_inner(balance: &mut BalanceType, target: &TargetRole, node_group: &String, rw_endpoint: ReadWriteEndpoint) {
+        match target {
+            TargetRole::Read => {
+                if rw_endpoint.read.len() == 0 {
+                    balance_add_endpoint(balance, rw_endpoint.readwrite);
+                } else {
+                    balance_add_endpoint(balance, rw_endpoint.read);
+                }
             }
 
             TargetRole::ReadWrite => {
@@ -227,15 +248,30 @@ impl RouteRuleMatch for RegexRuleMatchInner {
                 self.regexs.iter().any(|r| r.is_match(val))
             }
 
+            RouteInput::ShardingStatement(val, _) => {
+                self.regexs.iter().any(|r| r.is_match(val))
+            }
+
+            RouteInput::ShardingTransaction(val, _) => {
+                self.regexs.iter().any(|r| r.is_match(val))
+            }
+
             RouteInput::None => false,
-            _ => unreachable!()
         }
     }
 }
 
 impl RouteBalance for RegexRuleMatchInner {
-    fn get(&mut self, _input: &RouteInput) -> (&mut BalanceType, TargetRole) {
-        (&mut self.balance, self.rule.target.clone())
+    fn get(&mut self, input: &RouteInput) -> (&mut BalanceType, TargetRole) {
+        match input {
+            RouteInput::ShardingStatement(_, node_group) | RouteInput::ShardingTransaction(_, node_group) => {
+                (self.balance.get_mut(node_group).unwrap(), self.rule.target.clone())
+            },
+
+            _  => {
+                (self.balance.get_mut("GLOBAL").unwrap(), self.rule.target.clone())
+            }
+        }
     }
 }
 
@@ -325,8 +361,8 @@ impl RouteBalance for GenericRuleMatchInner {
         match input {
             RouteInput::Statement(sql) => match sql.split_once(' ') {
                 Some(key_word) => {
-                    let token = key_word.0.to_uppercase();
-                    match token.as_str() {
+                    let token = key_word.0.to_uppercase().trim();
+                    match token {
                         "SELECT" => (&mut self.r_balance, TargetRole::Read),
                         "INSERT" => (&mut self.rw_balance, TargetRole::ReadWrite),
                         "UPDATE" => (&mut self.rw_balance, TargetRole::ReadWrite),
