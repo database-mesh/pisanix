@@ -86,7 +86,8 @@ pub trait RouteBalance {
 /// Supported routing strategies
 pub enum RouteStrategy {
     ReadWriteSplitting(ReadWriteSplittingRouteStrategy),
-    Sharding(ShardingRouteStrategy),
+    ShardingReadWriteSplitting(ReadWriteSplittingRouteStrategy),
+    Sharding,
     Simple(BalanceType),
     None,
 }
@@ -123,14 +124,24 @@ impl RouteStrategy {
         config: config::ReadWriteSplitting,
         node_group_config: &Option<config::NodeGroup>,
         rw_endpoint: ReadWriteEndpoint,
+        has_sharding: bool,
     ) -> Result<Self, StragegyError> {
         let endpoint_group = Self::get_endpoint_group(node_group_config, &rw_endpoint)?;
 
-        Ok(Self::ReadWriteSplitting(ReadWriteSplittingRouteStrategy::new(config, node_group_config.clone(), endpoint_group, rw_endpoint)))
+        let rw_strategy = ReadWriteSplittingRouteStrategy::new(config, node_group_config.clone(), endpoint_group, rw_endpoint);
+        if has_sharding {
+            Ok(Self::ReadWriteSplitting(rw_strategy))
+        } else {
+            Ok(Self::ShardingReadWriteSplitting(rw_strategy))
+        }
     }
 
     pub fn new_with_simple_route(balance: BalanceType) -> Self {
         Self::Simple(balance)
+    }
+
+    pub fn new_with_sharding_only() -> Self {
+        Self::Sharding
     }
 
     pub fn get_endpoint_group(nodegroup: &Option<config::NodeGroup>, rw_endpoint: &ReadWriteEndpoint) -> Result<IndexMap<String, ReadWriteEndpoint>, StragegyError> {
@@ -174,6 +185,19 @@ impl RouteStrategy {
             _ => unreachable!()
         }
     }
+
+    //fn gen_route_input<'a>(&'a self, input: RouteInput<'a>) -> RouteInput<'a> {
+    //    match self {
+    //        Self::ReadWriteSplitting(_) => {
+    //            input
+    //        }
+
+    //        Self
+
+    //        _ => unreachable!()
+    //    }
+    //}
+
 }
 
 impl Route for RouteStrategy {
@@ -188,18 +212,15 @@ impl Route for RouteStrategy {
                 Self::readwritesplitting_dispatch(strategy, input)
             }
 
-            Self::Sharding(sharding) => {
-                match sharding {
-                    ShardingRouteStrategy::ShardingReadWriteSplitting(strategy) => {
-                        Self::readwritesplitting_dispatch(strategy, input)
-                    },
-                    ShardingRouteStrategy::Sharding => {
-                        if let RouteInput::Sharding(input) = input {
-                            Ok((Some(input.clone()), TargetRole::ReadWrite))
-                        } else {
-                            unreachable!()
-                        }
-                    }
+            Self::ShardingReadWriteSplitting(strateyy) => {
+                Self::readwritesplitting_dispatch(strateyy, input)
+            }
+
+            Self::Sharding => {
+                if let RouteInput::Sharding(input) = input {
+                    Ok((Some(input.clone()), TargetRole::ReadWrite))
+                } else {
+                    unreachable!()
                 }
             }
             

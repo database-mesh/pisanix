@@ -17,7 +17,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use conn_pool::{ConnAttrMut, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
-use mysql_protocol::client::conn::{ClientConn, SessionAttr};
+use mysql_protocol::{client::conn::{ClientConn, SessionAttr}, server::auth::ServerHandshakeCodec, session::Session};
 use pisa_error::error::{Error, ErrorKind};
 use strategy::route::{Route, RouteInput, RouteStrategy};
 use tokio::sync::Mutex;
@@ -115,7 +115,7 @@ pub struct TransEvent {
     name: TransEventName,
     src_state: TransState,
     dst_state: TransState,
-    driver: Option<Box<dyn ConnDriver + Send + Sync>>,
+    //driver: Option<Box<dyn ConnDriver + Send + Sync>>,
 }
 
 fn init_trans_events() -> Vec<TransEvent> {
@@ -124,139 +124,139 @@ fn init_trans_events() -> Vec<TransEvent> {
             name: TransEventName::UseEvent,
             src_state: TransState::TransDummyState,
             dst_state: TransState::TransUseState,
-            driver: Some(Box::new(Driver)),
+            //driver: Some(Box::new(Driver)),
         },
         TransEvent {
             name: TransEventName::UseEvent,
             src_state: TransState::TransUseState,
             dst_state: TransState::TransUseState,
-            driver: Some(Box::new(Driver)),
+            //driver: Some(Box::new(Driver)),
         },
         TransEvent {
             name: TransEventName::SetSessionEvent,
             src_state: TransState::TransDummyState,
             dst_state: TransState::TransSetSessionState,
-            driver: Some(Box::new(Driver)),
+            //driver: Some(Box::new(Driver)),
         },
         TransEvent {
             name: TransEventName::SetSessionEvent,
             src_state: TransState::TransUseState,
             dst_state: TransState::TransSetSessionState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::SetSessionEvent,
             src_state: TransState::TransSetSessionState,
             dst_state: TransState::TransSetSessionState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::QueryEvent,
             src_state: TransState::TransSetSessionState,
             dst_state: TransState::TransSetSessionState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::QueryEvent,
             src_state: TransState::TransUseState,
             dst_state: TransState::TransUseState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::QueryEvent,
             src_state: TransState::TransDummyState,
             dst_state: TransState::TransDummyState,
-            driver: Some(Box::new(Driver)),
+            //driver: Some(Box::new(Driver)),
         },
         TransEvent {
             name: TransEventName::StartEvent,
             src_state: TransState::TransDummyState,
             dst_state: TransState::TransStartState,
-            driver: Some(Box::new(Driver)),
+            //driver: Some(Box::new(Driver)),
         },
         TransEvent {
             name: TransEventName::StartEvent,
             src_state: TransState::TransUseState,
             dst_state: TransState::TransStartState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::StartEvent,
             src_state: TransState::TransSetSessionState,
             dst_state: TransState::TransStartState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::PrepareEvent,
             src_state: TransState::TransDummyState,
             dst_state: TransState::TransPrepareState,
-            driver: Some(Box::new(Driver)),
+            //driver: Some(Box::new(Driver)),
         },
         TransEvent {
             name: TransEventName::PrepareEvent,
             src_state: TransState::TransUseState,
             dst_state: TransState::TransPrepareState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::PrepareEvent,
             src_state: TransState::TransStartState,
             dst_state: TransState::TransPrepareState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::SendLongDataEvent,
             src_state: TransState::TransPrepareState,
             dst_state: TransState::TransPrepareState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::ExecuteEvent,
             src_state: TransState::TransPrepareState,
             dst_state: TransState::TransPrepareState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::CloseEvent,
             src_state: TransState::TransPrepareState,
             dst_state: TransState::TransDummyState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::ResetEvent,
             src_state: TransState::TransPrepareState,
             dst_state: TransState::TransDummyState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::DropEvent,
             src_state: TransState::TransPrepareState,
             dst_state: TransState::TransDummyState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::CommitRollBackEvent,
             src_state: TransState::TransPrepareState,
             dst_state: TransState::TransDummyState,
-            driver: None,
+            //driver: None,
         },
         TransEvent {
             name: TransEventName::CommitRollBackEvent,
             src_state: TransState::TransDummyState,
             dst_state: TransState::TransDummyState,
-            driver: Some(Box::new(Driver)),
+            //driver: Some(Box::new(Driver)),
         },
         TransEvent {
             name: TransEventName::CommitRollBackEvent,
             src_state: TransState::TransStartState,
             dst_state: TransState::TransDummyState,
-            driver: Some(Box::new(Driver)),
+            //driver: Some(Box::new(Driver)),
         },
         TransEvent {
             name: TransEventName::QueryEvent,
             src_state: TransState::TransSetSessionState,
             dst_state: TransState::TransDummyState,
-            driver: Some(Box::new(Driver)),
+            //driver: Some(Box::new(Driver)),
         },
     ];
 }
@@ -293,36 +293,59 @@ impl TransFsm {
         }
     }
 
-    pub async fn trigger(
+    pub fn trigger(
         &mut self,
         state_name: TransEventName,
         input: RouteInput<'_>,
-    ) -> Result<(), Error> {
+    ) -> bool {
         for event in &self.events {
             if event.name == state_name && event.src_state == self.current_state {
+                self.current_state = event.dst_state;
+                self.current_event = event.name;
+
                 match event.src_state {
                     TransState::TransDummyState => {
-                        let (mut client_conn, endpoint) = event
-                            .driver
-                            .as_ref()
-                            .unwrap()
-                            .get_driver_conn(self.route_strategy.clone(), &mut self.pool, input)
-                            .await?;
-
-                        client_conn.init(self.build_conn_attrs()).await;
-                        self.client_conn = Some(client_conn);
-
-                        self.endpoint = endpoint;
+                        return true
                     }
                     _ => {}
                 }
-                self.current_state = event.dst_state;
-                self.current_event = event.name;
-                return Ok(());
+                
+                return false;
             }
         }
-        Ok(())
+        false
     }
+
+    //pub async fn trigger(
+    //    &mut self,
+    //    state_name: TransEventName,
+    //    input: RouteInput<'_>,
+    //) -> Result<(), Error> {
+    //    for event in &self.events {
+    //        if event.name == state_name && event.src_state == self.current_state {
+    //            match event.src_state {
+    //                TransState::TransDummyState => {
+    //                    let (mut client_conn, endpoint) = event
+    //                        .driver
+    //                        .as_ref()
+    //                        .unwrap()
+    //                        .get_driver_conn(self.route_strategy.clone(), &mut self.pool, input)
+    //                        .await?;
+
+    //                    client_conn.init(self.build_conn_attrs()).await;
+    //                    self.client_conn = Some(client_conn);
+
+    //                    self.endpoint = endpoint;
+    //                }
+    //                _ => {}
+    //            }
+    //            self.current_state = event.dst_state;
+    //            self.current_event = event.name;
+    //            return Ok(());
+    //        }
+    //    }
+    //    Ok(())
+    //}
 
     // when autocommit=0, should be reset fsm state
     pub async fn reset_fsm_state(&mut self, input: RouteInput<'_>) -> Result<(), Error> {
@@ -348,16 +371,13 @@ impl TransFsm {
         self.autocommit = Some(status)
     }
 
-    pub async fn get_conn(&mut self) -> Result<PoolConn<ClientConn>, Error> {
+    pub async fn get_conn(&mut self, attrs: Vec<SessionAttr>) -> Result<PoolConn<ClientConn>, Error> {
         let conn = self.client_conn.take();
         let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
         match conn {
             Some(client_conn) => Ok(client_conn),
-            None => match self.pool.get_conn_with_endpoint(addr).await {
-                Ok(mut client_conn) => {
-                    client_conn.init(self.build_conn_attrs()).await;
-                    Ok(client_conn)
-                }
+            None => match self.pool.get_conn_with_endpoint_session(addr, attrs).await {
+                Ok(client_conn) => Ok(client_conn),
                 Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
             },
         }
@@ -368,7 +388,7 @@ impl TransFsm {
     }
 
     #[inline]
-    fn build_conn_attrs(&self) -> Vec<SessionAttr> {
+    pub fn build_conn_attrs() -> Vec<SessionAttr> {
         vec![
             SessionAttr::DB(self.db.clone()),
             SessionAttr::Charset(self.charset.clone()),
@@ -376,6 +396,15 @@ impl TransFsm {
         ]
     }
 }
+
+ #[inline]
+ pub fn build_conn_attrs(sess: &ServerHandshakeCodec) -> Vec<SessionAttr> {
+     vec![
+         SessionAttr::DB(codec.get_db()),
+         SessionAttr::Charset(codec.get_charset()),
+         SessionAttr::Autocommit(codec.get_autocommit()),
+     ]
+ }
 
 #[cfg(test)]
 mod test {

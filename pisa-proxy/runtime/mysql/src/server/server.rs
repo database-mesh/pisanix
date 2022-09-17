@@ -28,7 +28,7 @@ use mysql_protocol::{
         codec::{make_eof_packet, make_err_packet, ok_packet, CommonPacket, PacketSend},
         err::MySQLError,
     },
-    session::SessionMut,
+    session::{SessionMut, Session},
     util::{is_eof, length_encode_int},
 };
 use pisa_error::error::{Error, ErrorKind};
@@ -39,7 +39,7 @@ use tracing::{debug, error};
 
 use crate::{
     mysql::{MySQLService, ReqContext, RespContext},
-    transaction_fsm::{TransEventName, TransFsm},
+    transaction_fsm::{TransEventName, TransFsm, build_conn_attrs},
 };
 
 pub struct PisaMySQLService<T, C> {
@@ -59,11 +59,20 @@ where
     }
 
     async fn fsm_trigger(
-        fsm: &mut TransFsm,
+        req: &mut ReqContext<T, C>,
         state_name: TransEventName,
+        endpoint: &str,
         input: RouteInput<'_>,
     ) -> Result<PoolConn<ClientConn>, Error> {
-        fsm.trigger(state_name, input).await?;
+        let sess = req.framed.codec().get_session();
+        let attrs = build_conn_attrs(sess);
+        let is_get_conn = req.fsm.trigger(state_name, input);
+
+        if is_get_conn {
+            let conn = req.pool.get_conn_with_endpoint_session(endpoint, attrs).await?;
+            return Ok(conn);
+        }
+
         fsm.get_conn().await
     }
 
@@ -498,7 +507,7 @@ where
         let now = Instant::now();
         let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
         let mut client_conn = Self::fsm_trigger(
-            &mut cx.fsm,
+            &mut cx,
             TransEventName::PrepareEvent,
             RouteInput::Statement(sql),
         )

@@ -20,7 +20,7 @@ use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
 use mysql_parser::ast::{SqlStmt, Visitor, TableIdent};
 
-use crate::{config::{Sharding, StrategyType, ShardingAlgorithmName}, rewrite::ShardingRewriter};
+use crate::{config::{Sharding, StrategyType, ShardingAlgorithmName}, rewrite::{ShardingRewriter, ShardingRewriteInput}};
 
 use self::meta::{RewriteMetaData, WhereMeta, WhereMetaRightDataType};
 
@@ -85,33 +85,31 @@ pub struct ShardingRewriteOutput {
 }
 
 
-#[derive(Debug)]
-pub struct ShardingRewrite<'a> {
+#[derive(Debug, Clone)]
+pub struct ShardingRewrite {
     rules: Vec<Sharding>,
     // Raw sql
-    raw_sql: &'a str,
+    raw_sql: String,
 
     // Endpoints
     endpoints: Vec<Endpoint>,
+    // Whether has readwritesplitting
+    has_rw: bool,
 }
 
-
-
-impl<'a> ShardingRewrite<'a> {
-    pub fn new(rules: Vec<Sharding>, raw_sql: &'a str, endpoints: Vec<Endpoint>) -> Self {
-        ShardingRewrite { rules, raw_sql, endpoints }
+impl ShardingRewrite {
+    pub fn new(rules: Vec<Sharding>, endpoints: Vec<Endpoint>, has_rw: bool) -> Self {
+        ShardingRewrite { 
+            rules, 
+            raw_sql: "".to_string(), 
+            endpoints,
+            has_rw,
+        }
     }
 
-    fn parse_rule(&self) {
-        //self.rule.database_table_strategy.unwrap().
-
+    pub fn set_raw_sql(&mut self, raw_sql: String) {
+        self.raw_sql = raw_sql;
     }
-
-    //fn table_strategy(&self, mut meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>> {
-    //    
-    //
-    //    Ok(vec![])
-    //}
 
     fn database_strategy(&self, meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>>{
         let tables = meta.get_tables();
@@ -210,7 +208,7 @@ impl<'a> ShardingRewrite<'a> {
         )
     }
 
-    fn find_table_rule(&self, tables: &'a IndexMap<u8, Vec<TableIdent>>) -> Vec<(u8, Sharding, &TableIdent)> {
+    fn find_table_rule<'a>(&self, tables: &'a IndexMap<u8, Vec<TableIdent>>) -> Vec<(u8, Sharding, &'a TableIdent)> {
         Self::find_table(tables, |idx, meta| {
             let rule = self.rules.iter().find(|x| x.table_name == meta.name);
             if let Some(rule) = rule {
@@ -358,10 +356,11 @@ impl<'a> ShardingRewrite<'a> {
     }
 }
 
-impl<'a> ShardingRewriter<SqlStmt> for ShardingRewrite<'a> {
+impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
     type Output = Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>>;
-    fn rewrite(&mut self, mut ast: SqlStmt) -> Self::Output {
-        let meta = self.get_meta(&mut ast);
+    fn rewrite(&mut self, mut input: ShardingRewriteInput) -> Self::Output {
+        self.set_raw_sql(input.raw_sql);
+        let meta = self.get_meta(&mut input.ast);
         self.database_strategy(meta)
     }
 }
@@ -426,21 +425,24 @@ mod test {
         let raw_sql = "SELECT idx from db.tshard where idx = 3";
         let parser = Parser::new();
         let mut ast = parser.parse(raw_sql).unwrap();
-        let sr = ShardingRewrite::new(config.0.clone(), raw_sql, config.1.clone());
+        let sr = ShardingRewrite::new(config.0.clone(),  config.1.clone(), false);
+        sr.set_raw_sql(raw_sql.to_string());
         let meta = sr.get_meta(&mut ast[0]);
 
         let res = sr.database_strategy(meta).unwrap();
         assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
-        let sr = ShardingRewrite::new(config.0.clone(), raw_sql, config.1.clone());
+        let sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        sr.set_raw_sql(raw_sql.to_string());
         let mut ast = parser.parse(raw_sql).unwrap();
         let meta = sr.get_meta(&mut ast[0]);
         let res = sr.database_strategy( meta).unwrap();
         assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3 and idx = (SELECT idx from ds1.tshard where idx = 3)");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)";
-        let sr = ShardingRewrite::new(config.0.clone(), raw_sql, config.1);
+        let sr = ShardingRewrite::new(config.0.clone(), config.1, false);
+        sr.set_raw_sql(raw_sql.to_string());
         let mut ast = parser.parse(raw_sql).unwrap();
         let meta = sr.get_meta(&mut ast[0]);
         let res = sr.database_strategy( meta).unwrap();

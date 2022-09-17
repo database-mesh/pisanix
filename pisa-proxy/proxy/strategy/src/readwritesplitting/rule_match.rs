@@ -257,6 +257,7 @@ impl RouteRuleMatch for RegexRuleMatchInner {
             }
 
             RouteInput::None => false,
+            _ => unreachable!()
         }
     }
 }
@@ -361,7 +362,8 @@ impl RouteBalance for GenericRuleMatchInner {
         match input {
             RouteInput::Statement(sql) => match sql.split_once(' ') {
                 Some(key_word) => {
-                    let token = key_word.0.to_uppercase().trim();
+                    let key_word = key_word.0.to_uppercase();
+                    let token = key_word.trim();
                     match token {
                         "SELECT" => (&mut self.r_balance, TargetRole::Read),
                         "INSERT" => (&mut self.rw_balance, TargetRole::ReadWrite),
