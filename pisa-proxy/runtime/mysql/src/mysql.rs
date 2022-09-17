@@ -48,7 +48,8 @@ use proxy::{
 use strategy::{
     config::{NodeGroup, TargetRole},
     readwritesplitting::ReadWriteEndpoint,
-    route::{ReadWriteSplittingRouteStrategy, RouteStrategy}, sharding_rewrite::{self, ShardingRewrite},
+    route::{ReadWriteSplittingRouteStrategy, RouteStrategy},
+    sharding_rewrite::{self, ShardingRewrite},
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder, Framed};
@@ -79,10 +80,10 @@ impl MySQLProxy {
             }
         }
 
-        let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
-
-        let strategy = if self.proxy_config.read_write_splitting.is_some() && self.proxy_config.sharding.is_some()
+        let strategy = if self.proxy_config.read_write_splitting.is_some()
+            && self.proxy_config.sharding.is_some()
         {
+            let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
             RouteStrategy::new(
                 self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
                 &self.node_group,
@@ -91,6 +92,7 @@ impl MySQLProxy {
             )
             .map_err(|e| Error::new(ErrorKind::Runtime(e.into())))?
         } else if self.proxy_config.read_write_splitting.is_some() {
+            let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
             RouteStrategy::new(
                 self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
                 &self.node_group,
@@ -101,6 +103,7 @@ impl MySQLProxy {
         } else if self.proxy_config.sharding.is_some() {
             RouteStrategy::new_with_sharding_only()
         } else {
+            //let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
             let balance_type =
                 self.proxy_config.simple_loadbalance.as_ref().unwrap().balance_type.clone();
             let mut balance = Balance.build_balance(balance_type);
@@ -109,14 +112,14 @@ impl MySQLProxy {
                 balance.add(ep)
             }
 
-           RouteStrategy::new_with_simple_route(balance) }
+            RouteStrategy::new_with_simple_route(balance)
+        };
 
         Ok(strategy)
-
     }
 
     fn build_sharding_rewriter(&self) -> Option<ShardingRewrite> {
-        let config = self.proxy_config.sharding;
+        let config = self.proxy_config.sharding.clone();
         if config.is_none() {
             return None;
         }
@@ -157,7 +160,7 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         // TODO: using a loadbalancer factory for different load balance strategy.
         // Currently simple_loadbalancer purely provide a list of nodes without any strategy.
-        let lb = Arc::new(tokio::sync::Mutex::new(self.build_route()?));
+        let route_strategy = Arc::new(Mutex::new(self.build_route()?));
 
         // Build sharding rewriter
         let rewriter = self.build_sharding_rewriter();
@@ -170,11 +173,13 @@ impl proxy::factory::Proxy for MySQLProxy {
         let parser = Arc::new(Parser::new());
         //let metrics_collector = MySQLServerMetricsCollector::new();
 
+        let has_rw = self.proxy_config.read_write_splitting.is_some();
+
         loop {
             // TODO: need refactor
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
 
-            let lb = Arc::clone(&lb);
+            let route_strategy = route_strategy.clone();
             let plugin = plugin.clone();
             let _pcfg = self.proxy_config.clone();
             let parser = parser.clone();
@@ -210,7 +215,8 @@ impl proxy::factory::Proxy for MySQLProxy {
 
                 let framed = Framed::with_capacity(io, packet_codec, 16384);
                 let context = ReqContext {
-                    fsm: TransFsm::new_trans_fsm(lb, pool.clone()),
+                    fsm: TransFsm::new(pool.clone()),
+                    route_strategy,
                     pool,
                     ast_cache,
                     plugin,
@@ -220,6 +226,7 @@ impl proxy::factory::Proxy for MySQLProxy {
                     name: proxy_name,
                     mysql_parser: parser,
                     rewriter,
+                    has_readwritesplitting: has_rw,
                 };
 
                 if let Err(e) = ins.run(context).await {
@@ -234,6 +241,7 @@ impl proxy::factory::Proxy for MySQLProxy {
 pub struct ReqContext<T, C> {
     pub name: String,
     pub fsm: TransFsm,
+    pub route_strategy: Arc<Mutex<RouteStrategy>>,
     pub pool: Pool<ClientConn>,
     pub mysql_parser: Arc<Parser>,
     pub ast_cache: Arc<Mutex<ParserAstCache>>,
@@ -245,7 +253,8 @@ pub struct ReqContext<T, C> {
     pub concurrency_control_rule_idx: Option<usize>,
     // The codc for MySQL Protocol
     pub framed: Framed<T, C>,
-    pub rewriter: ShardingRewrite,
+    pub rewriter: Option<ShardingRewrite>,
+    pub has_readwritesplitting: bool,
 }
 
 /// Handle the return value of the command
@@ -418,4 +427,5 @@ where
 
         Ok(())
     }
+    
 }

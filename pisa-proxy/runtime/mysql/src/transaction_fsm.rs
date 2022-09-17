@@ -12,14 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, os::macos::raw};
 
 use async_trait::async_trait;
 use conn_pool::{ConnAttrMut, Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
-use mysql_protocol::{client::conn::{ClientConn, SessionAttr}, server::auth::ServerHandshakeCodec, session::Session};
+use mysql_parser::ast::SqlStmt;
+use mysql_protocol::{
+    client::conn::{ClientConn, SessionAttr},
+    server::auth::ServerHandshakeCodec,
+    session::Session,
+};
 use pisa_error::error::{Error, ErrorKind};
-use strategy::route::{Route, RouteInput, RouteStrategy};
+use strategy::{
+    rewrite::{ShardingRewriteInput, ShardingRewriter},
+    route::{BoxError, Route, RouteInput, RouteStrategy, RouteInputTyp},
+    sharding_rewrite::{DataSource, ShardingRewriteOutput},
+};
 use tokio::sync::Mutex;
 use tracing::debug;
 
@@ -60,56 +69,123 @@ impl Default for TransEventName {
     }
 }
 
-#[async_trait]
-pub trait ConnDriver {
-    async fn get_driver_conn(
-        &self,
-        loadbalance: Arc<Mutex<RouteStrategy>>,
-        pool: &mut Pool<ClientConn>,
-        input: RouteInput<'_>,
-    ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error>;
+use strategy::sharding_rewrite::ShardingRewrite;
+pub fn query_rewrite(
+    rewriter: &mut ShardingRewrite,
+    raw_sql: String,
+    ast: SqlStmt,
+    can_rewrite: bool,
+) -> Result<Vec<ShardingRewriteOutput>, BoxError> {
+    let outputs = if can_rewrite {
+        rewriter.rewrite(ShardingRewriteInput { raw_sql, ast })?
+    } else {
+        let endpoints = rewriter.get_endpoints();
+        endpoints
+            .iter()
+            .map(|x| ShardingRewriteOutput {
+                changes: vec![],
+                target_sql: raw_sql.clone(),
+                endpoint: x.clone(),
+                data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
+            })
+            .collect::<Vec<_>>()
+    };
+
+    Ok(outputs)
+}
+
+
+pub fn route(
+    input_typ: RouteInputTyp,
+    raw_sql: &str,
+    strategy: Arc<parking_lot::Mutex<RouteStrategy>>,
+) -> Endpoint {
+    let mut strategy = strategy.lock();
+    let input = match input_typ {
+        RouteInputTyp::Statement => RouteInput::Statement(raw_sql),
+        RouteInputTyp::Transaction => RouteInput::Transaction(raw_sql),
+        _ => RouteInput::None,
+    };
+                
+    let dispatch_res = strategy.dispatch(&input).unwrap();
+    debug!("route_strategy rw + sharding to {:?} for input typ: {:?}, sql: {:?}", dispatch_res, input_typ, raw_sql);
+
+    return dispatch_res.0.unwrap()
+}
+
+pub fn route_sharding(
+    input_typ: RouteInputTyp,
+    raw_sql: &str,
+    strategy: Arc<parking_lot::Mutex<RouteStrategy>>,
+    rewrite_outputs: &mut Vec<ShardingRewriteOutput>,
+) {
+    let mut strategy = strategy.lock();
+    for o in rewrite_outputs.iter_mut() {
+        match &o.data_source {
+            // sharding only
+            DataSource::Endpoint(ep) => {
+                debug!("route_strategy sharding only to {:?} for input typ: {:?}, sql: {:?}", ep, input_typ, raw_sql);
+                match input_typ {
+                    RouteInputTyp::Statement => RouteInput::Sharding(ep.clone()),
+                    RouteInputTyp::Transaction => RouteInput::Sharding(ep.clone()),
+                    _ => RouteInput::None,
+                };
+            },
+
+            // rewritesplitting + sharding
+            DataSource::NodeGroup(group) => {
+                let input = match input_typ {
+                    RouteInputTyp::Statement => RouteInput::ShardingStatement(raw_sql, group.clone()),
+                    RouteInputTyp::Transaction => RouteInput::ShardingTransaction(raw_sql, group.clone()),
+                    _ => RouteInput::None,
+                };
+                
+                let dispatch_res = strategy.dispatch(&input).unwrap();
+                debug!("route_strategy rw + sharding to {:?} for input typ: {:?}, sql: {:?}", dispatch_res, input_typ, raw_sql);
+                // reassign data_source, type should is DataSource::Endpoint
+                o.data_source = DataSource::Endpoint(dispatch_res.0.unwrap());
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct Driver;
 
-#[async_trait]
-impl ConnDriver for Driver {
-    async fn get_driver_conn(
-        &self,
-        route_strategy: Arc<Mutex<RouteStrategy>>,
-        pool: &mut Pool<ClientConn>,
-        input: RouteInput<'_>,
-    ) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error> {
-        let mut strategy = route_strategy.clone().lock_owned().await;
-        let dispatch_res = strategy.dispatch(&input).unwrap();
-        debug!("route_strategy to {:?} for input: {:?}", dispatch_res, input);
-
-        let endpoint = dispatch_res.0.unwrap();
-        let factory = ClientConn::with_opts(
-            endpoint.user.clone(),
-            endpoint.password.clone(),
-            endpoint.addr.clone(),
-        );
-        pool.set_factory(factory);
-
-        match pool.get_conn_with_endpoint(endpoint.addr.as_ref()).await {
-            Ok(client_conn) => {
-                if !client_conn.is_ready().await {
-                    return Ok((
-                        pool.rebuild_conn().await.map_err(ErrorKind::Protocol)?,
-                        Some(endpoint.clone()),
-                    ));
-                }
-                Ok((client_conn, Some(endpoint.clone())))
-            }
-            Err(err) => {
-                println!("errr {:?}", err);
-                Err(Error::new(ErrorKind::Protocol(err)))
-            }
-        }
-    }
-}
+//async fn get_driver_conn(
+//    route_strategy: Arc<Mutex<RouteStrategy>>,
+//    pool: &mut Pool<ClientConn>,
+//    input: RouteInput<'_>,
+//) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error> {
+//    let mut strategy = route_strategy.clone().lock_owned().await;
+//    let dispatch_res = strategy.dispatch(&input).unwrap();
+//    debug!("route_strategy to {:?} for input: {:?}", dispatch_res, input);
+//
+//    let endpoint = dispatch_res.0.unwrap();
+//    let factory = ClientConn::with_opts(
+//        endpoint.user.clone(),
+//        endpoint.password.clone(),
+//        endpoint.addr.clone(),
+//    );
+//    pool.set_factory(factory);
+//
+//    match pool.get_conn_with_endpoint(endpoint.addr.as_ref()).await {
+//        Ok(client_conn) => {
+//            if !client_conn.is_ready().await {
+//                return Ok((
+//                    pool.rebuild_conn().await.map_err(ErrorKind::Protocol)?,
+//                    Some(endpoint.clone()),
+//                ));
+//            }
+//            Ok((client_conn, Some(endpoint.clone())))
+//        }
+//        Err(err) => {
+//            println!("errr {:?}", err);
+//            Err(Error::new(ErrorKind::Protocol(err)))
+//        }
+//    }
+//}
 
 pub struct TransEvent {
     name: TransEventName,
@@ -265,7 +341,6 @@ pub struct TransFsm {
     pub events: Vec<TransEvent>,
     pub current_state: TransState,
     pub current_event: TransEventName,
-    pub route_strategy: Arc<Mutex<RouteStrategy>>,
     pub pool: Pool<ClientConn>,
     pub client_conn: Option<PoolConn<ClientConn>>,
     pub endpoint: Option<Endpoint>,
@@ -275,15 +350,13 @@ pub struct TransFsm {
 }
 
 impl TransFsm {
-    pub fn new_trans_fsm(
-        route_strategy: Arc<Mutex<RouteStrategy>>,
+    pub fn new(
         pool: Pool<ClientConn>,
     ) -> TransFsm {
         TransFsm {
             events: init_trans_events(),
             current_state: TransState::TransDummyState,
             current_event: TransEventName::DummyEvent,
-            route_strategy,
             pool,
             client_conn: None,
             endpoint: None,
@@ -293,23 +366,17 @@ impl TransFsm {
         }
     }
 
-    pub fn trigger(
-        &mut self,
-        state_name: TransEventName,
-        input: RouteInput<'_>,
-    ) -> bool {
+    pub fn trigger(&mut self, state_name: TransEventName) -> bool {
         for event in &self.events {
             if event.name == state_name && event.src_state == self.current_state {
                 self.current_state = event.dst_state;
                 self.current_event = event.name;
 
                 match event.src_state {
-                    TransState::TransDummyState => {
-                        return true
-                    }
+                    TransState::TransDummyState => return true,
                     _ => {}
                 }
-                
+
                 return false;
             }
         }
@@ -348,11 +415,11 @@ impl TransFsm {
     //}
 
     // when autocommit=0, should be reset fsm state
-    pub async fn reset_fsm_state(&mut self, input: RouteInput<'_>) -> Result<(), Error> {
+    pub fn reset_fsm_state(&mut self) -> Result<(), Error> {
         self.current_state = TransState::TransDummyState;
         self.current_event = TransEventName::DummyEvent;
 
-        self.trigger(TransEventName::QueryEvent, input).await?;
+        self.trigger(TransEventName::QueryEvent);
         Ok(())
     }
 
@@ -371,7 +438,10 @@ impl TransFsm {
         self.autocommit = Some(status)
     }
 
-    pub async fn get_conn(&mut self, attrs: Vec<SessionAttr>) -> Result<PoolConn<ClientConn>, Error> {
+    pub async fn get_conn(
+        &mut self,
+        attrs: Vec<SessionAttr>,
+    ) -> Result<PoolConn<ClientConn>, Error> {
         let conn = self.client_conn.take();
         let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
         match conn {
@@ -388,7 +458,7 @@ impl TransFsm {
     }
 
     #[inline]
-    pub fn build_conn_attrs() -> Vec<SessionAttr> {
+    pub fn build_conn_attrs(&self) -> Vec<SessionAttr> {
         vec![
             SessionAttr::DB(self.db.clone()),
             SessionAttr::Charset(self.charset.clone()),
@@ -397,14 +467,14 @@ impl TransFsm {
     }
 }
 
- #[inline]
- pub fn build_conn_attrs(sess: &ServerHandshakeCodec) -> Vec<SessionAttr> {
-     vec![
-         SessionAttr::DB(codec.get_db()),
-         SessionAttr::Charset(codec.get_charset()),
-         SessionAttr::Autocommit(codec.get_autocommit()),
-     ]
- }
+#[inline]
+pub fn build_conn_attrs(sess: &ServerHandshakeCodec) -> Vec<SessionAttr> {
+    vec![
+        SessionAttr::DB(sess.get_db()),
+        SessionAttr::Charset(sess.get_charset().unwrap()),
+        SessionAttr::Autocommit(sess.get_autocommit()),
+    ]
+}
 
 #[cfg(test)]
 mod test {

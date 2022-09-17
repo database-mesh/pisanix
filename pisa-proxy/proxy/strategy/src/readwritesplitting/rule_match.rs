@@ -223,22 +223,6 @@ impl RegexRuleMatchInner {
             }
         }
     }
-
-    fn build_balance_group_inner(balance: &mut BalanceType, target: &TargetRole, node_group: &String, rw_endpoint: ReadWriteEndpoint) {
-        match target {
-            TargetRole::Read => {
-                if rw_endpoint.read.len() == 0 {
-                    balance_add_endpoint(balance, rw_endpoint.readwrite);
-                } else {
-                    balance_add_endpoint(balance, rw_endpoint.read);
-                }
-            }
-
-            TargetRole::ReadWrite => {
-                balance_add_endpoint(balance, rw_endpoint.readwrite);
-            }
-        }
-    }
 }
 
 impl RouteRuleMatch for RegexRuleMatchInner {

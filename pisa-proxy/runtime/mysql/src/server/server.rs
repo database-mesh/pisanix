@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{marker::PhantomData, time::Instant};
+use std::{fmt::Pointer, marker::PhantomData, time::Instant};
 
 use async_trait::async_trait;
 use byteorder::{ByteOrder, LittleEndian};
@@ -28,18 +28,23 @@ use mysql_protocol::{
         codec::{make_eof_packet, make_err_packet, ok_packet, CommonPacket, PacketSend},
         err::MySQLError,
     },
-    session::{SessionMut, Session},
+    session::{Session, SessionMut},
     util::{is_eof, length_encode_int},
 };
 use pisa_error::error::{Error, ErrorKind};
-use strategy::route::RouteInput;
+use strategy::{
+    route::{RouteInput, RouteInputTyp},
+    sharding_rewrite::{DataSource, ShardingRewriteOutput},
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, error};
 
 use crate::{
     mysql::{MySQLService, ReqContext, RespContext},
-    transaction_fsm::{TransEventName, TransFsm, build_conn_attrs},
+    transaction_fsm::{
+        build_conn_attrs, query_rewrite, route, route_sharding, TransEventName, TransFsm,
+    },
 };
 
 pub struct PisaMySQLService<T, C> {
@@ -61,19 +66,27 @@ where
     async fn fsm_trigger(
         req: &mut ReqContext<T, C>,
         state_name: TransEventName,
-        endpoint: &str,
-        input: RouteInput<'_>,
+        input_typ: RouteInputTyp,
+        raw_sql: &str,
     ) -> Result<PoolConn<ClientConn>, Error> {
-        let sess = req.framed.codec().get_session();
+        let sess = req.framed.codec_mut().get_session();
         let attrs = build_conn_attrs(sess);
-        let is_get_conn = req.fsm.trigger(state_name, input);
+        let is_get_conn = req.fsm.trigger(state_name);
 
         if is_get_conn {
-            let conn = req.pool.get_conn_with_endpoint_session(endpoint, attrs).await?;
+            let endpoint = route(input_typ, raw_sql, req.route_strategy.clone());
+            let factory =
+                ClientConn::with_opts(endpoint.user, endpoint.password, endpoint.addr.clone());
+            req.pool.set_factory(factory);
+            let conn = req
+                .pool
+                .get_conn_with_endpoint_session(&endpoint.addr, attrs)
+                .await
+                .map_err(ErrorKind::Protocol)?;
             return Ok(conn);
         }
 
-        fsm.get_conn().await
+        req.fsm.get_conn(attrs).await
     }
 
     async fn init_db_inner<'b>(
@@ -192,80 +205,116 @@ where
         req: &mut ReqContext<T, C>,
         sql: &str,
     ) -> Result<PoolConn<ClientConn>, Error> {
-        match Self::get_ast(req, sql) {
+        Err(Error::new(ErrorKind::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "fff"))))
+    }
+
+    fn query_rewrite<'a>(
+        req: &'a mut ReqContext<T, C>,
+        sql: &'a str,
+    ) -> Result<(bool, RouteInputTyp, Vec<ShardingRewriteOutput>), Error> {
+        let ast = Self::get_ast(req, sql);
+        let mut ast = match ast {
             Err(err) => {
-                error!("err: {:?}", err);
-                Self::fsm_trigger(
-                    &mut req.fsm,
-                    TransEventName::QueryEvent,
-                    RouteInput::Statement(sql),
-                )
-                .await
+                error!("parse sql {:?} err: {:?}", sql, err);
+                if req.rewriter.is_some() {
+                    return Err(err);
+                }
+                let is_get_conn = req.fsm.trigger(TransEventName::QueryEvent);
+                return Ok((is_get_conn, RouteInputTyp::Statement, vec![]));
             }
 
-            Ok(stmt) => match &stmt[0] {
-                SqlStmt::Set(stmt) => {
-                    Self::handle_set_stmt(req, stmt, sql).await;
-                    req.fsm.get_conn().await
-                }
-                //TODO: split sql stmt for sql audit
-                SqlStmt::BeginStmt(_stmt) => {
-                    Self::fsm_trigger(
-                        &mut req.fsm,
-                        TransEventName::StartEvent,
-                        RouteInput::Transaction(sql),
-                    )
-                    .await
-                }
+            Ok(ast) => ast[0].clone(),
+        };
 
-                SqlStmt::Start(_stmt) => {
-                    Self::fsm_trigger(
-                        &mut req.fsm,
-                        TransEventName::StartEvent,
-                        RouteInput::Transaction(sql),
-                    )
-                    .await
-                }
+        let (is_get_conn, input, can_rewrite) = match &ast {
+            SqlStmt::Set(stmt) => {
+                let (is_get_conn, input) = Self::handle_set_stmt(req, &stmt);
+                (is_get_conn, input, false)
+            }
+            //TODO: split sql stmt for sql audit
+            SqlStmt::BeginStmt(_stmt) => {
+                //Self::fsm_trigger(
+                //    &mut req,
+                //    TransEventName::StartEvent,
+                //    RouteInput::Transaction(sql),
+                //)
+                //.await
 
-                SqlStmt::Commit(_stmt) => {
-                    Self::fsm_trigger(
-                        &mut req.fsm,
-                        TransEventName::CommitRollBackEvent,
-                        RouteInput::Transaction(sql),
-                    )
-                    .await
-                }
+                (req.fsm.trigger(TransEventName::StartEvent), RouteInputTyp::Transaction, false)
+            }
 
-                SqlStmt::Rollback(_stmt) => {
-                    Self::fsm_trigger(
-                        &mut req.fsm,
-                        TransEventName::CommitRollBackEvent,
-                        RouteInput::Transaction(sql),
-                    )
-                    .await
-                }
-                _ => {
-                    Self::fsm_trigger(
-                        &mut req.fsm,
-                        TransEventName::QueryEvent,
-                        RouteInput::Statement(sql),
-                    )
-                    .await
-                }
-            },
+            SqlStmt::Start(_stmt) => {
+                //Self::fsm_trigger(
+                //    &mut req,
+                //    TransEventName::StartEvent,
+                //    RouteInput::Transaction(sql),
+                //)
+                //.await
+                (req.fsm.trigger(TransEventName::StartEvent), RouteInputTyp::Transaction, false)
+            }
+
+            SqlStmt::Commit(_stmt) => {
+                //Self::fsm_trigger(
+                //    &mut req,
+                //    TransEventName::CommitRollBackEvent,
+                //    RouteInput::Transaction(sql),
+                //)
+                //.await
+                (
+                    req.fsm.trigger(TransEventName::CommitRollBackEvent),
+                    RouteInputTyp::Transaction,
+                    false,
+                )
+            }
+
+            SqlStmt::Rollback(_stmt) => {
+                //Self::fsm_trigger(
+                //    &mut req,
+                //    TransEventName::CommitRollBackEvent,
+                //    RouteInput::Transaction(sql),
+                //)
+                //.await
+                (
+                    req.fsm.trigger(TransEventName::CommitRollBackEvent),
+                    RouteInputTyp::Transaction,
+                    false,
+                )
+            }
+            _ => {
+                //Self::fsm_trigger(
+                //    &mut req,
+                //    TransEventName::QueryEvent,
+                //    RouteInput::Statement(sql),
+                //)
+                //.await
+                (req.fsm.trigger(TransEventName::QueryEvent), RouteInputTyp::Statement, true)
+            }
+        };
+
+        let is_rewriter = req.rewriter.is_some().clone();
+        if is_rewriter {
+            let outputs =
+                query_rewrite(req.rewriter.as_mut().unwrap(), sql.to_string(), ast, can_rewrite)
+                    .map_err(|e| ErrorKind::Runtime(e.into()))?;
+            return Ok((is_get_conn, input, outputs));
         }
+
+        return Ok((is_get_conn, input, vec![]));
     }
 
     // Set charset name
-    async fn handle_set_stmt(req: &mut ReqContext<T, C>, stmt: &SetOptValues, input: &str) {
+    fn handle_set_stmt<'b: 'a, 'a>(
+        req: &'b mut ReqContext<T, C>,
+        stmt: &'a SetOptValues,
+    ) -> (bool, RouteInputTyp) {
         match stmt {
             SetOptValues::OptValues(vals) => match &vals.opt {
                 SetOpts::SetNames(name) => {
                     if let Some(name) = &name.charset_name {
                         req.framed.codec_mut().get_session().set_charset(name.clone());
                         req.fsm.set_charset(name.clone());
-                        let _ = req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
-                        return;
+                        let _ = req.fsm.reset_fsm_state();
+                        return (true, RouteInputTyp::Statement);
                     }
                 }
                 SetOpts::SetVariable(val) => {
@@ -275,20 +324,24 @@ where
                                 Expr::LiteralExpr(Value::Num { value, .. })
                                 | Expr::SimpleIdentExpr(Value::Ident { value, .. }) => {
                                     if value == "0" || value.to_uppercase() == "OFF" {
-                                        req.fsm
-                                            .trigger(
-                                                TransEventName::SetSessionEvent,
-                                                RouteInput::Transaction(input),
-                                            )
-                                            .await
-                                            .unwrap();
+                                        //req.fsm
+                                        //    .trigger(
+                                        //        TransEventName::SetSessionEvent,
+                                        //        RouteInput::Transaction(input),
+                                        //    )
+                                        //    .await
+                                        //    .unwrap();
+                                        let is_get_conn =
+                                            req.fsm.trigger(TransEventName::SetSessionEvent);
+                                        return (is_get_conn, RouteInputTyp::Transaction);
                                     }
 
                                     if value == "1" {
-                                        let _ = req
-                                            .fsm
-                                            .reset_fsm_state(RouteInput::Statement(input))
-                                            .await;
+                                        //let _ = req
+                                        //    .fsm
+                                        //    .reset_fsm_state(RouteInput::Statement(input))
+                                        //    .await;
+                                        req.fsm.reset_fsm_state();
                                     }
 
                                     req.framed
@@ -296,7 +349,7 @@ where
                                         .get_session()
                                         .set_autocommit(value.clone());
                                     req.fsm.set_autocommit(value.clone());
-                                    return;
+                                    return (true, RouteInputTyp::Statement);
                                 }
                                 _ => {}
                             },
@@ -306,8 +359,10 @@ where
                                     .get_session()
                                     .set_autocommit(String::from("ON"));
                                 req.fsm.set_autocommit(String::from("ON"));
-                                let _ = req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
-                                return;
+                                //let _ = req.fsm.reset_fsm_state(RouteInput::Statement(input)).await;
+                                req.fsm.reset_fsm_state();
+
+                                return (true, RouteInputTyp::Statement);
                             }
 
                             _ => {}
@@ -320,10 +375,12 @@ where
             _ => {}
         }
 
-        req.fsm
-            .trigger(TransEventName::SetSessionEvent, RouteInput::Statement(input))
-            .await
-            .unwrap();
+        //req.fsm
+        //    .trigger(TransEventName::SetSessionEvent, RouteInput::Statement(input))
+        //    .await
+        //    .unwrap();
+        let is_get_conn = req.fsm.trigger(TransEventName::SetSessionEvent);
+        (is_get_conn, RouteInputTyp::Statement)
     }
 
     fn get_ast(req: &mut ReqContext<T, C>, sql: &str) -> Result<Vec<SqlStmt>, Error> {
@@ -440,7 +497,10 @@ where
                 None => break,
             };
 
-            let _ = req.framed.codec_mut().encode(PacketSend::EncodeOffset(data[4..].into(), buf.len()), &mut buf);
+            let _ = req
+                .framed
+                .codec_mut()
+                .encode(PacketSend::EncodeOffset(data[4..].into(), buf.len()), &mut buf);
 
             if is_eof(&data) {
                 break;
@@ -449,6 +509,19 @@ where
 
         req.framed.send(PacketSend::Origin(buf[..].into())).await.map_err(ErrorKind::from)?;
 
+        Ok(())
+    }
+
+    async fn sharding_command_not_support(
+        cx: &mut ReqContext<T, C>,
+        command: &str,
+    ) -> Result<(), Error> {
+        let err_info = make_err_packet(MySQLError::new(
+            1047,
+            "08S01".as_bytes().to_vec(),
+            format!("command {:?} not support in sharding", command),
+        ));
+        cx.framed.send(PacketSend::Encode(err_info[4..].into())).await.map_err(ErrorKind::from)?;
         Ok(())
     }
 }
@@ -465,10 +538,14 @@ where
     async fn init_db(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
 
+        if cx.rewriter.is_some() {
+            Self::sharding_command_not_support(cx, ComType::INIT_DB.as_ref()).await?;
+            return Ok(RespContext { ep: None, duration: now.elapsed() });
+        }
+
         let db = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
         let mut client_conn =
-            Self::fsm_trigger(&mut cx.fsm, TransEventName::UseEvent, RouteInput::Statement(db))
-                .await?;
+            Self::fsm_trigger(cx, TransEventName::UseEvent, RouteInputTyp::Statement, db).await?;
         let ep = client_conn.get_endpoint();
 
         collect_sql_processed_total!(cx, "COM_INIT_DB", ep.as_ref().unwrap());
@@ -506,12 +583,17 @@ where
     async fn prepare(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
         let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
-        let mut client_conn = Self::fsm_trigger(
-            &mut cx,
-            TransEventName::PrepareEvent,
-            RouteInput::Statement(sql),
-        )
-        .await?;
+
+        let mut client_conn = if cx.rewriter.is_some() {
+            let (is_get_conn, input_typ, mut rewrite_outputs) = Self::query_rewrite(cx, sql)?;
+            route_sharding(input_typ, sql, cx.route_strategy.clone(), &mut rewrite_outputs);
+            Self::fsm_trigger(cx, TransEventName::PrepareEvent, RouteInputTyp::Statement, sql)
+                .await?
+        } else {
+            Self::fsm_trigger(cx, TransEventName::PrepareEvent, RouteInputTyp::Statement, sql)
+                .await?
+        };
+
         let ep = client_conn.get_endpoint();
 
         collect_sql_processed_total!(cx, "COM_PREPARE", ep.as_ref().unwrap());
@@ -537,7 +619,8 @@ where
 
     async fn execute(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
-        let mut client_conn = cx.fsm.get_conn().await?;
+        let sess = cx.framed.codec_mut().get_session();
+        let mut client_conn = cx.fsm.get_conn(build_conn_attrs(sess)).await?;
         let ep = client_conn.get_endpoint();
 
         collect_sql_processed_total!(cx, "COM_EXECUTE", ep.as_ref().unwrap());
@@ -567,8 +650,15 @@ where
 
     async fn field_list(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
+
+        if cx.rewriter.is_some() {
+            Self::sharding_command_not_support(cx, ComType::FIELD_LIST.as_ref()).await?;
+            return Ok(RespContext { ep: None, duration: now.elapsed() });
+        }
+
         let mut client_conn =
-            Self::fsm_trigger(&mut cx.fsm, TransEventName::QueryEvent, RouteInput::None).await?;
+            Self::fsm_trigger(cx, TransEventName::QueryEvent, RouteInputTyp::None, "").await?;
+
         let ep = client_conn.get_endpoint();
 
         collect_sql_processed_total!(cx, "COM_FIELD_LIST", ep.as_ref().unwrap());

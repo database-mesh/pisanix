@@ -37,6 +37,14 @@ pub enum StragegyError {
     NodeGroupNotFound(String),
 }
 
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum RouteInputTyp {
+    Statement,
+    Transaction,
+    None,
+}
 /// RouteInput may have more fields or variants added in the future,
 /// As parameter of Route trait, Possible values are  `sql statement`, `sql ast`,etc.
 #[derive(Debug)]

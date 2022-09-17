@@ -20,7 +20,7 @@ use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
 use mysql_parser::ast::{SqlStmt, Visitor, TableIdent};
 
-use crate::{config::{Sharding, StrategyType, ShardingAlgorithmName}, rewrite::{ShardingRewriter, ShardingRewriteInput}};
+use crate::{config::{Sharding, StrategyType, ShardingAlgorithmName}, rewrite::{ShardingRewriter, ShardingRewriteInput}, route::BoxError};
 
 use self::meta::{RewriteMetaData, WhereMeta, WhereMetaRightDataType};
 
@@ -82,6 +82,14 @@ pub struct ShardingRewriteOutput {
     pub changes: Vec<RewriteChange>,
     pub target_sql: String,
     pub endpoint: Endpoint,
+    pub data_source: DataSource,
+}
+
+#[derive(Debug)]
+pub enum DataSource {
+    Endpoint(Endpoint),
+    NodeGroup(String),
+    None
 }
 
 
@@ -107,11 +115,15 @@ impl ShardingRewrite {
         }
     }
 
+    pub fn get_endpoints(&self) -> &Vec<Endpoint> {
+        &self.endpoints
+    }
+
     pub fn set_raw_sql(&mut self, raw_sql: String) {
         self.raw_sql = raw_sql;
     }
 
-    fn database_strategy(&self, meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>>{
+    fn database_strategy(&self, meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, BoxError>{
         let tables = meta.get_tables();
         let try_tables = self.find_table_rule(tables);
         
@@ -148,10 +160,15 @@ impl ShardingRewrite {
 
         let mut wheres = Vec::with_capacity(try_where.len());
         for v in try_where {
-            let v = v?;
             match v {
-                Some((idx, num, _)) => wheres.push((idx, num)),
-                None => continue
+                Ok(data) => {
+                    match data {
+                        Some((idx, num, _)) => wheres.push((idx, num)),
+                        None => continue
+                    }
+                },
+
+                Err(e ) => return Err(e)
             }
         }
 
@@ -203,6 +220,7 @@ impl ShardingRewrite {
                     changes, 
                     target_sql, 
                     endpoint: ep.take().unwrap().clone(), 
+                    data_source: DataSource::None,
                 }
             ]
         )
@@ -244,8 +262,8 @@ impl ShardingRewrite {
         }).flatten().collect::<Vec<_>>()
     }
 
-    fn find_where<F>(wheres: &IndexMap<u8, Vec<WhereMeta>>, calc_fn: F) -> Vec<Result<Option<(u8, u64, &WhereMeta)>, Box<dyn std::error::Error>>>
-    where F: Fn(u8, &WhereMeta) -> Result<Option<(u8, u64, &WhereMeta)>, Box<dyn std::error::Error>>
+    fn find_where<F>(wheres: &IndexMap<u8, Vec<WhereMeta>>, calc_fn: F) -> Vec<Result<Option<(u8, u64, &WhereMeta)>, BoxError>>
+    where F: Fn(u8, &WhereMeta) -> Result<Option<(u8, u64, &WhereMeta)>, BoxError>
     {
         wheres.iter().filter_map(|(k, v)| 
             Some(
@@ -260,7 +278,7 @@ impl ShardingRewrite {
         ).flatten().collect::<Vec<_>>()
     }
 
-    fn parse_where<'b>(meta: &'b WhereMeta, algo: &ShardingAlgorithmName, actual_nodes_length: u64, query_id: u8, sharding_column: &str) -> Result<Option<(u8, u64, &'b WhereMeta)>, Box<dyn std::error::Error>> {
+    fn parse_where<'b>(meta: &'b WhereMeta, algo: &ShardingAlgorithmName, actual_nodes_length: u64, query_id: u8, sharding_column: &str) -> Result<Option<(u8, u64, &'b WhereMeta)>, BoxError> {
         match meta {
             WhereMeta::BinaryExpr { left, right }  => {
                 if left != sharding_column {
@@ -326,6 +344,7 @@ impl ShardingRewrite {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql,
                 endpoint,
+                data_source: DataSource::None,
             })
         }
         output
@@ -357,7 +376,7 @@ impl ShardingRewrite {
 }
 
 impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
-    type Output = Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>>;
+    type Output = Result<Vec<ShardingRewriteOutput>, BoxError>;
     fn rewrite(&mut self, mut input: ShardingRewriteInput) -> Self::Output {
         self.set_raw_sql(input.raw_sql);
         let meta = self.get_meta(&mut input.ast);
