@@ -62,6 +62,7 @@ use crate::{
 
 use lazy_static::lazy_static;
 use std::sync::atomic::AtomicU32;
+use crate::server::stmt_cache::StmtCache;
 
 lazy_static! {
     pub static ref STMT_ID: AtomicU32 = AtomicU32::new(0);
@@ -181,6 +182,8 @@ impl proxy::factory::Proxy for MySQLProxy {
         //let metrics_collector = MySQLServerMetricsCollector::new();
 
         let has_rw = self.proxy_config.read_write_splitting.is_some();
+        //Stmt cache
+        let stmt_cache = Arc::new(Mutex::new(StmtCache::new()));
 
         loop {
             // TODO: need refactor
@@ -194,6 +197,7 @@ impl proxy::factory::Proxy for MySQLProxy {
             let pool = pool.clone();
             let proxy_name = self.proxy_config.name.clone();
             let rewriter = rewriter.clone();
+            let stmt_cache = stmt_cache.clone();
 
             let handshake_codec = ServerHandshakeCodec::new(
                 self.proxy_config.user.clone(),
@@ -234,6 +238,7 @@ impl proxy::factory::Proxy for MySQLProxy {
                     mysql_parser: parser,
                     rewriter,
                     has_readwritesplitting: has_rw,
+                    stmt_cache,
                 };
 
                 if let Err(e) = ins.run(context).await {
@@ -262,6 +267,7 @@ pub struct ReqContext<T, C> {
     pub framed: Framed<T, C>,
     pub rewriter: Option<ShardingRewrite>,
     pub has_readwritesplitting: bool,
+    pub stmt_cache: Arc<Mutex<StmtCache>>
 }
 
 /// Handle the return value of the command

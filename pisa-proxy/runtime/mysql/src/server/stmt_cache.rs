@@ -45,6 +45,24 @@ impl StmtCache {
         value.remove(&stmt_id)
     }
 
+    pub fn get_all(&mut self, server_stmt_id: u32) -> Vec<(u32, PoolConn<ClientConn>)> {
+        let value = self.cache.remove(&server_stmt_id);
+        let mut value = if let Some(value) = value {
+            value
+        } else {
+            return vec![]
+        };
+
+        value.drain(..).collect::<Vec<_>>()
+    }
+
+    pub fn put_all(&mut self, server_stmt_id: u32, conns: Vec<(u32, PoolConn<ClientConn>)>) {
+        let value = self.cache.entry(server_stmt_id).or_insert(CacheValue::new());
+        for conn in conns.into_iter() {
+            value.insert(conn.0, conn.1);
+        }
+    }
+
     pub fn remove(&mut self, server_stmt_id: u32) {
         self.cache.remove(&server_stmt_id);
     }

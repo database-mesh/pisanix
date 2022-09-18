@@ -119,7 +119,7 @@ where
         Ok(())
     }
 
-    async fn prepare_sharding_inner(req: &mut ReqContext<T, C>, payload: &[u8]) -> Result<Stmt, Error> {
+    async fn prepare_shard_inner(req: &mut ReqContext<T, C>, payload: &[u8]) -> Result<(), Error> {
         STMT_ID.fetch_add(1, Ordering::Relaxed);
         let stmt_id = STMT_ID.load(Ordering::Relaxed);
         let sess = req.framed.codec_mut().get_session();
@@ -127,23 +127,30 @@ where
         let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
         let (_, input_typ, mut rewrite_outputs)  = Self::query_rewrite(req, raw_sql)?;
         route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
-        let (mut stmts, shard_conns) = Executor::sharding_prepare_executor(req, rewrite_outputs, attrs).await?;
+        let (mut stmts, shard_conns) = Executor::shard_prepare_executor(req, rewrite_outputs, attrs).await?;
+        for i in stmts.iter().zip(shard_conns.into_iter()) {
+            req.stmt_cache.lock().put(stmt_id, i.0.stmt_id, i.1)
+        }
         let mut stmt = stmts.remove(0);
         stmt.stmt_id = stmt_id;
-        Ok(stmt)
+
+        Self::prepare_stmt(req, stmt).await?;
+
+        Ok(())
     }
 
-    async fn prepare_inner(
+    async fn prepare_normal_inner(
         req: &mut ReqContext<T, C>,
         client_conn: &mut PoolConn<ClientConn>,
         payload: &[u8],
     ) -> Result<(), Error> {
-        let stmt = if req.rewriter.is_some() {
-            Self::prepare_sharding_inner(req, payload).await?
-        } else {
-            client_conn.send_prepare(payload).await.map_err(ErrorKind::from)?
-        };
+        let stmt = client_conn.send_prepare(payload).await.map_err(ErrorKind::from)?;
+        Self::prepare_stmt(req, stmt).await?;
 
+        Ok(())
+    }
+
+    async fn prepare_stmt(req: &mut ReqContext<T,C>, stmt: Stmt) -> Result<(), Error> {
         let mut buf = BytesMut::with_capacity(128);
         let mut data = vec![0];
         data.extend_from_slice(&u32::to_le_bytes(stmt.stmt_id));
@@ -185,6 +192,12 @@ where
         }
 
         req.framed.send(PacketSend::Origin(buf[..].into())).await.map_err(ErrorKind::from)?;
+
+        Ok(())
+
+    }
+
+    async fn execute_shard_inner(req: &mut ReqContext<T, C>, ) -> Result<(), Error>{
 
         Ok(())
     }
@@ -597,26 +610,36 @@ where
 
     async fn prepare(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
-        let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
         if cx.rewriter.is_some() {
             cx.fsm.trigger(TransEventName::PrepareEvent);
+            let res = Self::prepare_shard_inner(cx, payload).await;
+
+            if let Err(ref err) = res {
+                if let ErrorKind::Protocol(ProtocolError::PrepareError(data)) = err.kind() {
+                    cx.framed
+                        .send(PacketSend::Encode(data[4..].into()))
+                        .await
+                        .map_err(ErrorKind::from)?;
+                }
+            }
 
             return Ok(RespContext {
                 ep: None,
                 duration: now.elapsed(),
             })
         }
+
+        let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
         
         let mut client_conn = Self::fsm_trigger(cx, TransEventName::PrepareEvent, RouteInputTyp::Statement, sql)
                 .await?;
-
         let ep = client_conn.get_endpoint();
 
         collect_sql_processed_total!(cx, "COM_PREPARE", ep.as_ref().unwrap());
         collect_sql_under_processing_inc!(cx, "COM_PREPARE", ep.as_ref().unwrap());
 
-        let res = Self::prepare_inner(cx, &mut client_conn, payload).await;
+        let res = Self::prepare_normal_inner(cx, &mut client_conn, payload).await;
         cx.fsm.put_conn(client_conn);
 
         collect_sql_under_processing_dec!(cx, "COM_PREPARE", ep.as_ref().unwrap());
@@ -636,6 +659,14 @@ where
 
     async fn execute(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
+
+        if cx.rewriter.is_some() {
+            return Ok(RespContext {
+                ep: None,
+                duration: now.elapsed(),
+            })
+        }
+
         let sess = cx.framed.codec_mut().get_session();
         let mut client_conn = cx.fsm.get_conn(&build_conn_attrs(sess)).await?;
         let ep = client_conn.get_endpoint();
@@ -652,9 +683,10 @@ where
         Ok(RespContext { ep, duration: now.elapsed() })
     }
 
-    async fn stmt_close(_cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
+    async fn stmt_close(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
         let stmt_id = LittleEndian::read_u32(payload);
+        cx.stmt_cache.lock().remove(stmt_id);
         debug!("stmt close {:?}", stmt_id);
 
         Ok(RespContext { ep: None, duration: now.elapsed() })

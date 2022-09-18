@@ -302,6 +302,21 @@ impl ClientConn {
         Ok(())
     }
 
+    pub async fn send_execute_without_stream<'a>(
+        &'a mut self,
+        val: &'a [u8],
+    ) -> Result<(), ProtocolError> {
+        let framed = self.framed.take().unwrap();
+        let mut resultset_codec = framed.into_resultset();
+        resultset_codec.codec_mut().with_binary(true);
+
+        resultset_codec.send(ResultSendCommand::Binary((COM_STMT_EXECUTE, val))).await?;
+
+        self.framed = Some(Box::new(ClientCodec::Resultset(resultset_codec)));
+
+        Ok(())
+    }
+
     pub async fn is_ready(&self) -> bool {
         self.framed.as_ref().unwrap().is_ready().await
     }

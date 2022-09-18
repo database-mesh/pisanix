@@ -14,6 +14,7 @@
 
 use std::marker::PhantomData;
 
+use byteorder::LittleEndian;
 use bytes::BytesMut;
 use conn_pool::{Pool, PoolConn};
 use futures::{executor, stream::FuturesOrdered, SinkExt, StreamExt};
@@ -67,6 +68,11 @@ where
         }
 
         let mut merge_stream = MergeStream::new(shard_streams, shards_length);
+
+        Self::handle_shard_resultset(req, &mut merge_stream).await
+    }
+    
+    async fn handle_shard_resultset<'a>(req: &mut ReqContext<T, C>, merge_stream: &mut MergeStream<ResultsetStream<'a>>) -> Result<(), Error> {
         let header = merge_stream.next().await;
         let header = if let Some(header) = Self::get_shard_one_data(header)? {
             header.1
@@ -93,7 +99,7 @@ where
             .codec_mut()
             .encode(PacketSend::EncodeOffset(header[4..].into(), 0), &mut buf);
 
-        Self::get_columns(req, &mut merge_stream, cols, &mut buf).await?;
+        Self::get_columns(req, merge_stream, cols, &mut buf).await?;
 
         // read eof
         let _ = merge_stream.next().await;
@@ -104,7 +110,7 @@ where
             .encode(PacketSend::EncodeOffset(make_eof_packet()[4..].into(), buf.len()), &mut buf);
 
         // get rows
-        Self::get_rows(req, &mut merge_stream, &mut buf).await?;
+        Self::get_rows(req, merge_stream, &mut buf).await?;
 
         let _ = req
             .framed
@@ -281,7 +287,7 @@ where
         Ok(conns)
     }
 
-    pub async fn sharding_prepare_executor(
+    pub async fn shard_prepare_executor(
         req: &mut ReqContext<T, C>,
         rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
@@ -308,5 +314,52 @@ where
         }
 
         Ok(( stmts, sended_conns ))
+    }
+
+    pub async fn shard_execute_executor(
+        req: &mut ReqContext<T, C>,
+        stmt_id: u32,
+        attrs: Vec<SessionAttr>,
+    ) -> Result<(), Error> {
+        let mut conns = Self::shard_send_execute(req, stmt_id, attrs).await?;
+        let shard_length = conns.len();
+        let mut shard_streams = Vec::with_capacity(shard_length);
+        for conn in conns.iter_mut() {
+            shard_streams.push(ResultsetStream::new(conn.1.framed.as_mut()).fuse());
+        }
+
+        let mut merge_stream = MergeStream::new(shard_streams, shard_length);
+        Self::handle_shard_resultset(req, &mut merge_stream).await?;
+
+        req.stmt_cache.lock().put_all(stmt_id, conns);
+
+        Ok(())
+    }
+
+    pub async fn shard_send_execute(
+        req: &mut ReqContext<T, C>,
+        stmt_id: u32,
+        attrs: Vec<SessionAttr>,
+    ) -> Result<Vec<(u32, PoolConn<ClientConn>)>, Error> {
+        let mut send_futs = FuturesOrdered::new();
+        let stmt_cache = req.stmt_cache.lock().get_all(stmt_id);
+        let mut sended_conns = Vec::with_capacity(stmt_cache.len());
+
+        for (id, mut conn) in stmt_cache.into_iter() {
+            let payload = id.to_le_bytes();
+            let f = tokio::spawn(async move {
+                let res = conn.send_execute_without_stream(&payload).await;
+                (conn, id, res)
+            });
+            send_futs.push(f);
+        }
+
+        while let Some(res) = send_futs.next().await {
+            let (conn, id, send_res) = res.map_err(|e| ErrorKind::Runtime(e.into()))?;
+            let _ = send_res.map_err(ErrorKind::from)?;
+            sended_conns.push((id, conn));
+        }
+
+        Ok(sended_conns)
     }
 }
