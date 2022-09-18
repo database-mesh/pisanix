@@ -48,8 +48,8 @@ pub trait ConnAttr {
 
 #[async_trait]
 pub trait ConnAttrMut {
-    type Item: Send;
-    async fn init(&mut self, _items: Vec<Self::Item>) {}
+    type Item: Send + Sync;
+    async fn init(&mut self, _items: &[Self::Item]) {}
 }
 
 #[derive(Debug)]
@@ -111,13 +111,13 @@ where
         Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
     }
     
-    pub async fn rebuild_conn_with_session(&self, attrs: Vec<<T as ConnAttrMut>::Item>) -> Result<PoolConn<T>, T::Error> {
+    pub async fn rebuild_conn_with_session(&self, attrs: &[<T as ConnAttrMut>::Item]) -> Result<PoolConn<T>, T::Error> {
         let mut conn = self.factory.as_ref().unwrap().build_conn().await?;
         self.reinit_session(&mut conn, attrs).await;
         Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
     }
 
-    pub async fn get_conn_with_endpoint_session(&self, endpoint: &str, attrs: Vec<<T as ConnAttrMut>::Item>) -> Result<PoolConn<T>, T::Error> {
+    pub async fn get_conn_with_endpoint_session(&self, endpoint: &str, attrs: &[<T as ConnAttrMut>::Item]) -> Result<PoolConn<T>, T::Error> {
         let mut conn = self.get_conn_with_endpoint(endpoint).await?;
         self.reinit_session(&mut conn, attrs).await;
 
@@ -146,7 +146,7 @@ where
         //Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
     }
 
-    async fn reinit_session(&self, conn: &mut T, attrs: Vec<<T as ConnAttrMut>::Item>) {
+    async fn reinit_session(&self, conn: &mut T, attrs: &[<T as ConnAttrMut>::Item]) {
         conn.init(attrs).await
     }
 

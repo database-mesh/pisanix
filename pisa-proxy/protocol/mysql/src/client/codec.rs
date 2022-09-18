@@ -20,7 +20,7 @@ use std::{
 };
 
 use bytes::{Buf, BufMut, BytesMut};
-use futures::Stream;
+use futures::{Stream, stream::Fuse};
 use pin_project::pin_project;
 use protocol_codegen::mysql_codec_convert;
 use tokio::io::Interest;
@@ -104,17 +104,17 @@ pub struct MergeStream<S>
 where 
     S: Stream + std::marker::Unpin,
 {
-    pub inner: Vec<S>,
+    pub inner: Vec<Fuse<S>>,
     idx: usize,
     buf: Vec<Option<S::Item>>,
     length: usize
 }
 
-impl<S> MergeStream<S> 
+impl<S> MergeStream<S>
 where 
     S: Stream + std::marker::Unpin,
 {
-   pub fn new(inner: Vec<S>, length: usize) -> Self {
+   pub fn new(inner: Vec<Fuse<S>>, length: usize) -> Self {
         MergeStream { 
             inner, 
             idx: 0,
@@ -131,8 +131,6 @@ where
     type Item = Vec<Option<S::Item>>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
-        //let inner = Pin::new(me.inner);
-        //let mut buf = Vec::with_capacity(me.inner.len());
         loop {
             let s = unsafe {
                 Pin::new_unchecked(me.inner.get_unchecked_mut(*me.idx))

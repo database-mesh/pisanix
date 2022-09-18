@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, os::macos::raw};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use conn_pool::{ConnAttrMut, Pool, PoolConn};
@@ -66,6 +66,21 @@ pub enum TransEventName {
 impl Default for TransEventName {
     fn default() -> Self {
         TransEventName::DummyEvent
+    }
+}
+
+pub async fn check_get_conn(pool: Pool<ClientConn>, endpoint: &str, attrs: &[SessionAttr]) -> Result<PoolConn<ClientConn>, Error>{
+    match pool.get_conn_with_endpoint_session(endpoint, attrs).await {
+        Ok(client_conn) => {
+            if !client_conn.is_ready().await {
+                return pool.rebuild_conn_with_session(attrs).await.map_err(|e| Error::new(ErrorKind::Protocol(e)))
+            }
+            Ok(client_conn)
+        }
+        Err(err) => {
+            debug!("check_get_conn errr {:?}", err);
+            Err(Error::new(ErrorKind::Protocol(err)))
+        }
     }
 }
 
@@ -415,12 +430,11 @@ impl TransFsm {
     //}
 
     // when autocommit=0, should be reset fsm state
-    pub fn reset_fsm_state(&mut self) -> Result<(), Error> {
+    pub fn reset_fsm_state(&mut self) {
         self.current_state = TransState::TransDummyState;
         self.current_event = TransEventName::DummyEvent;
 
         self.trigger(TransEventName::QueryEvent);
-        Ok(())
     }
 
     // Set current db.
@@ -440,7 +454,7 @@ impl TransFsm {
 
     pub async fn get_conn(
         &mut self,
-        attrs: Vec<SessionAttr>,
+        attrs: &[SessionAttr],
     ) -> Result<PoolConn<ClientConn>, Error> {
         let conn = self.client_conn.take();
         let addr = self.endpoint.as_ref().unwrap().addr.as_ref();

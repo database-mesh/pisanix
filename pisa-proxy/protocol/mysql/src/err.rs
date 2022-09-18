@@ -58,6 +58,9 @@ pub enum ProtocolError {
 
     #[error("stmt id not found: {0}")]
     StmtIdNotFound(u32),
+
+    #[error("DEFAULT, This errors is moot")]
+    Default,
 }
 
 #[derive(Debug, Error)]

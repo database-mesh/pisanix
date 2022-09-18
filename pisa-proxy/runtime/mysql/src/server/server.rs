@@ -43,7 +43,7 @@ use tracing::{debug, error};
 use crate::{
     mysql::{MySQLService, ReqContext, RespContext},
     transaction_fsm::{
-        build_conn_attrs, query_rewrite, route, route_sharding, TransEventName, TransFsm,
+        build_conn_attrs, query_rewrite, route, route_sharding, TransEventName, TransFsm, check_get_conn,
     },
 };
 
@@ -78,15 +78,10 @@ where
             let factory =
                 ClientConn::with_opts(endpoint.user, endpoint.password, endpoint.addr.clone());
             req.pool.set_factory(factory);
-            let conn = req
-                .pool
-                .get_conn_with_endpoint_session(&endpoint.addr, attrs)
-                .await
-                .map_err(ErrorKind::Protocol)?;
-            return Ok(conn);
+            return check_get_conn(req.pool.clone(), &endpoint.addr, &attrs).await
         }
 
-        req.fsm.get_conn(attrs).await
+        req.fsm.get_conn(&attrs).await
     }
 
     async fn init_db_inner<'b>(
@@ -620,7 +615,7 @@ where
     async fn execute(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
         let sess = cx.framed.codec_mut().get_session();
-        let mut client_conn = cx.fsm.get_conn(build_conn_attrs(sess)).await?;
+        let mut client_conn = cx.fsm.get_conn(&build_conn_attrs(sess)).await?;
         let ep = client_conn.get_endpoint();
 
         collect_sql_processed_total!(cx, "COM_EXECUTE", ep.as_ref().unwrap());
