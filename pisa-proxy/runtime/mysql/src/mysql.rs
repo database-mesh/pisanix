@@ -14,7 +14,7 @@
 
 use std::{
     marker::PhantomData,
-    sync::Arc,
+    sync::{atomic::AtomicU32, Arc},
     time::{Duration, Instant},
 };
 
@@ -24,6 +24,7 @@ use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
 use endpoint::endpoint::Endpoint;
 use futures::{SinkExt, StreamExt};
+use lazy_static::lazy_static;
 use loadbalance::balance::{Balance, LoadBalance};
 use mysql_parser::parser::Parser;
 use mysql_protocol::{
@@ -56,13 +57,9 @@ use tokio_util::codec::{Decoder, Encoder, Framed};
 use tracing::error;
 
 use crate::{
-    server::{metrics::*, PisaMySQLService},
+    server::{metrics::*, stmt_cache::StmtCache, PisaMySQLService},
     transaction_fsm::*,
 };
-
-use lazy_static::lazy_static;
-use std::sync::atomic::AtomicU32;
-use crate::server::stmt_cache::StmtCache;
 
 lazy_static! {
     pub static ref STMT_ID: AtomicU32 = AtomicU32::new(0);
@@ -108,7 +105,6 @@ impl MySQLProxy {
                 false,
             )
             .map_err(|e| Error::new(ErrorKind::Runtime(e.into())))?
-            
         } else {
             //let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
             let balance_type =
@@ -118,8 +114,18 @@ impl MySQLProxy {
             for ep in rw.into_iter() {
                 balance.add(ep)
             }
+
             if self.proxy_config.sharding.is_some() {
-                RouteStrategy::new_with_sharding_only(balance);
+                let has_strategy = &self.proxy_config.sharding.as_ref().unwrap().iter().all(|x| {
+                    x.table_strategy.is_some()
+                        || x.database_strategy.is_some()
+                        || x.database_table_strategy.is_some()
+                });
+                if *has_strategy {
+                    RouteStrategy::new_with_sharding_only(balance)
+                } else {
+                    RouteStrategy::new_with_simple_route(balance)
+                }
             } else {
                 RouteStrategy::new_with_simple_route(balance)
             }
@@ -130,7 +136,17 @@ impl MySQLProxy {
 
     fn build_sharding_rewriter(&self) -> Option<ShardingRewrite> {
         let config = self.proxy_config.sharding.clone();
+
         if config.is_none() {
+            return None;
+        }
+
+        let has_strategy = config.as_ref().unwrap().iter().all(|x| {
+            x.table_strategy.is_some()
+                || x.database_strategy.is_some()
+                || x.database_table_strategy.is_some()
+        });
+        if !has_strategy {
             return None;
         }
 
@@ -269,7 +285,7 @@ pub struct ReqContext<T, C> {
     pub framed: Framed<T, C>,
     pub rewriter: Option<ShardingRewrite>,
     pub has_readwritesplitting: bool,
-    pub stmt_cache: Arc<Mutex<StmtCache>>
+    pub stmt_cache: Arc<Mutex<StmtCache>>,
 }
 
 /// Handle the return value of the command
@@ -442,5 +458,4 @@ where
 
         Ok(())
     }
-    
 }

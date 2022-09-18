@@ -92,16 +92,17 @@ pub fn query_rewrite(
     let outputs = if can_rewrite {
         rewriter.rewrite(ShardingRewriteInput { raw_sql, ast })?
     } else {
-        let endpoints = rewriter.get_endpoints();
-        endpoints
-            .iter()
-            .map(|x| ShardingRewriteOutput {
-                changes: vec![],
-                target_sql: raw_sql.clone(),
-                endpoint: x.clone(),
-                data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
-            })
-            .collect::<Vec<_>>()
+        //let endpoints = rewriter.get_endpoints();
+        //endpoints
+        //    .iter()
+        //    .map(|x| ShardingRewriteOutput {
+        //        changes: vec![],
+        //        target_sql: raw_sql.clone(),
+        //        endpoint: x.clone(),
+        //        data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
+        //    })
+        //    .collect::<Vec<_>>()
+        vec![]
     };
 
     Ok(outputs)
@@ -452,11 +453,43 @@ impl TransFsm {
         self.autocommit = Some(status)
     }
 
+    pub async fn get_conn_with_endpoint(
+        &mut self,
+        endpoint: Endpoint,
+        attrs: &[SessionAttr],
+    ) -> Result<PoolConn<ClientConn>, Error> {
+        let conn = self.client_conn.take();
+        match conn {
+            Some(client_conn) => Ok(client_conn),
+            None => {
+                let factory = ClientConn::with_opts(
+                    endpoint.user,
+                    endpoint.password,
+                    endpoint.addr.clone(),
+                );
+                self.pool.set_factory(factory);
+                match self.pool.get_conn_with_endpoint_session(&endpoint.addr, attrs).await {
+                    Ok(client_conn) => Ok(client_conn),
+                    Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
+                }
+            },
+        }
+    }
+
     pub async fn get_conn(
         &mut self,
-        _attrs: &[SessionAttr],
+        attrs: &[SessionAttr],
     ) -> Result<PoolConn<ClientConn>, Error> {
-        Ok(self.client_conn.take().unwrap())
+        let conn = self.client_conn.take();
+        Ok(conn.unwrap())
+        //let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
+        //match conn {
+        //    Some(client_conn) => Ok(client_conn),
+        //    None => match self.pool.get_conn_with_endpoint_session(addr, attrs).await {
+        //        Ok(client_conn) => Ok(client_conn),
+        //        Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
+        //    },
+        //}
     }
 
     pub fn put_conn(&mut self, conn: PoolConn<ClientConn>) {

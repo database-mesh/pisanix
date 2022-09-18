@@ -64,7 +64,7 @@ where
         for conn in conns.iter_mut() {
             shard_streams.push(ResultsetStream::new(conn.framed.as_mut()).fuse());
         }
-
+        
         let mut merge_stream = MergeStream::new(shard_streams, shards_length);
 
         Self::handle_shard_resultset(req, &mut merge_stream).await

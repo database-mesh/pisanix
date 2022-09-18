@@ -74,12 +74,12 @@ where
         let sess = req.framed.codec_mut().get_session();
         let attrs = build_conn_attrs(sess);
         let is_get_conn = req.fsm.trigger(state_name);
-
         if is_get_conn {
             return Self::fsm_get_new_conn(req, raw_sql, input_typ, &attrs).await
         }
 
-        req.fsm.get_conn(&attrs).await
+        let endpoint = route(input_typ, raw_sql, req.route_strategy.clone());
+        req.fsm.get_conn_with_endpoint(endpoint, &attrs).await
     }
 
     async fn fsm_get_new_conn(req: &mut ReqContext<T, C>, raw_sql: &str, input_typ: RouteInputTyp, attrs: &[SessionAttr]) -> Result<PoolConn<ClientConn>, Error> {
@@ -130,6 +130,15 @@ where
         let attrs = build_conn_attrs(sess);
         let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
         let (_, input_typ, mut rewrite_outputs)  = Self::query_rewrite(req, raw_sql)?;
+
+        if rewrite_outputs.is_empty() {
+            let mut client_conn = Self::fsm_trigger(req, TransEventName::PrepareEvent, RouteInputTyp::Statement, raw_sql).await?;
+            let res = Self::prepare_normal_inner(req, &mut client_conn, payload).await;
+
+            req.fsm.put_conn(client_conn);
+            return res;
+        }
+
         route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
         let (mut stmts, shard_conns) = Executor::shard_prepare_executor(req, rewrite_outputs, attrs).await?;
         for i in stmts.iter().zip(shard_conns.into_iter()) {
@@ -222,7 +231,16 @@ where
         let sess = req.framed.codec_mut().get_session();
         let attrs = build_conn_attrs(sess);
         let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
-        let (_, input_typ, mut rewrite_outputs) = Self::query_rewrite(req, raw_sql)?;
+        let (is_get_conn, input_typ, mut rewrite_outputs) = Self::query_rewrite(req, raw_sql)?;
+
+        if rewrite_outputs.is_empty() {
+            let mut client_conn = Self::query_inner_get_conn(req, payload).await?;
+            let res = Self::query_inner(req, &mut client_conn, payload).await;
+            
+            req.fsm.put_conn(client_conn);
+            return res;
+        }
+
         route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
 
         Executor::shard_query_executor(req, rewrite_outputs, attrs).await?;
