@@ -48,7 +48,7 @@ use proxy::{
 use strategy::{
     config::{NodeGroup, TargetRole},
     readwritesplitting::ReadWriteEndpoint,
-    route::{ReadWriteSplittingRouteStrategy, RouteStrategy},
+    route::RouteStrategy,
     sharding_rewrite::ShardingRewrite,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -138,7 +138,7 @@ impl MySQLProxy {
             endpoints.push(endpoint);
         }
 
-        let mut has_rw = self.proxy_config.read_write_splitting.is_some();
+        let has_rw = self.proxy_config.read_write_splitting.is_some();
 
         Some(ShardingRewrite::new(config.unwrap(), endpoints, has_rw))
     }

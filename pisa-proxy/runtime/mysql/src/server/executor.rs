@@ -14,10 +14,9 @@
 
 use std::marker::PhantomData;
 
-use byteorder::LittleEndian;
 use bytes::BytesMut;
 use conn_pool::{Pool, PoolConn};
-use futures::{executor, stream::FuturesOrdered, SinkExt, StreamExt};
+use futures::{stream::FuturesOrdered, SinkExt, StreamExt};
 use mysql_protocol::{
     client::{
         codec::{MergeStream, ResultsetStream},
@@ -53,13 +52,12 @@ where
         + Send
         + CommonPacket,
 {
-    pub async fn sharding_query_executor(
+    pub async fn shard_query_executor(
         req: &mut ReqContext<T, C>,
         rewrite_outputs: Vec<ShardingRewriteOutput>,
-        pool: Pool<ClientConn>,
         attrs: Vec<SessionAttr>,
     ) -> Result<(), Error> {
-        let conns = Self::get_shard_conns(&rewrite_outputs, pool, attrs).await?;
+        let conns = Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?;
         let mut conns = Self::shard_send_query(conns, &rewrite_outputs).await?;
         let shards_length = conns.len();
         let mut shard_streams = Vec::with_capacity(shards_length);
@@ -226,7 +224,7 @@ where
         Ok(())
     }
 
-    pub async fn shard_send_query(
+    async fn shard_send_query(
         conns: Vec<PoolConn<ClientConn>>,
         rewrite_outputs: &[ShardingRewriteOutput],
     ) -> Result<Vec<PoolConn<ClientConn>>, Error> {
@@ -319,9 +317,8 @@ where
     pub async fn shard_execute_executor(
         req: &mut ReqContext<T, C>,
         stmt_id: u32,
-        attrs: Vec<SessionAttr>,
     ) -> Result<(), Error> {
-        let mut conns = Self::shard_send_execute(req, stmt_id, attrs).await?;
+        let mut conns = Self::shard_send_execute(req, stmt_id).await?;
         let shard_length = conns.len();
         let mut shard_streams = Vec::with_capacity(shard_length);
         for conn in conns.iter_mut() {
@@ -336,10 +333,9 @@ where
         Ok(())
     }
 
-    pub async fn shard_send_execute(
+    async fn shard_send_execute(
         req: &mut ReqContext<T, C>,
         stmt_id: u32,
-        attrs: Vec<SessionAttr>,
     ) -> Result<Vec<(u32, PoolConn<ClientConn>)>, Error> {
         let mut send_futs = FuturesOrdered::new();
         let stmt_cache = req.stmt_cache.lock().get_all(stmt_id);

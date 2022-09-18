@@ -21,7 +21,7 @@ use conn_pool::PoolConn;
 use futures::{SinkExt, StreamExt};
 use mysql_parser::ast::*;
 use mysql_protocol::{
-    client::{codec::ResultsetStream, conn::ClientConn},
+    client::{codec::ResultsetStream, conn::{ClientConn, SessionAttr}},
     err::ProtocolError,
     mysql_const::*,
     server::{
@@ -76,14 +76,18 @@ where
         let is_get_conn = req.fsm.trigger(state_name);
 
         if is_get_conn {
-            let endpoint = route(input_typ, raw_sql, req.route_strategy.clone());
-            let factory =
-                ClientConn::with_opts(endpoint.user, endpoint.password, endpoint.addr.clone());
-            req.pool.set_factory(factory);
-            return check_get_conn(req.pool.clone(), &endpoint.addr, &attrs).await;
+            return Self::fsm_get_new_conn(req, raw_sql, input_typ, &attrs).await
         }
 
         req.fsm.get_conn(&attrs).await
+    }
+
+    async fn fsm_get_new_conn(req: &mut ReqContext<T, C>, raw_sql: &str, input_typ: RouteInputTyp, attrs: &[SessionAttr]) -> Result<PoolConn<ClientConn>, Error> {
+        let endpoint = route(input_typ, raw_sql, req.route_strategy.clone());
+        let factory =
+            ClientConn::with_opts(endpoint.user, endpoint.password, endpoint.addr.clone());
+        req.pool.set_factory(factory);
+        check_get_conn(req.pool.clone(), &endpoint.addr, attrs).await
     }
 
     async fn init_db_inner<'b>(
@@ -197,9 +201,9 @@ where
 
     }
 
-    async fn execute_shard_inner(req: &mut ReqContext<T, C>, ) -> Result<(), Error>{
-
-        Ok(())
+    async fn execute_shard_inner(req: &mut ReqContext<T, C>, payload: &[u8] ) -> Result<(), Error>{
+        let stmt_id = LittleEndian::read_u32(payload);
+        Executor::shard_execute_executor(req, stmt_id).await
     }
 
     async fn execute_inner(
@@ -212,6 +216,17 @@ where
         Self::handle_query_resultset(req, stream).await.map_err(ErrorKind::from)?;
 
         Ok(RespContext { ep: None, duration: Instant::now().elapsed() })
+    }
+
+    async fn shard_query_inner(req: &mut ReqContext<T, C>, payload: &[u8]) -> Result<(), Error> {
+        let sess = req.framed.codec_mut().get_session();
+        let attrs = build_conn_attrs(sess);
+        let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
+        let (_, input_typ, mut rewrite_outputs) = Self::query_rewrite(req, raw_sql)?;
+        route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
+
+        Executor::shard_query_executor(req, rewrite_outputs, attrs).await?;
+        Ok(())
     }
 
     async fn query_inner(
@@ -231,9 +246,21 @@ where
 
     async fn query_inner_get_conn(
         req: &mut ReqContext<T, C>,
-        sql: &str,
+        payload: &[u8],
     ) -> Result<PoolConn<ClientConn>, Error> {
-        Err(Error::new(ErrorKind::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "fff"))))
+        let sess = req.framed.codec_mut().get_session();
+        let attrs = build_conn_attrs(sess);
+        let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
+        let (is_get_conn, input_typ, _rewrite_outputs) =  Self::query_rewrite(req, sql)?;
+        if is_get_conn {
+            let endpoint = route(input_typ, sql, req.route_strategy.clone());
+            let factory =
+                ClientConn::with_opts(endpoint.user, endpoint.password, endpoint.addr.clone());
+            req.pool.set_factory(factory);
+            return check_get_conn(req.pool.clone(), &endpoint.addr, &attrs).await;
+        }
+
+        req.fsm.get_conn(&attrs).await
     }
 
     fn query_rewrite<'a>(
@@ -319,8 +346,7 @@ where
             }
         };
 
-        let is_rewriter = req.rewriter.is_some().clone();
-        if is_rewriter {
+        if req.rewriter.is_some() {
             let outputs =
                 query_rewrite(req.rewriter.as_mut().unwrap(), sql.to_string(), ast, can_rewrite)
                     .map_err(|e| ErrorKind::Runtime(e.into()))?;
@@ -591,8 +617,17 @@ where
 
     async fn query(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
-        let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
-        let mut client_conn = Self::query_inner_get_conn(cx, sql).await?;
+
+        if cx.rewriter.is_some() {
+            Self::shard_query_inner(cx, payload).await?;
+            return Ok(RespContext {
+                ep: None,
+                duration: now.elapsed(),
+            })
+        }
+
+
+        let mut client_conn = Self::query_inner_get_conn(cx, payload).await?;
 
         let ep = client_conn.get_endpoint();
         collect_sql_processed_total!(cx, "COM_QUERY", ep.as_ref().unwrap());
@@ -661,6 +696,7 @@ where
         let now = Instant::now();
 
         if cx.rewriter.is_some() {
+            Self::execute_shard_inner(cx, payload).await?;
             return Ok(RespContext {
                 ep: None,
                 duration: now.elapsed(),

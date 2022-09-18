@@ -71,7 +71,8 @@ pub enum WhereMeta {
     // left: Field right: value
     BinaryExpr { left: String, right: WhereMetaRightDataType }
 }
-
+ 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum WhereMetaRightDataType {
     String(String),
@@ -107,6 +108,7 @@ pub struct InsertValue {
     pub value: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct QueryRequire {
     query_id: u8,
@@ -162,6 +164,7 @@ macro_rules! gen_push_func {
                     self.$field.entry(self.query_id).or_insert(vec![]).push(meta);
                 }
 
+                #[allow(dead_code)]
                 pub fn $get_func_name(&self) -> &IndexMap<u8, Vec<$meta_typ>> {
                     &self.$field
                 }

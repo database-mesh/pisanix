@@ -102,7 +102,7 @@ pub struct ShardingRewrite {
     // Endpoints
     endpoints: Vec<Endpoint>,
     // Whether has readwritesplitting
-    has_rw: bool,
+    pub has_rw: bool,
 }
 
 impl ShardingRewrite {

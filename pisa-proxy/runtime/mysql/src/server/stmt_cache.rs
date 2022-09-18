@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use conn_pool::{Pool, PoolConn};
+use conn_pool::PoolConn;
 use indexmap::IndexMap;
 use mysql_protocol::client::conn::ClientConn;
-use tracing::Id;
 
 type CacheValue = IndexMap<u32, PoolConn<ClientConn>>;
 pub struct StmtCache {
