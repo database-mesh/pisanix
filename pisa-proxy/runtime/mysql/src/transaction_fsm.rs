@@ -360,6 +360,7 @@ pub struct TransFsm {
     pub pool: Pool<ClientConn>,
     pub client_conn: Option<PoolConn<ClientConn>>,
     pub endpoint: Option<Endpoint>,
+    pub shard_cache_conn: Vec<PoolConn<ClientConn>>,
     pub db: Option<String>,
     pub charset: String,
     pub autocommit: Option<String>,
@@ -379,6 +380,7 @@ impl TransFsm {
             db: None,
             charset: String::from("utf8mb4"),
             autocommit: None,
+            shard_cache_conn: vec![],
         }
     }
 
@@ -494,6 +496,14 @@ impl TransFsm {
 
     pub fn put_conn(&mut self, conn: PoolConn<ClientConn>) {
         self.client_conn = Some(conn)
+    }
+
+    pub fn get_shard_conn(&mut self) -> Vec<PoolConn<ClientConn>> {
+        std::mem::replace(&mut self.shard_cache_conn, Vec::new())
+    }
+
+    pub fn put_shard_conn(&mut self, conns: Vec<PoolConn<ClientConn>>) {
+        self.shard_cache_conn = conns;
     }
 
     #[inline]

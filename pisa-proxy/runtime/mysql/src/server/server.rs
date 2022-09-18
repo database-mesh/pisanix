@@ -131,6 +131,9 @@ where
         let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
         let (_, input_typ, mut rewrite_outputs)  = Self::query_rewrite(req, raw_sql)?;
 
+        // PrepareEvent trigger
+        let is_get_conn = req.fsm.trigger(TransEventName::PrepareEvent);
+
         if rewrite_outputs.is_empty() {
             let mut client_conn = Self::fsm_trigger(req, TransEventName::PrepareEvent, RouteInputTyp::Statement, raw_sql).await?;
             let res = Self::prepare_normal_inner(req, &mut client_conn, payload).await;
@@ -140,7 +143,7 @@ where
         }
 
         route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
-        let (mut stmts, shard_conns) = Executor::shard_prepare_executor(req, rewrite_outputs, attrs).await?;
+        let (mut stmts, shard_conns) = Executor::shard_prepare_executor(req, rewrite_outputs, attrs, is_get_conn).await?;
         for i in stmts.iter().zip(shard_conns.into_iter()) {
             req.stmt_cache.lock().put(stmt_id, i.0.stmt_id, i.1)
         }
@@ -243,7 +246,7 @@ where
 
         route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
 
-        Executor::shard_query_executor(req, rewrite_outputs, attrs).await?;
+        Executor::shard_query_executor(req, rewrite_outputs, attrs, is_get_conn).await?;
         Ok(())
     }
 

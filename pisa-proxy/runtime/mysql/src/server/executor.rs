@@ -56,8 +56,14 @@ where
         req: &mut ReqContext<T, C>,
         rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
+        is_get_conn: bool,
     ) -> Result<(), Error> {
-        let conns = Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?;
+        let conns = if is_get_conn {
+            Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?
+        } else {
+            req.fsm.get_shard_conn()
+        };
+
         let mut conns = Self::shard_send_query(conns, &rewrite_outputs).await?;
         let shards_length = conns.len();
         let mut shard_streams = Vec::with_capacity(shards_length);
@@ -67,7 +73,11 @@ where
         
         let mut merge_stream = MergeStream::new(shard_streams, shards_length);
 
-        Self::handle_shard_resultset(req, &mut merge_stream).await
+        Self::handle_shard_resultset(req, &mut merge_stream).await?;
+        
+        // Put shard conn to fsm
+        req.fsm.put_shard_conn(conns);
+        Ok(())
     }
     
     async fn handle_shard_resultset<'a>(req: &mut ReqContext<T, C>, merge_stream: &mut MergeStream<ResultsetStream<'a>>) -> Result<(), Error> {
@@ -289,8 +299,14 @@ where
         req: &mut ReqContext<T, C>,
         rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
+        is_get_conn: bool,
     ) -> Result<(Vec<Stmt>, Vec<PoolConn<ClientConn>>), Error> {
-        let conns = Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?;
+        let conns = if is_get_conn {
+            Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?
+        } else {
+            req.fsm.get_shard_conn()
+        };
+
         let mut send_futs = FuturesOrdered::new();
         let mut sended_conns = Vec::with_capacity(conns.len());
 
