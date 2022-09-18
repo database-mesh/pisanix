@@ -137,12 +137,14 @@ pub fn route_sharding(
         match &o.data_source {
             // sharding only
             DataSource::Endpoint(ep) => {
-                debug!("route_strategy sharding only to {:?} for input typ: {:?}, sql: {:?}", ep, input_typ, raw_sql);
-                match input_typ {
+                let _input = match input_typ {
                     RouteInputTyp::Statement => RouteInput::Sharding(ep.clone()),
                     RouteInputTyp::Transaction => RouteInput::Sharding(ep.clone()),
                     _ => RouteInput::None,
                 };
+
+                //let dispatch_res = strategy.dispatch(&input).unwrap();
+                debug!("route_strategy sharding only to {:?} for input typ: {:?}, sql: {:?}", ep, input_typ, raw_sql);
             },
 
             // rewritesplitting + sharding
@@ -452,17 +454,9 @@ impl TransFsm {
 
     pub async fn get_conn(
         &mut self,
-        attrs: &[SessionAttr],
+        _attrs: &[SessionAttr],
     ) -> Result<PoolConn<ClientConn>, Error> {
-        let conn = self.client_conn.take();
-        let addr = self.endpoint.as_ref().unwrap().addr.as_ref();
-        match conn {
-            Some(client_conn) => Ok(client_conn),
-            None => match self.pool.get_conn_with_endpoint_session(addr, attrs).await {
-                Ok(client_conn) => Ok(client_conn),
-                Err(err) => Err(Error::new(ErrorKind::Protocol(err))),
-            },
-        }
+        Ok(self.client_conn.take().unwrap())
     }
 
     pub fn put_conn(&mut self, conn: PoolConn<ClientConn>) {

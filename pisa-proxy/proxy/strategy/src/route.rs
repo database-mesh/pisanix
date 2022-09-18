@@ -95,7 +95,7 @@ pub trait RouteBalance {
 pub enum RouteStrategy {
     ReadWriteSplitting(ReadWriteSplittingRouteStrategy),
     ShardingReadWriteSplitting(ReadWriteSplittingRouteStrategy),
-    Sharding,
+    Sharding(BalanceType),
     Simple(BalanceType),
     None,
 }
@@ -148,8 +148,8 @@ impl RouteStrategy {
         Self::Simple(balance)
     }
 
-    pub fn new_with_sharding_only() -> Self {
-        Self::Sharding
+    pub fn new_with_sharding_only(balance: BalanceType) -> Self {
+        Self::Sharding(balance)
     }
 
     pub fn get_endpoint_group(nodegroup: &Option<config::NodeGroup>, rw_endpoint: &ReadWriteEndpoint) -> Result<IndexMap<String, ReadWriteEndpoint>, StragegyError> {
@@ -193,19 +193,6 @@ impl RouteStrategy {
             _ => unreachable!()
         }
     }
-
-    //fn gen_route_input<'a>(&'a self, input: RouteInput<'a>) -> RouteInput<'a> {
-    //    match self {
-    //        Self::ReadWriteSplitting(_) => {
-    //            input
-    //        }
-
-    //        Self
-
-    //        _ => unreachable!()
-    //    }
-    //}
-
 }
 
 impl Route for RouteStrategy {
@@ -224,11 +211,11 @@ impl Route for RouteStrategy {
                 Self::readwritesplitting_dispatch(strateyy, input)
             }
 
-            Self::Sharding => {
+            Self::Sharding(ins) => {
                 if let RouteInput::Sharding(input) = input {
                     Ok((Some(input.clone()), TargetRole::ReadWrite))
                 } else {
-                    unreachable!()
+                    Ok((ins.next(), TargetRole::ReadWrite))
                 }
             }
             

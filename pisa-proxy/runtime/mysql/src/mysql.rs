@@ -108,8 +108,7 @@ impl MySQLProxy {
                 false,
             )
             .map_err(|e| Error::new(ErrorKind::Runtime(e.into())))?
-        } else if self.proxy_config.sharding.is_some() {
-            RouteStrategy::new_with_sharding_only()
+            
         } else {
             //let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
             let balance_type =
@@ -119,8 +118,11 @@ impl MySQLProxy {
             for ep in rw.into_iter() {
                 balance.add(ep)
             }
-
-            RouteStrategy::new_with_simple_route(balance)
+            if self.proxy_config.sharding.is_some() {
+                RouteStrategy::new_with_sharding_only(balance);
+            } else {
+                RouteStrategy::new_with_simple_route(balance)
+            }
         };
 
         Ok(strategy)

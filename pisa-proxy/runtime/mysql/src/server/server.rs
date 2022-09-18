@@ -626,7 +626,6 @@ where
             })
         }
 
-
         let mut client_conn = Self::query_inner_get_conn(cx, payload).await?;
 
         let ep = client_conn.get_endpoint();
