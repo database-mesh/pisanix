@@ -14,8 +14,7 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use conn_pool::{ConnAttrMut, Pool, PoolConn};
+use conn_pool::{Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
 use mysql_parser::ast::SqlStmt;
 use mysql_protocol::{
@@ -29,7 +28,6 @@ use strategy::{
     route::{BoxError, Route, RouteInput, RouteStrategy, RouteInputTyp},
     sharding_rewrite::{DataSource, ShardingRewriteOutput},
 };
-use tokio::sync::Mutex;
 use tracing::debug;
 
 #[derive(Debug, PartialEq, Clone, Copy)]

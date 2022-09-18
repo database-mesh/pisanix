@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{error::Error, vec};
+use std::error::Error;
 
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;

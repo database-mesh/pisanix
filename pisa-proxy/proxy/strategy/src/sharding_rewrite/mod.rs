@@ -14,7 +14,7 @@
 
 mod meta;
 
-use std::{vec, collections::HashMap};
+use std::vec;
 
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;

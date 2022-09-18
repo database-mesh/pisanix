@@ -18,3 +18,4 @@ pub mod server;
 pub use server::*;
 
 mod executor;
+mod stmt_cache;

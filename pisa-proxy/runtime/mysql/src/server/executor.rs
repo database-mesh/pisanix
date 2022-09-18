@@ -20,7 +20,7 @@ use futures::{executor, stream::FuturesOrdered, SinkExt, StreamExt};
 use mysql_protocol::{
     client::{
         codec::{MergeStream, ResultsetStream},
-        conn::{ClientConn, SessionAttr},
+        conn::{ClientConn, SessionAttr}, stmt::Stmt,
     },
     err::ProtocolError,
     mysql_const::*,
@@ -52,7 +52,7 @@ where
         + Send
         + CommonPacket,
 {
-    pub async fn sharding_executor(
+    pub async fn sharding_query_executor(
         req: &mut ReqContext<T, C>,
         rewrite_outputs: Vec<ShardingRewriteOutput>,
         pool: Pool<ClientConn>,
@@ -279,5 +279,34 @@ where
         }
 
         Ok(conns)
+    }
+
+    pub async fn sharding_prepare_executor(
+        req: &mut ReqContext<T, C>,
+        rewrite_outputs: Vec<ShardingRewriteOutput>,
+        attrs: Vec<SessionAttr>,
+    ) -> Result<(Vec<Stmt>, Vec<PoolConn<ClientConn>>), Error> {
+        let conns = Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?;
+        let mut send_futs = FuturesOrdered::new();
+        let mut sended_conns = Vec::with_capacity(conns.len());
+
+        for (mut conn, ro) in conns.into_iter().zip(rewrite_outputs.iter()) {
+            let sql = ro.target_sql.clone();
+            let f = tokio::spawn(async move {
+                let res = conn.send_prepare(sql.as_bytes()).await;
+                (conn, res)
+            });
+            send_futs.push(f);
+        }
+
+        let mut stmts = Vec::with_capacity(send_futs.len());
+        while let Some(conn) = send_futs.next().await {
+            let (conn, send_res) = conn.map_err(|e| ErrorKind::Runtime(e.into()))?;
+            let stmt = send_res.map_err(ErrorKind::Protocol)?;
+            sended_conns.push(conn);
+            stmts.push(stmt);
+        }
+
+        Ok(( stmts, sended_conns ))
     }
 }

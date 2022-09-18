@@ -49,7 +49,7 @@ use strategy::{
     config::{NodeGroup, TargetRole},
     readwritesplitting::ReadWriteEndpoint,
     route::{ReadWriteSplittingRouteStrategy, RouteStrategy},
-    sharding_rewrite::{self, ShardingRewrite},
+    sharding_rewrite::ShardingRewrite,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder, Framed};
@@ -59,6 +59,13 @@ use crate::{
     server::{metrics::*, PisaMySQLService},
     transaction_fsm::*,
 };
+
+use lazy_static::lazy_static;
+use std::sync::atomic::AtomicU32;
+
+lazy_static! {
+    pub static ref STMT_ID: AtomicU32 = AtomicU32::new(0);
+}
 
 #[derive(Default)]
 pub struct MySQLProxy {

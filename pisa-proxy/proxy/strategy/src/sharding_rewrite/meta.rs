@@ -16,8 +16,6 @@ use indexmap::IndexMap;
 use aho_corasick::{AhoCorasickBuilder, AhoCorasick};
 use mysql_parser::ast::*;
 
-use super::ShardingRewrite;
-
 #[derive(Debug, Clone)]
 enum ScanState {
     Empty,

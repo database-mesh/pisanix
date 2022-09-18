@@ -14,7 +14,6 @@
 
 use mysql_parser::ast::SqlStmt;
 
-use crate::config::Sharding;
 
 pub struct ShardingRewriteInput {
     pub raw_sql: String,

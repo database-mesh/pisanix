@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Pointer, marker::PhantomData, time::Instant};
+use std::{marker::PhantomData, time::Instant};
 
 use async_trait::async_trait;
 use byteorder::{ByteOrder, LittleEndian};
@@ -28,24 +28,26 @@ use mysql_protocol::{
         codec::{make_eof_packet, make_err_packet, ok_packet, CommonPacket, PacketSend},
         err::MySQLError,
     },
-    session::{Session, SessionMut},
+    session::SessionMut,
     util::{is_eof, length_encode_int},
 };
 use pisa_error::error::{Error, ErrorKind};
-use strategy::{
-    route::{RouteInput, RouteInputTyp},
-    sharding_rewrite::{DataSource, ShardingRewriteOutput},
-};
+use strategy::{route::RouteInputTyp, sharding_rewrite::ShardingRewriteOutput};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, error};
+use mysql_protocol::client::stmt::Stmt;
 
 use crate::{
-    mysql::{MySQLService, ReqContext, RespContext},
+    mysql::{MySQLService, ReqContext, RespContext, STMT_ID},
     transaction_fsm::{
-        build_conn_attrs, query_rewrite, route, route_sharding, TransEventName, TransFsm, check_get_conn,
+        build_conn_attrs, check_get_conn, query_rewrite, route, route_sharding, TransEventName,
     },
 };
+
+use std::sync::atomic::Ordering;
+
+use super::executor::Executor;
 
 pub struct PisaMySQLService<T, C> {
     _phat: PhantomData<(T, C)>,
@@ -78,7 +80,7 @@ where
             let factory =
                 ClientConn::with_opts(endpoint.user, endpoint.password, endpoint.addr.clone());
             req.pool.set_factory(factory);
-            return check_get_conn(req.pool.clone(), &endpoint.addr, &attrs).await
+            return check_get_conn(req.pool.clone(), &endpoint.addr, &attrs).await;
         }
 
         req.fsm.get_conn(&attrs).await
@@ -117,12 +119,30 @@ where
         Ok(())
     }
 
+    async fn prepare_sharding_inner(req: &mut ReqContext<T, C>, payload: &[u8]) -> Result<Stmt, Error> {
+        STMT_ID.fetch_add(1, Ordering::Relaxed);
+        let stmt_id = STMT_ID.load(Ordering::Relaxed);
+        let sess = req.framed.codec_mut().get_session();
+        let attrs = build_conn_attrs(sess);
+        let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
+        let (_, input_typ, mut rewrite_outputs)  = Self::query_rewrite(req, raw_sql)?;
+        route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
+        let (mut stmts, shard_conns) = Executor::sharding_prepare_executor(req, rewrite_outputs, attrs).await?;
+        let mut stmt = stmts.remove(0);
+        stmt.stmt_id = stmt_id;
+        Ok(stmt)
+    }
+
     async fn prepare_inner(
         req: &mut ReqContext<T, C>,
         client_conn: &mut PoolConn<ClientConn>,
         payload: &[u8],
     ) -> Result<(), Error> {
-        let stmt = client_conn.send_prepare(payload).await.map_err(ErrorKind::from)?;
+        let stmt = if req.rewriter.is_some() {
+            Self::prepare_sharding_inner(req, payload).await?
+        } else {
+            client_conn.send_prepare(payload).await.map_err(ErrorKind::from)?
+        };
 
         let mut buf = BytesMut::with_capacity(128);
         let mut data = vec![0];
@@ -208,7 +228,7 @@ where
         sql: &'a str,
     ) -> Result<(bool, RouteInputTyp, Vec<ShardingRewriteOutput>), Error> {
         let ast = Self::get_ast(req, sql);
-        let mut ast = match ast {
+        let ast = match ast {
             Err(err) => {
                 error!("parse sql {:?} err: {:?}", sql, err);
                 if req.rewriter.is_some() {
@@ -579,15 +599,17 @@ where
         let now = Instant::now();
         let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
 
-        let mut client_conn = if cx.rewriter.is_some() {
-            let (is_get_conn, input_typ, mut rewrite_outputs) = Self::query_rewrite(cx, sql)?;
-            route_sharding(input_typ, sql, cx.route_strategy.clone(), &mut rewrite_outputs);
-            Self::fsm_trigger(cx, TransEventName::PrepareEvent, RouteInputTyp::Statement, sql)
-                .await?
-        } else {
-            Self::fsm_trigger(cx, TransEventName::PrepareEvent, RouteInputTyp::Statement, sql)
-                .await?
-        };
+        if cx.rewriter.is_some() {
+            cx.fsm.trigger(TransEventName::PrepareEvent);
+
+            return Ok(RespContext {
+                ep: None,
+                duration: now.elapsed(),
+            })
+        }
+        
+        let mut client_conn = Self::fsm_trigger(cx, TransEventName::PrepareEvent, RouteInputTyp::Statement, sql)
+                .await?;
 
         let ep = client_conn.get_endpoint();
 
