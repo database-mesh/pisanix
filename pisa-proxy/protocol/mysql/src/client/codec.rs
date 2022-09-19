@@ -127,6 +127,7 @@ where
 impl<S> Stream for MergeStream<S> 
 where 
     S: Stream + std::marker::Unpin,
+    <S as Stream>::Item: std::fmt::Debug
 {
     type Item = Vec<Option<S::Item>>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -144,7 +145,7 @@ where
                 Poll::Pending => return Poll::Pending,
             };
 
-            if *me.idx == 4 {
+            if *me.idx == *me.length {
                 *me.idx = 0;
                 break
             }

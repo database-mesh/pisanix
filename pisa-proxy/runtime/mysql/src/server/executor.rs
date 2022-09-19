@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::atomic::Ordering, vec};
 
 use bytes::BytesMut;
 use conn_pool::{Pool, PoolConn};
 use futures::{stream::FuturesOrdered, SinkExt, StreamExt};
+use mysql_parser::ast::Op;
 use mysql_protocol::{
     client::{
         codec::{MergeStream, ResultsetStream},
@@ -32,7 +33,7 @@ use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{mysql::ReqContext, transaction_fsm::check_get_conn};
+use crate::{mysql::{ReqContext, STMT_ID}, transaction_fsm::check_get_conn};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecuteError {
@@ -58,10 +59,22 @@ where
         attrs: Vec<SessionAttr>,
         is_get_conn: bool,
     ) -> Result<(), Error> {
+        let mut curr_server_stmt_id: Option<u32> = None;
+        let mut curr_cached_stmt_id = vec![];
+
         let conns = if is_get_conn {
             Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?
         } else {
-            req.fsm.get_shard_conn()
+            let mut cached_conn = req.fsm.get_shard_conn();
+            if cached_conn.is_empty() {
+                let server_stmt_id = STMT_ID.load(Ordering::Relaxed);
+                let cached_stmt_conn = req.stmt_cache.lock().get_all(server_stmt_id);
+                curr_cached_stmt_id = cached_stmt_conn.iter().map(|x| x.0).collect();
+                cached_conn = cached_stmt_conn.into_iter().map(|x| x.1).collect();
+                curr_server_stmt_id = Some(server_stmt_id);
+            }
+
+            cached_conn
         };
 
         let mut conns = Self::shard_send_query(conns, &rewrite_outputs).await?;
@@ -75,8 +88,13 @@ where
 
         Self::handle_shard_resultset(req, &mut merge_stream).await?;
         
-        // Put shard conn to fsm
-        req.fsm.put_shard_conn(conns);
+        if let Some(id) = curr_server_stmt_id {
+            let stmt_conns = curr_cached_stmt_id.into_iter().zip(conns.into_iter()).collect();
+            req.stmt_cache.lock().put_all(id, stmt_conns)
+        } else {
+            // Put shard conn to fsm
+            req.fsm.put_shard_conn(conns);
+        }
         Ok(())
     }
     
