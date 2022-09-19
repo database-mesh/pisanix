@@ -78,7 +78,7 @@ mod test {
                 regex: vec![String::from("^select")],
                 target: TargetRole::Read,
                 algorithm_name: AlgorithmName::Random,
-                node_group_name: vec![String::from("")],
+                node_group_name: vec![],
             }),
             ReadWriteSplittingRule::Regex(RegexRule {
                 name: String::from("t2"),
@@ -86,7 +86,7 @@ mod test {
                 regex: vec![String::from("^insert")],
                 target: TargetRole::ReadWrite,
                 algorithm_name: AlgorithmName::Random,
-                node_group_name: vec![String::from("")],
+                node_group_name: vec![],
             }),
         ];
 

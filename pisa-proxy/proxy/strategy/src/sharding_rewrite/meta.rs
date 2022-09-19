@@ -1,19 +1,19 @@
 // Copyright 2022 SphereEx Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 use indexmap::IndexMap;
-use aho_corasick::{AhoCorasickBuilder, AhoCorasick};
 use mysql_parser::ast::*;
 
 #[derive(Debug, Clone)]
@@ -26,7 +26,7 @@ enum ScanState {
     Where(Vec<String>),
     OnCond(Vec<OnCond>),
     Avg(mysql_parser::Span, bool),
-    InsertRowValue(Vec<Vec<InsertValue>>)
+    InsertRowValue(Vec<InsertValue>),
 }
 
 type TableMeta = TableIdent;
@@ -34,7 +34,7 @@ type TableMeta = TableIdent;
 #[derive(Debug)]
 pub enum FieldMeta {
     Ident { span: mysql_parser::Span, name: String },
-    TableWild(TableWild)
+    TableWild(TableWild),
 }
 
 #[cfg(test)]
@@ -42,7 +42,7 @@ impl FieldMeta {
     fn to_string(&self) -> String {
         match self {
             Self::Ident { span: _, name } => name.clone(),
-            Self::TableWild(val) => val.format()
+            Self::TableWild(val) => val.format(),
         }
     }
 }
@@ -69,9 +69,9 @@ pub struct LimitMeta {
 #[non_exhaustive]
 pub enum WhereMeta {
     // left: Field right: value
-    BinaryExpr { left: String, right: WhereMetaRightDataType }
+    BinaryExpr { left: String, right: WhereMetaRightDataType },
 }
- 
+
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum WhereMetaRightDataType {
@@ -100,7 +100,11 @@ pub struct AvgMeta {
     pub distinct: bool,
 }
 
-pub type InsertValsMeta = Vec<Vec<InsertValue>>;
+#[derive(Debug)]
+pub struct InsertValsMeta {
+    pub values: Vec<InsertValue>,
+    pub span: mysql_parser::Span,
+}
 
 #[derive(Debug, Clone)]
 pub struct InsertValue {
@@ -183,7 +187,6 @@ gen_push_func!(push_on_cond, get_on_conds, JoinOnCond, on_conds);
 gen_push_func!(push_avg, get_avgs, AvgMeta, avgs);
 gen_push_func!(push_insert_value, get_inserts, InsertValsMeta, inserts);
 
-
 impl Transformer for RewriteMetaData {
     fn trans(&mut self, node: &mut Node<'_>) -> bool {
         match node {
@@ -237,62 +240,53 @@ impl Transformer for RewriteMetaData {
 
             Node::LimitClause(val) => {
                 for i in val.opts.iter() {
-                    self.push_limit( LimitMeta { span: i.span, name: i.opt.clone() })
+                    self.push_limit(LimitMeta { span: i.span, name: i.opt.clone() })
                 }
             }
 
             Node::InsertStmt(val) => {
-                self.push_table( val.table_name.clone() );
+                self.push_table(val.table_name.clone());
             }
 
-            Node::RowValue(_) => {
-                if let ScanState::InsertRowValue(args) = &mut self.state {
-                    args.push(vec![])
-                } else {
-                    self.state = ScanState::InsertRowValue(vec![vec![]])
-                }
-            }
+            Node::RowValue(_) => match self.state {
+                ScanState::InsertRowValue(_) => {}
+                _ => self.state = ScanState::InsertRowValue(vec![]),
+            },
 
-            Node::InsertIdent(val) => {
-                match val {
-                    InsertIdent::Ident(val) => {
-                        if let Value::Ident { span, value, quoted } = val {
-                            let name = if *quoted {
-                                self.ac.replace_all(value, &[""])
-                            } else {
-                                value.clone()
-                            };
-                            self.push_field(FieldMeta::Ident { span: *span, name })
-                        }
-                    },
-                    InsertIdent::TableWild(val) => {
-                        self.push_field(FieldMeta::TableWild(val.clone()))
+            Node::InsertIdent(val) => match val {
+                InsertIdent::Ident(val) => {
+                    if let Value::Ident { span, value, quoted } = val {
+                        let name =
+                            if *quoted { self.ac.replace_all(value, &[""]) } else { value.clone() };
+                        self.push_field(FieldMeta::Ident { span: *span, name })
                     }
                 }
-            }
+                InsertIdent::TableWild(val) => self.push_field(FieldMeta::TableWild(val.clone())),
+            },
 
             Node::Expr(e) => match e {
                 Expr::SimpleIdentExpr(Value::Ident { span, value, .. }) => match &mut self.state {
-                    ScanState::Field => self.push_field(FieldMeta::Ident { span: *span, name: value.to_string() }),
-                    ScanState::Order => self.push_order(OrderMeta { span: *span, name: value.to_string() }),
-                    ScanState::Group => self.push_group(GroupMeta { span: *span, name: value.to_string() }),
+                    ScanState::Field => {
+                        self.push_field(FieldMeta::Ident { span: *span, name: value.to_string() })
+                    }
+                    ScanState::Order => {
+                        self.push_order(OrderMeta { span: *span, name: value.to_string() })
+                    }
+                    ScanState::Group => {
+                        self.push_group(GroupMeta { span: *span, name: value.to_string() })
+                    }
                     ScanState::Where(args) => {
                         args.push(value.to_string());
                     }
                     ScanState::Avg(arg, distinct) => {
                         let arg = arg.clone();
                         let distinct = *distinct;
-                        let meta = AvgMeta {
-                            span: arg,
-                            name: value.to_string(),
-                            distinct,
-                        };
+                        let meta = AvgMeta { span: arg, name: value.to_string(), distinct };
                         self.push_avg(meta);
                         self.state = ScanState::Empty;
-                        
                     }
                     _ => {}
-                }
+                },
 
                 Expr::SimpleIdentExpr(e) => {
                     let state = self.state.clone();
@@ -301,24 +295,24 @@ impl Transformer for RewriteMetaData {
                         match state {
                             ScanState::OnCond(mut args) => {
                                 if args.len() < 1 {
-                                    args.push( OnCond { span: *span, name: e.format() });
+                                    args.push(OnCond { span: *span, name: e.format() });
                                     self.state = ScanState::OnCond(args);
-                                    return true
+                                    return true;
                                 }
 
-                                self.push_on_cond(JoinOnCond { left: args[0].clone(), right: OnCond { span: *span, name: e.format() }} );
+                                self.push_on_cond(JoinOnCond {
+                                    left: args[0].clone(),
+                                    right: OnCond { span: *span, name: e.format() },
+                                });
                                 self.state = ScanState::Empty;
-
-                            },
+                            }
 
                             _ => {}
-                        }                  
-
+                        }
                     }
-                    
                 }
 
-                Expr::BinaryOperationExpr { span:_, operator, left:_, right} => {
+                Expr::BinaryOperationExpr { span: _, operator, left: _, right } => {
                     match &mut self.state {
                         ScanState::Where(args) => {
                             if let Expr::LiteralExpr(_) = **right {
@@ -327,9 +321,7 @@ impl Transformer for RewriteMetaData {
                                     args.push(op);
                                 }
                             }
-                            
-                            
-                        },
+                        }
 
                         _ => {}
                     }
@@ -355,9 +347,9 @@ impl Transformer for RewriteMetaData {
                     self.prev_expr_type = None
                 }
 
-                Expr::LiteralExpr(Value::Num { span, value, signed}) => {
+                Expr::LiteralExpr(Value::Num { span, value, signed }) => {
                     match &mut self.state {
-                        ScanState::Where(args)=>  {
+                        ScanState::Where(args) => {
                             //println!("args {:?}", args);
                             if args.len() > 1 && args[0] == "=" {
                                 let right_value = if *signed {
@@ -366,17 +358,20 @@ impl Transformer for RewriteMetaData {
                                     WhereMetaRightDataType::Num(value.to_string())
                                 };
 
-                                let where_meta = WhereMeta::BinaryExpr { left: args[1].clone(), right: right_value };
+                                let where_meta = WhereMeta::BinaryExpr {
+                                    left: args[1].clone(),
+                                    right: right_value,
+                                };
                                 self.push_where(where_meta);
-                                
                             }
                             self.state = ScanState::Empty;
                         }
 
                         ScanState::InsertRowValue(args) => {
-                            args.last_mut().unwrap().push(InsertValue { span: *span, value: value.clone() });
+                            //args.last_mut().unwrap().push(InsertValue { span: *span, value: value.clone() });
+                            args.push(InsertValue { span: *span, value: value.clone() });
                         }
-                        _ => { }
+                        _ => {}
                     }
                 }
 
@@ -388,10 +383,13 @@ impl Transformer for RewriteMetaData {
         false
     }
 
-    fn complete(&mut self, _node: &mut Node) {
+    fn complete(&mut self, node: &mut Node) {
         if let ScanState::InsertRowValue(args) = &mut self.state {
-            let args = args.clone();
-            self.push_insert_value(args);
+            let values = args.clone();
+            *args = vec![];
+            if let Node::RowValue(val) = node {
+                self.push_insert_value(InsertValsMeta { values, span: val.span });
+            }
         }
     }
 }
@@ -421,7 +419,7 @@ mod test {
                 vec!["a.*"],
                 vec![],
                 vec![],
-                1,              
+                1,
             ),
             (
                 "SELECT order_id FROM t_order WHERE order_id IN (SELECT order_id1 from t_order1  where id in ( SELECT order_id1 from t_order2) group by id order by id) group by id1 limit 1,2",
@@ -440,7 +438,7 @@ mod test {
                 2,                                                      // tables count
             ),
             (
-                "INSERT INTO t(`id`) VALUES (111, 112),(222)",
+                "INSERT INTO t(`id`) VALUES (111, 112), (333)",
                 vec!["t"],
                 vec!["id"],
                 vec![],
