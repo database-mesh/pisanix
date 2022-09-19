@@ -18,7 +18,6 @@ use std::vec;
 
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
-use crc32fast::Hasher;
 use mysql_parser::ast::{SqlStmt, Visitor, TableIdent};
 
 use crate::{config::{Sharding, StrategyType, ShardingAlgorithmName}, rewrite::{ShardingRewriter, ShardingRewriteInput}, route::BoxError};
@@ -222,7 +221,7 @@ impl ShardingRewrite {
         )
     }
     
-    fn table_strategy(&self, meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, Box<dyn std::error::Error>> {
+    fn table_strategy(&self, meta: RewriteMetaData) -> Result<Vec<ShardingRewriteOutput>, BoxError> {
         let tables = meta.get_tables();
         let try_tables = self.find_table_rule(tables);
         if try_tables.is_empty() {
@@ -492,7 +491,7 @@ impl ShardingRewrite {
         if actual_node.len() == 0 {
             target.push_str(schema);
             target.push('.');
-            target.push_str(&format!("{}{:05}", &table.name, table_idx));
+            target.push_str(&format!("{}_{:05}", &table.name, table_idx));
         } else {
             target.push_str(actual_node);
             target.push_str(".");
