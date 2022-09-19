@@ -92,17 +92,16 @@ pub fn query_rewrite(
     let outputs = if can_rewrite {
         rewriter.rewrite(ShardingRewriteInput { raw_sql, ast })?
     } else {
-        //let endpoints = rewriter.get_endpoints();
-        //endpoints
-        //    .iter()
-        //    .map(|x| ShardingRewriteOutput {
-        //        changes: vec![],
-        //        target_sql: raw_sql.clone(),
-        //        endpoint: x.clone(),
-        //        data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
-        //    })
-        //    .collect::<Vec<_>>()
-        vec![]
+        let endpoints = rewriter.get_endpoints();
+        endpoints
+            .iter()
+            .map(|x| ShardingRewriteOutput {
+                changes: vec![],
+                target_sql: raw_sql.clone(),
+                endpoint: x.clone(),
+                data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
+            })
+            .collect::<Vec<_>>()
     };
 
     Ok(outputs)
@@ -480,7 +479,7 @@ impl TransFsm {
 
     pub async fn get_conn(
         &mut self,
-        attrs: &[SessionAttr],
+        _attrs: &[SessionAttr],
     ) -> Result<PoolConn<ClientConn>, Error> {
         let conn = self.client_conn.take();
         Ok(conn.unwrap())

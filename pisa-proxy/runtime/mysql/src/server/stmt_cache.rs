@@ -14,7 +14,7 @@
 
 use conn_pool::PoolConn;
 use indexmap::IndexMap;
-use mysql_protocol::client::{conn::ClientConn, stmt};
+use mysql_protocol::client::conn::ClientConn;
 
 struct Entry {
     id: u32,

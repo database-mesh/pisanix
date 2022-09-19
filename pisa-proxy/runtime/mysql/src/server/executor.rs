@@ -17,7 +17,6 @@ use std::{marker::PhantomData, sync::atomic::Ordering, vec};
 use bytes::BytesMut;
 use conn_pool::{Pool, PoolConn};
 use futures::{stream::FuturesOrdered, SinkExt, StreamExt};
-use mysql_parser::ast::Op;
 use mysql_protocol::{
     client::{
         codec::{MergeStream, ResultsetStream},
