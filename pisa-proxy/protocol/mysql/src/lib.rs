@@ -14,7 +14,7 @@
 
 pub mod charset;
 pub mod client;
-mod column;
+pub mod column;
 pub mod err;
 mod macros;
 pub mod mysql_const;

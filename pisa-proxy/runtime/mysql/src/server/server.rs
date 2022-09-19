@@ -143,6 +143,8 @@ where
         }
 
         route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
+        let sharding_column = rewrite_outputs[0].sharding_column.clone();
+
         let (mut stmts, shard_conns) = Executor::shard_prepare_executor(req, rewrite_outputs, attrs, is_get_conn).await?;
         for i in stmts.iter().zip(shard_conns.into_iter()) {
             req.stmt_cache.lock().put(stmt_id, i.0.stmt_id, i.1)
@@ -150,6 +152,8 @@ where
         let mut stmt = stmts.remove(0);
         stmt.stmt_id = stmt_id;
 
+
+        req.stmt_cache.lock().put_sharding_column(stmt_id, sharding_column);
         Self::prepare_stmt(req, stmt).await?;
 
         Ok(())

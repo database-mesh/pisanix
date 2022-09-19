@@ -99,6 +99,7 @@ pub fn query_rewrite(
                 changes: vec![],
                 target_sql: raw_sql.clone(),
                 data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
+                sharding_column: None,
             })
             .collect::<Vec<_>>()
     };
@@ -527,30 +528,29 @@ pub fn build_conn_attrs(sess: &ServerHandshakeCodec) -> Vec<SessionAttr> {
 mod test {
     use super::*;
 
-    #[tokio::test]
-    async fn test_trigger() {
-        let lb = Arc::new(tokio::sync::Mutex::new(RouteStrategy::None));
-        let mut tsm = TransFsm::new_trans_fsm(lb, Pool::new(1));
+    #[test]
+    fn test_trigger() {
+        let mut tsm = TransFsm::new(Pool::new(1));
         tsm.current_state = TransState::TransUseState;
-        let _ = tsm.trigger(TransEventName::QueryEvent, RouteInput::None).await;
+        let _ = tsm.trigger(TransEventName::QueryEvent);
         assert_eq!(tsm.current_state, TransState::TransUseState);
         assert_eq!(tsm.current_event, TransEventName::QueryEvent);
-        let _ = tsm.trigger(TransEventName::SetSessionEvent, RouteInput::None).await;
+        let _ = tsm.trigger(TransEventName::SetSessionEvent);
         assert_eq!(tsm.current_state, TransState::TransSetSessionState);
         assert_eq!(tsm.current_event, TransEventName::SetSessionEvent);
-        let _ = tsm.trigger(TransEventName::StartEvent, RouteInput::None).await;
+        let _ = tsm.trigger(TransEventName::StartEvent);
         assert_eq!(tsm.current_state, TransState::TransStartState);
         assert_eq!(tsm.current_event, TransEventName::StartEvent);
-        let _ = tsm.trigger(TransEventName::PrepareEvent, RouteInput::None).await;
+        let _ = tsm.trigger(TransEventName::PrepareEvent);
         assert_eq!(tsm.current_state, TransState::TransPrepareState);
         assert_eq!(tsm.current_event, TransEventName::PrepareEvent);
-        let _ = tsm.trigger(TransEventName::SendLongDataEvent, RouteInput::None).await;
+        let _ = tsm.trigger(TransEventName::SendLongDataEvent);
         assert_eq!(tsm.current_state, TransState::TransPrepareState);
         assert_eq!(tsm.current_event, TransEventName::SendLongDataEvent);
-        let _ = tsm.trigger(TransEventName::ExecuteEvent, RouteInput::None).await;
+        let _ = tsm.trigger(TransEventName::ExecuteEvent);
         assert_eq!(tsm.current_state, TransState::TransPrepareState);
         assert_eq!(tsm.current_event, TransEventName::ExecuteEvent);
-        let _ = tsm.trigger(TransEventName::CommitRollBackEvent, RouteInput::None).await;
+        let _ = tsm.trigger(TransEventName::CommitRollBackEvent);
         assert_eq!(tsm.current_state, TransState::TransDummyState);
         assert_eq!(tsm.current_event, TransEventName::CommitRollBackEvent);
     }
