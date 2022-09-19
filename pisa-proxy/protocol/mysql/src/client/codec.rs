@@ -20,7 +20,7 @@ use std::{
 };
 
 use bytes::{Buf, BufMut, BytesMut};
-use futures::Stream;
+use futures::{Stream, stream::Fuse};
 use pin_project::pin_project;
 use protocol_codegen::mysql_codec_convert;
 use tokio::io::Interest;
@@ -97,6 +97,70 @@ impl ClientCodec {
         }
     }
 }
+
+
+#[pin_project]
+pub struct MergeStream<S> 
+where 
+    S: Stream + std::marker::Unpin,
+{
+    pub inner: Vec<Fuse<S>>,
+    idx: usize,
+    buf: Vec<Option<S::Item>>,
+    length: usize
+}
+
+impl<S> MergeStream<S>
+where 
+    S: Stream + std::marker::Unpin,
+{
+   pub fn new(inner: Vec<Fuse<S>>, length: usize) -> Self {
+        MergeStream { 
+            inner, 
+            idx: 0,
+            buf: Vec::with_capacity(length),
+            length,
+        }
+   } 
+}
+
+impl<S> Stream for MergeStream<S> 
+where 
+    S: Stream + std::marker::Unpin,
+    <S as Stream>::Item: std::fmt::Debug
+{
+    type Item = Vec<Option<S::Item>>;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let me = self.project();
+        loop {
+            let s = unsafe {
+                Pin::new_unchecked(me.inner.get_unchecked_mut(*me.idx))
+            };
+            match s.poll_next(cx) {
+                Poll::Ready(data) => {
+                    *me.idx += 1;
+                    me.buf.push(data);
+                },
+
+                Poll::Pending => return Poll::Pending,
+            };
+
+            if *me.idx == *me.length {
+                *me.idx = 0;
+                break
+            }
+
+        }
+
+        if me.buf.is_empty() || me.buf.iter().all(|x| x.is_none()) {
+            return Poll::Ready(None);
+        } else {
+            return  Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.length))))
+        }
+
+    }
+}
+
 
 #[derive(Debug)]
 #[pin_project]

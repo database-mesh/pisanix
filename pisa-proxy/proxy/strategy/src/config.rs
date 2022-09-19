@@ -15,6 +15,27 @@
 use loadbalance::balance::AlgorithmName;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NodeGroup {
+    #[serde(rename = "member")]
+    pub members: Vec<Member>,
+}
+
+impl Default for NodeGroup {
+    fn default() -> Self {
+       Self { 
+        members: vec![] 
+       } 
+    } 
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Member {
+    pub name: String,
+    pub readwrite: String,
+    pub reads: Vec<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
@@ -96,6 +117,8 @@ pub struct RegexRule {
     pub regex: Vec<String>,
     pub target: TargetRole,
     pub algorithm_name: AlgorithmName,
+    #[serde(default)]
+    pub node_group_name: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -104,6 +127,8 @@ pub struct GenericRule {
     #[serde(rename = "type")]
     pub rule_type: String,
     pub algorithm_name: AlgorithmName,
+    #[serde(default)]
+    pub node_group_name: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -125,9 +150,9 @@ pub struct Sharding {
     pub actual_datanodes: Vec<String>,
     pub binding_tables: Option<Vec<String>>,
     pub broadcast_tables: Option<Vec<String>>,
-    pub database_strategy: Option<Vec<StrategyType>>,
-    pub table_strategy: Option<Vec<StrategyType>>,
-    pub database_table_strategy: Option<Vec<StrategyType>>,
+    pub database_strategy: Option<StrategyType>,
+    pub table_strategy: Option<StrategyType>,
+    pub database_table_strategy: Option<StrategyType>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

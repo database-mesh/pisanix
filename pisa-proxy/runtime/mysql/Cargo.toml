@@ -33,3 +33,5 @@ tracing-futures = { version = "0.2.3" }
 tracing-subscriber = "0.3.9"
 tower = { version = "0.4.13" }
 #mysql-macro = { path = "../macros" }
+indexmap = "1.9.1"
+lazy_static = "1.4.0"

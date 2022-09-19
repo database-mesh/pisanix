@@ -13,6 +13,7 @@ api = { path = "../api" }
 clap = { version = "3.2.12", features = ["env"] }
 plugin = { path = "../../plugin" }
 proxy = { path = "../../proxy" }
+strategy = { path = "../../proxy/strategy" }
 reqwest = { version = "0.11.10", features = ["blocking", "json"] }
 runtime_mysql = { path = "../../runtime/mysql" }
 serde = { version = "1.0.133", default-features = false, features = ["derive"] }

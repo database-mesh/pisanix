@@ -29,3 +29,9 @@ impl fmt::Debug for Endpoint {
         write!(f, "Endpoint: [name:{}, addr:{}, db:{}]", self.name, self.addr, self.db)
     }
 }
+
+impl ToString for Endpoint {
+    fn to_string(&self) -> String {
+        self.addr.clone() 
+    }
+}

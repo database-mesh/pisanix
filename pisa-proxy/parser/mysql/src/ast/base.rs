@@ -895,8 +895,8 @@ pub enum Value {
 
     Num {
         span: Span,
-        // todo add parse i64 string
         value: String,
+        signed: bool,
     },
 
     HexNum {
@@ -907,8 +907,8 @@ pub enum Value {
 
     FloatNum {
         span: Span,
-        // todo add parse f64 string
         value: String,
+        signed: bool,
     },
 
     BinNum {
@@ -963,11 +963,16 @@ impl Value {
                 var_ident
             }
 
-            Self::Num { span: _, value } => (*value).to_string(),
+            Self::Num { span: _, signed, value } | Self::FloatNum { span:_, value, signed }=> {
+                let mut value = (*value).to_string();
+                if *signed {
+                    value.insert(0, '-');
+                }
+                
+                value
+            }
 
             Self::HexNum { span: _, value } => (*value).to_string(),
-
-            Self::FloatNum { span: _, value } => (*value).to_string(),
 
             Self::BinNum { span: _, value } => (*value).to_string(),
 
