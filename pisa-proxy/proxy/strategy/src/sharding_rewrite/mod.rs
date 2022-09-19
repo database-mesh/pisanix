@@ -109,7 +109,6 @@ impl ShardingRewrite {
             raw_sql: "".to_string(), 
             endpoints,
             has_rw,
-            crc32_hash: Hasher::new(),
         }
     }
 
