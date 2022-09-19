@@ -84,6 +84,7 @@ pub struct ShardingRewriteOutput {
     pub changes: Vec<RewriteChange>,
     pub target_sql: String,
     pub data_source: DataSource,
+    pub sharding_column: Option<String>,
 }
 
 #[derive(Debug)]
@@ -231,23 +232,24 @@ impl ShardingRewrite {
             })
             .collect::<Vec<_>>();
 
-        let mut ep = self
+        let ep = self
             .endpoints
             .iter()
-            .find(|e| e.name == sharding_rule.actual_datanodes[shard_idx as usize]);
-        if ep.is_none() {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "endpoint not found",
-            )));
-        }
+            .find(|e| e.name == sharding_rule.actual_datanodes[shard_idx as usize]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+
+        let sharding_column = if let Some(StrategyType::DatabaseStrategyConfig(strategy)) = &sharding_rule.database_strategy {
+            strategy.database_sharding_column.to_string() 
+        } else {
+            unreachable!()
+        };
 
         Ok(
             vec![
                 ShardingRewriteOutput { 
                     changes, 
                     target_sql, 
-                    data_source: DataSource::Endpoint(ep.take().unwrap().clone()),
+                    data_source: DataSource::Endpoint(ep.clone()),
+                    sharding_column: Some(sharding_column)
                 }
             ]
         )
@@ -372,13 +374,20 @@ impl ShardingRewrite {
             .collect::<Vec<_>>();
 
         let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+        
+        let sharding_column = if let Some(StrategyType::TableStrategyConfig(strategy)) = &sharding_rule.table_strategy {
+            strategy.table_sharding_column.to_string()   
+        } else {
+            unreachable!()
+        };
 
         Ok(
             vec![
                 ShardingRewriteOutput { 
                     changes, 
                     target_sql: target_sql.to_string(), 
-                    data_source: DataSource::Endpoint(ep.clone())
+                    data_source: DataSource::Endpoint(ep.clone()),
+                    sharding_column: Some(sharding_column),
                 }
             ]
         )
@@ -532,6 +541,7 @@ impl ShardingRewrite {
                 changes: vec![],
                 target_sql: v.trim_end_matches(", ").to_string(),
                 data_source: DataSource::Endpoint(ep.clone()),
+                sharding_column: Some(sharding_column.to_string()),
             }
 
         }).collect::<Vec<ShardingRewriteOutput>>();
@@ -628,6 +638,7 @@ impl ShardingRewrite {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql,
                 data_source: DataSource::Endpoint(ep),
+                sharding_column: None,
             })
         }
         output
@@ -672,7 +683,8 @@ impl ShardingRewrite {
             output.push(ShardingRewriteOutput {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql: target_sql.to_string(),
-                data_source: DataSource::Endpoint(ep)
+                data_source: DataSource::Endpoint(ep),
+                sharding_column: None
             })
         }
 
@@ -894,6 +906,7 @@ mod test {
         let meta = sr.get_meta(&mut ast[0]);
 
         let res = sr.table_strategy(meta).unwrap();
+
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
