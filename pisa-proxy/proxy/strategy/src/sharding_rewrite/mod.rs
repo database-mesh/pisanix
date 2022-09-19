@@ -886,7 +886,7 @@ mod test {
     #[test]
     fn test_table_sharding_strategy_insert() {
         let config = get_table_sharding_config();
-        let raw_sql = "INSERT INTO db.tshard(idx) VALUES (12, 111), (13), (16)".to_string();
+        let raw_sql = "INSERT INTO db.tshard(idx) VALUES (12), (13), (16)".to_string();
         let parser = Parser::new();
         let mut ast = parser.parse(&raw_sql).unwrap();
         let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
@@ -897,8 +897,8 @@ mod test {
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "INSERT INTO db.tshard00000(idx) VALUES (12, 111), (16)",
-                "INSERT INTO db.tshard00001(idx) VALUES (13)",
+                "INSERT INTO db.tshard_00000(idx) VALUES (12), (16)",
+                "INSERT INTO db.tshard_00001(idx) VALUES (13)",
             ],
         );
 
