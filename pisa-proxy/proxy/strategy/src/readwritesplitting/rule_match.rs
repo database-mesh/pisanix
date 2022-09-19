@@ -371,6 +371,7 @@ impl RouteBalance for GenericRuleMatchInner {
 mod test {
     use endpoint::endpoint::Endpoint;
     use loadbalance::balance::*;
+    use indexmap::IndexMap;
 
     use super::RulesMatchBuilder;
     use crate::{config::*, readwritesplitting::ReadWriteEndpoint, RouteBalance, RouteInput};
@@ -384,6 +385,7 @@ mod test {
                 regex: vec![String::from("^select")],
                 target: TargetRole::Read,
                 algorithm_name: AlgorithmName::Random,
+                node_group_name: vec![String::from("")],
             }),
             ReadWriteSplittingRule::Regex(RegexRule {
                 name: String::from("t2"),
@@ -391,6 +393,7 @@ mod test {
                 regex: vec![String::from("^insert")],
                 target: TargetRole::Read,
                 algorithm_name: AlgorithmName::Random,
+                node_group_name: vec![String::from("")],
             }),
         ];
 
@@ -415,7 +418,8 @@ mod test {
             }],
         };
 
-        let mut m = RulesMatchBuilder::build(rules, default_target, rw_endpoint);
+        let endpoint_group = IndexMap::new();
+        let mut m = RulesMatchBuilder::build(rules, default_target, endpoint_group, rw_endpoint);
         let (b, target) = m.get(&RouteInput::Statement("insert"));
         let endpoint = b.next();
         assert_eq!(target, TargetRole::Read);

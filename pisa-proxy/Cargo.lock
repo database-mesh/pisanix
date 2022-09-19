@@ -1701,6 +1701,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8bf247779e67a9082a4790b45e71ac7cfd1321331a5c856a74a9faebdab78d0"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2593,7 +2602,7 @@ checksum = "32d3ebd75ac2679c2af3a92246639f9fcc8a442ee420719cc4fe195b98dd5fa3"
 dependencies = [
  "bytes",
  "heck 0.3.3",
- "itertools",
+ "itertools 0.9.0",
  "log",
  "multimap",
  "petgraph",
@@ -2610,7 +2619,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "169a15f3008ecb5160cba7d37bcd690a7601b6d30cfb87a117d45e59d52af5d4"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.9.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -3015,7 +3024,9 @@ dependencies = [
  "endpoint",
  "error",
  "futures",
+ "indexmap",
  "iota",
+ "lazy_static",
  "loadbalance",
  "mysql_parser",
  "mysql_protocol",
@@ -3575,6 +3586,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 name = "strategy"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
  "async-trait",
  "chrono",
  "conn_pool",
@@ -3583,8 +3595,10 @@ dependencies = [
  "error",
  "futures",
  "indexmap",
+ "itertools 0.10.4",
  "lazy_static",
  "loadbalance",
+ "mysql_parser",
  "mysql_protocol",
  "parking_lot 0.12.0",
  "regex",

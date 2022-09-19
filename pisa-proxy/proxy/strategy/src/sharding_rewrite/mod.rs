@@ -18,6 +18,7 @@ use std::vec;
 
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
+use crc32fast::Hasher;
 use mysql_parser::ast::{SqlStmt, Visitor, TableIdent};
 
 use crate::{config::{Sharding, StrategyType, ShardingAlgorithmName}, rewrite::{ShardingRewriter, ShardingRewriteInput}, route::BoxError};
@@ -34,7 +35,6 @@ impl CalcShardingIdx<u64> for u64 {
             ShardingAlgorithmName::Mod => {
                 Some(self.wrapping_rem(id))
             },
-
             _ => None
         }
     }
@@ -46,7 +46,6 @@ impl CalcShardingIdx<i64> for i64 {
             ShardingAlgorithmName::Mod => {
                 Some(self.wrapping_rem(id) as u64)
             },
-
             _ => None
         }
     }
@@ -57,8 +56,7 @@ impl CalcShardingIdx<f64> for f64 {
         match algo {
             ShardingAlgorithmName::Mod => {
                 Some((self % id).round() as u64)
-            },
-
+            }
             _ => None
         }
     }
@@ -81,7 +79,6 @@ pub struct DatabaseChange {
 pub struct ShardingRewriteOutput {
     pub changes: Vec<RewriteChange>,
     pub target_sql: String,
-    pub endpoint: Endpoint,
     pub data_source: DataSource,
 }
 
@@ -112,6 +109,7 @@ impl ShardingRewrite {
             raw_sql: "".to_string(), 
             endpoints,
             has_rw,
+            crc32_hash: Hasher::new(),
         }
     }
 
@@ -219,8 +217,7 @@ impl ShardingRewrite {
                 ShardingRewriteOutput { 
                     changes, 
                     target_sql, 
-                    endpoint: ep.take().unwrap().clone(), 
-                    data_source: DataSource::None,
+                    data_source: DataSource::Endpoint(ep.take().unwrap().clone()),
                 }
             ]
         )
@@ -267,18 +264,9 @@ impl ShardingRewrite {
                         None => continue
                     }
                 },
-
                 Err(e ) => return Err(e)
             }
         }
-
-        //for v in try_where {
-        //    let v = v?;
-        //    match v {
-        //        Some((idx, num, _)) => wheres.push((idx, num)),
-        //        None => continue
-        //    }
-        //}
 
         let expect_sum = wheres[0].1 as usize * wheres.len();
         let sum: usize = wheres.iter().map(|x| x.1).sum::<u64>() as usize;
@@ -325,8 +313,7 @@ impl ShardingRewrite {
                 ShardingRewriteOutput { 
                     changes, 
                     target_sql: target_sql.to_string(), 
-                    endpoint: ep.take().unwrap().clone(), 
-                    data_source: DataSource::None
+                    data_source: DataSource::Endpoint(ep.take().unwrap().clone())
                 }
             ]
         )
@@ -384,7 +371,8 @@ impl ShardingRewrite {
         ).flatten().collect::<Vec<_>>()
     }
 
-    fn parse_where<'b>(meta: &'b WhereMeta, algo: &ShardingAlgorithmName, actual_nodes_length: u64, query_id: u8, sharding_column: &str) -> Result<Option<(u8, u64, &'b WhereMeta)>, BoxError> {
+    fn parse_where<'b>(meta: &'b WhereMeta, algo: &ShardingAlgorithmName, sharding_count: u64, query_id: u8, sharding_column: &str) -> Result<Option<(u8, u64, &'b WhereMeta)>, BoxError> {
+
         match meta {
             WhereMeta::BinaryExpr { left, right }  => {
                 if left != sharding_column {
@@ -394,17 +382,17 @@ impl ShardingRewrite {
                 let num = match right {
                     WhereMetaRightDataType::Num(val) => {
                         let val = val.parse::<u64>()?;
-                        val.calc(algo, actual_nodes_length)
+                        val.calc(algo, sharding_count)
                     },
 
                     WhereMetaRightDataType::SignedNum(val) => {
                         let val = val.parse::<i64>()?;
-                        val.calc(algo, actual_nodes_length as i64)
+                        val.calc(algo, sharding_count as i64)
                     },
 
                     WhereMetaRightDataType::FloatNum(val) => {
                         let val = val.parse::<f64>()?;
-                        val.calc(algo, actual_nodes_length as f64)
+                        val.calc(algo, sharding_count as f64)
                     }
                     _ => return Ok(None)
                 };
@@ -445,12 +433,11 @@ impl ShardingRewrite {
                 offset = change.target.len() - change.span.len();
             }
 
-            let endpoint = self.endpoints[group].clone();
+            let ep = self.endpoints[group].clone();
             output.push(ShardingRewriteOutput {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql,
-                endpoint,
-                data_source: DataSource::None,
+                data_source: DataSource::Endpoint(ep),
             })
         }
         output
@@ -488,12 +475,11 @@ impl ShardingRewrite {
                 offset = change.target.len() - change.span.len();
             }
 
-            let endpoint = self.endpoints[0].clone();
+            let ep = self.endpoints[0].clone();
             output.push(ShardingRewriteOutput {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql: target_sql.to_string(),
-                endpoint,
-                data_source: DataSource::None
+                data_source: DataSource::Endpoint(ep)
             })
         }
 
@@ -507,13 +493,12 @@ impl ShardingRewrite {
         if actual_node.len() == 0 {
             target.push_str(schema);
             target.push('.');
-            target.push_str(&format!("{}000{}", &table.name, table_idx.to_string()));
+            target.push_str(&format!("{}{:05}", &table.name, table_idx));
         } else {
             target.push_str(actual_node);
             target.push_str(".");
             target.push_str(&table.name);
-        }   
-        //target.push(' ');
+        }
         target
     } 
 
@@ -540,8 +525,6 @@ impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
         self.database_strategy(meta)
     }
 }
-
-
 
 #[cfg(test)]
 mod test {
@@ -637,7 +620,7 @@ mod test {
         let raw_sql = "SELECT idx from db.tshard where idx = 3";
         let parser = Parser::new();
         let mut ast = parser.parse(raw_sql).unwrap();
-        let sr = ShardingRewrite::new(config.0.clone(),  config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(),  config.1.clone(), false);
         sr.set_raw_sql(raw_sql.to_string());
         let meta = sr.get_meta(&mut ast[0]);
 
@@ -645,7 +628,7 @@ mod test {
         assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
-        let sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
         sr.set_raw_sql(raw_sql.to_string());
         let mut ast = parser.parse(raw_sql).unwrap();
         let meta = sr.get_meta(&mut ast[0]);
@@ -653,7 +636,7 @@ mod test {
         assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3 and idx = (SELECT idx from ds1.tshard where idx = 3)");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)";
-        let sr = ShardingRewrite::new(config.0.clone(), config.1, false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1, false);
         sr.set_raw_sql(raw_sql.to_string());
         let mut ast = parser.parse(raw_sql).unwrap();
         let meta = sr.get_meta(&mut ast[0]);
@@ -681,10 +664,10 @@ mod test {
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "SELECT idx from db.tshard0000 where idx > 3",
-                "SELECT idx from db.tshard0001 where idx > 3",
-                "SELECT idx from db.tshard0002 where idx > 3",
-                "SELECT idx from db.tshard0003 where idx > 3",
+                "SELECT idx from db.tshard00000 where idx > 3",
+                "SELECT idx from db.tshard00001 where idx > 3",
+                "SELECT idx from db.tshard00002 where idx > 3",
+                "SELECT idx from db.tshard00003 where idx > 3",
             ],
         );
 
@@ -694,7 +677,7 @@ mod test {
         sr.set_raw_sql(raw_sql);
         let meta = sr.get_meta(&mut ast[0]);
         let res = sr.table_strategy(meta).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from db.tshard0000 where idx = 4".to_string());
+        assert_eq!(res[0].target_sql, "SELECT idx from db.tshard00000 where idx = 4".to_string());
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)".to_string();
         let mut ast = parser.parse(&raw_sql).unwrap();
@@ -702,7 +685,7 @@ mod test {
         sr.set_raw_sql(raw_sql);
         let meta = sr.get_meta(&mut ast[0]);
         let res = sr.table_strategy(meta).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from db.tshard0003 where idx = 3 and idx = (SELECT idx from db.tshard0003 where idx = 3)".to_string());
+        assert_eq!(res[0].target_sql, "SELECT idx from db.tshard00003 where idx = 3 and idx = (SELECT idx from db.tshard00003 where idx = 3)".to_string());
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)".to_string();
         let mut ast = parser.parse(&raw_sql).unwrap();
@@ -713,10 +696,10 @@ mod test {
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "SELECT idx from db.tshard0000 where idx = 3 and idx = (SELECT idx from db.tshard0000 where idx = 4)",
-                "SELECT idx from db.tshard0001 where idx = 3 and idx = (SELECT idx from db.tshard0001 where idx = 4)",
-                "SELECT idx from db.tshard0002 where idx = 3 and idx = (SELECT idx from db.tshard0002 where idx = 4)",
-                "SELECT idx from db.tshard0003 where idx = 3 and idx = (SELECT idx from db.tshard0003 where idx = 4)",
+                "SELECT idx from db.tshard00000 where idx = 3 and idx = (SELECT idx from db.tshard00000 where idx = 4)",
+                "SELECT idx from db.tshard00001 where idx = 3 and idx = (SELECT idx from db.tshard00001 where idx = 4)",
+                "SELECT idx from db.tshard00002 where idx = 3 and idx = (SELECT idx from db.tshard00002 where idx = 4)",
+                "SELECT idx from db.tshard00003 where idx = 3 and idx = (SELECT idx from db.tshard00003 where idx = 4)",
             ],
         );
     }

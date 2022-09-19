@@ -98,7 +98,6 @@ pub fn query_rewrite(
             .map(|x| ShardingRewriteOutput {
                 changes: vec![],
                 target_sql: raw_sql.clone(),
-                endpoint: x.clone(),
                 data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
             })
             .collect::<Vec<_>>()
