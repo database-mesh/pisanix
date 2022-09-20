@@ -650,10 +650,12 @@ impl ShardingRewrite {
     ) -> Vec<ShardingRewriteOutput> {
         let mut output = vec![];
         let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
+        let mut sharding_column = None; 
 
         for t in tables.iter() {
             match t.1.table_strategy.as_ref().unwrap() {
                 crate::config::StrategyType::TableStrategyConfig(config) => {
+                    sharding_column = Some(config.table_sharding_column.clone());
                     for idx in 0..config.sharding_count as u64 {
                         let target = self.change_table(t.2, "", idx);
 
@@ -684,7 +686,7 @@ impl ShardingRewrite {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql: target_sql.to_string(),
                 data_source: DataSource::Endpoint(ep),
-                sharding_column: None
+                sharding_column: sharding_column.clone(),
             })
         }
 
@@ -727,7 +729,7 @@ impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
     fn rewrite(&mut self, mut input: ShardingRewriteInput) -> Self::Output {
         self.set_raw_sql(input.raw_sql);
         let meta = self.get_meta(&mut input.ast);
-        self.database_strategy(meta)
+        self.table_strategy(meta)
     }
 }
 
