@@ -24,12 +24,15 @@ struct Entry {
 pub struct StmtCache {
     // key is generated id by pisa, value is returnd stmt id from client
     cache: IndexMap<u32, Vec<Entry>>,
+    sharding_column_cache: IndexMap<u32, Option<String>>
 }
 
 impl StmtCache {
     pub fn new() -> Self {
         Self { 
-            cache: IndexMap::new() }
+            cache: IndexMap::new(),
+            sharding_column_cache: IndexMap::new(),
+        }
     }
 
     pub fn put(&mut self, server_stmt_id: u32, stmt_id: u32, conn: PoolConn<ClientConn>) {
@@ -93,5 +96,18 @@ impl StmtCache {
 
     pub fn remove(&mut self, server_stmt_id: u32) {
         self.cache.remove(&server_stmt_id);
+    }
+
+    pub fn put_sharding_column(&mut self, server_stmt_id: u32, sharding_column: Option<String>) {
+        let _ = self.sharding_column_cache.insert(server_stmt_id, sharding_column);
+    }
+
+    pub fn get_sharding_column(&mut self, server_stmt_id: u32) -> Option<String> {
+        let name = self.sharding_column_cache.get(&server_stmt_id);
+        if let Some(name) = name {
+            name.clone()
+        } else {
+            None
+        }
     }
 }
