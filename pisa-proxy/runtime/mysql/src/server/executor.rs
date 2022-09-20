@@ -25,7 +25,7 @@ use mysql_protocol::{
     err::ProtocolError,
     mysql_const::*,
     server::codec::{make_eof_packet, CommonPacket, PacketSend},
-    util::{length_encode_int, is_eof},
+    util::{length_encode_int, is_eof}, row::{RowDataText, RowDataBinary, RowDataTyp, RowData},
 };
 use pisa_error::error::{Error, ErrorKind};
 use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput};
@@ -33,6 +33,10 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{mysql::{ReqContext, STMT_ID}, transaction_fsm::check_get_conn};
+use rayon::prelude::*;
+use std::sync::Arc;
+use mysql_protocol::column::ColumnInfo;
+use mysql_protocol::column::Column;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecuteError {
@@ -79,13 +83,16 @@ where
         let mut conns = Self::shard_send_query(conns, &rewrite_outputs).await?;
         let shards_length = conns.len();
         let mut shard_streams = Vec::with_capacity(shards_length);
+        
         for conn in conns.iter_mut() {
-            shard_streams.push(ResultsetStream::new(conn.framed.as_mut()).fuse());
+            let s = ResultsetStream::new(conn.framed.as_mut());
+            shard_streams.push(s.fuse());
         }
         
         let mut merge_stream = MergeStream::new(shard_streams, shards_length);
 
-        Self::handle_shard_resultset(req, &mut merge_stream).await?;
+        let sharding_column = rewrite_outputs[0].sharding_column.clone();
+        Self::handle_shard_resultset(req, &mut merge_stream, sharding_column, false).await?;
         
         if let Some(id) = curr_server_stmt_id {
             let stmt_conns = curr_cached_stmt_id.into_iter().zip(conns.into_iter()).collect();
@@ -97,7 +104,7 @@ where
         Ok(())
     }
     
-    async fn handle_shard_resultset<'a>(req: &mut ReqContext<T, C>, merge_stream: &mut MergeStream<ResultsetStream<'a>>) -> Result<(), Error> {
+    async fn handle_shard_resultset<'a>(req: &mut ReqContext<T, C>, merge_stream: &mut MergeStream<ResultsetStream<'a>>, sharding_column: Option<String>, is_binary: bool) -> Result<(), Error> {
         let header = merge_stream.next().await;
         let header = if let Some(header) = Self::get_shard_one_data(header)? {
             header.1
@@ -124,7 +131,7 @@ where
             .codec_mut()
             .encode(PacketSend::EncodeOffset(header[4..].into(), 0), &mut buf);
 
-        Self::get_columns(req, merge_stream, cols, &mut buf).await?;
+        let col_info = Self::get_columns(req, merge_stream, cols, &mut buf).await?;
 
         // read eof
         let _ = merge_stream.next().await;
@@ -135,7 +142,7 @@ where
             .encode(PacketSend::EncodeOffset(make_eof_packet()[4..].into(), buf.len()), &mut buf);
 
         // get rows
-        Self::get_rows(req, merge_stream, &mut buf).await?;
+        Self::get_rows(req, merge_stream, &mut buf, sharding_column, col_info, is_binary).await?;
 
         let _ = req
             .framed
@@ -150,22 +157,59 @@ where
         req: &mut ReqContext<T, C>,
         stream: &mut MergeStream<ResultsetStream<'a>>,
         buf: &mut BytesMut,
+        sharding_column: Option<String>,
+        col_info: Arc<[ColumnInfo]>,
+        is_binary: bool,
     ) -> Result<(), Error> {
-        while let Some(mut chunk) = stream.next().await {
-            let _ = Self::check_single_chunk(&mut chunk)?;
-            for row in chunk.into_iter() {
-                if let Some(row) = row {
-                    // We have ensured `c` is Ok(_) by above step
-                    let row = row.unwrap();
-                    if is_eof(&row) {
-                        continue;
-                    }
+        let row_data = match is_binary {
+            false => {
+                let row_data_text = RowDataText::new(col_info, &[][..]);
+                RowDataTyp::Text(row_data_text)
+            }
+            true => {
+                let row_data_binary = RowDataBinary::new(col_info, &[][..]);
+                RowDataTyp::Binary(row_data_binary)
+            },
+        };
 
-                    let _ = req
-                        .framed
-                        .codec_mut()
-                        .encode(PacketSend::EncodeOffset(row[4..].into(), buf.len()), buf);
+        while let Some(chunk) = stream.next().await {
+            let mut chunk = chunk.into_par_iter().filter_map(|x| {
+                if let Some(x) = x {
+                    if let Ok(data) = &x {
+                        if is_eof(data) {
+                            return None
+                        }
+                    }
+                    Some(x)
+                } else {
+                    None
                 }
+            }).collect::<Result<Vec<_>, _>>().map_err(ErrorKind::from)?;
+
+            if is_binary {
+                if let Some(name) = &sharding_column {
+                    chunk.par_sort_by_cached_key(|x| {
+                        let mut row_data = row_data.clone();
+                        row_data.with_buf(&x[4..]);
+                        row_data.decode_with_name::<u64>(&name).unwrap()
+                    })
+                }
+            } else {
+                if let Some(name) = &sharding_column {
+                    chunk.par_sort_by_cached_key(|x| {
+                        let mut row_data = row_data.clone();
+                        row_data.with_buf(&x[4..]);
+                        let value = row_data.decode_with_name::<String>(&name).unwrap().unwrap();
+                        value.parse::<u64>().unwrap()
+                    })
+                }
+            }
+            
+            for row in chunk.iter() {
+                let _ = req
+                    .framed
+                    .codec_mut()
+                    .encode(PacketSend::EncodeOffset(row[4..].into(), buf.len()), buf);
             }
         }
 
@@ -176,8 +220,10 @@ where
         stream: &mut MergeStream<ResultsetStream<'a>>,
         column_length: u64,
         buf: &mut BytesMut,
-    ) -> Result<(), Error> {
+    ) -> Result<Arc<[ColumnInfo]>, Error> {
+        let mut col_buf = Vec::with_capacity(100);
         let mut idx: Option<usize> = None;
+
         for _ in 0..column_length {
             let data = stream.next().await;
             let data = if let Some(idx) = idx {
@@ -186,10 +232,10 @@ where
                     if let Some(data) = data {
                         data.map_err(ErrorKind::Protocol)?
                     } else {
-                        return Ok(());
+                       unreachable!() 
                     }
                 } else {
-                    return Ok(());
+                    unreachable!() 
                 }
             } else {
                 // find index from chunk
@@ -198,17 +244,21 @@ where
                     idx = Some(data.0);
                     data.1
                 } else {
-                    return Ok(());
+                    unreachable!()
                 }
             };
 
+            col_buf.extend_from_slice(&data[..]);
             let _ = req
                 .framed
                 .codec_mut()
                 .encode(PacketSend::EncodeOffset(data[4..].into(), buf.len()), buf);
         }
 
-        Ok(())
+        let col_info = col_buf.as_slice().decode_columns();
+        let arc_col_info: Arc<[ColumnInfo]> = col_info.into_boxed_slice().into();
+
+        Ok(arc_col_info)
     }
 
     fn get_shard_one_data(
@@ -358,8 +408,9 @@ where
             shard_streams.push(ResultsetStream::new(conn.1.framed.as_mut()).fuse());
         }
 
+        let sharding_column = req.stmt_cache.lock().get_sharding_column(stmt_id);
         let mut merge_stream = MergeStream::new(shard_streams, shard_length);
-        Self::handle_shard_resultset(req, &mut merge_stream).await?;
+        Self::handle_shard_resultset(req, &mut merge_stream, sharding_column, true).await?;
 
         req.stmt_cache.lock().put_all(stmt_id, conns);
 
@@ -390,5 +441,13 @@ where
         }
 
         Ok(sended_conns)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test() {
+        assert_eq!(1, 1);
     }
 }
