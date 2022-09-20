@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod meta;
-mod genric_meta;
+mod generic_meta;
 
 use std::vec;
 
@@ -24,7 +24,7 @@ use crate::sharding_rewrite::meta::AvgMeta;
 
 use self::{meta::{
     FieldMeta, InsertValsMeta, RewriteMetaData, WhereMeta, WhereMetaRightDataType,
-}, genric_meta::ShardingMeta};
+}, generic_meta::ShardingMeta};
 use crate::{
     config::{Sharding, ShardingAlgorithmName, StrategyType},
     rewrite::{ShardingRewriteInput, ShardingRewriter},
