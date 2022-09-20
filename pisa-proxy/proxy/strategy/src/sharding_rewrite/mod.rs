@@ -19,6 +19,7 @@ use std::vec;
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
 use mysql_parser::ast::{SqlStmt, Visitor, TableIdent};
+use crate::sharding_rewrite::meta::AvgMeta;
 
 use self::meta::{
     FieldMeta, InsertValsMeta, RewriteMetaData, WhereMeta, WhereMetaRightDataType,
@@ -268,6 +269,8 @@ impl ShardingRewrite {
         let wheres = meta.get_wheres();
         let inserts = meta.get_inserts();
         let fields = meta.get_fields();
+        let avgs = meta.get_avgs();
+        println!("aaaaa {:#?}", avgs);
 
         if !inserts.is_empty() {
             let outputs = try_tables.into_iter().map(|(query_id, rule, table)| {
@@ -296,7 +299,9 @@ impl ShardingRewrite {
        }
 
         if wheres.is_empty() {
-            return Ok(self.table_strategy_iproduct(try_tables.clone()));
+            let mut wheres_output = self.table_strategy_iproduct(try_tables.clone(), &avgs[0][0]);
+            self.change_avg(&mut wheres_output[0].target_sql, &avgs[0][0], 1);
+            return Ok(wheres_output);
         }
 
         let try_where = Self::find_where(wheres, |query_id, meta| {
@@ -338,7 +343,7 @@ impl ShardingRewrite {
         let sum: usize = wheres.iter().map(|x| x.1).sum::<u64>() as usize;
 
         if expect_sum != sum {
-            return Ok(self.table_strategy_iproduct(try_tables));
+            return Ok(self.table_strategy_iproduct(try_tables, &avgs[0][0]));
         }
 
         let would_changes: Vec<DatabaseChange> = try_tables
@@ -509,6 +514,16 @@ impl ShardingRewrite {
         }
     }
 
+    fn change_avg(&self, target_sql: &mut String, avg_meta: &AvgMeta, idx: u64) -> String {
+        for _ in 0..avg_meta.span.len() {
+            target_sql.remove(avg_meta.span.start() + 0);
+        }
+
+        target_sql.insert_str(avg_meta.span.start(), &format!("COUNT({}) AS AVG_DERIVED_COUNT_{}, SUM({}) AS AVG_DERIVED_SUM_{}", avg_meta.name, idx, avg_meta.name, idx));
+        println!("target_sql sss {:?}", target_sql);
+        target_sql.to_string()
+    }
+
     fn change_insert_sql(
         &self,
         rule: &Sharding,
@@ -647,6 +662,7 @@ impl ShardingRewrite {
     fn table_strategy_iproduct(
         &self,
         tables: Vec<(u8, Sharding, &TableIdent)>,
+        avgs: &AvgMeta,
     ) -> Vec<ShardingRewriteOutput> {
         let mut output = vec![];
         let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
@@ -681,6 +697,8 @@ impl ShardingRewrite {
                 offset = change.target.len() - change.span.len();
             }
 
+            self.change_avg(&mut target_sql, &avgs, 1);
+            
             let ep = self.endpoints[0].clone();
             output.push(ShardingRewriteOutput {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
@@ -689,7 +707,6 @@ impl ShardingRewrite {
                 sharding_column: sharding_column.clone(),
             })
         }
-
         output
     }
 
@@ -916,6 +933,30 @@ mod test {
                 "INSERT INTO db.tshard_00001(idx) VALUES (13)",
             ],
         );
+    }
+
+    #[test]
+    fn test_table_sharding_strategy_avg() {
+        let config = get_table_sharding_config();
+        let raw_sql = "SELECT AVG(price) FROM db.tshard WHERE idx > 3".to_string();
+        let parser = Parser::new();
+        let mut ast = parser.parse(&raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        sr.set_raw_sql(raw_sql);
+        let meta = sr.get_meta(&mut ast[0]);
+
+        let res = sr.table_strategy(meta).unwrap();
+        assert_eq!(
+            res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
+            vec![
+                "SELECT COUNT(price) AS AVG_DERIVED_COUNT_0, SUM(price) AS AVG_DERIVED_SUM_0 FROM tshard_00000 WHERE idx > 3",
+                "SELECT COUNT(price) AS AVG_DERIVED_COUNT_1, SUM(price) AS AVG_DERIVED_SUM_1 FROM tshard_00001 WHERE idx > 3",
+                "SELECT COUNT(price) AS AVG_DERIVED_COUNT_2, SUM(price) AS AVG_DERIVED_SUM_2 FROM tshard_00002 WHERE idx > 3",
+                "SELECT COUNT(price) AS AVG_DERIVED_COUNT_3, SUM(price) AS AVG_DERIVED_SUM_3 FROM tshard_00003 WHERE idx > 3",
+            ]
+        );
+        println!("{:#?}", res);
+        // assert_eq!(res[0].target_sql, "SELECT COUNT(price) AS AVG_DERIVED_COUNT_0, SUM(price) AS AVG_DERIVED_SUM_0 FROM tshard WHERE idx = 3");
 
     }
 }
