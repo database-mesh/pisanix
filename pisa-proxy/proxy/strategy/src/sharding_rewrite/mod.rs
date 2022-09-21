@@ -702,7 +702,14 @@ impl ShardingRewrite {
             }
             
         } else {
-            target.push_str(actual_node);
+            if schema.contains("`") {
+                target.push('`');
+                target.push_str(actual_node);
+                target.push('`');
+            } else {
+                target.push_str(actual_node);
+            }
+            
             target.push_str(".");
             target.push_str(&table.name);
         }
@@ -827,7 +834,7 @@ mod test {
     #[test]
     fn test_database_sharding_strategy() {
         let config = get_database_sharding_config();
-        let raw_sql = "SELECT idx from db.tshard where idx = 3";
+        let raw_sql = "SELECT idx from `db`.tshard where idx = 3";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
         let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
@@ -836,7 +843,7 @@ mod test {
             ast: ast[0].clone(),
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3");
+        assert_eq!(res[0].target_sql, "SELECT idx from `ds1`.tshard where idx = 3");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let ast = parser.parse(raw_sql).unwrap();
