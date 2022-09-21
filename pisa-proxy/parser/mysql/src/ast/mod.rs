@@ -86,6 +86,10 @@ impl SqlStmt {
                 stmt.format()
             }
 
+            Self::DeleteStmt(stmt) => {
+                stmt.format()
+            }
+
             // Implements the format method when developing sharding in the future
             _x => todo!(),
         }
@@ -122,6 +126,14 @@ impl Visitor for SqlStmt {
                 Self::UpdateStmt(Box::new(new_node))
             }
 
+            Self::DeleteStmt(stmt) => {
+                let mut node = Node::DeleteStmt(stmt);
+                tf.trans(&mut node);
+
+                let new_node = node.into_delete_stmt().unwrap().visit(tf);
+                Self::DeleteStmt(Box::new(new_node))
+            }
+
             Self::Set(stmt) => {
                 let mut node = Node::SetOptValues(stmt);
                 tf.trans(&mut node);
@@ -156,7 +168,7 @@ mod test {
                         *value = "transd".to_string();
                     }
 
-                    Node::Value(Value::Num { span: _, value }) => {
+                    Node::Value(Value::Num { span: _, value, signed: _ }) => {
                         *value = "2".to_string();
                     }
 

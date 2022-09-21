@@ -467,6 +467,7 @@ impl ShardingRewrite {
     ) -> Result<Option<(u8, u64, &'b WhereMeta)>, ShardingRewriteError> {
         match meta {
             WhereMeta::BinaryExpr { left, right } => {
+                let left = left.replace("`", "");
                 if left != sharding_column {
                     return Ok(None);
                 }
@@ -779,7 +780,14 @@ impl ShardingRewrite {
             }
             
         } else {
-            target.push_str(actual_node);
+            if schema.contains("`") {
+                target.push('`');
+                target.push_str(actual_node);
+                target.push('`');
+            } else {
+                target.push_str(actual_node);
+            }
+            
             target.push_str(".");
             target.push_str(&table.name);
         }
@@ -904,7 +912,7 @@ mod test {
     #[test]
     fn test_database_sharding_strategy() {
         let config = get_database_sharding_config();
-        let raw_sql = "SELECT idx from db.tshard where idx = 3";
+        let raw_sql = "SELECT idx from `db`.tshard where idx = 3";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
         let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
@@ -913,7 +921,7 @@ mod test {
             ast: ast[0].clone(),
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3");
+        assert_eq!(res[0].target_sql, "SELECT idx from `ds1`.tshard where idx = 3");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let ast = parser.parse(raw_sql).unwrap();
@@ -1002,9 +1010,9 @@ mod test {
     #[test]
     fn test_table_sharding_strategy_insert() {
         let config = get_table_sharding_config();
-        let raw_sql = "INSERT INTO db.tshard(idx) VALUES (12), (13), (16)".to_string();
+        let raw_sql = "INSERT INTO db.tshard(idx) VALUES (12), (13), (16)";
         let parser = Parser::new();
-        let ast = parser.parse(&raw_sql).unwrap();
+        let ast = parser.parse(raw_sql).unwrap();
         let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
@@ -1075,5 +1083,38 @@ mod test {
 
         let res = sr.rewrite(input).unwrap();
         assert_eq!(res[0].target_sql, "SELECT * from db.tshard_00000 where znl > (SELECT COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000 from db.tshard_00000)")
+    }
+
+    fn test_table_sharding_strategy_update_delete() {
+        let config = get_table_sharding_config();
+        let raw_sql = "UPDATE db.tshard set a=1 where idx = 2";
+        let parser = Parser::new();
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
+            vec![
+                "UPDATE db.tshard_00002 set a=1 where idx = 2"
+            ],
+        );
+
+        let raw_sql = "DELETE FROM db.tshard where idx = 1";
+        let ast = parser.parse(raw_sql).unwrap();
+        let input = ShardingRewriteInput {
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
+            vec![
+                "DELETE FROM db.tshard_00001 where idx = 1"
+            ],
+        );
     }
 }
