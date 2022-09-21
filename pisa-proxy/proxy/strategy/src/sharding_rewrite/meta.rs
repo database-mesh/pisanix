@@ -448,11 +448,7 @@ mod test {
         ];
 
         let parser = Parser::new();
-
-        let mut ast = parser.parse(inputs[5].0).unwrap();
-        let mut meta = RewriteMetaData::default();
-        let _ = ast[0].visit(&mut meta);
-
+        
         for input in inputs {
             let mut ast = parser.parse(input.0).unwrap();
             let mut meta = RewriteMetaData::default();
