@@ -98,28 +98,51 @@ impl ClientCodec {
     }
 }
 
+pub enum MergeResultsetState {
+    Header,
+    ColumnInfo,
+    ColumnEof,
+    Row
+}
 
 #[pin_project]
 pub struct MergeStream<S> 
 where 
     S: Stream + std::marker::Unpin,
 {
-    pub inner: Vec<Fuse<S>>,
+    inner: Vec<Fuse<S>>,
     idx: usize,
     buf: Vec<Option<S::Item>>,
-    length: usize
+    base_length: usize,
+    limit: usize,
+    limit_idx: usize,
+    state: MergeResultsetState,
+}
+
+impl<S> MergeStream<S> 
+where 
+    S: Stream + std::marker::Unpin,
+{
+   fn set_state(&mut self, state: MergeResultsetState)  {
+        self.state = state;
+   }
 }
 
 impl<S> MergeStream<S>
 where 
     S: Stream + std::marker::Unpin,
 {
-   pub fn new(inner: Vec<Fuse<S>>, length: usize) -> Self {
+   pub fn new(inner: Vec<Fuse<S>>, base_length: usize) -> Self {
+        let limit = base_length * 100;
+        
         MergeStream { 
             inner, 
             idx: 0,
-            buf: Vec::with_capacity(length),
-            length,
+            buf: Vec::with_capacity(base_length),
+            base_length,
+            limit_idx: 0, 
+            limit,
+            state: MergeResultsetState::Header,
         }
    } 
 }
@@ -134,28 +157,53 @@ where
         let me = self.project();
         loop {
             let s = unsafe {
-                Pin::new_unchecked(me.inner.get_unchecked_mut(*me.idx))
+                Pin::new(me.inner.get_unchecked_mut(*me.idx))
             };
-            match s.poll_next(cx) {
-                Poll::Ready(data) => {
-                    *me.idx += 1;
-                    me.buf.push(data);
+
+            match me.state {
+                MergeResultsetState::Header | MergeResultsetState::ColumnInfo | MergeResultsetState::ColumnEof => {
+                    match s.poll_next(cx) {
+                        Poll::Ready(data) => {
+                            *me.idx += 1;
+                            me.buf.push(data);
+                        },
+
+                        Poll::Pending => return Poll::Pending,
+                    };
+
+                    if *me.idx == *me.base_length {
+                        *me.idx = 0;
+                        break
+                    }
                 },
 
-                Poll::Pending => return Poll::Pending,
-            };
+                MergeResultsetState::Row => {
+                    match s.poll_next(cx) {
+                        Poll::Ready(data) => {
+                            *me.idx += 1;
+                            *me.limit_idx += 1;
+                            me.buf.push(data);
+                        },
 
-            if *me.idx == *me.length {
-                *me.idx = 0;
-                break
+                        Poll::Pending => return Poll::Pending,
+                    };
+
+                    if *me.idx == *me.base_length {
+                        *me.idx = 0;
+                    }
+
+                    if *me.limit_idx == *me.limit {
+                        *me.limit_idx = 0;
+                        break;
+                    }
+                }
             }
-
         }
 
         if me.buf.is_empty() || me.buf.iter().all(|x| x.is_none()) {
             return Poll::Ready(None);
         } else {
-            return  Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.length))))
+            return  Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.limit))))
         }
 
     }
