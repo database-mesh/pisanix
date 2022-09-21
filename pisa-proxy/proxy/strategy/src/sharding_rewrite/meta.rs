@@ -204,6 +204,12 @@ impl Transformer for RewriteMetaData {
                 self.push_table(t.table_name.clone());
             }
 
+            Node::DeleteStmt(t) => {
+                if let Some(table) = &t.table_name {
+                    self.push_table(table.clone());
+                }
+            }
+
             Node::FromClause(_) => {
                 self.state = ScanState::TableName;
             }
@@ -350,7 +356,6 @@ impl Transformer for RewriteMetaData {
                 Expr::LiteralExpr(Value::Num { span, value, signed }) => {
                     match &mut self.state {
                         ScanState::Where(args) => {
-                            //println!("args {:?}", args);
                             if args.len() > 1 && args[0] == "=" {
                                 let right_value = if *signed {
                                     WhereMetaRightDataType::SignedNum(value.to_string())
@@ -444,7 +449,7 @@ mod test {
                 vec![],
                 vec![],
                 1,
-            )
+            ),
         ];
 
         let parser = Parser::new();
@@ -454,7 +459,6 @@ mod test {
             let mut meta = RewriteMetaData::default();
             let _ = ast[0].visit(&mut meta);
 
-            println!("meta {:#?}", meta);
             assert_eq!(
                 meta.tables
                     .values()
