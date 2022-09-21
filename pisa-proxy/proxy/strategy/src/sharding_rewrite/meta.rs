@@ -444,14 +444,6 @@ mod test {
                 vec![],
                 vec![],
                 1,
-            ),
-            (
-                "DELETE FROM t where id = 3",
-                vec![],
-                vec![],
-                vec![],
-                vec![],
-                1,
             )
         ];
 
@@ -460,55 +452,54 @@ mod test {
         let mut ast = parser.parse(inputs[5].0).unwrap();
         let mut meta = RewriteMetaData::default();
         let _ = ast[0].visit(&mut meta);
-        println!("meta111: {:#?}", meta);
 
-        // for input in inputs {
-        //     let mut ast = parser.parse(input.0).unwrap();
-        //     let mut meta = RewriteMetaData::default();
-        //     let _ = ast[0].visit(&mut meta);
+        for input in inputs {
+            let mut ast = parser.parse(input.0).unwrap();
+            let mut meta = RewriteMetaData::default();
+            let _ = ast[0].visit(&mut meta);
 
-        //     println!("meta {:#?}", meta);
-        //     assert_eq!(
-        //         meta.tables
-        //             .values()
-        //             .into_iter()
-        //             .map(|x| x)
-        //             .flatten()
-        //             .map(|x| x.name.as_str())
-        //             .collect::<Vec<_>>(),
-        //         input.1
-        //     );
-        //     assert_eq!(
-        //         meta.fields
-        //             .values()
-        //             .into_iter()
-        //             .map(|x| x)
-        //             .flatten()
-        //             .map(|x| x.to_string())
-        //             .collect::<Vec<_>>(),
-        //         input.2
-        //     );
-        //     assert_eq!(
-        //         meta.groups
-        //             .values()
-        //             .into_iter()
-        //             .map(|x| x)
-        //             .flatten()
-        //             .map(|x| x.name.as_str())
-        //             .collect::<Vec<_>>(),
-        //         input.3
-        //     );
-        //     assert_eq!(
-        //         meta.orders
-        //             .values()
-        //             .into_iter()
-        //             .map(|x| x)
-        //             .flatten()
-        //             .map(|x| x.name.as_str())
-        //             .collect::<Vec<_>>(),
-        //         input.4
-        //     );
-        //     assert_eq!(meta.tables.len(), input.5);
-        // }
+            println!("meta {:#?}", meta);
+            assert_eq!(
+                meta.tables
+                    .values()
+                    .into_iter()
+                    .map(|x| x)
+                    .flatten()
+                    .map(|x| x.name.as_str())
+                    .collect::<Vec<_>>(),
+                input.1
+            );
+            assert_eq!(
+                meta.fields
+                    .values()
+                    .into_iter()
+                    .map(|x| x)
+                    .flatten()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>(),
+                input.2
+            );
+            assert_eq!(
+                meta.groups
+                    .values()
+                    .into_iter()
+                    .map(|x| x)
+                    .flatten()
+                    .map(|x| x.name.as_str())
+                    .collect::<Vec<_>>(),
+                input.3
+            );
+            assert_eq!(
+                meta.orders
+                    .values()
+                    .into_iter()
+                    .map(|x| x)
+                    .flatten()
+                    .map(|x| x.name.as_str())
+                    .collect::<Vec<_>>(),
+                input.4
+            );
+            assert_eq!(meta.tables.len(), input.5);
+        }
     }
 }
