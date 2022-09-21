@@ -70,6 +70,7 @@ impl CalcShardingIdx<f64> for f64 {
 #[derive(Debug)]
 pub enum RewriteChange {
     DatabaseChange(DatabaseChange),
+    AvgChange(AvgChange),
 }
 
 #[derive(Debug)]
@@ -78,6 +79,11 @@ pub struct DatabaseChange {
     pub target: String,
     pub shard_idx: u64,
     pub rule: Sharding,
+}
+
+#[derive(Debug)]
+pub struct AvgChange {
+    pub target: String
 }
 
 #[derive(Debug)]
@@ -252,9 +258,7 @@ impl ShardingRewrite {
        }
 
         if wheres.is_empty() {
-            let mut wheres_output = self.table_strategy_iproduct(try_tables.clone(), &avgs[0][0]);
-            self.change_avg(&mut wheres_output[0].target_sql, &avgs[0][0], 1);
-            return Ok(wheres_output);
+            return Ok(self.table_strategy_iproduct(try_tables.clone(), avgs));
         }
 
         let wheres = Self::find_try_where(StrategyTyp::Table, &try_tables, wheres)?.into_iter().filter_map(|x| {
@@ -268,7 +272,7 @@ impl ShardingRewrite {
         let sum: usize = wheres.iter().map(|x| x.1).sum::<u64>() as usize;
 
         if expect_sum != sum {
-            return Ok(self.table_strategy_iproduct(try_tables, &avgs[0][0]));
+            return Ok(self.table_strategy_iproduct(try_tables, avgs));
         }
 
         let would_changes: Vec<DatabaseChange> = try_tables
@@ -292,17 +296,20 @@ impl ShardingRewrite {
         let mut target_sql = self.raw_sql.clone();
         let mut offset = 0;
         let sharding_rule = &would_changes[0].rule.clone();
+        let mut shard_idx: u64 = 0;
+
+        let mut output = vec![];
 
         let changes = would_changes
             .into_iter()
             .map(|x| {
                 Self::change_sql(&mut target_sql, x.span, &x.target, offset);
                 offset = x.target.len() - x.span.len();
-
+                shard_idx = x.shard_idx;
                 RewriteChange::DatabaseChange(x)
             })
             .collect::<Vec<_>>();
-
+    
         let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
         
         let sharding_column = if let Some(StrategyType::TableStrategyConfig(strategy)) = &sharding_rule.table_strategy {
@@ -311,15 +318,31 @@ impl ShardingRewrite {
             unreachable!()
         };
 
-        Ok(
-            vec![
-                ShardingRewriteOutput { 
-                    changes, 
-                    target_sql: target_sql.to_string(), 
+       
+
+        if !avgs.is_empty() {
+            let target = Self::change_avg(&mut target_sql, avgs, shard_idx, 0);
+            output.push(
+                ShardingRewriteOutput {
+                    changes: vec![RewriteChange::AvgChange(AvgChange{target: target.to_string()})],
+                    target_sql: target_sql.to_string(),
                     data_source: DataSource::Endpoint(ep.clone()),
-                    sharding_column: Some(sharding_column),
+                    sharding_column: Some(sharding_column.clone()),
                 }
-            ]
+            );
+        }
+
+        output.push(
+            ShardingRewriteOutput { 
+                changes, 
+                target_sql: target_sql.to_string(), 
+                data_source: DataSource::Endpoint(ep.clone()),
+                sharding_column: Some(sharding_column.clone()),
+            }
+        );
+
+        Ok(
+            output
         )
     }
 
@@ -466,17 +489,28 @@ impl ShardingRewrite {
         }
     }
 
-    fn change_avg(&self, target_sql: &mut String, avg_meta: &AvgMeta, idx: u64) -> String {
-        for _ in 0..avg_meta.span.len() {
-            target_sql.remove(avg_meta.span.start() + 0);
+    fn change_avg(target_sql: &mut String, avgs: &IndexMap<u8, Vec<AvgMeta>>, idx: u64, offset: usize) -> String {
+        let last_span = avgs[0][avgs[0].len()-1].span;
+        let first_span = avgs[0][0].span;
+        let len = last_span.start() + last_span.len() - first_span.start();
+        
+        for _ in 0..len {
+            target_sql.remove(first_span.start() + offset);
         }
 
-        target_sql.insert_str(avg_meta.span.start(), &format!("COUNT({}) AS AVG_{}_DERIVED_COUNT_{}, SUM({}) AS AVG_{}_DERIVED_SUM_{}",
-                avg_meta.name, avg_meta.name.to_uppercase(), idx, 
-                avg_meta.name, avg_meta.name.to_uppercase(), idx));
-
-        println!("target_sql sss {:?}", target_sql);
-        target_sql.to_string()
+        let mut target = String::from("");
+        for avg_meta in &avgs[0] {
+            target += &format!("COUNT({}) AS {}_AVG_DERIVED_COUNT_{:05}, SUM({}) AS {}_AVG_DERIVED_SUM_{:05}",
+                    avg_meta.name, avg_meta.name.to_uppercase(), idx, 
+                    avg_meta.name, avg_meta.name.to_uppercase(), idx);
+            if avg_meta.span != last_span {
+                target.push(',');
+                target.push(' ');
+            }
+        }
+        
+        target_sql.insert_str(first_span.start() + offset, &target);
+        target
     }
 
     fn change_insert_sql(&self, try_tables: Vec<(u8, Sharding, &TableIdent)>, fields: &IndexMap<u8, Vec<FieldMeta>>,inserts: &IndexMap<u8, Vec<InsertValsMeta>>) -> Result<Vec<ShardingRewriteOutput>, ShardingRewriteError> {
@@ -648,11 +682,12 @@ impl ShardingRewrite {
     fn table_strategy_iproduct(
         &self,
         tables: Vec<(u8, Sharding, &TableIdent)>,
-        avgs: &AvgMeta,
+        avgs: &IndexMap<u8, Vec<AvgMeta>>,
     ) -> Vec<ShardingRewriteOutput> {
         let mut output = vec![];
         let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
         let mut sharding_column = None; 
+        let ep = self.endpoints[0].clone();
 
         for t in tables.iter() {
             match t.1.table_strategy.as_ref().unwrap() {
@@ -678,18 +713,31 @@ impl ShardingRewrite {
         for (_, changes) in group_changes.into_iter() {
             let mut offset = 0;
             let mut target_sql = self.raw_sql.clone();
+
             for change in changes.iter() {
                 Self::change_sql(&mut target_sql, change.span, &change.target, offset);
                 offset = change.target.len() - change.span.len();
+              
             }
 
-            self.change_avg(&mut target_sql, &avgs, 1);
-            
-            let ep = self.endpoints[0].clone();
+            if !avgs.is_empty() {
+                if changes[0].span.start() > avgs[0][0].span.start() {
+                    offset = 0; 
+                }
+                let target = Self::change_avg(&mut target_sql, avgs, changes[0].shard_idx, offset);
+                output.push(ShardingRewriteOutput {
+                    changes: vec![RewriteChange::AvgChange(AvgChange{target: target.to_string()})],
+                    target_sql: target_sql.to_string(),
+                    data_source: DataSource::Endpoint(ep.clone()),
+                    sharding_column: sharding_column.clone(),
+                });
+            }
+         
+            // let ep = self.endpoints[0].clone();
             output.push(ShardingRewriteOutput {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql: target_sql.to_string(),
-                data_source: DataSource::Endpoint(ep),
+                data_source: DataSource::Endpoint(ep.clone()),
                 sharding_column: sharding_column.clone(),
             })
         }
@@ -949,24 +997,57 @@ mod test {
     #[test]
     fn test_table_sharding_strategy_avg() {
         let config = get_table_sharding_config();
-        let raw_sql = "SELECT AVG(price) FROM db.tshard WHERE idx > 3".to_string();
         let parser = Parser::new();
-        let mut ast = parser.parse(&raw_sql).unwrap();
+        let raw_sql = "SELECT AVG(price) FROM db.tshard WHERE idx > 3".to_string();
+        let ast = parser.parse(&raw_sql).unwrap();
         let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
-        sr.set_raw_sql(raw_sql);
-        let meta = sr.get_meta(&mut ast[0]);
+        let input = ShardingRewriteInput {
+            raw_sql: raw_sql.clone(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(res[0].target_sql, "SELECT COUNT(price) AS PRICE_AVG_DERIVED_COUNT_00000, SUM(price) AS PRICE_AVG_DERIVED_SUM_00000 FROM db.tshard_00000 WHERE idx > 3");
 
-        let res = sr.table_strategy(meta).unwrap();
-        assert_eq!(
-            res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
-            vec![
-                "SELECT COUNT(price) AS PRICE_AVG_DERIVED_COUNT_0, SUM(price) AS PRICE_AVG_DERIVED_SUM_0 FROM tshard_00000 WHERE idx > 3",
-                "SELECT COUNT(price) AS PRICE_AVG_DERIVED_COUNT_1, SUM(price) AS PRICE_AVG_DERIVED_SUM_1 FROM tshard_00001 WHERE idx > 3",
-                "SELECT COUNT(price) AS PRICE_AVG_DERIVED_COUNT_2, SUM(price) AS PRICE_AVG_DERIVED_SUM_2 FROM tshard_00002 WHERE idx > 3",
-                "SELECT COUNT(price) AS PRICE_AVG_DERIVED_COUNT_3, SUM(price) AS PRICE_AVG_DERIVED_SUM_3 FROM tshard_00003 WHERE idx > 3",
-            ]
-        );
-        println!("{:#?}", res);
-        // assert_eq!(res[0].target_sql, "SELECT COUNT(price) AS AVG_DERIVED_COUNT_0, SUM(price) AS AVG_DERIVED_SUM_0 FROM tshard WHERE idx = 3");
+        let raw_sql = "SELECT AVG(pbl), AVG(znl), AVG(ngl) FROM db.tshard WHERE idx > 3".to_string();
+        let ast = parser.parse(&raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            raw_sql: raw_sql.clone(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(res[0].target_sql, "SELECT COUNT(pbl) AS PBL_AVG_DERIVED_COUNT_00000, SUM(pbl) AS PBL_AVG_DERIVED_SUM_00000, COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000, COUNT(ngl) AS NGL_AVG_DERIVED_COUNT_00000, SUM(ngl) AS NGL_AVG_DERIVED_SUM_00000 FROM db.tshard_00000 WHERE idx > 3");
+
+        let raw_sql = "SELECT AVG(pbl) FROM db.tshard WHERE idx = 3".to_string();
+        let ast = parser.parse(&raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            raw_sql: raw_sql.clone(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        // println!("res: {:#?}", res);
+        assert_eq!(res[0].target_sql, "SELECT COUNT(pbl) AS PBL_AVG_DERIVED_COUNT_00003, SUM(pbl) AS PBL_AVG_DERIVED_SUM_00003 FROM db.tshard_00003 WHERE idx = 3");
+
+        let raw_sql = "SELECT AVG(znl) FROM db.tshard".to_string();
+        let ast = parser.parse(&raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            raw_sql: raw_sql.clone(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(res[0].target_sql, "SELECT COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000 FROM db.tshard_00000");
+ 
+        let raw_sql = "SELECT * from db.tshard where znl > (SELECT AVG(znl) from db.tshard)".to_string();
+        let ast = parser.parse(&raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            raw_sql: raw_sql.clone(),
+            ast: ast[0].clone(),
+        };
+
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(res[0].target_sql, "SELECT * from db.tshard_00000 where znl > (SELECT COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000 from db.tshard_00000)")
     }
 }
