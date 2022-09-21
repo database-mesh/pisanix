@@ -967,7 +967,8 @@ mod test {
             ast: ast[0].clone(),
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from db.tshard_00003 where idx = 3 and idx = (SELECT idx from db.tshard_00003 where idx = 3)".to_string());
+        println!("res: {:#?}", res);
+        assert_eq!(res[0].target_sql, "SELECT idx from db.`tshard_00003` where idx = 3 and idx = (SELECT idx from db.tshard_00003 where idx = 3)".to_string());
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
