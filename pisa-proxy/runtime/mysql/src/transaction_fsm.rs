@@ -87,22 +87,33 @@ pub fn query_rewrite(
     rewriter: &mut ShardingRewrite,
     raw_sql: String,
     ast: SqlStmt,
+    default_db: Option<String>,
     can_rewrite: bool,
 ) -> Result<Vec<ShardingRewriteOutput>, BoxError> {
-    let outputs = if can_rewrite {
-        rewriter.rewrite(ShardingRewriteInput { raw_sql, ast })?
-    } else {
-        let endpoints = rewriter.get_endpoints();
-        endpoints
-            .iter()
-            .map(|x| ShardingRewriteOutput {
-                changes: vec![],
-                target_sql: raw_sql.clone(),
-                data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
-                sharding_column: None,
-            })
-            .collect::<Vec<_>>()
-    };
+    if can_rewrite{
+        let outputs = rewriter.rewrite(
+        ShardingRewriteInput { 
+            raw_sql: raw_sql.clone(), 
+            ast,
+            default_db,
+        })?;
+
+        if !outputs.is_empty() {
+            return Ok(outputs)
+        }
+    }
+
+
+    let endpoints = rewriter.get_endpoints();
+    let outputs = endpoints
+        .iter()
+        .map(|x| ShardingRewriteOutput {
+            changes: vec![],
+            target_sql: raw_sql.clone(),
+            data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
+            sharding_column: None,
+        })
+        .collect::<Vec<_>>();
 
     Ok(outputs)
 }

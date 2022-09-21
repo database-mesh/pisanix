@@ -28,7 +28,7 @@ use mysql_protocol::{
         codec::{make_eof_packet, make_err_packet, ok_packet, CommonPacket, PacketSend},
         err::MySQLError,
     },
-    session::SessionMut,
+    session::{SessionMut, Session},
     util::{is_eof, length_encode_int},
 };
 use pisa_error::error::{Error, ErrorKind};
@@ -313,33 +313,14 @@ where
             }
             //TODO: split sql stmt for sql audit
             SqlStmt::BeginStmt(_stmt) => {
-                //Self::fsm_trigger(
-                //    &mut req,
-                //    TransEventName::StartEvent,
-                //    RouteInput::Transaction(sql),
-                //)
-                //.await
-
                 (req.fsm.trigger(TransEventName::StartEvent), RouteInputTyp::Transaction, false)
             }
 
             SqlStmt::Start(_stmt) => {
-                //Self::fsm_trigger(
-                //    &mut req,
-                //    TransEventName::StartEvent,
-                //    RouteInput::Transaction(sql),
-                //)
-                //.await
                 (req.fsm.trigger(TransEventName::StartEvent), RouteInputTyp::Transaction, false)
             }
 
             SqlStmt::Commit(_stmt) => {
-                //Self::fsm_trigger(
-                //    &mut req,
-                //    TransEventName::CommitRollBackEvent,
-                //    RouteInput::Transaction(sql),
-                //)
-                //.await
                 (
                     req.fsm.trigger(TransEventName::CommitRollBackEvent),
                     RouteInputTyp::Transaction,
@@ -348,12 +329,6 @@ where
             }
 
             SqlStmt::Rollback(_stmt) => {
-                //Self::fsm_trigger(
-                //    &mut req,
-                //    TransEventName::CommitRollBackEvent,
-                //    RouteInput::Transaction(sql),
-                //)
-                //.await
                 (
                     req.fsm.trigger(TransEventName::CommitRollBackEvent),
                     RouteInputTyp::Transaction,
@@ -361,20 +336,16 @@ where
                 )
             }
             _ => {
-                //Self::fsm_trigger(
-                //    &mut req,
-                //    TransEventName::QueryEvent,
-                //    RouteInput::Statement(sql),
-                //)
-                //.await
                 (req.fsm.trigger(TransEventName::QueryEvent), RouteInputTyp::Statement, true)
             }
         };
 
         if req.rewriter.is_some() {
+            let default_db = req.framed.codec_mut().get_session().get_db();
             let outputs =
-                query_rewrite(req.rewriter.as_mut().unwrap(), sql.to_string(), ast, can_rewrite)
+                query_rewrite(req.rewriter.as_mut().unwrap(), sql.to_string(), ast, default_db, can_rewrite)
                     .map_err(|e| ErrorKind::Runtime(e.into()))?;
+            debug!("rewrite outputs {:?}", outputs);
             return Ok((is_get_conn, input, outputs));
         }
 
@@ -616,13 +587,15 @@ where
 {
     async fn init_db(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
+        let db = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
+        cx.framed.codec_mut().get_session().set_db(db.to_string());
 
         if cx.rewriter.is_some() {
-            Self::sharding_command_not_support(cx, ComType::INIT_DB.as_ref()).await?;
+            cx.framed.send(PacketSend::Encode(ok_packet()[4..].into())).await.map_err(ErrorKind::from)?;
             return Ok(RespContext { ep: None, duration: now.elapsed() });
         }
 
-        let db = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
+
         let mut client_conn =
             Self::fsm_trigger(cx, TransEventName::UseEvent, RouteInputTyp::Statement, db).await?;
         let ep = client_conn.get_endpoint();
@@ -761,7 +734,7 @@ where
         let now = Instant::now();
 
         if cx.rewriter.is_some() {
-            Self::sharding_command_not_support(cx, ComType::FIELD_LIST.as_ref()).await?;
+            cx.framed.send(PacketSend::Encode(ok_packet()[4..].into())).await.map_err(ErrorKind::from)?;
             return Ok(RespContext { ep: None, duration: now.elapsed() });
         }
 
