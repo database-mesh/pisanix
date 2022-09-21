@@ -83,7 +83,7 @@ pub struct DatabaseChange {
 
 #[derive(Debug)]
 pub struct AvgChange {
-    pub target: String
+    pub target: IndexMap::<String, String>
 }
 
 #[derive(Debug)]
@@ -324,7 +324,7 @@ impl ShardingRewrite {
             let target = Self::change_avg(&mut target_sql, avgs, shard_idx, 0);
             output.push(
                 ShardingRewriteOutput {
-                    changes: vec![RewriteChange::AvgChange(AvgChange{target: target.to_string()})],
+                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
                     target_sql: target_sql.to_string(),
                     data_source: DataSource::Endpoint(ep.clone()),
                     sharding_column: Some(sharding_column.clone()),
@@ -496,28 +496,37 @@ impl ShardingRewrite {
         }
     }
 
-    fn change_avg(target_sql: &mut String, avgs: &IndexMap<u8, Vec<AvgMeta>>, idx: u64, offset: usize) -> String {
-        let last_span = avgs[0][avgs[0].len()-1].span;
-        let first_span = avgs[0][0].span;
-        let len = last_span.start() + last_span.len() - first_span.start();
-        
-        for _ in 0..len {
-            target_sql.remove(first_span.start() + offset);
-        }
-
+    fn change_avg(target_sql: &mut String, avgs: &IndexMap<u8, Vec<AvgMeta>>, idx: u64, offset: usize) -> IndexMap<String, String> {
         let mut target = String::from("");
-        for avg_meta in &avgs[0] {
-            target += &format!("COUNT({}) AS {}_AVG_DERIVED_COUNT_{:05}, SUM({}) AS {}_AVG_DERIVED_SUM_{:05}",
-                    avg_meta.name, avg_meta.name.to_uppercase(), idx, 
-                    avg_meta.name, avg_meta.name.to_uppercase(), idx);
-            if avg_meta.span != last_span {
-                target.push(',');
-                target.push(' ');
+        let mut res = IndexMap::new();
+        for (_, avg) in avgs.iter() {
+            let last_span = avg[avg.len() - 1].span;
+            let first_span = avg[0].span;
+            let len = last_span.start() + last_span.len() - first_span.start();
+            
+            for _ in 0..len {
+                target_sql.remove(first_span.start() + offset);
             }
+    
+            for avg_meta in avg {
+                let target_count = &format!("COUNT({}) AS ", avg_meta.name);
+                let target_count_as = &format!("{}_AVG_DERIVED_COUNT_{:05}", avg_meta.name.to_uppercase(), idx);
+                res.insert("avg_count".to_string(), target_count_as.to_string());
+
+                let target_sum = &format!("SUM({}) AS ", avg_meta.name);
+                let target_sum_as = &format!("{}_AVG_DERIVED_SUM_{:05}", avg_meta.name.to_uppercase(), idx);
+                res.insert("avg_sum".to_string(), target_sum_as.to_string());
+
+                target += &format!("{}{}, {}{}", target_count, target_count_as, target_sum, target_sum_as);
+                if avg_meta.span != last_span {
+                    target.push(',');
+                    target.push(' ');
+                }
+            }
+            
+            target_sql.insert_str(first_span.start() + offset, &target);
         }
-        
-        target_sql.insert_str(first_span.start() + offset, &target);
-        target
+        res
     }
 
     fn change_insert_sql(&self, try_tables: Vec<(u8, Sharding, &TableIdent)>, fields: &IndexMap<u8, Vec<FieldMeta>>,inserts: &IndexMap<u8, Vec<InsertValsMeta>>) -> Result<Vec<ShardingRewriteOutput>, ShardingRewriteError> {
@@ -733,7 +742,7 @@ impl ShardingRewrite {
                 }
                 let target = Self::change_avg(&mut target_sql, avgs, changes[0].shard_idx, offset);
                 output.push(ShardingRewriteOutput {
-                    changes: vec![RewriteChange::AvgChange(AvgChange{target: target.to_string()})],
+                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
                     target_sql: target_sql.to_string(),
                     data_source: DataSource::Endpoint(ep.clone()),
                     sharding_column: sharding_column.clone(),
@@ -967,7 +976,6 @@ mod test {
             ast: ast[0].clone(),
         };
         let res = sr.rewrite(input).unwrap();
-        println!("res: {:#?}", res);
         assert_eq!(res[0].target_sql, "SELECT idx from db.`tshard_00003` where idx = 3 and idx = (SELECT idx from db.tshard_00003 where idx = 3)".to_string());
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)".to_string();
@@ -1043,7 +1051,6 @@ mod test {
             ast: ast[0].clone(),
         };
         let res = sr.rewrite(input).unwrap();
-        // println!("res: {:#?}", res);
         assert_eq!(res[0].target_sql, "SELECT COUNT(pbl) AS PBL_AVG_DERIVED_COUNT_00003, SUM(pbl) AS PBL_AVG_DERIVED_SUM_00003 FROM db.tshard_00003 WHERE idx = 3");
 
         let raw_sql = "SELECT AVG(znl) FROM db.tshard".to_string();
