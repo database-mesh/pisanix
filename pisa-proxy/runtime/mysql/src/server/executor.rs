@@ -283,24 +283,6 @@ where
         }
     }
 
-    fn check_single_chunk(
-        chunk: &mut [Option<Result<BytesMut, ProtocolError>>],
-    ) -> Result<(), Error> {
-        for c in chunk.iter_mut() {
-            if let Some(c) = c {
-                match c {
-                    Ok(_) => {}
-                    Err(e) => {
-                        let e = std::mem::replace(e, ProtocolError::Default);
-                        return Err(Error::new(ErrorKind::Protocol(e)));
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     async fn shard_send_query(
         conns: Vec<PoolConn<ClientConn>>,
         rewrite_outputs: &[ShardingRewriteOutput],

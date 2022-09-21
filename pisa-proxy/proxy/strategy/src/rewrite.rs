@@ -18,6 +18,7 @@ use mysql_parser::ast::SqlStmt;
 pub struct ShardingRewriteInput {
     pub raw_sql: String,
     pub ast: SqlStmt,
+    pub default_db: Option<String>
 }
 
 pub trait ShardingRewriter<I> {

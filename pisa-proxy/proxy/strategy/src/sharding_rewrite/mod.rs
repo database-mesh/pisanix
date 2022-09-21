@@ -15,11 +15,9 @@
 mod meta;
 mod generic_meta;
 
-use std::vec;
-
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
-use mysql_parser::ast::{SqlStmt, Visitor, TableIdent};
+use mysql_parser::ast::{SqlStmt, Visitor, TableIdent };
 use crate::sharding_rewrite::meta::AvgMeta;
 
 use self::{meta::{
@@ -113,6 +111,9 @@ pub struct ShardingRewrite {
     endpoints: Vec<Endpoint>,
     // Whether has readwritesplitting
     pub has_rw: bool,
+
+    // Default database from client
+    default_db: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -134,6 +135,9 @@ pub enum ShardingRewriteError {
 
     #[error("fields is empty")]
     FieldsIsEmpty,
+
+    #[error("database is not found")]
+    DatabaseNotFound
 }
 
 struct ChangeInsertMeta {
@@ -148,7 +152,7 @@ enum StrategyTyp {
 
 impl ShardingRewrite {
     pub fn new(rules: Vec<Sharding>, endpoints: Vec<Endpoint>, has_rw: bool) -> Self {
-        ShardingRewrite { rules, raw_sql: "".to_string(), endpoints, has_rw }
+        ShardingRewrite { rules, raw_sql: "".to_string(), endpoints, has_rw , default_db: None, }
     }
 
     pub fn get_endpoints(&self) -> &Vec<Endpoint> {
@@ -157,6 +161,10 @@ impl ShardingRewrite {
 
     pub fn set_raw_sql(&mut self, raw_sql: String) {
         self.raw_sql = raw_sql;
+    }
+
+    pub fn set_default_db(&mut self, db: Option<String>) {
+        self.default_db = db;
     }
 
     fn database_strategy(
@@ -314,13 +322,7 @@ impl ShardingRewrite {
     
         let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
         
-        let sharding_column = if let Some(StrategyType::TableStrategyConfig(strategy)) = &sharding_rule.table_strategy {
-            strategy.table_sharding_column.to_string()   
-        } else {
-            unreachable!()
-        };
-
-       
+        let sharding_column = sharding_rule.get_sharding_column().1.unwrap();
 
         if !avgs.is_empty() {
             let target = Self::change_avg(&mut target_sql, avgs, shard_idx, 0);
@@ -329,7 +331,7 @@ impl ShardingRewrite {
                     changes: vec![RewriteChange::AvgChange(AvgChange{target})],
                     target_sql: target_sql.to_string(),
                     data_source: DataSource::Endpoint(ep.clone()),
-                    sharding_column: Some(sharding_column.clone()),
+                    sharding_column: Some(sharding_column.to_string()),
                 }
             );
         }
@@ -339,7 +341,7 @@ impl ShardingRewrite {
                 changes, 
                 target_sql: target_sql.to_string(), 
                 data_source: DataSource::Endpoint(ep.clone()),
-                sharding_column: Some(sharding_column.clone()),
+                sharding_column: Some(sharding_column.to_string()),
             }
         );
 
@@ -352,6 +354,9 @@ impl ShardingRewrite {
         &self,
         tables: &'a IndexMap<u8, Vec<TableIdent>>,
     ) -> Vec<(u8, Sharding, &'a TableIdent)> {
+        let default_db = self.default_db.as_ref();
+        let mut endpoints = self.endpoints.iter();
+
         Self::find_table(tables, |idx, meta| {
             let rule = self.rules.iter().find(|x| {
                 let name = if meta.name.contains("`") {
@@ -362,7 +367,15 @@ impl ShardingRewrite {
                 x.table_name == name
             });
             if let Some(rule) = rule {
-                if meta.schema.is_some() {
+                let has_default_db = if let Some(default_db) = default_db {
+                    rule.actual_datanodes.iter().find(|x| {
+                        endpoints.find(|ep| &ep.name ==  *x && default_db == &ep.db).is_some()
+                    }).is_some()
+                } else {
+                    false
+                };
+                
+                if meta.schema.is_some() || has_default_db {
                     (idx, Some(rule.clone()), true)
                 } else {
                     (idx, None, false)
@@ -375,10 +388,10 @@ impl ShardingRewrite {
 
     fn find_table<F>(
         tables: &IndexMap<u8, Vec<TableIdent>>,
-        calc_fn: F,
+        mut calc_fn: F,
     ) -> Vec<(u8, Sharding, &TableIdent)>
     where
-        F: Fn(u8, &TableIdent) -> (u8, Option<Sharding>, bool),
+        F: FnMut(u8, &TableIdent) -> (u8, Option<Sharding>, bool),
     {
         tables
             .iter()
@@ -764,11 +777,18 @@ impl ShardingRewrite {
     }
 
     fn change_table(&self, table: &TableIdent, actual_node: &str, table_idx: u64) -> String {
-        let schema = table.schema.as_ref().unwrap();
+        let schema = if let Some(schema) = table.schema.as_ref() {
+            schema
+        } else {
+            self.default_db.as_ref().unwrap()
+        };
+
         let mut target = String::with_capacity(schema.len());
 
-        if actual_node.len() == 0 {
+        if actual_node.is_empty() {
+            target.push('`');
             target.push_str(schema);
+            target.push('`');
             target.push('.');
             if table.name.contains("`")  {
                 target.push('`');    
@@ -813,9 +833,12 @@ impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
     type Output = Result<Vec<ShardingRewriteOutput>, ShardingRewriteError>;
     fn rewrite(&mut self, mut input: ShardingRewriteInput) -> Self::Output {
         self.set_raw_sql(input.raw_sql);
+        self.set_default_db(input.default_db);
+        
         let meta = self.get_meta(&mut input.ast);
         let tables = meta.get_tables().clone();
         let try_tables = self.find_table_rule(&tables);
+
         if try_tables.is_empty() {
             return Ok(vec![]);
         }
@@ -919,6 +942,7 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
         assert_eq!(res[0].target_sql, "SELECT idx from `ds1`.tshard where idx = 3");
@@ -928,6 +952,7 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
         assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3 and idx = (SELECT idx from ds1.tshard where idx = 3)");
@@ -937,6 +962,7 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
         assert_eq!(
@@ -957,16 +983,17 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
         let res = sr.rewrite(input).unwrap();
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "SELECT idx from db.tshard_00000 where idx > 3",
-                "SELECT idx from db.tshard_00001 where idx > 3",
-                "SELECT idx from db.tshard_00002 where idx > 3",
-                "SELECT idx from db.tshard_00003 where idx > 3",
+                "SELECT idx from `db`.tshard_00000 where idx > 3",
+                "SELECT idx from `db`.tshard_00001 where idx > 3",
+                "SELECT idx from `db`.tshard_00002 where idx > 3",
+                "SELECT idx from `db`.tshard_00003 where idx > 3",
             ],
         );
 
@@ -975,33 +1002,36 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from db.tshard_00000 where idx = 4".to_string());
+        assert_eq!(res[0].target_sql, "SELECT idx from `db`.tshard_00000 where idx = 4".to_string());
 
         let raw_sql = "SELECT idx from db.`tshard` where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from db.`tshard_00003` where idx = 3 and idx = (SELECT idx from db.tshard_00003 where idx = 3)".to_string());
+        assert_eq!(res[0].target_sql, "SELECT idx from `db`.`tshard_00003` where idx = 3 and idx = (SELECT idx from `db`.tshard_00003 where idx = 3)".to_string());
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "SELECT idx from db.tshard_00000 where idx = 3 and idx = (SELECT idx from db.tshard_00000 where idx = 4)",
-                "SELECT idx from db.tshard_00001 where idx = 3 and idx = (SELECT idx from db.tshard_00001 where idx = 4)",
-                "SELECT idx from db.tshard_00002 where idx = 3 and idx = (SELECT idx from db.tshard_00002 where idx = 4)",
-                "SELECT idx from db.tshard_00003 where idx = 3 and idx = (SELECT idx from db.tshard_00003 where idx = 4)",
+                "SELECT idx from `db`.tshard_00000 where idx = 3 and idx = (SELECT idx from `db`.tshard_00000 where idx = 4)",
+                "SELECT idx from `db`.tshard_00001 where idx = 3 and idx = (SELECT idx from `db`.tshard_00001 where idx = 4)",
+                "SELECT idx from `db`.tshard_00002 where idx = 3 and idx = (SELECT idx from `db`.tshard_00002 where idx = 4)",
+                "SELECT idx from `db`.tshard_00003 where idx = 3 and idx = (SELECT idx from `db`.tshard_00003 where idx = 4)",
             ],
         );
 
@@ -1017,14 +1047,15 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
 
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "INSERT INTO db.tshard_00000(idx) VALUES (12), (16)",
-                "INSERT INTO db.tshard_00001(idx) VALUES (13)",
+                "INSERT INTO `db`.tshard_00000(idx) VALUES (12), (16)",
+                "INSERT INTO `db`.tshard_00001(idx) VALUES (13)",
             ],
         );
     }
@@ -1039,9 +1070,10 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT COUNT(price) AS PRICE_AVG_DERIVED_COUNT_00000, SUM(price) AS PRICE_AVG_DERIVED_SUM_00000 FROM db.tshard_00000 WHERE idx > 3");
+        assert_eq!(res[0].target_sql, "SELECT COUNT(price) AS PRICE_AVG_DERIVED_COUNT_00000, SUM(price) AS PRICE_AVG_DERIVED_SUM_00000 FROM `db`.tshard_00000 WHERE idx > 3");
 
         let raw_sql = "SELECT AVG(pbl), AVG(znl), AVG(ngl) FROM db.tshard WHERE idx > 3".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
@@ -1049,9 +1081,10 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT COUNT(pbl) AS PBL_AVG_DERIVED_COUNT_00000, SUM(pbl) AS PBL_AVG_DERIVED_SUM_00000, COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000, COUNT(ngl) AS NGL_AVG_DERIVED_COUNT_00000, SUM(ngl) AS NGL_AVG_DERIVED_SUM_00000 FROM db.tshard_00000 WHERE idx > 3");
+        assert_eq!(res[0].target_sql, "SELECT COUNT(pbl) AS PBL_AVG_DERIVED_COUNT_00000, SUM(pbl) AS PBL_AVG_DERIVED_SUM_00000, COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000, COUNT(ngl) AS NGL_AVG_DERIVED_COUNT_00000, SUM(ngl) AS NGL_AVG_DERIVED_SUM_00000 FROM `db`.tshard_00000 WHERE idx > 3");
 
         let raw_sql = "SELECT AVG(pbl) FROM db.tshard WHERE idx = 3".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
@@ -1059,9 +1092,10 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT COUNT(pbl) AS PBL_AVG_DERIVED_COUNT_00003, SUM(pbl) AS PBL_AVG_DERIVED_SUM_00003 FROM db.tshard_00003 WHERE idx = 3");
+        assert_eq!(res[0].target_sql, "SELECT COUNT(pbl) AS PBL_AVG_DERIVED_COUNT_00003, SUM(pbl) AS PBL_AVG_DERIVED_SUM_00003 FROM `db`.tshard_00003 WHERE idx = 3");
 
         let raw_sql = "SELECT AVG(znl) FROM db.tshard".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
@@ -1069,9 +1103,10 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000 FROM db.tshard_00000");
+        assert_eq!(res[0].target_sql, "SELECT COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000 FROM `db`.tshard_00000");
  
         let raw_sql = "SELECT * from db.tshard where znl > (SELECT AVG(znl) from db.tshard)".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
@@ -1079,10 +1114,11 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
+            default_db: None,
         };
 
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT * from db.tshard_00000 where znl > (SELECT COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000 from db.tshard_00000)")
+        assert_eq!(res[0].target_sql, "SELECT * from `db`.tshard_00000 where znl > (SELECT COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000 from `db`.tshard_00000)")
     }
 
     fn test_table_sharding_strategy_update_delete() {
@@ -1094,12 +1130,13 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "UPDATE db.tshard_00002 set a=1 where idx = 2"
+                "UPDATE `db`.tshard_00002 set a=1 where idx = 2"
             ],
         );
 
@@ -1108,12 +1145,34 @@ mod test {
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
+            default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "DELETE FROM db.tshard_00001 where idx = 1"
+                "DELETE FROM `db`.tshard_00001 where idx = 1"
+            ],
+        );
+    }
+
+    #[test]
+    fn test_default_db() {
+        let config = get_table_sharding_config();
+        let raw_sql = "UPDATE tshard set a=1 where idx = 2";
+        let parser = Parser::new();
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+            default_db: Some("db".to_string()),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
+            vec![
+                "UPDATE `db`.tshard_00002 set a=1 where idx = 2"
             ],
         );
     }
