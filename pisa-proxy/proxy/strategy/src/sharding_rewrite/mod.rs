@@ -351,7 +351,14 @@ impl ShardingRewrite {
         tables: &'a IndexMap<u8, Vec<TableIdent>>,
     ) -> Vec<(u8, Sharding, &'a TableIdent)> {
         Self::find_table(tables, |idx, meta| {
-            let rule = self.rules.iter().find(|x| x.table_name == meta.name);
+            let rule = self.rules.iter().find(|x| {
+                let name = if meta.name.contains("`") {
+                    meta.name.replace("`", "")
+                } else {
+                    meta.name.to_string()
+                };
+                x.table_name == name
+            });
             if let Some(rule) = rule {
                 if meta.schema.is_some() {
                     (idx, Some(rule.clone()), true)
@@ -751,7 +758,15 @@ impl ShardingRewrite {
         if actual_node.len() == 0 {
             target.push_str(schema);
             target.push('.');
-            target.push_str(&format!("{}_{:05}", &table.name, table_idx));
+            if table.name.contains("`")  {
+                target.push('`');    
+                let name = table.name.replace("`", "");
+                target.push_str(&format!("{}_{:05}", &name, table_idx));
+                target.push('`');
+            } else {
+                target.push_str(&format!("{}_{:05}", &table.name, table_idx));
+            }
+            
         } else {
             target.push_str(actual_node);
             target.push_str(".");
@@ -945,7 +960,7 @@ mod test {
         let res = sr.rewrite(input).unwrap();
         assert_eq!(res[0].target_sql, "SELECT idx from db.tshard_00000 where idx = 4".to_string());
 
-        let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)".to_string();
+        let raw_sql = "SELECT idx from db.`tshard` where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
@@ -970,6 +985,7 @@ mod test {
                 "SELECT idx from db.tshard_00003 where idx = 3 and idx = (SELECT idx from db.tshard_00003 where idx = 4)",
             ],
         );
+
     }
 
     #[test]
