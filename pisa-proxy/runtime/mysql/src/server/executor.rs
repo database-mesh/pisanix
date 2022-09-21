@@ -12,31 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{marker::PhantomData, sync::atomic::Ordering, vec};
+use std::{
+    marker::PhantomData,
+    sync::{atomic::Ordering, Arc},
+    vec,
+};
 
 use bytes::BytesMut;
 use conn_pool::{Pool, PoolConn};
 use futures::{stream::FuturesOrdered, SinkExt, StreamExt};
 use mysql_protocol::{
     client::{
-        codec::{MergeStream, ResultsetStream},
-        conn::{ClientConn, SessionAttr}, stmt::Stmt,
+        codec::{MergeResultsetState, MergeStream, ResultsetStream},
+        conn::{ClientConn, SessionAttr},
+        stmt::Stmt,
     },
+    column::{Column, ColumnInfo},
     err::ProtocolError,
     mysql_const::*,
+    row::{RowData, RowDataBinary, RowDataText, RowDataTyp},
     server::codec::{make_eof_packet, CommonPacket, PacketSend},
-    util::{length_encode_int, is_eof}, row::{RowDataText, RowDataBinary, RowDataTyp, RowData},
+    util::{is_eof, length_encode_int},
 };
 use pisa_error::error::{Error, ErrorKind};
+use rayon::prelude::*;
 use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{mysql::{ReqContext, STMT_ID}, transaction_fsm::check_get_conn};
-use rayon::prelude::*;
-use std::sync::Arc;
-use mysql_protocol::column::ColumnInfo;
-use mysql_protocol::column::Column;
+use crate::{
+    mysql::{ReqContext, STMT_ID},
+    transaction_fsm::check_get_conn,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecuteError {
@@ -83,17 +90,17 @@ where
         let mut conns = Self::shard_send_query(conns, &rewrite_outputs).await?;
         let shards_length = conns.len();
         let mut shard_streams = Vec::with_capacity(shards_length);
-        
+
         for conn in conns.iter_mut() {
             let s = ResultsetStream::new(conn.framed.as_mut());
             shard_streams.push(s.fuse());
         }
-        
+
         let mut merge_stream = MergeStream::new(shard_streams, shards_length);
 
         let sharding_column = rewrite_outputs[0].sharding_column.clone();
         Self::handle_shard_resultset(req, &mut merge_stream, sharding_column, false).await?;
-        
+
         if let Some(id) = curr_server_stmt_id {
             let stmt_conns = curr_cached_stmt_id.into_iter().zip(conns.into_iter()).collect();
             req.stmt_cache.lock().put_all(id, stmt_conns)
@@ -103,8 +110,13 @@ where
         }
         Ok(())
     }
-    
-    async fn handle_shard_resultset<'a>(req: &mut ReqContext<T, C>, merge_stream: &mut MergeStream<ResultsetStream<'a>>, sharding_column: Option<String>, is_binary: bool) -> Result<(), Error> {
+
+    async fn handle_shard_resultset<'a>(
+        req: &mut ReqContext<T, C>,
+        merge_stream: &mut MergeStream<ResultsetStream<'a>>,
+        sharding_column: Option<String>,
+        is_binary: bool,
+    ) -> Result<(), Error> {
         let header = merge_stream.next().await;
         let header = if let Some(header) = Self::get_shard_one_data(header)? {
             header.1
@@ -141,6 +153,7 @@ where
             .codec_mut()
             .encode(PacketSend::EncodeOffset(make_eof_packet()[4..].into(), buf.len()), &mut buf);
 
+        merge_stream.set_state(MergeResultsetState::Row);
         // get rows
         Self::get_rows(req, merge_stream, &mut buf, sharding_column, col_info, is_binary).await?;
 
@@ -169,22 +182,26 @@ where
             true => {
                 let row_data_binary = RowDataBinary::new(col_info, &[][..]);
                 RowDataTyp::Binary(row_data_binary)
-            },
+            }
         };
 
         while let Some(chunk) = stream.next().await {
-            let mut chunk = chunk.into_par_iter().filter_map(|x| {
-                if let Some(x) = x {
-                    if let Ok(data) = &x {
-                        if is_eof(data) {
-                            return None
+            let mut chunk = chunk
+                .into_par_iter()
+                .filter_map(|x| {
+                    if let Some(x) = x {
+                        if let Ok(data) = &x {
+                            if is_eof(data) {
+                                return None;
+                            }
                         }
+                        Some(x)
+                    } else {
+                        None
                     }
-                    Some(x)
-                } else {
-                    None
-                }
-            }).collect::<Result<Vec<_>, _>>().map_err(ErrorKind::from)?;
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(ErrorKind::from)?;
 
             if is_binary {
                 if let Some(name) = &sharding_column {
@@ -204,7 +221,7 @@ where
                     })
                 }
             }
-            
+
             for row in chunk.iter() {
                 let _ = req
                     .framed
@@ -232,10 +249,10 @@ where
                     if let Some(data) = data {
                         data.map_err(ErrorKind::Protocol)?
                     } else {
-                       unreachable!() 
+                        unreachable!()
                     }
                 } else {
-                    unreachable!() 
+                    unreachable!()
                 }
             } else {
                 // find index from chunk
@@ -376,7 +393,7 @@ where
             stmts.push(stmt);
         }
 
-        Ok(( stmts, sended_conns ))
+        Ok((stmts, sended_conns))
     }
 
     pub async fn shard_execute_executor(

@@ -20,7 +20,7 @@ use std::{
 };
 
 use bytes::{Buf, BufMut, BytesMut};
-use futures::{Stream, stream::Fuse};
+use futures::{stream::Fuse, Stream};
 use pin_project::pin_project;
 use protocol_codegen::mysql_codec_convert;
 use tokio::io::Interest;
@@ -102,12 +102,12 @@ pub enum MergeResultsetState {
     Header,
     ColumnInfo,
     ColumnEof,
-    Row
+    Row,
 }
 
 #[pin_project]
-pub struct MergeStream<S> 
-where 
+pub struct MergeStream<S>
+where
     S: Stream + std::marker::Unpin,
 {
     inner: Vec<Fuse<S>>,
@@ -119,63 +119,63 @@ where
     state: MergeResultsetState,
 }
 
-impl<S> MergeStream<S> 
-where 
+impl<S> MergeStream<S>
+where
     S: Stream + std::marker::Unpin,
 {
-   fn set_state(&mut self, state: MergeResultsetState)  {
+    pub fn set_state(&mut self, state: MergeResultsetState) {
         self.state = state;
-   }
+    }
 }
 
 impl<S> MergeStream<S>
-where 
+where
     S: Stream + std::marker::Unpin,
 {
-   pub fn new(inner: Vec<Fuse<S>>, base_length: usize) -> Self {
+    pub fn new(inner: Vec<Fuse<S>>, base_length: usize) -> Self {
         let limit = base_length * 100;
-        
-        MergeStream { 
-            inner, 
+
+        MergeStream {
+            inner,
             idx: 0,
             buf: Vec::with_capacity(base_length),
             base_length,
-            limit_idx: 0, 
+            limit_idx: 0,
             limit,
             state: MergeResultsetState::Header,
         }
-   } 
+    }
 }
 
-impl<S> Stream for MergeStream<S> 
-where 
+impl<S> Stream for MergeStream<S>
+where
     S: Stream + std::marker::Unpin,
-    <S as Stream>::Item: std::fmt::Debug
+    <S as Stream>::Item: std::fmt::Debug,
 {
     type Item = Vec<Option<S::Item>>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
         loop {
-            let s = unsafe {
-                Pin::new(me.inner.get_unchecked_mut(*me.idx))
-            };
+            let s = unsafe { Pin::new(me.inner.get_unchecked_mut(*me.idx)) };
 
             match me.state {
-                MergeResultsetState::Header | MergeResultsetState::ColumnInfo | MergeResultsetState::ColumnEof => {
+                MergeResultsetState::Header
+                | MergeResultsetState::ColumnInfo
+                | MergeResultsetState::ColumnEof => {
                     match s.poll_next(cx) {
                         Poll::Ready(data) => {
                             *me.idx += 1;
                             me.buf.push(data);
-                        },
+                        }
 
                         Poll::Pending => return Poll::Pending,
                     };
 
                     if *me.idx == *me.base_length {
                         *me.idx = 0;
-                        break
+                        break;
                     }
-                },
+                }
 
                 MergeResultsetState::Row => {
                     match s.poll_next(cx) {
@@ -183,7 +183,7 @@ where
                             *me.idx += 1;
                             *me.limit_idx += 1;
                             me.buf.push(data);
-                        },
+                        }
 
                         Poll::Pending => return Poll::Pending,
                     };
@@ -203,12 +203,10 @@ where
         if me.buf.is_empty() || me.buf.iter().all(|x| x.is_none()) {
             return Poll::Ready(None);
         } else {
-            return  Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.limit))))
+            return Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.limit))));
         }
-
     }
 }
-
 
 #[derive(Debug)]
 #[pin_project]
@@ -398,8 +396,6 @@ pub fn write_command<'a>(item: SendCommand<'a>, dst: &'a mut BytesMut) {
     dst.put(item.1.as_bytes());
 }
 
-
-
 #[cfg(test)]
 mod test {
     use tokio_stream::StreamExt;
@@ -450,7 +446,4 @@ mod test {
             }
         }
     }
-
-
-
 }
