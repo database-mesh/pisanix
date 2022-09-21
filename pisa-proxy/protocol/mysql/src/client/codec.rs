@@ -119,13 +119,13 @@ where
     state: MergeResultsetState,
 }
 
-impl<S> MergeStream<S>
-where
+impl<S> MergeStream<S> 
+where 
     S: Stream + std::marker::Unpin,
 {
-    pub fn set_state(&mut self, state: MergeResultsetState) {
+   fn set_state(&mut self, state: MergeResultsetState)  {
         self.state = state;
-    }
+   }
 }
 
 impl<S> MergeStream<S>
@@ -173,9 +173,9 @@ where
 
                     if *me.idx == *me.base_length {
                         *me.idx = 0;
-                        break;
+                        break
                     }
-                }
+                },
 
                 MergeResultsetState::Row => {
                     match s.poll_next(cx) {
@@ -200,10 +200,7 @@ where
             }
         }
 
-        if me.buf.is_empty() || me.buf.iter().all(|x| x.is_none()) {
-            return Poll::Ready(None);
-        } else {
-            return Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.limit))));
+        return Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.limit))));
         }
     }
 }
