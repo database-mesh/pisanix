@@ -119,13 +119,13 @@ where
     state: MergeResultsetState,
 }
 
-impl<S> MergeStream<S> 
-where 
+impl<S> MergeStream<S>
+where
     S: Stream + std::marker::Unpin,
 {
-   fn set_state(&mut self, state: MergeResultsetState)  {
+    pub fn set_state(&mut self, state: MergeResultsetState) {
         self.state = state;
-   }
+    }
 }
 
 impl<S> MergeStream<S>
@@ -173,9 +173,9 @@ where
 
                     if *me.idx == *me.base_length {
                         *me.idx = 0;
-                        break
+                        break;
                     }
-                },
+                }
 
                 MergeResultsetState::Row => {
                     match s.poll_next(cx) {
