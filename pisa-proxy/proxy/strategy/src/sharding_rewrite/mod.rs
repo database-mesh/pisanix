@@ -84,7 +84,7 @@ pub struct DatabaseChange {
 #[derive(Debug)]
 pub struct AvgChange {
     // avg sql rewrite target
-    // example: COUNT(pbl): COUNT(pbl) AS PBL_AVG_DERIVED_COUNT_00000, SUM(pbl) AS PBL_AVG_DERIVED_SUM_00000
+    // example: AVG(pbl): avg_count: PBL_AVG_DERIVED_COUNT_00000, avg_sum: PBL_AVG_DERIVED_SUM_00000
     pub target: IndexMap::<String, String>
 }
 
