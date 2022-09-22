@@ -213,7 +213,7 @@ where
                 }
             } else {
                 if let Some(name) = &sharding_column {
-                    if let Some(_) = col_info.clone().iter().find(|col_info| col_info.column_name.eq(name)) {
+                    if let Some(_) = col_info.iter().find(|col_info| col_info.column_name.eq(name)) {
                         chunk.par_sort_by_cached_key(|x| {
                             let mut row_data = row_data.clone();
                             row_data.with_buf(&x[4..]);
