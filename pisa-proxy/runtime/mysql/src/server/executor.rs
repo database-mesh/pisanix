@@ -115,6 +115,7 @@ where
         req: &mut ReqContext<T, C>,
         merge_stream: &mut MergeStream<ResultsetStream<'a>>,
         sharding_column: Option<String>,
+        // rewrite_outputs: Vec<ShardingRewriteOutput>
         is_binary: bool,
     ) -> Result<(), Error> {
         let header = merge_stream.next().await;
@@ -176,11 +177,11 @@ where
     ) -> Result<(), Error> {
         let row_data = match is_binary {
             false => {
-                let row_data_text = RowDataText::new(col_info, &[][..]);
+                let row_data_text = RowDataText::new(col_info.clone(), &[][..]);
                 RowDataTyp::Text(row_data_text)
             }
             true => {
-                let row_data_binary = RowDataBinary::new(col_info, &[][..]);
+                let row_data_binary = RowDataBinary::new(col_info.clone(), &[][..]);
                 RowDataTyp::Binary(row_data_binary)
             }
         };
@@ -213,12 +214,14 @@ where
                 }
             } else {
                 if let Some(name) = &sharding_column {
-                    chunk.par_sort_by_cached_key(|x| {
-                        let mut row_data = row_data.clone();
-                        row_data.with_buf(&x[4..]);
-                        let value = row_data.decode_with_name::<String>(&name).unwrap().unwrap();
-                        value.parse::<u64>().unwrap()
-                    })
+                    if let Some(_) = col_info.clone().iter().find(|col_info| col_info.column_name.eq(name)) {
+                        chunk.par_sort_by_cached_key(|x| {
+                            let mut row_data = row_data.clone();
+                            row_data.with_buf(&x[4..]);
+                            let value = row_data.decode_with_name::<String>(&name).unwrap().unwrap();
+                            value.parse::<u64>().unwrap()
+                        })
+                    }
                 }
             }
 
