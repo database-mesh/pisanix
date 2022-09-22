@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod meta;
+mod rewrite_const;
 mod generic_meta;
 
 use endpoint::endpoint::Endpoint;
@@ -21,6 +22,7 @@ use mysql_parser::ast::{SqlStmt, Visitor, TableIdent };
 use crate::sharding_rewrite::meta::AvgMeta;
 use crate::sharding_rewrite::meta::GroupMeta;
 use crate::sharding_rewrite::meta::OrderMeta;
+use crate::sharding_rewrite::rewrite_const::*;
 
 use self::{meta::{
     FieldMeta, InsertValsMeta, RewriteMetaData, WhereMeta, WhereMetaRightDataType,
@@ -607,8 +609,14 @@ impl ShardingRewrite {
                         if let Some(order_metas) = orders.get(field_query_id) {
                             for order in order_metas.into_iter() {
                                 if let None = field_meta.into_iter().find(|x| x.to_string() == order.name) {
-                                    let target_field = format!("{}{} AS ", ori_field, order.name);
-                                    let target_as = format!("{}_ORDER_BY_DERIVED_{:05}", order.name.to_uppercase(), idx);
+                                    let target_field = format!("{}{} {} ", ori_field, order.name, AS);
+                                    let mut target_as = String::from("");
+                                    if order.name.contains("`") {
+                                        let new_order_name = order.name.replace("`", "");
+                                        target_as = format!("{}_{}_{:05}", new_order_name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx);
+                                    } else {
+                                        target_as = format!("{}_{}_{:05}", order.name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx);
+                                    }
                                     let target = format!("{}{}", target_field, target_as);
                                     target_sql.insert_str(first_span.start(), &target.clone());
                                     order_changes.insert("order".to_string(), target_as);
@@ -623,8 +631,14 @@ impl ShardingRewrite {
                         if let Some(group_metas) = groups.get(field_query_id) {
                             for group in group_metas.into_iter() {
                                 if let None = field_meta.into_iter().find(|x| x.to_string() == group.name) {
-                                    let target_field = format!("{}{} AS ", ori_field, group.name);
-                                    let target_as = format!("{}_GROUP_BY_DERIVED_{:05}", group.name.to_uppercase(), idx);
+                                    let target_field = format!("{}{} {} ", ori_field, group.name, AS);
+                                    let mut target_as = String::from("");
+                                    if group.name.contains("`") {
+                                        let new_group_name = group.name.replace("`", "");
+                                        target_as = format!("{}_{}_{:05}", new_group_name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx);
+                                    } else {
+                                        target_as = format!("{}_{}_{:05}", group.name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx);
+                                    }
                                     let target = format!("{}{}", target_field, target_as);
                                     target_sql.insert_str(first_span.start(), &target.clone());
                                     group_changes.insert("group".to_string(), target_as);
@@ -652,12 +666,12 @@ impl ShardingRewrite {
             }
     
             for avg_meta in avg {
-                let target_count = &format!("COUNT({}) AS ", avg_meta.name);
-                let target_count_as = &format!("{}_AVG_DERIVED_COUNT_{:05}", avg_meta.name.to_uppercase(), idx);
+                let target_count = &format!("{}({}) {} ", COUNT, avg_meta.name, AS);
+                let target_count_as = &format!("{}_{}_{:05}", avg_meta.name.to_ascii_uppercase(), AVG_DERIVED_COUNT, idx);
                 res.insert("avg_count".to_string(), target_count_as.to_string());
 
-                let target_sum = &format!("SUM({}) AS ", avg_meta.name);
-                let target_sum_as = &format!("{}_AVG_DERIVED_SUM_{:05}", avg_meta.name.to_uppercase(), idx);
+                let target_sum = &format!("{}({}) {} ", SUM, avg_meta.name, AS);
+                let target_sum_as = &format!("{}_{}_{:05}", avg_meta.name.to_ascii_uppercase(), AVG_DERIVED_SUM, idx);
                 res.insert("avg_sum".to_string(), target_sum_as.to_string());
 
                 target += &format!("{}{}, {}{}", target_count, target_count_as, target_sum, target_sum_as);
@@ -1389,7 +1403,7 @@ mod test {
             "SELECT order_id, order_item_id, user_id AS USER_ID_ORDER_BY_DERIVED_00000 FROM `db`.tshard_00000 WHERE id in (SELECT s_id, ngl, znl from `db`.tshard_00000) ORDER BY user_id"
         );
 
-        let raw_sql = "SELECT order_id, order_item_id from db.tshard where idx = 3 ORDER BY user_id";
+        let raw_sql = "SELECT order_id, order_item_id from db.tshard where idx = 3 ORDER BY `user_id`";
         let ast = parser.parse(raw_sql).unwrap();
         let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
         let input = ShardingRewriteInput {
@@ -1400,7 +1414,7 @@ mod test {
         let res = sr.rewrite(input).unwrap();
         assert_eq!(
             res[0].target_sql,
-            "SELECT order_id, order_item_id, user_id AS USER_ID_ORDER_BY_DERIVED_00003 from `db`.tshard_00003 where idx = 3 ORDER BY user_id"
+            "SELECT order_id, order_item_id, `user_id` AS USER_ID_ORDER_BY_DERIVED_00003 from `db`.tshard_00003 where idx = 3 ORDER BY `user_id`"
         );
     }
 }
