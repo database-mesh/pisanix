@@ -13,9 +13,9 @@
 // limitations under the License.
 
 pub const DEFAULT_LOCAL_CONFIG: &str = "etc/config.toml";
-pub const DEFAULT_PISA_PROXY_ADMIN_LISTEN_HOST: &str = "0.0.0.0";
-pub const DEFAULT_PISA_PROXY_ADMIN_LISTEN_PORT: &str = "5591";
-pub const DEFAULT_PISA_PROXY_ADMIN_LOG_LEVEL: &str = "WARN";
+pub const DEFAULT_PISA_PROXY_ADMIN_LISTEN_HOST: &str = "";
+pub const DEFAULT_PISA_PROXY_ADMIN_LISTEN_PORT: &str = "";
+pub const DEFAULT_PISA_PROXY_ADMIN_LOG_LEVEL: &str = "";
 pub const DEFAULT_PISA_CONTROLLER_HOST: &str = "";
 pub const DEFAULT_PISA_CONTROLLER_NAMESPACE: &str = "pisa-system";
 pub const DEFAULT_PISA_CONTROLLER_SERVICE: &str = "pisa-controller";
