@@ -155,17 +155,20 @@ annotations:
 首先利用 Helm 部署 microservices-demo 
 
 ```shell
+git clone https://github.com/database-mesh/microservices-demo.git
 kubectl create ns demotest
 cd deploy/kubernetes/helm-chart
 helm dependency build
 cd ..
 helm install microservices-demo helm-chart -n demotest
 ```
-检查 Helm 命令部署情况
+检查 Helm 命令部署情况：
 
 ![socks-shop-deployed](/img/socks-shop-deployed.png)
 
-等待程序启动并看到如下页面后确认已正确运行
+等待程序启动并看到如下页面后确认已正确运行：
+
+注：如果前面执行 `helm dependency build` 提示 nginx ingress 报错，可以跳过继续执行后面的 `helm install` 命令，最终查看部署结果使用的是 `kubectl port-forward` 子命令而非 `ingress`。 
 
 ![socks-shop-preview](/img/socks-shop-preview.png)
 
@@ -243,7 +246,7 @@ spec:
 kubectl label ns demotest pisanix.io/inject=enabled
 ```
 
-修改 catalogue-dep.yaml 来为 catalogue deployment 添加标签以开启注入，
+检查 catalogue-dep.yaml 或 catalogue deployment 以确认是否已添加标签并开启注入：
 
 ```yaml
 ---
