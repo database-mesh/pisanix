@@ -31,7 +31,6 @@ use server::{
 };
 
 fn main() {
-    // let config = PisaProxyConfigBuilder::new().load_config();
     let config = PisaProxyConfigBuilder::new().collect_from_cmd().build();
     tracing_subscriber::fmt()
         .with_max_level(Level::from_str(config.get_admin().log_level.as_str()).ok())
@@ -39,32 +38,51 @@ fn main() {
 
     info!("Pisa-Proxy {}", config.get_version());
 
-    let mut servers = Vec::with_capacity(config.get_proxy().len());
-    let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
-        .build_http_server(HttpServerKind::Rocket);
+    match config.proxy.clone() {
+        Some(_) => {
+            let mut servers = Vec::with_capacity(config.get_proxy().len());
+            let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
+                .build_http_server(HttpServerKind::Rocket);
 
-    build_runtime().block_on(async move {
-        for proxy_config in config.get_proxy() {
-            let cfg = proxy_config;
-            let factory = PisaProxyFactory::new(cfg.to_owned(), config.clone());
-            match proxy_config.backend_type.as_str() {
-                BACKEND_TYPE_MYSQL => servers
-                    .push(tokio::spawn(new_proxy_server(factory.build_proxy(ProxyKind::MySQL)))),
-                BACKEND_TYPE_SHARDINGSPHERE_PROXY => servers.push(tokio::spawn(new_proxy_server(
-                    factory.build_proxy(ProxyKind::ShardingSphereProxy),
-                ))),
-                &_ => {}
-            }
+            build_runtime().block_on(async move {
+                for proxy_config in config.get_proxy() {
+                    let cfg = proxy_config;
+                    let factory = PisaProxyFactory::new(cfg.to_owned(), config.clone());
+                    match proxy_config.backend_type.as_str() {
+                        BACKEND_TYPE_MYSQL => servers.push(tokio::spawn(new_proxy_server(
+                            factory.build_proxy(ProxyKind::MySQL),
+                        ))),
+                        BACKEND_TYPE_SHARDINGSPHERE_PROXY => servers.push(tokio::spawn(
+                            new_proxy_server(factory.build_proxy(ProxyKind::ShardingSphereProxy)),
+                        )),
+                        &_ => {}
+                    }
+                }
+
+                servers.push(tokio::spawn(new_http_server(http_server)));
+
+                for server in servers {
+                    if let Err(e) = server.await {
+                        error!("{:?}", e)
+                    }
+                }
+            });
         }
+        None => {
+            let mut servers = Vec::with_capacity(1);
+            let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
+                .build_http_server(HttpServerKind::Rocket);
+            build_runtime().block_on(async move {
+                servers.push(tokio::spawn(new_http_server(http_server)));
 
-        servers.push(tokio::spawn(new_http_server(http_server)));
-
-        for server in servers {
-            if let Err(e) = server.await {
-                error!("{:?}", e)
-            }
+                for server in servers {
+                    if let Err(e) = server.await {
+                        error!("{:?}", e)
+                    }
+                }
+            });
         }
-    });
+    }
 }
 
 /// build runtime, build Tokio runtime
