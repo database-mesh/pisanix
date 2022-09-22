@@ -154,6 +154,7 @@ impl PisaProxyConfigBuilder {
             )
             .arg(
                 Arg::new("loglevel")
+                    .short('l')
                     .long("log-level")
                     .help("Log level")
                     .default_value(DEFAULT_PISA_PROXY_ADMIN_LOG_LEVEL)
