@@ -69,18 +69,14 @@ fn main() {
             });
         }
         None => {
-            let mut servers = Vec::with_capacity(1);
             let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
                 .build_http_server(HttpServerKind::Rocket);
             build_runtime().block_on(async move {
-                servers.push(tokio::spawn(new_http_server(http_server)));
-
-                for server in servers {
-                    if let Err(e) = server.await {
+                if let Err(e) = tokio::spawn(new_http_server(http_server)).await {
                         error!("{:?}", e)
                     }
                 }
-            });
+            );
         }
     }
 }
