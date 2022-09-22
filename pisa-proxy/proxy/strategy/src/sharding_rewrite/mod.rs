@@ -13,12 +13,16 @@
 // limitations under the License.
 
 mod meta;
+mod rewrite_const;
 mod generic_meta;
 
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
 use mysql_parser::ast::{SqlStmt, Visitor, TableIdent };
 use crate::sharding_rewrite::meta::AvgMeta;
+use crate::sharding_rewrite::meta::GroupMeta;
+use crate::sharding_rewrite::meta::OrderMeta;
+use crate::sharding_rewrite::rewrite_const::*;
 
 use self::{meta::{
     FieldMeta, InsertValsMeta, RewriteMetaData, WhereMeta, WhereMetaRightDataType,
@@ -69,6 +73,8 @@ impl CalcShardingIdx<f64> for f64 {
 pub enum RewriteChange {
     DatabaseChange(DatabaseChange),
     AvgChange(AvgChange),
+    OrderChange(OrderChange),
+    GroupChange(GroupChange),
 }
 
 #[derive(Debug)]
@@ -83,6 +89,16 @@ pub struct DatabaseChange {
 pub struct AvgChange {
     // avg sql rewrite target
     // example: AVG(pbl): avg_count: PBL_AVG_DERIVED_COUNT_00000, avg_sum: PBL_AVG_DERIVED_SUM_00000
+    pub target: IndexMap::<String, String>
+}
+
+#[derive(Debug)]
+pub struct OrderChange {
+    pub target: IndexMap::<String, String>
+}
+
+#[derive(Debug)]
+pub struct GroupChange {
     pub target: IndexMap::<String, String>
 }
 
@@ -148,6 +164,11 @@ struct ChangeInsertMeta {
 enum StrategyTyp {
     Database,
     Table,
+}
+
+pub enum OrderGroupChange {
+    Order(OrderMeta),
+    Group(GroupMeta),
 }
 
 impl ShardingRewrite {
@@ -258,6 +279,8 @@ impl ShardingRewrite {
         let inserts = meta.get_inserts();
         let fields = meta.get_fields();
         let avgs = meta.get_avgs();
+        let orders = meta.get_orders();
+        let groups = meta.get_groups();
 
         if !inserts.is_empty() {
             if fields.is_empty() {
@@ -265,10 +288,11 @@ impl ShardingRewrite {
             }
 
             return self.change_insert_sql(try_tables, fields, inserts);
-       }
+        }
 
+        
         if wheres.is_empty() {
-            return Ok(self.table_strategy_iproduct(try_tables.clone(), avgs));
+            return Ok(self.table_strategy_iproduct(try_tables.clone(), avgs, fields, orders, groups));
         }
 
         let wheres = Self::find_try_where(StrategyTyp::Table, &try_tables, wheres)?.into_iter().filter_map(|x| {
@@ -282,7 +306,7 @@ impl ShardingRewrite {
         let sum: usize = wheres.iter().map(|x| x.1).sum::<u64>() as usize;
 
         if expect_sum != sum {
-            return Ok(self.table_strategy_iproduct(try_tables, avgs));
+            return Ok(self.table_strategy_iproduct(try_tables, avgs, fields, orders, groups));
         }
 
         let would_changes: Vec<DatabaseChange> = try_tables
@@ -323,6 +347,30 @@ impl ShardingRewrite {
         let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
         
         let sharding_column = sharding_rule.get_sharding_column().1.unwrap();
+
+        let (order_target, group_target) = Self::change_order_group(&mut target_sql, orders, groups, fields, shard_idx);
+
+        if !order_target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::OrderChange(OrderChange{target: order_target})],
+                        target_sql: target_sql.to_string(),
+                        data_source: DataSource::Endpoint(ep.clone()),
+                        sharding_column: Some(sharding_column.to_string()),
+                    }
+                )
+        }
+           
+        if !group_target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::GroupChange(GroupChange{target: group_target})],
+                        target_sql: target_sql.to_string(),
+                        data_source: DataSource::Endpoint(ep.clone()),
+                        sharding_column: Some(sharding_column.to_string()),
+                    }
+                )
+        }
 
         if !avgs.is_empty() {
             let target = Self::change_avg(&mut target_sql, avgs, shard_idx, 0);
@@ -512,8 +560,123 @@ impl ShardingRewrite {
         }
     }
 
+    fn change_order_group(
+        target_sql: &mut String,
+        orders: &IndexMap<u8, Vec<OrderMeta>>, 
+        groups: &IndexMap<u8, Vec<GroupMeta>>, 
+        fields: &IndexMap<u8, Vec<FieldMeta>>, 
+        idx: u64
+    ) -> (IndexMap::<String, String>, IndexMap::<String, String>) {
+        let mut order_changes: IndexMap::<String, String> = IndexMap::new();
+        let mut group_changes: IndexMap::<String, String> = IndexMap::new();
+
+        for (query_id, field) in fields.iter() {
+            if *query_id == 1 {
+                let last_span = match &field[&field.len() - 1] {
+                    FieldMeta::Ident{span, name: _} => {
+                        span
+                    }
+                    _ => unreachable!(),
+                };
+                let first_span = match &field[0] {
+                    FieldMeta::Ident{span, name: _} => {
+                        span
+                    },
+                    _ => unreachable!(),
+                };
+
+                let len = last_span.start() + last_span.len() - first_span.start();
+
+                let mut ori_field = String::with_capacity(len);
+                field.iter().map(|x| {
+                    match x {
+                        FieldMeta::Ident{span: _, name} => {
+                            ori_field += &format!("{}, ", name).to_string();
+                            name
+                        },
+                        _ => unreachable!()
+                    }
+                }).collect::<Vec<_>>();
+
+                if !orders.is_empty() || !groups.is_empty() {
+                    for _ in 0..len {
+                        target_sql.remove(first_span.start());
+                    }
+                }
+                
+                if !orders.is_empty() {
+                    for (field_query_id, field_meta) in fields.into_iter() {
+                        if let Some(order_metas) = orders.get(field_query_id) {
+                            for order in order_metas.into_iter() {
+                                if let None = field_meta.into_iter().find(|&x| {
+                                    match x {
+                                        FieldMeta::Ident{span: _, name} => {
+                                            if *name == order.name {
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                }) {
+                                    let target_field = format!("{}{} {} ", ori_field, order.name, AS);
+                                    let mut target_as = String::with_capacity(target_field.len());
+                                    if order.name.contains("`") {
+                                        let new_order_name = order.name.replace("`", "");
+                                        target_as = format!("{}_{}_{:05}", new_order_name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx);
+                                    } else {
+                                        target_as = format!("{}_{}_{:05}", order.name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx);
+                                    }
+                                    let target = format!("{}{}", target_field, target_as);
+                                    target_sql.insert_str(first_span.start(), &target.clone());
+                                    order_changes.insert("order".to_string(), target_as);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !groups.is_empty() {
+                    for (field_query_id, field_meta) in fields.iter() {
+                        if let Some(group_metas) = groups.get(field_query_id) {
+                            for group in group_metas.into_iter() {
+                                if let None = field_meta.into_iter().find(|&x| {
+                                    match x {
+                                        FieldMeta::Ident{span: _, name} => {
+                                            if *name == group.name {
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                }) {
+                                    let target_field = format!("{}{} {} ", ori_field, group.name, AS);
+                                    let mut target_as = String::with_capacity(target_field.len());
+                                    if group.name.contains("`") {
+                                        let new_group_name = group.name.replace("`", "");
+                                        target_as = format!("{}_{}_{:05}", new_group_name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx);
+                                    } else {
+                                        target_as = format!("{}_{}_{:05}", group.name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx);
+                                    }
+                                    let target = format!("{}{}", target_field, target_as);
+                                    target_sql.insert_str(first_span.start(), &target.clone());
+                                    group_changes.insert("group".to_string(), target_as);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return (order_changes, group_changes)
+    }
+
     fn change_avg(target_sql: &mut String, avgs: &IndexMap<u8, Vec<AvgMeta>>, idx: u64, offset: usize) -> IndexMap<String, String> {
-        let mut target = String::from("");
+        let mut target = String::with_capacity(AVG_DERIVED_COUNT.len() + AVG_DERIVED_SUM.len());
         let mut res = IndexMap::new();
         for (_, avg) in avgs.iter() {
             let last_span = avg[avg.len() - 1].span;
@@ -525,12 +688,12 @@ impl ShardingRewrite {
             }
     
             for avg_meta in avg {
-                let target_count = &format!("COUNT({}) AS ", avg_meta.name);
-                let target_count_as = &format!("{}_AVG_DERIVED_COUNT_{:05}", avg_meta.name.to_uppercase(), idx);
+                let target_count = &format!("{}({}) {} ", COUNT, avg_meta.name, AS);
+                let target_count_as = &format!("{}_{}_{:05}", avg_meta.name.to_ascii_uppercase(), AVG_DERIVED_COUNT, idx);
                 res.insert("avg_count".to_string(), target_count_as.to_string());
 
-                let target_sum = &format!("SUM({}) AS ", avg_meta.name);
-                let target_sum_as = &format!("{}_AVG_DERIVED_SUM_{:05}", avg_meta.name.to_uppercase(), idx);
+                let target_sum = &format!("{}({}) {} ", SUM, avg_meta.name, AS);
+                let target_sum_as = &format!("{}_{}_{:05}", avg_meta.name.to_ascii_uppercase(), AVG_DERIVED_SUM, idx);
                 res.insert("avg_sum".to_string(), target_sum_as.to_string());
 
                 target += &format!("{}{}, {}{}", target_count, target_count_as, target_sum, target_sum_as);
@@ -715,6 +878,9 @@ impl ShardingRewrite {
         &self,
         tables: Vec<(u8, Sharding, &TableIdent)>,
         avgs: &IndexMap<u8, Vec<AvgMeta>>,
+        fields: &IndexMap<u8, Vec<FieldMeta>>,
+        orders: &IndexMap<u8, Vec<OrderMeta>>,
+        groups: &IndexMap<u8, Vec<GroupMeta>>,
     ) -> Vec<ShardingRewriteOutput> {
         let mut output = vec![];
         let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
@@ -752,6 +918,29 @@ impl ShardingRewrite {
               
             }
 
+            let (order_target, group_target) = Self::change_order_group(&mut target_sql, orders, groups, fields, changes[0].shard_idx);
+            if !order_target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::OrderChange(OrderChange{target: order_target})],
+                        target_sql: target_sql.to_string(),
+                        data_source: DataSource::Endpoint(ep.clone()),
+                        sharding_column: sharding_column.clone(),
+                    }
+                )
+             }
+           
+            if !group_target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::GroupChange(GroupChange{target: group_target})],
+                        target_sql: target_sql.to_string(),
+                        data_source: DataSource::Endpoint(ep.clone()),
+                        sharding_column: sharding_column.clone(),
+                    }
+                )
+            }
+
             if !avgs.is_empty() {
                 if changes[0].span.start() > avgs[0][0].span.start() {
                     offset = 0; 
@@ -764,8 +953,7 @@ impl ShardingRewrite {
                     sharding_column: sharding_column.clone(),
                 });
             }
-         
-            // let ep = self.endpoints[0].clone();
+
             output.push(ShardingRewriteOutput {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql: target_sql.to_string(),
@@ -1034,7 +1222,6 @@ mod test {
                 "SELECT idx from `db`.tshard_00003 where idx = 3 and idx = (SELECT idx from `db`.tshard_00003 where idx = 4)",
             ],
         );
-
     }
 
     #[test]
@@ -1121,6 +1308,7 @@ mod test {
         assert_eq!(res[0].target_sql, "SELECT * from `db`.tshard_00000 where znl > (SELECT COUNT(znl) AS ZNL_AVG_DERIVED_COUNT_00000, SUM(znl) AS ZNL_AVG_DERIVED_SUM_00000 from `db`.tshard_00000)")
     }
 
+    #[test]
     fn test_table_sharding_strategy_update_delete() {
         let config = get_table_sharding_config();
         let raw_sql = "UPDATE db.tshard set a=1 where idx = 2";
@@ -1174,6 +1362,81 @@ mod test {
             vec![
                 "UPDATE `db`.tshard_00002 set a=1 where idx = 2"
             ],
+        );
+    }
+
+    #[test]
+    fn test_table_sharding_strategy_order_group_by() {
+        let config = get_table_sharding_config();
+        let parser = Parser::new();
+        let raw_sql = "SELECT order_id, order_item_id FROM db.tshard ORDER BY user_id";
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            default_db: None,
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res[0].target_sql,
+            "SELECT order_id, order_item_id, user_id AS USER_ID_ORDER_BY_DERIVED_00000 FROM `db`.tshard_00000 ORDER BY user_id"
+        );
+
+        let raw_sql = "SELECT order_id, order_item_id FROM db.tshard GROUP BY user_id";
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            default_db: None,
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res[0].target_sql,
+            "SELECT order_id, order_item_id, user_id AS USER_ID_GROUP_BY_DERIVED_00000 FROM `db`.tshard_00000 GROUP BY user_id"
+        );
+
+        let raw_sql = "SELECT order_id, order_item_id from db.tshard where user_id > 3 ORDER BY user_id";
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            default_db: None,
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res[0].target_sql,
+            "SELECT order_id, order_item_id, user_id AS USER_ID_ORDER_BY_DERIVED_00000 from `db`.tshard_00000 where user_id > 3 ORDER BY user_id"
+        );
+
+        let raw_sql = "SELECT order_id, order_item_id FROM db.tshard WHERE id in (SELECT s_id, ngl, znl from db.tshard) ORDER BY user_id";
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            default_db: None,
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res[0].target_sql,
+            "SELECT order_id, order_item_id, user_id AS USER_ID_ORDER_BY_DERIVED_00000 FROM `db`.tshard_00000 WHERE id in (SELECT s_id, ngl, znl from `db`.tshard_00000) ORDER BY user_id"
+        );
+
+        let raw_sql = "SELECT order_id, order_item_id from db.tshard where idx = 3 ORDER BY `user_id`";
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            default_db: None,
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res[0].target_sql,
+            "SELECT order_id, order_item_id, `user_id` AS USER_ID_ORDER_BY_DERIVED_00003 from `db`.tshard_00003 where idx = 3 ORDER BY `user_id`"
         );
     }
 }
