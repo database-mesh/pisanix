@@ -571,18 +571,7 @@ impl ShardingRewrite {
         let mut group_changes: IndexMap::<String, String> = IndexMap::new();
 
         for (query_id, field) in fields.iter() {
-            let mut ori_field = String::from("");
             if *query_id == 1 {
-                field.iter().map(|x| {
-                    match x {
-                        FieldMeta::Ident{span: _, name} => {
-                            ori_field += &format!("{}, ", name).to_string();
-                            name
-                        },
-                        _ => unreachable!()
-                    }
-                }).collect::<Vec<_>>();
-          
                 let last_span = match &field[&field.len() - 1] {
                     FieldMeta::Ident{span, name: _} => {
                         span
@@ -597,6 +586,17 @@ impl ShardingRewrite {
                 };
 
                 let len = last_span.start() + last_span.len() - first_span.start();
+
+                let mut ori_field = String::with_capacity(len);
+                field.iter().map(|x| {
+                    match x {
+                        FieldMeta::Ident{span: _, name} => {
+                            ori_field += &format!("{}, ", name).to_string();
+                            name
+                        },
+                        _ => unreachable!()
+                    }
+                }).collect::<Vec<_>>();
 
                 if !orders.is_empty() || !groups.is_empty() {
                     for _ in 0..len {
@@ -621,7 +621,7 @@ impl ShardingRewrite {
                                     }
                                 }) {
                                     let target_field = format!("{}{} {} ", ori_field, order.name, AS);
-                                    let mut target_as = String::from("");
+                                    let mut target_as = String::with_capacity(target_field.len());
                                     if order.name.contains("`") {
                                         let new_order_name = order.name.replace("`", "");
                                         target_as = format!("{}_{}_{:05}", new_order_name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx);
@@ -654,7 +654,7 @@ impl ShardingRewrite {
                                     }
                                 }) {
                                     let target_field = format!("{}{} {} ", ori_field, group.name, AS);
-                                    let mut target_as = String::from("");
+                                    let mut target_as = String::with_capacity(target_field.len());
                                     if group.name.contains("`") {
                                         let new_group_name = group.name.replace("`", "");
                                         target_as = format!("{}_{}_{:05}", new_group_name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx);
@@ -676,7 +676,7 @@ impl ShardingRewrite {
     }
 
     fn change_avg(target_sql: &mut String, avgs: &IndexMap<u8, Vec<AvgMeta>>, idx: u64, offset: usize) -> IndexMap<String, String> {
-        let mut target = String::from("");
+        let mut target = String::with_capacity(AVG_DERIVED_COUNT.len() + AVG_DERIVED_SUM.len());
         let mut res = IndexMap::new();
         for (_, avg) in avgs.iter() {
             let last_span = avg[avg.len() - 1].span;
