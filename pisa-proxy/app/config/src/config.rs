@@ -219,7 +219,7 @@ impl PisaProxyConfigBuilder {
                 "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
                 self._pisa_controller_host, self._deployed_ns, self._deployed_name
             );
-            builder.build_from_http(http_path).unwrap()
+            builder.build_from_http(http_path).unwrap_or_default()
         };
 
         if !self._log_level.is_empty() {
