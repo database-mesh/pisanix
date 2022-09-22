@@ -39,7 +39,7 @@ pub enum FieldMeta {
 
 #[cfg(test)]
 impl FieldMeta {
-    fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         match self {
             Self::Ident { span: _, name } => name.clone(),
             Self::TableWild(val) => val.format(),
