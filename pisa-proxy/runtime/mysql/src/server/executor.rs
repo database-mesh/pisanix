@@ -115,7 +115,6 @@ where
         req: &mut ReqContext<T, C>,
         merge_stream: &mut MergeStream<ResultsetStream<'a>>,
         sharding_column: Option<String>,
-        // rewrite_outputs: Vec<ShardingRewriteOutput>
         is_binary: bool,
     ) -> Result<(), Error> {
         let header = merge_stream.next().await;
