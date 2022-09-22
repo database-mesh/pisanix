@@ -608,7 +608,18 @@ impl ShardingRewrite {
                     for (field_query_id, field_meta) in fields.into_iter() {
                         if let Some(order_metas) = orders.get(field_query_id) {
                             for order in order_metas.into_iter() {
-                                if let None = field_meta.into_iter().find(|x| x.to_string() == order.name) {
+                                if let None = field_meta.into_iter().find(|&x| {
+                                    match x {
+                                        FieldMeta::Ident{span: _, name} => {
+                                            if *name == order.name {
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                }) {
                                     let target_field = format!("{}{} {} ", ori_field, order.name, AS);
                                     let mut target_as = String::from("");
                                     if order.name.contains("`") {
@@ -630,7 +641,18 @@ impl ShardingRewrite {
                     for (field_query_id, field_meta) in fields.iter() {
                         if let Some(group_metas) = groups.get(field_query_id) {
                             for group in group_metas.into_iter() {
-                                if let None = field_meta.into_iter().find(|x| x.to_string() == group.name) {
+                                if let None = field_meta.into_iter().find(|&x| {
+                                    match x {
+                                        FieldMeta::Ident{span: _, name} => {
+                                            if *name == group.name {
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                }) {
                                     let target_field = format!("{}{} {} ", ori_field, group.name, AS);
                                     let mut target_as = String::from("");
                                     if group.name.contains("`") {
