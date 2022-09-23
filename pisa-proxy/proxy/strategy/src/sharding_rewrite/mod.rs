@@ -562,8 +562,8 @@ impl ShardingRewrite {
 
     fn change_order_group(
         target_sql: &mut String,
-        mut orders: &IndexMap<u8, Vec<OrderMeta>>, 
-        mut groups: &IndexMap<u8, Vec<GroupMeta>>, 
+        orders: &IndexMap<u8, Vec<OrderMeta>>, 
+        groups: &IndexMap<u8, Vec<GroupMeta>>, 
         fields: &IndexMap<u8, Vec<FieldMeta>>, 
         idx: u64
     ) -> (IndexMap::<String, String>, IndexMap::<String, String>) {
