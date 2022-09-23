@@ -707,6 +707,7 @@ impl ShardingRewrite {
             }
     
             for avg_meta in avg {
+                res.insert("avg_field".to_string(), format!("AVG({})", avg_meta.name));
                 let target_count = &format!("{}({}) {} ", COUNT, avg_meta.name, AS);
                 let target_count_as = &format!("{}_{}_{:05}", avg_meta.name.to_ascii_uppercase(), AVG_DERIVED_COUNT, idx);
                 res.insert("avg_count".to_string(), target_count_as.to_string());

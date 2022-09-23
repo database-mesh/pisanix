@@ -35,7 +35,7 @@ use super::{
 use crate::{
     err::ProtocolError,
     row::{RowData, RowDataTyp},
-    util::{get_length, is_eof},
+    util::{get_length, is_eof}, client::resultset::DecodeResultsetState,
 };
 
 pub type SendCommand<'a> = (u8, &'a str);
@@ -116,6 +116,7 @@ where
     base_length: usize,
     limit: usize,
     limit_idx: usize,
+    none_count: usize,
     state: MergeResultsetState,
 }
 
@@ -142,6 +143,7 @@ where
             base_length,
             limit_idx: 0,
             limit,
+            none_count: 0,
             state: MergeResultsetState::Header,
         }
     }
@@ -179,28 +181,40 @@ where
 
                 MergeResultsetState::Row => {
                     match s.poll_next(cx) {
-                        Poll::Ready(data) => {
+                        Poll::Ready(Some(data)) => {
                             *me.idx += 1;
                             *me.limit_idx += 1;
-                            me.buf.push(data);
+                            me.buf.push(Some(data));
+                        }
+
+                        Poll::Ready(None) => {
+                            *me.idx += 1;
+                            *me.limit_idx += 1;
+                            *me.none_count += 1;    
                         }
 
                         Poll::Pending => return Poll::Pending,
                     };
 
+
                     if *me.idx == *me.base_length {
                         *me.idx = 0;
+                        if *me.none_count == *me.base_length {
+                            *me.none_count = 0;
+                            break;
+                        }
                     }
 
                     if *me.limit_idx == *me.limit {
                         *me.limit_idx = 0;
+                        *me.none_count = 0;
                         break;
                     }
                 }
             }
         }
 
-        if me.buf.is_empty() || me.buf.iter().all(|x| x.is_none()) {
+        if me.buf.is_empty() {
             return Poll::Ready(None);
         } else {
             return Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.limit))));
@@ -235,10 +249,21 @@ impl<'a> Stream for ResultsetStream<'a> {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
         let codec = Pin::new(me.framed);
-        let is_complete = codec.codec().next_state.is_complete();
+        //println!("rs {:?}", codec.codec().next_state);
+        let next_state = codec.codec().next_state.clone();
+        let is_complete = next_state.is_complete();
+        
 
         match codec.poll_next(cx) {
-            Poll::Ready(Some(Ok(data))) => Poll::Ready(Some(Ok(data.0))),
+            Poll::Ready(Some(Ok(data))) => {
+                if next_state == DecodeResultsetState::Row || next_state == DecodeResultsetState::RowBinary {
+                    if is_eof(&data.0) {
+                        return Poll::Ready(None)
+                    }
+                }
+
+                Poll::Ready(Some(Ok(data.0)))
+            }
 
             Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
 
