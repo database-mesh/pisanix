@@ -190,24 +190,6 @@ where
         while let Some(chunk) = stream.next().await {
             let mut chunk = chunk
                 .into_par_iter().map(|x| x.unwrap()).collect::<Result<Vec<_>, _>>().map_err(ErrorKind::from)?;
-                //.filter_map(|x| {
-                //    let x = x.unwrap();
-                //    //if let Some(x) = x {
-                //        if let Ok(data) = &x {
-                //            if is_eof(data) {
-                //                None
-                //            } else {
-                //                Some(x)
-                //            }
-                //        } else {
-                //            Some(x)
-                //        }
-                //    //} else {
-                //        
-                //    //}
-                //})
-                //.collect::<Result<Vec<_>, _>>()
-                //.map_err(ErrorKind::from)?;
 
             //println!("chunk {:?}", &chunk[..]);
             if is_binary {
