@@ -591,7 +591,6 @@ impl ShardingRewrite {
                 let fields_list = field.iter().map(|x| {
                     match x {
                         FieldMeta::Ident{span: _, name} => {
-                            
                             ori_field += &format!("{}, ", name).to_string();
                             name
                         },
@@ -603,6 +602,8 @@ impl ShardingRewrite {
                     if !orders.is_empty() {
                         for order in orders[query_id].iter() {
                             if field.replace("`", "") == order.name.replace("`", "") {
+                                order_changes.insert("order_field".to_string(), order.name.clone());
+                                order_changes.insert("order_target".to_string(), "".to_string());
                                 return (order_changes, group_changes);
                             }
                         }
@@ -611,6 +612,8 @@ impl ShardingRewrite {
                     if !groups.is_empty() {
                         for group in groups[query_id].iter() {
                             if field.replace("`", "") == group.name.replace("`", "") {
+                                order_changes.insert("group_field".to_string(), group.name.clone());
+                                order_changes.insert("group_target".to_string(), "".to_string());
                                 return (order_changes, group_changes);
                             }
                         }
@@ -649,7 +652,8 @@ impl ShardingRewrite {
                                     }
                                     let target = format!("{}{}", target_field, target_as);
                                     target_sql.insert_str(first_span.start(), &target.clone());
-                                    order_changes.insert("order".to_string(), target_as);
+                                    order_changes.insert("order_target".to_string(), target_as);
+                                    order_changes.insert("order_field".to_string(), order.name.clone());
                                 }
                             }
                         }
@@ -682,7 +686,8 @@ impl ShardingRewrite {
                                     }
                                     let target = format!("{}{}", target_field, target_as);
                                     target_sql.insert_str(first_span.start(), &target.clone());
-                                    group_changes.insert("group".to_string(), target_as);
+                                    group_changes.insert("group_target".to_string(), target_as);
+                                    group_changes.insert("group_field".to_string(), group.name.clone());
                                 }
                             }
                         }
