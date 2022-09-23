@@ -36,7 +36,7 @@ use mysql_protocol::{
 };
 use pisa_error::error::{Error, ErrorKind};
 use rayon::prelude::*;
-use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput};
+use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput, RewriteChange};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -67,7 +67,7 @@ where
 {
     pub async fn shard_query_executor(
         req: &mut ReqContext<T, C>,
-        rewrite_outputs: Vec<ShardingRewriteOutput>,
+        // rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
         is_get_conn: bool,
     ) -> Result<(), Error> {
@@ -75,7 +75,7 @@ where
         let mut curr_cached_stmt_id = vec![];
 
         let conns = if is_get_conn {
-            Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?
+            Self::get_shard_conns(&req.rewrite_outputs, req.pool.clone(), attrs).await?
         } else {
             let mut cached_conn = req.fsm.get_shard_conn();
             if cached_conn.is_empty() {
@@ -89,7 +89,7 @@ where
             cached_conn
         };
 
-        let mut conns = Self::shard_send_query(conns, &rewrite_outputs).await?;
+        let mut conns = Self::shard_send_query(conns, &req.rewrite_outputs).await?;
         let shards_length = conns.len();
         let mut shard_streams = Vec::with_capacity(shards_length);
 
@@ -100,7 +100,7 @@ where
 
         let mut merge_stream = MergeStream::new(shard_streams, shards_length);
 
-        let sharding_column = rewrite_outputs[0].sharding_column.clone();
+        let sharding_column = req.rewrite_outputs[0].sharding_column.clone();
         Self::handle_shard_resultset(req, &mut merge_stream, sharding_column, false).await?;
 
         if let Some(id) = curr_server_stmt_id {
@@ -191,7 +191,6 @@ where
             let mut chunk = chunk
                 .into_par_iter().map(|x| x.unwrap()).collect::<Result<Vec<_>, _>>().map_err(ErrorKind::from)?;
 
-            //println!("chunk {:?}", &chunk[..]);
             if is_binary {
                 if let Some(name) = &sharding_column {
                     chunk.par_sort_by_cached_key(|x| {
@@ -223,6 +222,7 @@ where
 
         Ok(())
     }
+
     async fn get_columns<'a>(
         req: &mut ReqContext<T, C>,
         stream: &mut MergeStream<ResultsetStream<'a>>,
@@ -354,15 +354,15 @@ where
 
     pub async fn shard_prepare_executor(
         req: &mut ReqContext<T, C>,
-        rewrite_outputs: Vec<ShardingRewriteOutput>,
+        // rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
         _is_get_conn: bool,
     ) -> Result<(Vec<Stmt>, Vec<PoolConn<ClientConn>>), Error> {
-        let conns = Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?;
+        let conns = Self::get_shard_conns(&req.rewrite_outputs, req.pool.clone(), attrs).await?;
         let mut send_futs = FuturesOrdered::new();
         let mut sended_conns = Vec::with_capacity(conns.len());
 
-        for (mut conn, ro) in conns.into_iter().zip(rewrite_outputs.iter()) {
+        for (mut conn, ro) in conns.into_iter().zip(req.rewrite_outputs.iter()) {
             let sql = ro.target_sql.clone();
             let f = tokio::spawn(async move {
                 let res = conn.send_prepare(sql.as_bytes()).await;

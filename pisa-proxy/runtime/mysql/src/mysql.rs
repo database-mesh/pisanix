@@ -51,6 +51,7 @@ use strategy::{
     readwritesplitting::ReadWriteEndpoint,
     route::RouteStrategy,
     sharding_rewrite::ShardingRewrite,
+    sharding_rewrite::ShardingRewriteOutput,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder, Framed};
@@ -252,6 +253,7 @@ impl proxy::factory::Proxy for MySQLProxy {
                     name: proxy_name,
                     mysql_parser: parser,
                     rewriter,
+                    rewrite_outputs: vec![],
                     has_readwritesplitting: has_rw,
                     stmt_cache: StmtCache::new(),
                     stmt_id: AtomicU32::new(0),
@@ -282,6 +284,7 @@ pub struct ReqContext<T, C> {
     // The codc for MySQL Protocol
     pub framed: Framed<T, C>,
     pub rewriter: Option<ShardingRewrite>,
+    pub rewrite_outputs: Vec<ShardingRewriteOutput>,
     pub has_readwritesplitting: bool,
     pub stmt_cache: StmtCache,
     pub stmt_id: AtomicU32,

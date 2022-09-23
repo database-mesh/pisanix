@@ -129,13 +129,13 @@ where
         let sess = req.framed.codec_mut().get_session();
         let attrs = build_conn_attrs(sess);
         let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
-        let (_, input_typ, mut rewrite_outputs)  = Self::query_rewrite(req, raw_sql)?;
-
+        let (_, input_typ, rewrite_outputs)  = Self::query_rewrite(req, raw_sql)?;
+        req.rewrite_outputs = rewrite_outputs;
 
         // PrepareEvent trigger
         let is_get_conn = req.fsm.trigger(TransEventName::PrepareEvent);
 
-        if rewrite_outputs.is_empty() {
+        if req.rewrite_outputs.is_empty() {
             let mut client_conn = Self::fsm_trigger(req, TransEventName::PrepareEvent, RouteInputTyp::Statement, raw_sql).await?;
             let res = Self::prepare_normal_inner(req, &mut client_conn, payload).await;
 
@@ -143,11 +143,11 @@ where
             return res;
         }
 
-        route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
-        let sharding_column = rewrite_outputs[0].sharding_column.clone();
-        debug!("prepare rewrite outputs {:?} {:?} {:?}", rewrite_outputs, rewrite_outputs.len(), is_get_conn);
+        route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut req.rewrite_outputs);
+        let sharding_column = req.rewrite_outputs[0].sharding_column.clone();
+        debug!("prepare rewrite outputs {:?} {:?} {:?}", req.rewrite_outputs, req.rewrite_outputs.len(), is_get_conn);
 
-        let (mut stmts, shard_conns) = Executor::shard_prepare_executor(req, rewrite_outputs, attrs, is_get_conn).await?;
+        let (mut stmts, shard_conns) = Executor::shard_prepare_executor(req, attrs, is_get_conn).await?;
         for i in stmts.iter().zip(shard_conns.into_iter()) {
             req.stmt_cache.put(stmt_id, i.0.stmt_id, i.1)
         }
@@ -239,9 +239,10 @@ where
         let sess = req.framed.codec_mut().get_session();
         let attrs = build_conn_attrs(sess);
         let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
-        let (is_get_conn, input_typ, mut rewrite_outputs) = Self::query_rewrite(req, raw_sql)?;
+        let (is_get_conn, input_typ, rewrite_outputs) = Self::query_rewrite(req, raw_sql)?;
+        req.rewrite_outputs = rewrite_outputs;
 
-        if rewrite_outputs.is_empty() {
+        if req.rewrite_outputs.is_empty() {
             let mut client_conn = Self::query_inner_get_conn(req, payload).await?;
             let res = Self::query_inner(req, &mut client_conn, payload).await;
             
@@ -249,9 +250,8 @@ where
             return res;
         }
 
-        route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
-
-        Executor::shard_query_executor(req, rewrite_outputs, attrs, is_get_conn).await?;
+        route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut req.rewrite_outputs);
+        Executor::shard_query_executor(req, attrs, is_get_conn).await?;
         Ok(())
     }
 
