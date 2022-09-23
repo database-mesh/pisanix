@@ -588,9 +588,10 @@ impl ShardingRewrite {
                 let len = last_span.start() + last_span.len() - first_span.start();
 
                 let mut ori_field = String::with_capacity(len);
-                field.iter().map(|x| {
+                let fields_list = field.iter().map(|x| {
                     match x {
                         FieldMeta::Ident{span: _, name} => {
+                            
                             ori_field += &format!("{}, ", name).to_string();
                             name
                         },
@@ -598,6 +599,24 @@ impl ShardingRewrite {
                     }
                 }).collect::<Vec<_>>();
 
+                for field in fields_list.into_iter() {
+                    if !orders.is_empty() {
+                        for order in orders[query_id].iter() {
+                            if field.replace("`", "") == order.name.replace("`", "") {
+                                return (order_changes, group_changes);
+                            }
+                        }
+                    }
+                  
+                    if !groups.is_empty() {
+                        for group in groups[query_id].iter() {
+                            if field.replace("`", "") == group.name.replace("`", "") {
+                                return (order_changes, group_changes);
+                            }
+                        }
+                    }
+                }
+            
                 if !orders.is_empty() || !groups.is_empty() {
                     for _ in 0..len {
                         target_sql.remove(first_span.start());
@@ -688,6 +707,7 @@ impl ShardingRewrite {
             }
     
             for avg_meta in avg {
+                res.insert("avg_field".to_string(), format!("AVG({})", avg_meta.name));
                 let target_count = &format!("{}({}) {} ", COUNT, avg_meta.name, AS);
                 let target_count_as = &format!("{}_{}_{:05}", avg_meta.name.to_ascii_uppercase(), AVG_DERIVED_COUNT, idx);
                 res.insert("avg_count".to_string(), target_count_as.to_string());
@@ -1438,5 +1458,16 @@ mod test {
             res[0].target_sql,
             "SELECT order_id, order_item_id, `user_id` AS USER_ID_ORDER_BY_DERIVED_00003 from `db`.tshard_00003 where idx = 3 ORDER BY `user_id`"
         );
+
+        let raw_sql = "SELECT id FROM db.tshard ORDER BY `id`";
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let input = ShardingRewriteInput {
+            default_db: None,
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(res[0].target_sql, "SELECT id FROM `db`.tshard_00000 ORDER BY `id`");
     }
 }
