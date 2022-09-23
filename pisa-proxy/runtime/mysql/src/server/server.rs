@@ -39,7 +39,7 @@ use tracing::{debug, error};
 use mysql_protocol::client::stmt::Stmt;
 
 use crate::{
-    mysql::{MySQLService, ReqContext, RespContext, STMT_ID},
+    mysql::{MySQLService, ReqContext, RespContext},
     transaction_fsm::{
         build_conn_attrs, check_get_conn, query_rewrite, route, route_sharding, TransEventName,
     },
@@ -124,12 +124,13 @@ where
     }
 
     async fn prepare_shard_inner(req: &mut ReqContext<T, C>, payload: &[u8]) -> Result<(), Error> {
-        STMT_ID.fetch_add(1, Ordering::Relaxed);
-        let stmt_id = STMT_ID.load(Ordering::Relaxed);
+        req.stmt_id.fetch_add(1, Ordering::Relaxed);
+        let stmt_id = req.stmt_id.load(Ordering::Relaxed);
         let sess = req.framed.codec_mut().get_session();
         let attrs = build_conn_attrs(sess);
         let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
         let (_, input_typ, mut rewrite_outputs)  = Self::query_rewrite(req, raw_sql)?;
+
 
         // PrepareEvent trigger
         let is_get_conn = req.fsm.trigger(TransEventName::PrepareEvent);
@@ -144,16 +145,17 @@ where
 
         route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut rewrite_outputs);
         let sharding_column = rewrite_outputs[0].sharding_column.clone();
+        debug!("prepare rewrite outputs {:?} {:?} {:?}", rewrite_outputs, rewrite_outputs.len(), is_get_conn);
 
         let (mut stmts, shard_conns) = Executor::shard_prepare_executor(req, rewrite_outputs, attrs, is_get_conn).await?;
         for i in stmts.iter().zip(shard_conns.into_iter()) {
-            req.stmt_cache.lock().put(stmt_id, i.0.stmt_id, i.1)
+            req.stmt_cache.put(stmt_id, i.0.stmt_id, i.1)
         }
+
         let mut stmt = stmts.remove(0);
         stmt.stmt_id = stmt_id;
 
-
-        req.stmt_cache.lock().put_sharding_column(stmt_id, sharding_column);
+        req.stmt_cache.put_sharding_column(stmt_id, sharding_column);
         Self::prepare_stmt(req, stmt).await?;
 
         Ok(())
@@ -218,8 +220,7 @@ where
     }
 
     async fn execute_shard_inner(req: &mut ReqContext<T, C>, payload: &[u8] ) -> Result<(), Error>{
-        let stmt_id = LittleEndian::read_u32(payload);
-        Executor::shard_execute_executor(req, stmt_id).await
+        Executor::shard_execute_executor(req, payload).await
     }
 
     async fn execute_inner(
@@ -381,6 +382,7 @@ where
                                         //    )
                                         //    .await
                                         //    .unwrap();
+                                        
                                         let is_get_conn =
                                             req.fsm.trigger(TransEventName::SetSessionEvent);
                                         return (is_get_conn, RouteInputTyp::Transaction);
@@ -499,18 +501,11 @@ where
             .codec_mut()
             .encode(PacketSend::EncodeOffset(make_eof_packet()[4..].into(), buf.len()), &mut buf);
 
-        loop {
-            let data = stream.next().await;
-
+        while let Some(data) = stream.next().await {
             let row = match data {
-                Some(Ok(data)) => data,
-                Some(Err(e)) => return Err(e),
-                None => break,
+                Ok(data) => data,
+                Err(e) => return Err(e),
             };
-
-            if is_eof(&row) {
-                break;
-            }
 
             let _ = req
                 .framed
@@ -719,7 +714,7 @@ where
     async fn stmt_close(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error> {
         let now = Instant::now();
         let stmt_id = LittleEndian::read_u32(payload);
-        cx.stmt_cache.lock().remove(stmt_id);
+        cx.stmt_cache.remove(stmt_id);
         debug!("stmt close {:?}", stmt_id);
 
         Ok(RespContext { ep: None, duration: now.elapsed() })

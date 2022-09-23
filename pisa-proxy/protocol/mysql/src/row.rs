@@ -96,8 +96,14 @@ pub struct RowDataBinary<T: AsRef<[u8]>> {
     buf: T,
 }
 
-impl< T: BufExt + AsRef<[u8]>> RowDataBinary<T> {
-    pub fn new(columns: Arc<[ColumnInfo]>, mut buf: T) -> RowDataBinary<T> {
+impl<T: BufExt + AsRef<[u8]>> RowDataBinary<T> {
+    pub fn new(columns: Arc<[ColumnInfo]>, buf: T) -> RowDataBinary<T> {
+        let common = RowDataCommon::new(columns);
+        RowDataBinary { common, null_map: vec![], buf }
+    }
+
+    #[cfg(test)]
+    pub fn test_new(columns: Arc<[ColumnInfo]>, mut buf: T) -> RowDataBinary<T> {
         let column_length = columns.len();
         let common = RowDataCommon::new(columns);
         // See https://dev.mysql.com/doc/internals/en/binary-protocol-resultset-row.html
@@ -108,15 +114,27 @@ impl< T: BufExt + AsRef<[u8]>> RowDataBinary<T> {
 
         let mut null_map = vec![0; null_map_length];
         buf.copy_to_slice(&mut null_map);
-
         RowDataBinary { common, null_map, buf }
     }
-
 }
+
+use bytes::Buf;
 
 impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
     fn with_buf(&mut self, buf: T) {
-        self.buf = buf;
+        let column_length = self.common.columns.len();
+        // See https://dev.mysql.com/doc/internals/en/binary-protocol-resultset-row.html
+        // NULL Bitmap length: (column-count + 7 + 2) / 8
+        let null_map_length = (column_length + 7 + 2) >> 3;
+
+        // Eat packet header
+        buf.as_ref().get_u8();
+
+        let mut null_map = vec![0; null_map_length];
+        buf.as_ref().copy_to_slice(&mut null_map);
+        self.null_map = null_map;
+
+        self.buf = buf; 
     }
     // The method must be called in column order
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
@@ -326,7 +344,7 @@ mod test {
         let row_buf = &get_test_binary_row_data()[4..];
 
 
-        let mut row = RowDataBinary::new(columns.into_boxed_slice().into(), row_buf);
+        let mut row = RowDataBinary::test_new(columns.into_boxed_slice().into(), row_buf);
         let res = row.decode_with_name::<String>("Command");
         assert_eq!(res.unwrap().unwrap(), "Execute");
 
@@ -346,12 +364,12 @@ mod test {
         let columns: Arc<[ColumnInfo]> = column_buf.decode_columns().into_boxed_slice().into();
         let row_buf = &get_test_binary_row_data_time()[4..];
 
-        let mut row = RowDataBinary::new(columns.clone(), row_buf);
+        let mut row = RowDataBinary::test_new(columns.clone(), row_buf);
         let res = row.decode_with_name::<Duration>("time");
         assert_eq!(res.unwrap().unwrap().num_seconds(), -122901);
 
         let row_buf = &get_test_binary_row_data_datetime()[4..];
-        let mut row = RowDataBinary::new(columns.clone(), row_buf);
+        let mut row = RowDataBinary::test_new(columns.clone(), row_buf);
         // Test decode as NaiveDateTime
         let res = row.decode_with_name::<NaiveDateTime>("time");
 
@@ -373,7 +391,7 @@ mod test {
 
         // Test decode as NaiveTime (include microseconds)
         let row_buf = &get_test_binary_row_data_datetime_micro()[4..];
-        let mut row = RowDataBinary::new(columns.clone(), row_buf);
+        let mut row = RowDataBinary::test_new(columns.clone(), row_buf);
         let res = row.decode_with_name::<NaiveDateTime>("time");
         let d = NaiveDate::from_ymd(2003, 12, 31);
         let dt = d.and_hms_micro(01, 02, 03, 123123);
@@ -386,7 +404,7 @@ mod test {
         let columns: Arc<[ColumnInfo]> = column_buf.decode_columns().into_boxed_slice().into();
         let row_buf = &get_test_binary_row_data_null()[4..];
 
-        let mut row = RowDataBinary::new(columns.clone(), row_buf);
+        let mut row = RowDataBinary::test_new(columns.clone(), row_buf);
         let res = row.decode_with_name::<NaiveDateTime>("deleted_at");
         assert_eq!(res.unwrap(), None);
         let res = row.decode_with_name::<u64>("id");
