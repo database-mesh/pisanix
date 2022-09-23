@@ -41,9 +41,11 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{
-    mysql::{ReqContext, STMT_ID},
+    mysql::ReqContext,
     transaction_fsm::check_get_conn,
 };
+
+use byteorder::{ByteOrder, LittleEndian};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecuteError {
@@ -77,8 +79,8 @@ where
         } else {
             let mut cached_conn = req.fsm.get_shard_conn();
             if cached_conn.is_empty() {
-                let server_stmt_id = STMT_ID.load(Ordering::Relaxed);
-                let cached_stmt_conn = req.stmt_cache.lock().get_all(server_stmt_id);
+                let server_stmt_id = req.stmt_id.load(Ordering::Relaxed);
+                let cached_stmt_conn = req.stmt_cache.get_all(server_stmt_id);
                 curr_cached_stmt_id = cached_stmt_conn.iter().map(|x| x.0).collect();
                 cached_conn = cached_stmt_conn.into_iter().map(|x| x.1).collect();
                 curr_server_stmt_id = Some(server_stmt_id);
@@ -103,7 +105,7 @@ where
 
         if let Some(id) = curr_server_stmt_id {
             let stmt_conns = curr_cached_stmt_id.into_iter().zip(conns.into_iter()).collect();
-            req.stmt_cache.lock().put_all(id, stmt_conns)
+            req.stmt_cache.put_all(id, stmt_conns)
         } else {
             // Put shard conn to fsm
             req.fsm.put_shard_conn(conns);
@@ -187,22 +189,27 @@ where
 
         while let Some(chunk) = stream.next().await {
             let mut chunk = chunk
-                .into_par_iter()
-                .filter_map(|x| {
-                    if let Some(x) = x {
-                        if let Ok(data) = &x {
-                            if is_eof(data) {
-                                return None;
-                            }
-                        }
-                        Some(x)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(ErrorKind::from)?;
+                .into_par_iter().map(|x| x.unwrap()).collect::<Result<Vec<_>, _>>().map_err(ErrorKind::from)?;
+                //.filter_map(|x| {
+                //    let x = x.unwrap();
+                //    //if let Some(x) = x {
+                //        if let Ok(data) = &x {
+                //            if is_eof(data) {
+                //                None
+                //            } else {
+                //                Some(x)
+                //            }
+                //        } else {
+                //            Some(x)
+                //        }
+                //    //} else {
+                //        
+                //    //}
+                //})
+                //.collect::<Result<Vec<_>, _>>()
+                //.map_err(ErrorKind::from)?;
 
+            //println!("chunk {:?}", &chunk[..]);
             if is_binary {
                 if let Some(name) = &sharding_column {
                     chunk.par_sort_by_cached_key(|x| {
@@ -367,14 +374,9 @@ where
         req: &mut ReqContext<T, C>,
         rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
-        is_get_conn: bool,
+        _is_get_conn: bool,
     ) -> Result<(Vec<Stmt>, Vec<PoolConn<ClientConn>>), Error> {
-        let conns = if is_get_conn {
-            Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?
-        } else {
-            req.fsm.get_shard_conn()
-        };
-
+        let conns = Self::get_shard_conns(&rewrite_outputs, req.pool.clone(), attrs).await?;
         let mut send_futs = FuturesOrdered::new();
         let mut sended_conns = Vec::with_capacity(conns.len());
 
@@ -400,20 +402,21 @@ where
 
     pub async fn shard_execute_executor(
         req: &mut ReqContext<T, C>,
-        stmt_id: u32,
+        payload: &[u8],
     ) -> Result<(), Error> {
-        let mut conns = Self::shard_send_execute(req, stmt_id).await?;
+        let stmt_id = LittleEndian::read_u32(payload);
+        let mut conns = Self::shard_send_execute(req, stmt_id, payload).await?;
         let shard_length = conns.len();
         let mut shard_streams = Vec::with_capacity(shard_length);
         for conn in conns.iter_mut() {
             shard_streams.push(ResultsetStream::new(conn.1.framed.as_mut()).fuse());
         }
 
-        let sharding_column = req.stmt_cache.lock().get_sharding_column(stmt_id);
+        let sharding_column = req.stmt_cache.get_sharding_column(stmt_id);
         let mut merge_stream = MergeStream::new(shard_streams, shard_length);
         Self::handle_shard_resultset(req, &mut merge_stream, sharding_column, true).await?;
 
-        req.stmt_cache.lock().put_all(stmt_id, conns);
+        req.stmt_cache.put_all(stmt_id, conns);
 
         Ok(())
     }
@@ -421,13 +424,20 @@ where
     async fn shard_send_execute(
         req: &mut ReqContext<T, C>,
         stmt_id: u32,
+        payload: &[u8],
     ) -> Result<Vec<(u32, PoolConn<ClientConn>)>, Error> {
         let mut send_futs = FuturesOrdered::new();
-        let stmt_cache = req.stmt_cache.lock().get_all(stmt_id);
+        let stmt_cache = req.stmt_cache.get_all(stmt_id);
         let mut sended_conns = Vec::with_capacity(stmt_cache.len());
 
         for (id, mut conn) in stmt_cache.into_iter() {
-            let payload = id.to_le_bytes();
+            let mut payload = payload.to_vec();
+            let payload_ptr = payload.as_mut_ptr();
+            let id_bytes = id.to_le_bytes().as_ptr();
+            unsafe {
+                std::ptr::copy_nonoverlapping(id_bytes, payload_ptr, 4);
+            }
+            let payload = payload.clone();
             let f = tokio::spawn(async move {
                 let res = conn.send_execute_without_stream(&payload).await;
                 (conn, id, res)

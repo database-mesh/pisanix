@@ -16,11 +16,13 @@ use conn_pool::PoolConn;
 use indexmap::IndexMap;
 use mysql_protocol::client::conn::ClientConn;
 
+#[derive(Debug)]
 struct Entry {
     id: u32,
     conn: PoolConn<ClientConn>,
 }
 
+#[derive(Debug)]
 pub struct StmtCache {
     // key is generated id by pisa, value is returnd stmt id from client
     cache: IndexMap<u32, Vec<Entry>>,
@@ -41,13 +43,7 @@ impl StmtCache {
             conn,
         };
 
-        let value = self.cache.entry(server_stmt_id).or_insert(vec![]);
-        let idx = value.iter().position(|x| x.id == stmt_id);
-        if let Some(idx) = idx {
-            value[idx] = entry;
-        } else {
-            value.push(entry);
-        }
+        self.cache.entry(server_stmt_id).or_insert(vec![]).push(entry);
     }
 
     pub fn get(&mut self, server_stmt_id: u32, stmt_id: u32) -> Option<PoolConn<ClientConn>> {
