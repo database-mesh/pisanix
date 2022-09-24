@@ -31,6 +31,33 @@ type Proxy struct {
 	ReadWriteSplitting *ReadWriteSplitting `json:"read_write_splitting,omitempty"`
 	Plugin             *Plugin             `json:"plugin,omitempty"`
 	ServerVersion      string              `json:"server_version,omitempty"`
+	Sharding           []Sharding          `json:"sharding,omitempty"`
+}
+
+type Sharding struct {
+	TableName       string   `json:"table_name"`
+	ActualDatanodes []string `json:"actual_datanodes"`
+	// BindingTables [][]string `json:"binding_tables"`
+	// BroadcastTables []string `json:"broadcast_tables"`
+	TableStrategy         *TableStrategy         `json:"table_strategy,omitempty"`
+	DatabaseStrategy      *DatabaseStrategy      `json:"database_strategy,omitempty"`
+	DatabaseTableStrategy *DatabaseTableStrategy `json:"database_table_strategy,omitempty"`
+}
+
+type TableStrategy struct {
+	TableShardingAlgorithmName string `json:"table_sharding_algorithm_name"`
+	TableShardingColumn        string `json:"table_sharding_column"`
+	ShardingCount              uint32 `json:"sharding_count"`
+}
+
+type DatabaseStrategy struct {
+	DatabaseShardingAlgorithmName string `json:"database_sharding_algorithm_name"`
+	DatabaseShardingColumn        string `json:"database_sharding_column"`
+}
+
+type DatabaseTableStrategy struct {
+	TableStrategy
+	DatabaseStrategy
 }
 
 type Plugin struct {
