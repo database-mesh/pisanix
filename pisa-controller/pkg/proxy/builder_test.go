@@ -44,6 +44,7 @@ var vdb = client.VirtualDatabase{
 				},
 				Name:            "catalogue",
 				TrafficStrategy: "catalogue",
+				DataShard:       "catalogue",
 			},
 		},
 	},
@@ -298,6 +299,19 @@ var expectedProxy = &Proxy{
 			},
 		},
 	},
+	Sharding: []Sharding{
+		{
+			TableName: "testshard",
+			ActualDatanodes: []string{
+				"ms001",
+			},
+			TableStrategy: &TableStrategy{
+				TableShardingAlgorithmName: "crc32mod",
+				TableShardingColumn:        "order_id",
+				ShardingCount:              4,
+			},
+		},
+	},
 	Plugin: &Plugin{
 		CircuitBreaks: []CircuitBreak{
 			{
@@ -335,12 +349,60 @@ func Test_ProxyBuilder(t *testing.T) {
 			TrafficStrategy:        tsReadWriteSplttingDynamic,
 			DatabaseEndpoints:      []client.DatabaseEndpoint{dbep},
 		},
+		{
+			VirtualDatabaseService: vdb.Spec.Services[0],
+			// TODO: temp
+			TrafficStrategy:   tsSimpleLoadBalance,
+			DataShard:         shard,
+			DatabaseEndpoints: []client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
+		},
 	}
 
 	for _, b := range builders {
 		actual := b.Build()
 		assertProxy(t, expectedProxy, actual, "proxy should be correct")
 	}
+}
+
+var expectedShardedProxy = &Proxy{
+	Name:          "catalogue",
+	BackendType:   "mysql",
+	DB:            "socksdb",
+	User:          "root",
+	Password:      "fake_password",
+	ServerVersion: "5.7.37",
+	PoolSize:      3,
+	ListenAddr:    "127.0.0.1:3306",
+	Sharding: []Sharding{
+		{
+			TableName: "testshard",
+			ActualDatanodes: []string{
+				"ms001",
+			},
+			TableStrategy: &TableStrategy{
+				TableShardingAlgorithmName: "crc32mod",
+				TableShardingColumn:        "order_id",
+				ShardingCount:              4,
+			},
+		},
+	},
+}
+
+func Test_ShardedProxyBuilder(t *testing.T) {
+	builders := []*ProxyBuilder{
+		{
+			VirtualDatabaseService: vdb.Spec.Services[0],
+			// TODO: temp
+			DataShard:         shard,
+			DatabaseEndpoints: []client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
+		},
+	}
+
+	for _, b := range builders {
+		actual := b.Build()
+		assertProxy(t, expectedProxy, actual, "proxy should be correct")
+	}
+
 }
 
 func assertProxy(t *testing.T, exp, act *Proxy, msg ...interface{}) bool {
@@ -354,10 +416,18 @@ func assertProxy(t *testing.T, exp, act *Proxy, msg ...interface{}) bool {
 		assert.Equal(t, exp.ServerVersion, act.ServerVersion, "serverVersion should be equal") &&
 		assertSimpleLoadBalance(t, exp.SimpleLoadBalance, act.SimpleLoadBalance, "simpleLoadBalance should be equal") &&
 		assertReadWriteSplitting(t, exp.ReadWriteSplitting, act.ReadWriteSplitting, "readWriteSplitting should be equal") &&
+		assertDataSharding(t, exp.Sharding, act.Sharding, "sharding should be equal") &&
 		assertPlugin(t, exp.Plugin, act.Plugin, "plugin should be equal")
 }
 
-func assertSimpleLoadBalance(t *testing.T, act, exp *SimpleLoadBalance, msg ...interface{}) bool {
+func assertDataSharding(t *testing.T, act, exp []Sharding, msg ...interface{}) bool {
+	if act != nil && exp != nil {
+		return assert.ElementsMatch(t, act, exp, "rules should be equal")
+	}
+	return true
+}
+
+func assertSimpleLoadBalance(t *testing.T, exp, act *SimpleLoadBalance, msg ...interface{}) bool {
 	if act != nil && exp != nil {
 		return assert.Equal(t, act.BalancerType, exp.BalancerType, "balancerType should be equal") &&
 			assert.ElementsMatch(t, act.Nodes, exp.Nodes, "nodes should be equal")
@@ -366,7 +436,7 @@ func assertSimpleLoadBalance(t *testing.T, act, exp *SimpleLoadBalance, msg ...i
 	return true
 }
 
-func assertReadWriteSplitting(t *testing.T, act, exp *ReadWriteSplitting, msg ...interface{}) bool {
+func assertReadWriteSplitting(t *testing.T, exp, act *ReadWriteSplitting, msg ...interface{}) bool {
 	if act != nil && exp != nil {
 		return assertReadWriteSplittingStatic(t, act.Static, exp.Static, "readWriteSplittingStatic should be equal") &&
 			assertReadWriteSplittingDynamic(t, act.Dynamic, exp.Dynamic, "readWriteSplittingDynamic should be equal")
@@ -414,7 +484,10 @@ func assertReadWriteDiscovery(t *testing.T, act, exp ReadWriteDiscovery, msg ...
 }
 
 func assertPlugin(t *testing.T, act, exp *Plugin, msg ...interface{}) bool {
-	return assertCircuitBreaks(t, act.CircuitBreaks, exp.CircuitBreaks, "circuitBreaks should be equal") && assertConcurrencyControls(t, act.ConcurrencyControls, exp.ConcurrencyControls, "concurrencyControls should be equal")
+	if act != nil && exp != nil {
+		return assertCircuitBreaks(t, act.CircuitBreaks, exp.CircuitBreaks, "circuitBreaks should be equal") && assertConcurrencyControls(t, act.ConcurrencyControls, exp.ConcurrencyControls, "concurrencyControls should be equal")
+	}
+	return true
 }
 
 func assertCircuitBreaks(t *testing.T, act, exp []CircuitBreak, msg ...interface{}) bool {
@@ -572,7 +645,7 @@ func Test_ShardingConfig(t *testing.T) {
 					BackendType:   "mysql",
 					PoolSize:      3,
 					ServerVersion: "",
-					Sharding: []*Sharding{
+					Sharding: []Sharding{
 						{
 							TableName: "test_shard_hash",
 							ActualDatanodes: []string{
@@ -702,9 +775,35 @@ var dbepread2 = client.DatabaseEndpoint{
 }
 
 var shard = client.DataShard{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "catalogue",
+		Namespace: "demotest",
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
 	Spec: client.DataShardSpec{
 		Rules: []client.ShardingRule{
 			{
+				TableName: "testshard",
+				TableStrategy: &client.TableStrategy{
+					TableShardingAlgorithmName: "crc32mod",
+					TableShardingColumn:        "order_id",
+					ShardingCount:              4,
+				},
+				ActualDatanodes: client.ActualDatanodesValue{
+					ValueSource: &client.ValueSourceType{
+						ActualDatanodesNodeValue: &client.ActualDatanodesNodeValue{
+							Nodes: []client.ValueFrom{
+								{
+									ValueFromReadWriteSplitting: &client.ValueFromReadWriteSplitting{
+										Name: "ms001",
+									},
+								},
+							},
+						},
+					},
+				},
 				ReadWriteSplittingGroup: []client.ReadWriteSplittingGroup{
 					{
 						Name: "ms001",
