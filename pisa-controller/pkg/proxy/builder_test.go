@@ -540,3 +540,215 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 
 	fmt.Printf("%s\n", string(data))
 }
+
+func Test_ShardingConfig(t *testing.T) {
+	config := PisaProxyConfig{
+		Admin: AdminConfig{
+			Host:     "0.0.0.0",
+			Port:     8082,
+			LogLevel: "INFO",
+		},
+		MySQL: MySQLConfig{
+			Nodes: []MySQLNode{
+				{
+					Name:     "ds001",
+					Db:       "socksdb",
+					User:     "root",
+					Password: "12345678",
+					Host:     "127.0.0.1",
+					Port:     3306,
+					// Weight:   1,
+					Role: "read",
+				},
+			},
+		},
+		Proxy: ProxyConfig{
+			Config: []Proxy{
+				{
+					ListenAddr:    "0.0.0.0:9088",
+					User:          "root",
+					Password:      "12345678",
+					DB:            "testrw",
+					BackendType:   "mysql",
+					PoolSize:      3,
+					ServerVersion: "",
+					Sharding: []*Sharding{
+						{
+							TableName: "test_shard_hash",
+							ActualDatanodes: []string{
+								"ds001",
+							},
+							TableStrategy: &TableStrategy{
+								TableShardingAlgorithmName: "crc32mod",
+								TableShardingColumn:        "order_id",
+								ShardingCount:              4,
+							},
+							DatabaseStrategy: &DatabaseStrategy{
+								DatabaseShardingAlgorithmName: "mod",
+								DatabaseShardingColumn:        "id",
+							},
+							DatabaseTableStrategy: &DatabaseTableStrategy{
+								TableStrategy: TableStrategy{
+									TableShardingAlgorithmName: "crc32_mod",
+									TableShardingColumn:        "order_id",
+									ShardingCount:              4,
+								},
+								DatabaseStrategy: DatabaseStrategy{
+									DatabaseShardingAlgorithmName: "mod",
+									DatabaseShardingColumn:        "order_id",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		NodeGroup: NodeGroupConfig{
+			Members: []NodeGroupMember{
+				{
+					Name:      "ms001",
+					ReadWrite: "ds001",
+					Reads: []string{
+						"ds001",
+						"ds002",
+					},
+				},
+				{
+					Name:      "ms002",
+					ReadWrite: "ds002",
+					Reads: []string{
+						"ds002",
+						"ds003",
+					},
+				},
+			},
+		},
+	}
+
+	data, _ := json.Marshal(config)
+	t.Logf("%s\n", string(data))
+}
+
+var dbepreadwrite = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "ds000",
+		Namespace: "demotest",
+		Annotations: map[string]string{
+			DatabaseEndpointRoleKey: ReadWriteSplittingRoleReadWrite,
+		},
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				DB:       "socksdb",
+				Host:     "catalogue-db.demotest",
+				Password: "fake_password",
+				Port:     3306,
+				User:     "root",
+			},
+		},
+	},
+}
+
+var dbepread1 = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "ds001",
+		Namespace: "demotest",
+		Annotations: map[string]string{
+			DatabaseEndpointRoleKey: ReadWriteSplittingRoleRead,
+		},
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				DB:       "socksdb",
+				Host:     "catalogue-db.demotest",
+				Password: "fake_password",
+				Port:     3306,
+				User:     "root",
+			},
+		},
+	},
+}
+
+var dbepread2 = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "ds002",
+		Namespace: "demotest",
+		Annotations: map[string]string{
+			DatabaseEndpointRoleKey: ReadWriteSplittingRoleRead,
+		},
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				DB:       "socksdb",
+				Host:     "catalogue-db.demotest",
+				Password: "fake_password",
+				Port:     3306,
+				User:     "root",
+			},
+		},
+	},
+}
+
+var shard = client.DataShard{
+	Spec: client.DataShardSpec{
+		Rules: []client.ShardingRule{
+			{
+				ReadWriteSplittingGroup: []client.ReadWriteSplittingGroup{
+					{
+						Name: "ms001",
+						Rules: []client.ReadWriteSplittingRule{
+							{
+								Name:   "read",
+								Target: "read",
+							},
+							{
+								Name:   "readwrite",
+								Target: "readwrite",
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+}
+
+var expectedNodeGroup = NodeGroupConfig{
+	Members: []NodeGroupMember{
+		{
+			Name: "ms001",
+			Reads: []string{
+				"ds001",
+				"ds002",
+			},
+			ReadWrite: "ds000",
+		},
+	},
+}
+
+func Test_NodeGroupConfigBuilder(t *testing.T) {
+	builder := NewNodeGroupConfigBuilder().SetDataShards(shard).SetDatabaseEndpoints([]client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2})
+	cfg := builder.Build()
+	t.Logf("cfg: %+v\n", cfg.Members)
+	assert.Equal(t, len(expectedNodeGroup.Members), len(cfg.Members), "members in total should be equal")
+	for _, cfgm := range cfg.Members {
+		for _, expm := range expectedNodeGroup.Members {
+			if cfgm.Name == expm.Name {
+				assert.EqualValues(t, cfgm.ReadWrite, expm.ReadWrite, "readwrite should be equal")
+				assert.EqualValues(t, cfgm.Reads, expm.Reads, "read should be equal")
+			}
+		}
+	}
+}

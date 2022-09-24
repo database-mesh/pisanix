@@ -20,9 +20,20 @@ import (
 )
 
 type PisaProxyConfig struct {
-	Admin AdminConfig `json:"admin"`
-	MySQL MySQLConfig `json:"mysql"`
-	Proxy ProxyConfig `json:"proxy"`
+	Admin     AdminConfig     `json:"admin"`
+	MySQL     MySQLConfig     `json:"mysql"`
+	Proxy     ProxyConfig     `json:"proxy"`
+	NodeGroup NodeGroupConfig `json:"node_group"`
+}
+
+type NodeGroupConfig struct {
+	Members []NodeGroupMember `json:"member"`
+}
+
+type NodeGroupMember struct {
+	Name      string   `json:"name"`
+	Reads     []string `json:"reads"`
+	ReadWrite string   `json:"readwrite"`
 }
 
 type AdminConfig struct {
@@ -40,16 +51,18 @@ type ProxyConfig struct {
 }
 
 type PisaProxyConfigBuilder struct {
-	AdminConfigBuilder *AdminConfigBuilder
-	MySQLConfigBuilder *MySQLConfigBuilder
-	ProxyConfigBuilder *ProxyConfigBuilder
+	AdminConfigBuilder     *AdminConfigBuilder
+	MySQLConfigBuilder     *MySQLConfigBuilder
+	ProxyConfigBuilder     *ProxyConfigBuilder
+	NodeGroupConfigBuilder *NodeGroupConfigBuilder
 }
 
 func NewPisaProxyConfigBuilder() *PisaProxyConfigBuilder {
 	return &PisaProxyConfigBuilder{
-		AdminConfigBuilder: NewAdminConfigBuilder(),
-		MySQLConfigBuilder: NewMySQLConfigBuilder(),
-		ProxyConfigBuilder: NewProxyConfigBuilder(),
+		AdminConfigBuilder:     NewAdminConfigBuilder(),
+		MySQLConfigBuilder:     NewMySQLConfigBuilder(),
+		ProxyConfigBuilder:     NewProxyConfigBuilder(),
+		NodeGroupConfigBuilder: NewNodeGroupConfigBuilder(),
 	}
 }
 
@@ -68,11 +81,17 @@ func (b *PisaProxyConfigBuilder) SetProxyConfigBuilder(builder *ProxyConfigBuild
 	return b
 }
 
+func (b *PisaProxyConfigBuilder) SetNodeGroupConfigBuilder(builder *NodeGroupConfigBuilder) *PisaProxyConfigBuilder {
+	b.NodeGroupConfigBuilder = builder
+	return b
+}
+
 func (b *PisaProxyConfigBuilder) Build() *PisaProxyConfig {
 	config := &PisaProxyConfig{}
 	config.Admin = *b.AdminConfigBuilder.Build()
 	config.MySQL = *b.MySQLConfigBuilder.Build()
 	config.Proxy = *b.ProxyConfigBuilder.Build()
+	config.NodeGroup = *b.NodeGroupConfigBuilder.Build()
 
 	return config
 }
@@ -341,6 +360,67 @@ func (b *MySQLConfigBuilder) Build() *MySQLConfig {
 	}
 
 	config.Nodes = BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
+
+	return config
+}
+
+type NodeGroupConfigBuilder struct {
+	DataShards        client.DataShard
+	DatabaseEndpoints []client.DatabaseEndpoint
+}
+
+func NewNodeGroupConfigBuilder() *NodeGroupConfigBuilder {
+	return &NodeGroupConfigBuilder{
+		DataShards: client.DataShard{},
+	}
+}
+
+func (b *NodeGroupConfigBuilder) SetDataShards(ds client.DataShard) *NodeGroupConfigBuilder {
+	b.DataShards = ds
+	return b
+}
+
+func (b *NodeGroupConfigBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *NodeGroupConfigBuilder {
+	b.DatabaseEndpoints = dbeps
+	return b
+}
+
+func (b *NodeGroupConfigBuilder) Build() *NodeGroupConfig {
+	dbepmap := map[string][]string{}
+	for _, dbep := range b.DatabaseEndpoints {
+		if dbep.Annotations[DatabaseEndpointRoleKey] == ReadWriteSplittingRoleRead {
+			dbepmap[ReadWriteSplittingRoleRead] = append(dbepmap[ReadWriteSplittingRoleRead], dbep.Name)
+		}
+		if dbep.Annotations[DatabaseEndpointRoleKey] == ReadWriteSplittingRoleReadWrite {
+			dbepmap[ReadWriteSplittingRoleReadWrite] = append(dbepmap[ReadWriteSplittingRoleReadWrite], dbep.Name)
+		}
+	}
+
+	config := &NodeGroupConfig{
+		Members: []NodeGroupMember{},
+	}
+
+	for _, r := range b.DataShards.Spec.Rules {
+		if r.ReadWriteSplittingGroup != nil {
+			for _, g := range r.ReadWriteSplittingGroup {
+				m := NodeGroupMember{
+					Name: g.Name,
+				}
+				for _, rule := range g.Rules {
+					//FIXME: if multiple dbeps share same role but belong to different node groups
+					if rule.Target == ReadWriteSplittingRoleRead {
+						m.Reads = dbepmap[rule.Target]
+					}
+					if rule.Target == ReadWriteSplittingRoleReadWrite {
+						m.ReadWrite = dbepmap[rule.Target][0]
+					}
+				}
+				config.Members = append(config.Members, m)
+				//FIXME: do not support multiple ReadWriteSplittingGroup now
+				break
+			}
+		}
+	}
 
 	return config
 }
