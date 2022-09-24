@@ -349,13 +349,6 @@ func Test_ProxyBuilder(t *testing.T) {
 			TrafficStrategy:        tsReadWriteSplttingDynamic,
 			DatabaseEndpoints:      []client.DatabaseEndpoint{dbep},
 		},
-		{
-			VirtualDatabaseService: vdb.Spec.Services[0],
-			// TODO: temp
-			TrafficStrategy:   tsSimpleLoadBalance,
-			DataShard:         shard,
-			DatabaseEndpoints: []client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
-		},
 	}
 
 	for _, b := range builders {
