@@ -332,6 +332,63 @@ var expectedProxy = &Proxy{
 	},
 }
 
+var expectedrwProxy = &Proxy{
+	Name:          "catalogue",
+	BackendType:   "mysql",
+	DB:            "socksdb",
+	User:          "root",
+	Password:      "fake_password",
+	ServerVersion: "5.7.37",
+	PoolSize:      3,
+	ListenAddr:    "127.0.0.1:3306",
+	SimpleLoadBalance: &SimpleLoadBalance{
+		BalancerType: "roundrobin",
+		Nodes:        []string{"catalogue"},
+	},
+	Sharding: []Sharding{
+		{
+			TableName: "testshard",
+			ActualDatanodes: []string{
+				"ms001",
+			},
+			TableStrategy: &TableStrategy{
+				TableShardingAlgorithmName: "crc32mod",
+				TableShardingColumn:        "order_id",
+				ShardingCount:              4,
+			},
+		},
+	},
+}
+
+var expectedgeneralProxy = &Proxy{
+	Name:          "catalogue",
+	BackendType:   "mysql",
+	DB:            "socksdb",
+	User:          "root",
+	Password:      "fake_password",
+	ServerVersion: "5.7.37",
+	PoolSize:      3,
+	ListenAddr:    "127.0.0.1:3306",
+	SimpleLoadBalance: &SimpleLoadBalance{
+		BalancerType: "roundrobin",
+		Nodes:        []string{"catalogue"},
+	},
+	Sharding: []Sharding{
+		{
+			TableName: "testshard",
+			ActualDatanodes: []string{
+				"ds001",
+				"ds002",
+			},
+			TableStrategy: &TableStrategy{
+				TableShardingAlgorithmName: "crc32mod",
+				TableShardingColumn:        "order_id",
+				ShardingCount:              4,
+			},
+		},
+	},
+}
+
 func Test_ProxyBuilder(t *testing.T) {
 	builders := []*ProxyBuilder{
 		{
@@ -386,16 +443,21 @@ func Test_ShardedProxyBuilder(t *testing.T) {
 		{
 			VirtualDatabaseService: vdb.Spec.Services[0],
 			// TODO: temp
-			DataShard:         shard,
+			DataShard:         rwshard,
+			DatabaseEndpoints: []client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
+		},
+		{
+			VirtualDatabaseService: vdb.Spec.Services[0],
+			// TODO: temp
+			DataShard:         generalshard,
 			DatabaseEndpoints: []client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
 		},
 	}
 
-	for _, b := range builders {
-		actual := b.Build()
-		assertProxy(t, expectedProxy, actual, "proxy should be correct")
-	}
-
+	actualSharded := builders[0].Build()
+	assertProxy(t, expectedShardedProxy, actualSharded, "proxy should be correct")
+	actualGeneral := builders[1].Build()
+	assertProxy(t, expectedgeneralProxy, actualGeneral, "proxy should be correct")
 }
 
 func assertProxy(t *testing.T, exp, act *Proxy, msg ...interface{}) bool {
@@ -767,7 +829,58 @@ var dbepread2 = client.DatabaseEndpoint{
 	},
 }
 
-var shard = client.DataShard{
+var generalshard = client.DataShard{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "catalogue",
+		Namespace: "demotest",
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
+	Spec: client.DataShardSpec{
+		Rules: []client.ShardingRule{
+			{
+				TableName: "testshard",
+				TableStrategy: &client.TableStrategy{
+					TableShardingAlgorithmName: "crc32mod",
+					TableShardingColumn:        "order_id",
+					ShardingCount:              4,
+				},
+				ActualDatanodes: client.ActualDatanodesValue{
+					ValueSource: &client.ValueSourceType{
+						ActualDatanodesNodeValue: &client.ActualDatanodesNodeValue{
+							Nodes: []client.ValueFrom{
+								{
+									Value: "ds001",
+								},
+								{
+									Value: "ds002",
+								},
+							},
+						},
+					},
+				},
+				ReadWriteSplittingGroup: []client.ReadWriteSplittingGroup{
+					{
+						Name: "ms001",
+						Rules: []client.ReadWriteSplittingRule{
+							{
+								Name:   "read",
+								Target: "read",
+							},
+							{
+								Name:   "readwrite",
+								Target: "readwrite",
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+}
+
+var rwshard = client.DataShard{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
@@ -831,9 +944,8 @@ var expectedNodeGroup = NodeGroupConfig{
 }
 
 func Test_NodeGroupConfigBuilder(t *testing.T) {
-	builder := NewNodeGroupConfigBuilder().SetDataShards(shard).SetDatabaseEndpoints([]client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2})
+	builder := NewNodeGroupConfigBuilder().SetDataShards(rwshard).SetDatabaseEndpoints([]client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2})
 	cfg := builder.Build()
-	t.Logf("cfg: %+v\n", cfg.Members)
 	assert.Equal(t, len(expectedNodeGroup.Members), len(cfg.Members), "members in total should be equal")
 	for _, cfgm := range cfg.Members {
 		for _, expm := range expectedNodeGroup.Members {
