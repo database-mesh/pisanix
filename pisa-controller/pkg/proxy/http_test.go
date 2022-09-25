@@ -56,7 +56,7 @@ func Test_build(t *testing.T) {
 		},
 		Proxy: ProxyConfig{
 			Config: []Proxy{
-				*expectedProxy,
+				*expectedrwProxy,
 			},
 		},
 	}
