@@ -17,16 +17,16 @@
 apiVersion: core.database-mesh.io/v1alpha1
 kind: VirtualDatabase
 metadata:
-  name: catalogue 
-  namespace: demotest 
+  name: test 
+  namespace: default 
 spec:
   services:
   - databaseMySQL:
-      db: socksdb  
-      host: 0.0.0.0 
-      password: "12345678"
-      port: 9088 
+      db: test 
+      host: 127.0.0.1 
+      password: "root"
+      port: 3306 
       user: root 
-    name: catalogue 
-    trafficStrategy: catalogue 
-    dataShard: catalogue
+    name: mysql 
+    trafficStrategy: test 
+    dataShard: test 

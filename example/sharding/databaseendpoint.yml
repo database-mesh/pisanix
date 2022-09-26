@@ -18,16 +18,14 @@ apiVersion: core.database-mesh.io/v1alpha1
 kind: DatabaseEndpoint
 metadata:
   labels:
-    source: catalogue 
+    source: test 
   name: ds001 
-  namespace: demotest 
-  annotations:
-    "database-mesh.io/role": "read"
+  namespace: default 
 spec:
   database:
     MySQL:
-      db: socksdb 
-      host: 127.0.0.1 
-      password: "12345678"
+      db: test 
+      host: mysql.default 
+      password: root 
       port: 3306
-      user: root 
+      user: root

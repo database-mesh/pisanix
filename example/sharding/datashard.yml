@@ -17,13 +17,13 @@
 apiVersion: core.database-mesh.io/v1alpha1
 kind: DataShard 
 metadata:
-  name: catalogue 
-  namespace: demotest 
+  name: test 
+  namespace: default 
   labels:
-    source: catalogue
+    source: test 
 spec:
   rules: 
-  - tableName: "tb1_5kb"
+  - tableName: "t_order"
     tableStrategy:
       tableShardingAlgorithmName: "mod"
       tableShardingColumn: "id"
