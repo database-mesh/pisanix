@@ -753,8 +753,7 @@ func Test_ShardingConfig(t *testing.T) {
 		},
 	}
 
-	data, _ := json.Marshal(config)
-	t.Logf("%s\n", string(data))
+	// data, _ := json.Marshal(config)
 }
 
 var dbepreadwrite = client.DatabaseEndpoint{
