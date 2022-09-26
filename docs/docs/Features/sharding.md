@@ -68,6 +68,7 @@ SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00
 - 基于单 shard-key 的静态分片规则
 - 分片算法：crc32mod 和 mod
 - 单库水平分表
+- 基于分片的查询，更新，删除，修改
 
 #### 使用限制
 - 不支持子查询
