@@ -200,7 +200,6 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         let has_rw = self.proxy_config.read_write_splitting.is_some();
 
-        println!("has_rw {:?}", has_rw);
         loop {
             // TODO: need refactor
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
