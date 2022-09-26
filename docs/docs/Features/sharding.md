@@ -37,6 +37,9 @@ SELECT order_id FROM order.t_order WHERE order_id = 1;
 ```
 SELECT order_id FROM order.t_order_00001 WHERE order_id = 1;
 ```
+
+**特别说明: SQL rewrite 在修改标识符计算实际表名时会自动根据分片规则添加表索引，索引规则位 表名_索引，索引位为5位表示。例如：`t_order` 表改写后为 `t_order_00000`。因此用户需要根据实际业务场景先创建好对应的表名**
+
 #### 2. 补列
 需要在查询语句中补列通常由两种情况导致。 第一种情况是 Pisa-Proxy 需要在结果归并时获取相应数据，但该数据并未能通过查询的SQL返回。 这种情况主要是针对 GROUP BY 和 ORDER BY。结果归并时，需要根据 GROUP BY 和 ORDER BY 的字段项进行分组和排序，但如果原始SQL的选择项中若并未包含分组项或排序项，则需要对原始SQL进行改写。
 例如有以下 SQL 语句:
@@ -65,6 +68,7 @@ SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00
 - 基于单 shard-key 的静态分片规则
 - 分片算法：crc32mod 和 mod
 - 单库水平分表
+- 基于分片的查询，更新，删除，修改
 
 #### 使用限制
 - 不支持子查询
@@ -83,5 +87,3 @@ SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00
 |table_sharding_algorithm_name|enum|是|无|分片算法|
 |table_sharding_column|String|是|无|分片键|
 |sharding_count|u64|是|无|分片数|
-
-
