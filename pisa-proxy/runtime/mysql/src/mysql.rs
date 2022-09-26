@@ -14,7 +14,7 @@
 
 use std::{
     marker::PhantomData,
-    sync::{atomic::{AtomicU32, Ordering}, Arc},
+    sync::{atomic::AtomicU32, Arc},
     time::{Duration, Instant},
 };
 
@@ -24,7 +24,6 @@ use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
 use endpoint::endpoint::Endpoint;
 use futures::{SinkExt, StreamExt};
-use lazy_static::lazy_static;
 use loadbalance::balance::{Balance, LoadBalance};
 use mysql_parser::parser::Parser;
 use mysql_protocol::{
@@ -62,9 +61,6 @@ use crate::{
     transaction_fsm::*,
 };
 
-//lazy_static! {
-//    pub static ref STMT_ID: AtomicU32 = AtomicU32::new(0);
-//}
 
 #[derive(Default)]
 pub struct MySQLProxy {
@@ -89,6 +85,7 @@ impl MySQLProxy {
         let strategy = if self.proxy_config.read_write_splitting.is_some()
             && self.proxy_config.sharding.is_some()
         {
+
             let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
             RouteStrategy::new(
                 self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
@@ -157,9 +154,10 @@ impl MySQLProxy {
             endpoints.push(endpoint);
         }
 
+
         let has_rw = self.proxy_config.read_write_splitting.is_some();
 
-        Some(ShardingRewrite::new(config.unwrap(), endpoints, has_rw))
+        Some(ShardingRewrite::new(config.unwrap(), endpoints, self.node_group.clone(), has_rw))
     }
 }
 
@@ -202,6 +200,7 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         let has_rw = self.proxy_config.read_write_splitting.is_some();
 
+        println!("has_rw {:?}", has_rw);
         loop {
             // TODO: need refactor
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
