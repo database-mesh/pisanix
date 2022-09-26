@@ -14,7 +14,7 @@
 
 use std::{
     marker::PhantomData,
-    sync::Arc,
+    sync::{atomic::AtomicU32, Arc},
     time::{Duration, Instant},
 };
 
@@ -25,16 +25,14 @@ use conn_pool::Pool;
 use endpoint::endpoint::Endpoint;
 use futures::{SinkExt, StreamExt};
 use loadbalance::balance::{Balance, LoadBalance};
-use mysql_parser::{
-    parser::Parser,
-};
+use mysql_parser::parser::Parser;
 use mysql_protocol::{
     client::conn::ClientConn,
     err::ProtocolError,
     mysql_const::ComType,
     server::{
         auth::{handshake, ServerHandshakeCodec},
-        codec::{ok_packet, CommonPacket, PacketCodec, PacketSend},
+        codec::{make_err_packet, ok_packet, CommonPacket, PacketCodec, PacketSend},
         err::MySQLError,
         stream::LocalStream,
     },
@@ -42,42 +40,38 @@ use mysql_protocol::{
 };
 use parking_lot::Mutex;
 use pisa_error::error::{Error, ErrorKind};
-use plugin::{
-    build_phase::PluginPhase,
-    err::BoxError,
-};
+use plugin::{build_phase::PluginPhase, err::BoxError, layer::Service};
 use proxy::{
     listener::Listener,
     proxy::{MySQLNode, Proxy, ProxyConfig},
 };
 use strategy::{
-    config::TargetRole,
+    config::{NodeGroup, TargetRole},
     readwritesplitting::ReadWriteEndpoint,
     route::RouteStrategy,
+    sharding_rewrite::ShardingRewrite,
+    sharding_rewrite::ShardingRewriteOutput,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder, Framed};
 use tracing::error;
 
 use crate::{
-    server::{
-        metrics::*
-    },
+    server::{metrics::*, stmt_cache::StmtCache, PisaMySQLService},
     transaction_fsm::*,
 };
-use plugin::layer::Service;
-use crate::server::PisaMySQLService;
-use mysql_protocol::server::codec::make_err_packet;
+
 
 #[derive(Default)]
 pub struct MySQLProxy {
     pub proxy_config: ProxyConfig,
+    pub node_group: Option<NodeGroup>,
     pub mysql_nodes: Vec<MySQLNode>,
     pub pisa_version: String,
 }
 
 impl MySQLProxy {
-    fn build_route(&self) -> RouteStrategy {
+    fn build_route(&self) -> Result<RouteStrategy, Error> {
         let length = self.mysql_nodes.len();
         let (mut rw, mut ro) = (Vec::with_capacity(length), Vec::with_capacity(length));
         for node in &self.mysql_nodes {
@@ -88,7 +82,29 @@ impl MySQLProxy {
             }
         }
 
-        if self.proxy_config.read_write_splitting.is_none() {
+        let strategy = if self.proxy_config.read_write_splitting.is_some()
+            && self.proxy_config.sharding.is_some()
+        {
+
+            let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
+            RouteStrategy::new(
+                self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
+                &self.node_group,
+                rw_endpoint,
+                true,
+            )
+            .map_err(|e| Error::new(ErrorKind::Runtime(e.into())))?
+        } else if self.proxy_config.read_write_splitting.is_some() {
+            let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
+            RouteStrategy::new(
+                self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
+                &self.node_group,
+                rw_endpoint,
+                false,
+            )
+            .map_err(|e| Error::new(ErrorKind::Runtime(e.into())))?
+        } else {
+            //let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
             let balance_type =
                 self.proxy_config.simple_loadbalance.as_ref().unwrap().balance_type.clone();
             let mut balance = Balance.build_balance(balance_type);
@@ -97,15 +113,51 @@ impl MySQLProxy {
                 balance.add(ep)
             }
 
-            return RouteStrategy::new_with_simple_route(balance);
+            if self.proxy_config.sharding.is_some() {
+                let has_strategy = &self.proxy_config.sharding.as_ref().unwrap().iter().all(|x| {
+                    x.table_strategy.is_some()
+                        || x.database_strategy.is_some()
+                        || x.database_table_strategy.is_some()
+                });
+                if *has_strategy {
+                    RouteStrategy::new_with_sharding_only(balance)
+                } else {
+                    RouteStrategy::new_with_simple_route(balance)
+                }
+            } else {
+                RouteStrategy::new_with_simple_route(balance)
+            }
+        };
+
+        Ok(strategy)
+    }
+
+    fn build_sharding_rewriter(&self) -> Option<ShardingRewrite> {
+        let config = self.proxy_config.sharding.clone();
+
+        if config.is_none() {
+            return None;
         }
 
-        let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
+        let has_strategy = config.as_ref().unwrap().iter().all(|x| {
+            x.table_strategy.is_some()
+                || x.database_strategy.is_some()
+                || x.database_table_strategy.is_some()
+        });
+        if !has_strategy {
+            return None;
+        }
 
-        RouteStrategy::new(
-            self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
-            rw_endpoint,
-        )
+        let mut endpoints: Vec<Endpoint> = vec![];
+        for mysql_node in &self.mysql_nodes {
+            let endpoint = Endpoint::from(mysql_node.clone());
+            endpoints.push(endpoint);
+        }
+
+
+        let has_rw = self.proxy_config.read_write_splitting.is_some();
+
+        Some(ShardingRewrite::new(config.unwrap(), endpoints, self.node_group.clone(), has_rw))
     }
 }
 
@@ -133,7 +185,10 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         // TODO: using a loadbalancer factory for different load balance strategy.
         // Currently simple_loadbalancer purely provide a list of nodes without any strategy.
-        let lb = Arc::new(tokio::sync::Mutex::new(self.build_route()));
+        let route_strategy = Arc::new(Mutex::new(self.build_route()?));
+
+        // Build sharding rewriter
+        let rewriter = self.build_sharding_rewriter();
 
         let mut plugin: Option<PluginPhase> = None;
         if let Some(config) = &self.proxy_config.plugin {
@@ -143,17 +198,21 @@ impl proxy::factory::Proxy for MySQLProxy {
         let parser = Arc::new(Parser::new());
         //let metrics_collector = MySQLServerMetricsCollector::new();
 
+        let has_rw = self.proxy_config.read_write_splitting.is_some();
+
+        println!("has_rw {:?}", has_rw);
         loop {
             // TODO: need refactor
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
 
-            let lb = Arc::clone(&lb);
+            let route_strategy = route_strategy.clone();
             let plugin = plugin.clone();
             let _pcfg = self.proxy_config.clone();
             let parser = parser.clone();
             let ast_cache = ast_cache.clone();
             let pool = pool.clone();
             let proxy_name = self.proxy_config.name.clone();
+            let rewriter = rewriter.clone();
 
             let handshake_codec = ServerHandshakeCodec::new(
                 self.proxy_config.user.clone(),
@@ -175,14 +234,16 @@ impl proxy::factory::Proxy for MySQLProxy {
                 }
 
                 let handshake_framed = res.unwrap().0;
-                let parts = handshake_framed.into_parts(); 
+                let parts = handshake_framed.into_parts();
 
                 let packet_codec = PacketCodec::new(parts.codec, 8196);
                 let io = parts.io;
 
-                let framed = Framed::with_capacity(io, packet_codec, 16384); 
+                let framed = Framed::with_capacity(io, packet_codec, 16384);
                 let context = ReqContext {
-                    fsm: TransFsm::new_trans_fsm(lb, pool),
+                    fsm: TransFsm::new(pool.clone()),
+                    route_strategy,
+                    pool,
                     ast_cache,
                     plugin,
                     metrics_collector: MySQLServerMetricsCollector,
@@ -190,6 +251,11 @@ impl proxy::factory::Proxy for MySQLProxy {
                     framed,
                     name: proxy_name,
                     mysql_parser: parser,
+                    rewriter,
+                    rewrite_outputs: vec![],
+                    has_readwritesplitting: has_rw,
+                    stmt_cache: StmtCache::new(),
+                    stmt_id: AtomicU32::new(0),
                 };
 
                 if let Err(e) = ins.run(context).await {
@@ -204,6 +270,8 @@ impl proxy::factory::Proxy for MySQLProxy {
 pub struct ReqContext<T, C> {
     pub name: String,
     pub fsm: TransFsm,
+    pub route_strategy: Arc<Mutex<RouteStrategy>>,
+    pub pool: Pool<ClientConn>,
     pub mysql_parser: Arc<Parser>,
     pub ast_cache: Arc<Mutex<ParserAstCache>>,
     pub plugin: Option<PluginPhase>,
@@ -214,6 +282,11 @@ pub struct ReqContext<T, C> {
     pub concurrency_control_rule_idx: Option<usize>,
     // The codc for MySQL Protocol
     pub framed: Framed<T, C>,
+    pub rewriter: Option<ShardingRewrite>,
+    pub rewrite_outputs: Vec<ShardingRewriteOutput>,
+    pub has_readwritesplitting: bool,
+    pub stmt_cache: StmtCache,
+    pub stmt_id: AtomicU32,
 }
 
 /// Handle the return value of the command
@@ -238,8 +311,8 @@ pub trait MySQLService<T, C> {
     async fn field_list(cx: &mut ReqContext<T, C>, payload: &[u8]) -> Result<RespContext, Error>;
 }
 
-/// Start an instance of the `MySQLService`, its used to execute method 
-/// of the `MySQLService` trait 
+/// Start an instance of the `MySQLService`, its used to execute method
+/// of the `MySQLService` trait
 pub struct MySQLInstance<S, T, C> {
     // A service implementing the MySQLSerivce trait to handle mysql command
     _inner: S,
@@ -252,7 +325,9 @@ impl<S, T, C> MySQLInstance<S, T, C>
 where
     S: MySQLService<T, C>,
     T: AsyncRead + AsyncWrite + Unpin,
-    C: Decoder<Item = BytesMut, Error = ProtocolError> + Encoder<PacketSend<Box<[u8]>>, Error = ProtocolError> + CommonPacket,
+    C: Decoder<Item = BytesMut, Error = ProtocolError>
+        + Encoder<PacketSend<Box<[u8]>>, Error = ProtocolError>
+        + CommonPacket,
 {
     fn new(inner: S) -> Self {
         Self { _inner: inner, is_quit: false, _phat: PhantomData }
@@ -260,7 +335,9 @@ where
 
     async fn run(&mut self, mut cx: ReqContext<T, C>) -> Result<(), Error>
     where
-        C: Decoder<Item = BytesMut, Error = ProtocolError> + Encoder<PacketSend<Box<[u8]>>> + CommonPacket,
+        C: Decoder<Item = BytesMut, Error = ProtocolError>
+            + Encoder<PacketSend<Box<[u8]>>>
+            + CommonPacket,
     {
         let db = cx.framed.codec_mut().get_session().get_db();
         cx.fsm.set_db(db);
@@ -315,7 +392,10 @@ where
                 "08S01".as_bytes().to_vec(),
                 err.to_string(),
             ));
-            cx.framed.send(PacketSend::Encode(err_info[4..].into())).await.map_err(ErrorKind::from)?;
+            cx.framed
+                .send(PacketSend::Encode(err_info[4..].into()))
+                .await
+                .map_err(ErrorKind::from)?;
             return Ok(RespContext { ep: None, duration: now.elapsed() });
         }
 
@@ -328,14 +408,20 @@ where
             ComType::QUERY => S::query(cx, &payload).await,
             ComType::FIELD_LIST => S::field_list(cx, &payload).await,
             ComType::PING => {
-                cx.framed.send(PacketSend::Encode(ok_packet()[4..].into())).await.map_err(ErrorKind::from)?;
+                cx.framed
+                    .send(PacketSend::Encode(ok_packet()[4..].into()))
+                    .await
+                    .map_err(ErrorKind::from)?;
                 return Ok(RespContext { ep: None, duration: now.elapsed() });
             }
             ComType::STMT_PREPARE => S::prepare(cx, &payload).await,
             ComType::STMT_EXECUTE => S::execute(cx, &payload).await,
             ComType::STMT_CLOSE => S::stmt_close(cx, &payload).await,
             ComType::STMT_RESET => {
-                cx.framed.send(PacketSend::Encode(ok_packet()[4..].into())).await.map_err(ErrorKind::from)?;
+                cx.framed
+                    .send(PacketSend::Encode(ok_packet()[4..].into()))
+                    .await
+                    .map_err(ErrorKind::from)?;
                 return Ok(RespContext { ep: None, duration: now.elapsed() });
             }
             x => {
@@ -344,7 +430,10 @@ where
                     "08S01".as_bytes().to_vec(),
                     format!("command {} not support", x.as_ref()),
                 ));
-                cx.framed.send(PacketSend::Encode(err_info[4..].into())).await.map_err(ErrorKind::from)?;
+                cx.framed
+                    .send(PacketSend::Encode(err_info[4..].into()))
+                    .await
+                    .map_err(ErrorKind::from)?;
                 return Ok(RespContext { ep: None, duration: now.elapsed() });
             }
         }
@@ -371,4 +460,3 @@ where
         Ok(())
     }
 }
-

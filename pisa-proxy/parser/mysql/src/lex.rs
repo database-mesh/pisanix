@@ -399,6 +399,8 @@ impl<'a> Scanner<'a> {
                     old_pos,
                     self.pos - old_pos + 1,
                 )));
+
+                self.is_ident_dot = false;
             }
 
             '.' => {
@@ -672,7 +674,15 @@ impl<'a> Scanner<'a> {
             return DefaultLexeme::new(T_IDENT, old_pos, length);
         }
 
-        self.is_ident_dot = self.peek() == '.';
+        self.is_ident_dot = if self.peek() == '.' {
+            self.next();
+            let ch = self.peek();
+            self.pos -= 1;
+            !(ch == '`')
+        } else {
+            false
+        };
+        
 
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if is_x86_feature_detected!("sse2") {
@@ -1160,10 +1170,11 @@ mod test {
             //("SELECT 'тест' AS test\tkoi8r\tkoi8r_general_ci\tutf8mb4_0900_ai_ci;", 11),
             //("SELECT _yea | x'cafebabe' FROM at;", 11),
             //("SELECT w, SUM(w) OVER (ROWS BETWEEN CURRENT ROW AND 3 FOLLOWING) FROM t;", 11),
-            ("prepare stmt2 from @s", 5),
+            //("prepare stmt2 from @s", 5),
+            ("SELECT idx from db.`tshard` where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4", 11),
         ];
 
-        //println!("T_TEXT_STRING {:?} {:?}", );
+        println!("T_TEXT_STRING {:?}", T_IDENT_QUOTED);
         for (input, num) in inputs {
             let mut scanner = Scanner::new(input);
             println!("{:?}", scanner.chars);

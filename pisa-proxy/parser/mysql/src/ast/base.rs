@@ -895,8 +895,8 @@ pub enum Value {
 
     Num {
         span: Span,
-        // todo add parse i64 string
         value: String,
+        signed: bool,
     },
 
     HexNum {
@@ -907,8 +907,8 @@ pub enum Value {
 
     FloatNum {
         span: Span,
-        // todo add parse f64 string
         value: String,
+        signed: bool,
     },
 
     BinNum {
@@ -963,11 +963,16 @@ impl Value {
                 var_ident
             }
 
-            Self::Num { span: _, value } => (*value).to_string(),
+            Self::Num { span: _, signed, value } | Self::FloatNum { span:_, value, signed }=> {
+                let mut value = (*value).to_string();
+                if *signed {
+                    value.insert(0, '-');
+                }
+                
+                value
+            }
 
             Self::HexNum { span: _, value } => (*value).to_string(),
-
-            Self::FloatNum { span: _, value } => (*value).to_string(),
 
             Self::BinNum { span: _, value } => (*value).to_string(),
 
@@ -1606,7 +1611,7 @@ mod test {
     #[test]
     fn test_value() {
         impl Transformer for S {
-            fn trans(&mut self, node: &mut Node) -> &mut Self {
+            fn trans(&mut self, node: &mut Node) ->  bool {
                 match node {
                     Node::Value(Value::Text { span: _, value }) => {
                         if self.is_default {
@@ -1616,7 +1621,7 @@ mod test {
                         }
                     }
 
-                    Node::Value(Value::Num { span: _, value }) => {
+                    Node::Value(Value::Num { span: _, value, signed: _ }) => {
                         *value = "2".to_string();
                     }
 
@@ -1625,7 +1630,7 @@ mod test {
                     _ => {}
                 };
 
-                self
+                true
             }
         }
 
@@ -1646,10 +1651,10 @@ mod test {
     }
 
     fn test_value_num(s: &mut S) {
-        let mut val = Value::Num { span: Span::new(1, 1), value: "1".to_string() };
+        let mut val = Value::Num { span: Span::new(1, 1), value: "1".to_string() , signed: false};
 
         let new_val = val.visit(s);
-        if let Value::Num { span: _, value } = new_val {
+        if let Value::Num { span: _, value, signed: _} = new_val {
             assert_eq!(value, "2")
         }
     }

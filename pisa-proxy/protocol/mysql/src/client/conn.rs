@@ -287,6 +287,36 @@ impl ClientConn {
         Ok(())
     }
 
+    pub async fn send_query_without_stream<'a>(
+        &'a mut self,
+        val: &'a [u8],
+    ) -> Result<(), ProtocolError> {
+        let framed = self.framed.take().unwrap();
+
+        let mut resultset_codec = framed.into_resultset();
+
+        resultset_codec.send(ResultSendCommand::Binary((COM_QUERY, val))).await?;
+
+        self.framed = Some(Box::new(ClientCodec::Resultset(resultset_codec)));
+
+        Ok(())
+    }
+
+    pub async fn send_execute_without_stream<'a>(
+        &'a mut self,
+        val: &'a [u8],
+    ) -> Result<(), ProtocolError> {
+        let framed = self.framed.take().unwrap();
+        let mut resultset_codec = framed.into_resultset();
+        resultset_codec.codec_mut().with_binary(true);
+
+        resultset_codec.send(ResultSendCommand::Binary((COM_STMT_EXECUTE, val))).await?;
+
+        self.framed = Some(Box::new(ClientCodec::Resultset(resultset_codec)));
+
+        Ok(())
+    }
+
     pub async fn is_ready(&self) -> bool {
         self.framed.as_ref().unwrap().is_ready().await
     }
@@ -378,6 +408,7 @@ impl ConnAttr for ClientConn {
     }
 }
 
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum SessionAttr {
     DB(Option<String>),
@@ -388,7 +419,7 @@ pub enum SessionAttr {
 #[async_trait]
 impl ConnAttrMut for ClientConn {
     type Item = SessionAttr;
-    async fn init(&mut self, items: Vec<SessionAttr>) {
+    async fn init(&mut self, items: &[SessionAttr]) {
         for attr in items.iter() {
             match attr {
                 SessionAttr::DB(val) => {

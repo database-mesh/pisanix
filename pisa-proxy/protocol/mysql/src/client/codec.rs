@@ -20,7 +20,7 @@ use std::{
 };
 
 use bytes::{Buf, BufMut, BytesMut};
-use futures::Stream;
+use futures::{stream::Fuse, Stream};
 use pin_project::pin_project;
 use protocol_codegen::mysql_codec_convert;
 use tokio::io::Interest;
@@ -35,7 +35,7 @@ use super::{
 use crate::{
     err::ProtocolError,
     row::{RowData, RowDataTyp},
-    util::{get_length, is_eof},
+    util::{get_length, is_eof}, client::resultset::DecodeResultsetState,
 };
 
 pub type SendCommand<'a> = (u8, &'a str);
@@ -98,6 +98,130 @@ impl ClientCodec {
     }
 }
 
+pub enum MergeResultsetState {
+    Header,
+    ColumnInfo,
+    ColumnEof,
+    Row,
+}
+
+#[pin_project]
+pub struct MergeStream<S>
+where
+    S: Stream + std::marker::Unpin,
+{
+    inner: Vec<Fuse<S>>,
+    idx: usize,
+    buf: Vec<Option<S::Item>>,
+    base_length: usize,
+    limit: usize,
+    limit_idx: usize,
+    none_count: usize,
+    state: MergeResultsetState,
+}
+
+impl<S> MergeStream<S>
+where
+    S: Stream + std::marker::Unpin,
+{
+    pub fn set_state(&mut self, state: MergeResultsetState) {
+        self.state = state;
+    }
+}
+
+impl<S> MergeStream<S>
+where
+    S: Stream + std::marker::Unpin,
+{
+    pub fn new(inner: Vec<Fuse<S>>, base_length: usize) -> Self {
+        let limit = base_length * 100;
+
+        MergeStream {
+            inner,
+            idx: 0,
+            buf: Vec::with_capacity(base_length),
+            base_length,
+            limit_idx: 0,
+            limit,
+            none_count: 0,
+            state: MergeResultsetState::Header,
+        }
+    }
+}
+
+impl<S> Stream for MergeStream<S>
+where
+    S: Stream + std::marker::Unpin,
+    <S as Stream>::Item: std::fmt::Debug,
+{
+    type Item = Vec<Option<S::Item>>;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let me = self.project();
+        loop {
+            let s = unsafe { Pin::new(me.inner.get_unchecked_mut(*me.idx)) };
+
+            match me.state {
+                MergeResultsetState::Header
+                | MergeResultsetState::ColumnInfo
+                | MergeResultsetState::ColumnEof => {
+                    match s.poll_next(cx) {
+                        Poll::Ready(data) => {
+                            *me.idx += 1;
+                            me.buf.push(data);
+                        }
+
+                        Poll::Pending => return Poll::Pending,
+                    };
+
+                    if *me.idx == *me.base_length {
+                        *me.idx = 0;
+                        break;
+                    }
+                }
+
+                MergeResultsetState::Row => {
+                    match s.poll_next(cx) {
+                        Poll::Ready(Some(data)) => {
+                            *me.idx += 1;
+                            *me.limit_idx += 1;
+                            me.buf.push(Some(data));
+                        }
+
+                        Poll::Ready(None) => {
+                            *me.idx += 1;
+                            *me.limit_idx += 1;
+                            *me.none_count += 1;    
+                        }
+
+                        Poll::Pending => return Poll::Pending,
+                    };
+
+
+                    if *me.idx == *me.base_length {
+                        *me.idx = 0;
+                        if *me.none_count == *me.base_length {
+                            *me.none_count = 0;
+                            break;
+                        }
+                    }
+
+                    if *me.limit_idx == *me.limit {
+                        *me.limit_idx = 0;
+                        *me.none_count = 0;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if me.buf.is_empty() {
+            return Poll::Ready(None);
+        } else {
+            return Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.limit))));
+        }
+    }
+}
+
 #[derive(Debug)]
 #[pin_project]
 pub struct ResultsetStream<'a> {
@@ -125,10 +249,21 @@ impl<'a> Stream for ResultsetStream<'a> {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
         let codec = Pin::new(me.framed);
-        let is_complete = codec.codec().next_state.is_complete();
+        //println!("rs {:?}", codec.codec().next_state);
+        let next_state = codec.codec().next_state.clone();
+        let is_complete = next_state.is_complete();
+        
 
         match codec.poll_next(cx) {
-            Poll::Ready(Some(Ok(data))) => Poll::Ready(Some(Ok(data.0))),
+            Poll::Ready(Some(Ok(data))) => {
+                if next_state == DecodeResultsetState::Row || next_state == DecodeResultsetState::RowBinary {
+                    if is_eof(&data.0) {
+                        return Poll::Ready(None)
+                    }
+                }
+
+                Poll::Ready(Some(Ok(data.0)))
+            }
 
             Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
 
@@ -286,8 +421,6 @@ pub fn write_command<'a>(item: SendCommand<'a>, dst: &'a mut BytesMut) {
     dst.put(item.1.as_bytes());
 }
 
-
-
 #[cfg(test)]
 mod test {
     use tokio_stream::StreamExt;
@@ -338,7 +471,4 @@ mod test {
             }
         }
     }
-
-
-
 }

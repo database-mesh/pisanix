@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod config;
-pub mod route;
-use route::*;
-pub mod discovery;
-pub mod monitors;
-pub mod readwritesplitting;
-pub mod rewrite;
-pub mod sharding_rewrite;
 
-#[macro_use]
-extern crate lazy_static;
+pub const ORDER_BY_DERIVED: &str = "ORDER_BY_DERIVED";
+pub const GROUP_BY_DERIVED: &str = "GROUP_BY_DERIVED";
+pub const AVG_DERIVED_COUNT: &str = "AVG_DERIVED_COUNT";
+pub const AVG_DERIVED_SUM: &str = "AVG_DERIVED_SUM";
+pub const COUNT: &str = "COUNT";
+pub const SUM: &str = "SUM";
+pub const AS: &str = "AS";
