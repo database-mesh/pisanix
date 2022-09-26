@@ -237,29 +237,6 @@ spec:
       db: "socksdb"
 ```
 
-- DataShard
-
-```yaml
-apiVersion: core.database-mesh.io/v1alpha1
-kind: DataShard
-metadata:
-  name: catalogue
-  namespace: demotest
-  labels:
-    source: catalogue
-spec:
-  rules:
-  - tableName: "t_order"
-    tableStrategy:
-      tableShardingAlgorithmName: "mod"
-      tableShardingColumn: "id"
-      shardingCount: 4
-    actualDatanodes:
-      valueSource:
-        nodes:
-        - value: "ds001"
-```
-
 #### 应用访问数据库切换至 Pisanix
 
 为 namespace 添加标签以开启注入
