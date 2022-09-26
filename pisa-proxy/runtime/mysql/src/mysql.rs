@@ -49,8 +49,7 @@ use strategy::{
     config::{NodeGroup, TargetRole},
     readwritesplitting::ReadWriteEndpoint,
     route::RouteStrategy,
-    sharding_rewrite::ShardingRewrite,
-    sharding_rewrite::ShardingRewriteOutput,
+    sharding_rewrite::{ShardingRewrite, ShardingRewriteOutput},
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder, Framed};
@@ -60,7 +59,6 @@ use crate::{
     server::{metrics::*, stmt_cache::StmtCache, PisaMySQLService},
     transaction_fsm::*,
 };
-
 
 #[derive(Default)]
 pub struct MySQLProxy {
@@ -85,7 +83,6 @@ impl MySQLProxy {
         let strategy = if self.proxy_config.read_write_splitting.is_some()
             && self.proxy_config.sharding.is_some()
         {
-
             let rw_endpoint = ReadWriteEndpoint { read: ro, readwrite: rw };
             RouteStrategy::new(
                 self.proxy_config.read_write_splitting.as_ref().unwrap().clone(),
@@ -154,7 +151,6 @@ impl MySQLProxy {
             endpoints.push(endpoint);
         }
 
-
         let has_rw = self.proxy_config.read_write_splitting.is_some();
 
         Some(ShardingRewrite::new(config.unwrap(), endpoints, self.node_group.clone(), has_rw))
@@ -200,7 +196,6 @@ impl proxy::factory::Proxy for MySQLProxy {
 
         let has_rw = self.proxy_config.read_write_splitting.is_some();
 
-        println!("has_rw {:?}", has_rw);
         loop {
             // TODO: need refactor
             let socket = proxy.accept(&listener).await.map_err(ErrorKind::Io)?;
