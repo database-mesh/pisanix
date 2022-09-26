@@ -8,7 +8,12 @@ sidebar_position: 6
 
 ## 数据分片介绍
 如下图，在数据分片中主要包函了 SQL 解析、SQL 改写、SQL 路由、结果归并这几个重要模块，
-![Pisanix Arch](/img/sharding-core.png)
+
+```
++------------+     +-------------+     +-----------+     +--------------+
+| SQL Parse  | --> | SQL Rewrite | --> | SQL Route | --> | Result Merge |
++------------+     +-------------+     +-----------+     +--------------+
+```
 
 ### 名词解释
 SQL 解析: 在分片中，请求到达 Pisa-Proxy 后会首先经过 SQL Parser，将 SQL 解析成 AST。
@@ -55,12 +60,24 @@ SELECT AVG(price) FROM t_order WHERE user_id = 1;
 ```
 SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00000 FROM t_order_00000 WHERE user_id = 1;
 ```
+# 支持特性
+#### 特性
+- 基于单 shard-key 的静态分片规则
+- 分片算法：crc32mod 和 mod
+- 单库水平分表
 
-## 配置说明
+#### 使用限制
+- 不支持子查询
+- 不支持分库
+- 不支持分布式事务
+- 不支持基于表达式配置的分片规则
+- 不支持跨库 join 查询
+
+# 配置说明
 | 属性 | 值类型 | 是否依赖 | 默认值 | 含义 |
 |-----|-------|---------|-------|-----|
-| table_name |String|  否     |  无   |分片表名|
-| actual_datanodes| Vec\<String\>| 否     |  无   |后端数据呀|
+| table_name |String|否|无|分片表名|
+| actual_datanodes| Vec\<String\>|否|无|后端数据源|
 |binding_tables|Vec\<String\>|否|无|暂不支持||
 |broadcast_tables|Vec\<String\>|否|无|暂不支持||
 |table_sharding_algorithm_name|enum|是|无|分片算法|
