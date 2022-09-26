@@ -18,6 +18,7 @@ mod generic_meta;
 
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
+use crc32fast::Hasher;
 use mysql_parser::ast::{SqlStmt, Visitor, TableIdent };
 use crate::sharding_rewrite::meta::AvgMeta;
 use crate::sharding_rewrite::meta::GroupMeta;
@@ -33,38 +34,53 @@ use crate::{
 };
 
 pub trait CalcShardingIdx<I> {
-    fn calc(self, algo: &ShardingAlgorithmName, id: I) -> Option<u64>;
+    fn calc(self, algo: &ShardingAlgorithmName, sharding_count: I) -> Option<u64>;
 }
 
 impl CalcShardingIdx<u64> for u64 {
-    fn calc(self, algo: &ShardingAlgorithmName, id: u64) -> Option<u64> {
+    fn calc(self, algo: &ShardingAlgorithmName, sharding_count: u64) -> Option<u64> {
         match algo {
             ShardingAlgorithmName::Mod => {
-                Some(self.wrapping_rem(id))
+                Some(self.wrapping_rem(sharding_count))
             },
-            _ => None,
+            ShardingAlgorithmName::CRC32Mod => {
+                let mut hasher = Hasher::new();
+                hasher.update(&self.to_be_bytes());
+                let checksum = hasher.finalize();
+                Some(checksum.wrapping_rem(sharding_count.try_into().unwrap()).into())
+            }
         }
     }
 }
 
 impl CalcShardingIdx<i64> for i64 {
-    fn calc(self, algo: &ShardingAlgorithmName, id: i64) -> Option<u64> {
+    fn calc(self, algo: &ShardingAlgorithmName, sharding_count: i64) -> Option<u64> {
         match algo {
             ShardingAlgorithmName::Mod => {
-                Some(self.wrapping_rem(id) as u64)
+                Some(self.wrapping_rem(sharding_count) as u64)
             },
-            _ => None
+            ShardingAlgorithmName::CRC32Mod => {
+                let mut hasher = Hasher::new();
+                hasher.update(&self.to_be_bytes());
+                let checksum = hasher.finalize();
+                Some(checksum.wrapping_rem(sharding_count.try_into().unwrap()).into())
+            }
         }
     }
 }
 
 impl CalcShardingIdx<f64> for f64 {
-    fn calc(self, algo: &ShardingAlgorithmName, id: f64) -> Option<u64> {
+    fn calc(self, algo: &ShardingAlgorithmName, sharding_count: f64) -> Option<u64> {
         match algo {
             ShardingAlgorithmName::Mod => {
-                Some((self % id).round() as u64)
+                Some((self % sharding_count).round() as u64)
+            },
+            ShardingAlgorithmName::CRC32Mod => {
+                let mut hasher = Hasher::new();
+                hasher.update(&self.to_be_bytes());
+                let checksum = hasher.finalize();
+                Some(((checksum as f64) % sharding_count).round() as u64)
             }
-            _ => None
         }
     }
 }
