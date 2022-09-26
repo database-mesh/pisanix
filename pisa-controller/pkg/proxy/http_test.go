@@ -27,12 +27,19 @@ func Test_build(t *testing.T) {
 			tsReadWriteSplttingDynamic,
 		},
 	}
+
+	dslist := &client.DataShardList{
+		Items: []client.DataShard{
+			generalshard,
+		},
+	}
+
 	dbeplist := &client.DatabaseEndpointList{
 		Items: []client.DatabaseEndpoint{
 			dbep,
 		},
 	}
-	actual, _ := build(&vdb, tslist, dbeplist)
+	actual, _ := build(&vdb, tslist, dslist, dbeplist)
 
 	expected := &PisaProxyConfig{
 		Admin: AdminConfig{
