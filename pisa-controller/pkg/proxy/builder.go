@@ -23,11 +23,11 @@ type PisaProxyConfig struct {
 	Admin     AdminConfig     `json:"admin"`
 	MySQL     MySQLConfig     `json:"mysql"`
 	Proxy     ProxyConfig     `json:"proxy"`
-	NodeGroup NodeGroupConfig `json:"node_group"`
+	NodeGroup NodeGroupConfig `json:"node_group,omitempty"`
 }
 
 type NodeGroupConfig struct {
-	Members []NodeGroupMember `json:"member"`
+	Members []NodeGroupMember `json:"member,omitempty"`
 }
 
 type NodeGroupMember struct {
