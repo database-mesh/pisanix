@@ -1,0 +1,172 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  name: datashards.core.database-mesh.io
+spec:
+  group: core.database-mesh.io
+  names:
+    kind: DataShard
+    listKind: DataShardList
+    plural: datashards
+    singular: datashard
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: DataShard is the Schema for the datashards API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              rules:
+                items:
+                  properties:
+                    actualDatanodes:
+                      properties:
+                        valueSource:
+                          properties:
+                            expression:
+                              type: string
+                            nodes:
+                              items:
+                                properties:
+                                  value:
+                                    type: string
+                                  valueFromReadWriteSplitting:
+                                    properties:
+                                      name:
+                                        type: string
+                                    required:
+                                    - name
+                                    type: object
+                                required:
+                                - value
+                                type: object
+                              type: array
+                          required:
+                          - expression
+                          - nodes
+                          type: object
+                      required:
+                      - valueSource
+                      type: object
+                    databaseStrategy:
+                      properties:
+                        databaseShardingAlgorithmName:
+                          type: string
+                        databaseShardingColumn:
+                          type: string
+                      required:
+                      - databaseShardingAlgorithmName
+                      - databaseShardingColumn
+                      type: object
+                    databaseTableStrategy:
+                      properties:
+                        databaseShardingAlgorithmName:
+                          type: string
+                        databaseShardingColumn:
+                          type: string
+                        shardingCount:
+                          format: int32
+                          type: integer
+                        tableShardingAlgorithmName:
+                          type: string
+                        tableShardingColumn:
+                          type: string
+                      required:
+                      - databaseShardingAlgorithmName
+                      - databaseShardingColumn
+                      - shardingCount
+                      - tableShardingAlgorithmName
+                      - tableShardingColumn
+                      type: object
+                    readWriteSplittingGroup:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          rules:
+                            items:
+                              description: ReadWriteSplittingStaticRule defines static
+                                rules
+                              properties:
+                                algorithmName:
+                                  description: LoadBalanceAlgorithm defines the name
+                                    of managed loadbalance algorithm
+                                  type: string
+                                name:
+                                  type: string
+                                regex:
+                                  items:
+                                    type: string
+                                  type: array
+                                target:
+                                  type: string
+                                type:
+                                  description: RuleType defines the type of static
+                                    rule
+                                  type: string
+                              required:
+                              - algorithmName
+                              - name
+                              - type
+                              type: object
+                            type: array
+                        required:
+                        - name
+                        type: object
+                      type: array
+                    tableName:
+                      type: string
+                    tableStrategy:
+                      properties:
+                        shardingCount:
+                          format: int32
+                          type: integer
+                        tableShardingAlgorithmName:
+                          type: string
+                        tableShardingColumn:
+                          type: string
+                      required:
+                      - shardingCount
+                      - tableShardingAlgorithmName
+                      - tableShardingColumn
+                      type: object
+                  required:
+                  - actualDatanodes
+                  - tableName
+                  type: object
+                type: array
+            required:
+            - rules
+            type: object
+          status:
+            description: DataShardStatus defines the observed state of DataShard
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
