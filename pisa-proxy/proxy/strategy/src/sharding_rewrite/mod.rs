@@ -126,7 +126,7 @@ pub struct ShardingRewriteOutput {
     pub sharding_column: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataSource {
     Endpoint(Endpoint),
     NodeGroup(String),
@@ -318,6 +318,10 @@ impl ShardingRewrite {
             }
         }).collect::<Vec<_>>();
 
+        if wheres.is_empty() {
+            return Ok(self.table_strategy_iproduct(try_tables.clone(), avgs, fields, orders, groups));
+        }
+
         let expect_sum = wheres[0].1 as usize * wheres.len();
         let sum: usize = wheres.iter().map(|x| x.1).sum::<u64>() as usize;
 
@@ -361,6 +365,11 @@ impl ShardingRewrite {
             .collect::<Vec<_>>();
     
         let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+        let data_source = if self.has_rw {
+            DataSource::NodeGroup(sharding_rule.actual_datanodes[0].clone())
+        } else {
+            DataSource::Endpoint(ep.clone())
+        };
         
         let sharding_column = sharding_rule.get_sharding_column().1.unwrap();
 
@@ -371,7 +380,7 @@ impl ShardingRewrite {
                     ShardingRewriteOutput {
                         changes: vec![RewriteChange::OrderChange(OrderChange{target: order_target})],
                         target_sql: target_sql.to_string(),
-                        data_source: DataSource::Endpoint(ep.clone()),
+                        data_source: data_source.clone(),
                         sharding_column: Some(sharding_column.to_string()),
                     }
                 )
@@ -382,7 +391,7 @@ impl ShardingRewrite {
                     ShardingRewriteOutput {
                         changes: vec![RewriteChange::GroupChange(GroupChange{target: group_target})],
                         target_sql: target_sql.to_string(),
-                        data_source: DataSource::Endpoint(ep.clone()),
+                        data_source: data_source.clone(),
                         sharding_column: Some(sharding_column.to_string()),
                     }
                 )
@@ -394,7 +403,7 @@ impl ShardingRewrite {
                 ShardingRewriteOutput {
                     changes: vec![RewriteChange::AvgChange(AvgChange{target})],
                     target_sql: target_sql.to_string(),
-                    data_source: DataSource::Endpoint(ep.clone()),
+                    data_source: data_source.clone(),
                     sharding_column: Some(sharding_column.to_string()),
                 }
             );
@@ -404,7 +413,7 @@ impl ShardingRewrite {
             ShardingRewriteOutput { 
                 changes, 
                 target_sql: target_sql.to_string(), 
-                data_source: DataSource::Endpoint(ep.clone()),
+                data_source,
                 sharding_column: Some(sharding_column.to_string()),
             }
         );
@@ -659,13 +668,12 @@ impl ShardingRewrite {
                                     }
                                 }) {
                                     let target_field = format!("{}{} {} ", ori_field, order.name, AS);
-                                    let mut target_as = String::with_capacity(target_field.len());
-                                    if order.name.contains("`") {
+                                    let target_as = if order.name.contains("`") {
                                         let new_order_name = order.name.replace("`", "");
-                                        target_as = format!("{}_{}_{:05}", new_order_name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx);
+                                        format!("{}_{}_{:05}", new_order_name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx)
                                     } else {
-                                        target_as = format!("{}_{}_{:05}", order.name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx);
-                                    }
+                                        format!("{}_{}_{:05}", order.name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx)
+                                    };
                                     let target = format!("{}{}", target_field, target_as);
                                     target_sql.insert_str(first_span.start(), &target.clone());
                                     order_changes.insert("order_target".to_string(), target_as);
@@ -693,13 +701,12 @@ impl ShardingRewrite {
                                     }
                                 }) {
                                     let target_field = format!("{}{} {} ", ori_field, group.name, AS);
-                                    let mut target_as = String::with_capacity(target_field.len());
-                                    if group.name.contains("`") {
+                                    let target_as = if group.name.contains("`") {
                                         let new_group_name = group.name.replace("`", "");
-                                        target_as = format!("{}_{}_{:05}", new_group_name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx);
+                                        format!("{}_{}_{:05}", new_group_name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx)
                                     } else {
-                                        target_as = format!("{}_{}_{:05}", group.name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx);
-                                    }
+                                        format!("{}_{}_{:05}", group.name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx)
+                                    };
                                     let target = format!("{}{}", target_field, target_as);
                                     target_sql.insert_str(first_span.start(), &target.clone());
                                     group_changes.insert("group_target".to_string(), target_as);
@@ -1093,7 +1100,7 @@ mod test {
     use mysql_parser::parser::Parser;
 
     use super::ShardingRewrite;
-    use crate::{config::{DatabaseStrategyConfig, Sharding, ShardingAlgorithmName, StrategyType}, rewrite::{ShardingRewriteInput, ShardingRewriter}};
+    use crate::{config::{DatabaseStrategyConfig, Sharding, ShardingAlgorithmName, StrategyType}, rewrite::{ShardingRewriteInput, ShardingRewriter}, sharding_rewrite::DataSource};
 
     fn get_database_sharding_config() -> (Vec<Sharding>, Vec<Endpoint>) {
         (
@@ -1490,5 +1497,24 @@ mod test {
         };
         let res = sr.rewrite(input).unwrap();
         assert_eq!(res[0].target_sql, "SELECT id FROM `db`.tshard_00000 ORDER BY `id`");
+    }
+
+    #[test]
+    fn test_table_sharding_strategy_rw() {
+        let config = get_table_sharding_config();
+        let parser = Parser::new();
+        let raw_sql = "SELECT id FROM db.tshard where idx = 10";
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), true);
+        let input = ShardingRewriteInput {
+            default_db: None,
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res[0].data_source,
+            DataSource::NodeGroup("ds001".to_string())
+        );
     }
 }
