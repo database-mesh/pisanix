@@ -80,8 +80,8 @@ SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00
 # 配置说明
 | 属性 | 值类型 | 是否依赖 | 默认值 | 含义 |
 |-----|-------|---------|-------|-----|
-| table_name |String|否|无|分片表名|
-| actual_datanodes| Vec\<String\>|否|无|后端数据源|
+| table_name |String|是|无|分片表名|
+| actual_datanodes| Vec\<String\>|是|无|后端数据源|
 |binding_tables|Vec\<String\>|否|无|暂不支持||
 |broadcast_tables|Vec\<String\>|否|无|暂不支持||
 |table_sharding_algorithm_name|enum|是|无|分片算法|
