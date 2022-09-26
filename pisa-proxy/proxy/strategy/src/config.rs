@@ -186,7 +186,6 @@ pub struct StrategyInline {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TableStrategyConfig {
-    pub datanode_name: String,
     pub table_sharding_algorithm_name: ShardingAlgorithmName,
     pub table_sharding_column: String,
     pub sharding_count: u32,
