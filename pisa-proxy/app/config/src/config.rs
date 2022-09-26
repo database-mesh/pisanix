@@ -244,7 +244,7 @@ pub struct PisaProxyConfig {
     pub admin: Admin,
     pub proxy: Option<ProxiesConfig>,
     pub mysql: Option<MySQLNodes>,
-    pub nodegroup: Option<NodeGroup>,
+    pub node_group: Option<NodeGroup>,
     pub shardingsphere_proxy: Option<MySQLNodes>,
     pub version: Option<String>,
 }

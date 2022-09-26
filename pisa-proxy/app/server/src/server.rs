@@ -36,7 +36,7 @@ impl ProxyFactory for PisaProxyFactory {
             ProxyKind::MySQL => Box::new(runtime_mysql::mysql::MySQLProxy {
                 proxy_config: config,
                 mysql_nodes: self.pisa_config.get_mysql().to_vec(),
-                node_group: self.pisa_config.nodegroup.clone(),
+                node_group: self.pisa_config.node_group.clone(),
                 pisa_version: self.pisa_config.get_version().to_string(),
                 // mysql_nodes: self.pisa_config.mysql.as_ref().unwrap().node.as_ref().unwrap().to_vec(),
                 // pisa_version: self.pisa_config.version.as_ref().unwrap().to_string(),
