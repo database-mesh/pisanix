@@ -29,6 +29,8 @@ spec:
     listKind: DataShardList
     plural: datashards
     singular: datashard
+    shortNames:
+    - shard 
   scope: Namespaced
   versions:
   - name: v1alpha1
@@ -75,9 +77,6 @@ spec:
                                 - value
                                 type: object
                               type: array
-                          required:
-                          - expression
-                          - nodes
                           type: object
                       required:
                       - valueSource
