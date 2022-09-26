@@ -45,3 +45,6 @@ docs/.docusaurus/*
 .idea
 .DS_Store
 .nocalhost/
+
+# Helm Charts Compressed File
+.tgz
