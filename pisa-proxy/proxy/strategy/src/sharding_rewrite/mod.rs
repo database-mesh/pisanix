@@ -20,6 +20,7 @@ use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
 use crc32fast::Hasher;
 use mysql_parser::ast::{SqlStmt, Visitor, TableIdent };
+use crate::config::NodeGroup;
 use crate::sharding_rewrite::meta::AvgMeta;
 use crate::sharding_rewrite::meta::GroupMeta;
 use crate::sharding_rewrite::meta::OrderMeta;
@@ -126,7 +127,7 @@ pub struct ShardingRewriteOutput {
     pub sharding_column: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataSource {
     Endpoint(Endpoint),
     NodeGroup(String),
@@ -142,7 +143,10 @@ pub struct ShardingRewrite {
     // Endpoints
     endpoints: Vec<Endpoint>,
     // Whether has readwritesplitting
-    pub has_rw: bool,
+    has_rw: bool,
+
+    // Node Group Config
+    node_group_config: Option<NodeGroup>,
 
     // Default database from client
     default_db: Option<String>,
@@ -188,8 +192,8 @@ pub enum OrderGroupChange {
 }
 
 impl ShardingRewrite {
-    pub fn new(rules: Vec<Sharding>, endpoints: Vec<Endpoint>, has_rw: bool) -> Self {
-        ShardingRewrite { rules, raw_sql: "".to_string(), endpoints, has_rw , default_db: None, }
+    pub fn new(rules: Vec<Sharding>, endpoints: Vec<Endpoint>, node_group_config: Option<NodeGroup>, has_rw: bool) -> Self {
+        ShardingRewrite { rules, raw_sql: "".to_string(), endpoints, node_group_config, has_rw , default_db: None, }
     }
 
     pub fn get_endpoints(&self) -> &Vec<Endpoint> {
@@ -318,6 +322,10 @@ impl ShardingRewrite {
             }
         }).collect::<Vec<_>>();
 
+        if wheres.is_empty() {
+            return Ok(self.table_strategy_iproduct(try_tables.clone(), avgs, fields, orders, groups));
+        }
+
         let expect_sum = wheres[0].1 as usize * wheres.len();
         let sum: usize = wheres.iter().map(|x| x.1).sum::<u64>() as usize;
 
@@ -360,7 +368,12 @@ impl ShardingRewrite {
             })
             .collect::<Vec<_>>();
     
-        let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+        let data_source = if self.has_rw {
+            DataSource::NodeGroup(sharding_rule.actual_datanodes[0].clone())
+        } else {
+            let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+            DataSource::Endpoint(ep.clone())
+        };
         
         let sharding_column = sharding_rule.get_sharding_column().1.unwrap();
 
@@ -371,7 +384,7 @@ impl ShardingRewrite {
                     ShardingRewriteOutput {
                         changes: vec![RewriteChange::OrderChange(OrderChange{target: order_target})],
                         target_sql: target_sql.to_string(),
-                        data_source: DataSource::Endpoint(ep.clone()),
+                        data_source: data_source.clone(),
                         sharding_column: Some(sharding_column.to_string()),
                     }
                 )
@@ -382,7 +395,7 @@ impl ShardingRewrite {
                     ShardingRewriteOutput {
                         changes: vec![RewriteChange::GroupChange(GroupChange{target: group_target})],
                         target_sql: target_sql.to_string(),
-                        data_source: DataSource::Endpoint(ep.clone()),
+                        data_source: data_source.clone(),
                         sharding_column: Some(sharding_column.to_string()),
                     }
                 )
@@ -394,7 +407,7 @@ impl ShardingRewrite {
                 ShardingRewriteOutput {
                     changes: vec![RewriteChange::AvgChange(AvgChange{target})],
                     target_sql: target_sql.to_string(),
-                    data_source: DataSource::Endpoint(ep.clone()),
+                    data_source: data_source.clone(),
                     sharding_column: Some(sharding_column.to_string()),
                 }
             );
@@ -404,7 +417,7 @@ impl ShardingRewrite {
             ShardingRewriteOutput { 
                 changes, 
                 target_sql: target_sql.to_string(), 
-                data_source: DataSource::Endpoint(ep.clone()),
+                data_source,
                 sharding_column: Some(sharding_column.to_string()),
             }
         );
@@ -432,9 +445,16 @@ impl ShardingRewrite {
             });
             if let Some(rule) = rule {
                 let has_default_db = if let Some(default_db) = default_db {
-                    rule.actual_datanodes.iter().find(|x| {
-                        endpoints.find(|ep| &ep.name ==  *x && default_db == &ep.db).is_some()
-                    }).is_some()
+                    if self.has_rw {
+                        let node_group = self.node_group_config.as_ref().unwrap();
+                        rule.actual_datanodes.iter().find(|x| {
+                            node_group.members.iter().find(|g| &g.name == *x).is_some()
+                        }).is_some()
+                    } else {
+                        rule.actual_datanodes.iter().find(|x| {
+                            endpoints.find(|ep| &ep.name ==  *x && default_db == &ep.db).is_some()
+                        }).is_some()
+                    }
                 } else {
                     false
                 };
@@ -659,13 +679,12 @@ impl ShardingRewrite {
                                     }
                                 }) {
                                     let target_field = format!("{}{} {} ", ori_field, order.name, AS);
-                                    let mut target_as = String::with_capacity(target_field.len());
-                                    if order.name.contains("`") {
+                                    let target_as = if order.name.contains("`") {
                                         let new_order_name = order.name.replace("`", "");
-                                        target_as = format!("{}_{}_{:05}", new_order_name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx);
+                                        format!("{}_{}_{:05}", new_order_name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx)
                                     } else {
-                                        target_as = format!("{}_{}_{:05}", order.name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx);
-                                    }
+                                        format!("{}_{}_{:05}", order.name.to_ascii_uppercase(), ORDER_BY_DERIVED, idx)
+                                    };
                                     let target = format!("{}{}", target_field, target_as);
                                     target_sql.insert_str(first_span.start(), &target.clone());
                                     order_changes.insert("order_target".to_string(), target_as);
@@ -693,13 +712,12 @@ impl ShardingRewrite {
                                     }
                                 }) {
                                     let target_field = format!("{}{} {} ", ori_field, group.name, AS);
-                                    let mut target_as = String::with_capacity(target_field.len());
-                                    if group.name.contains("`") {
+                                    let target_as = if group.name.contains("`") {
                                         let new_group_name = group.name.replace("`", "");
-                                        target_as = format!("{}_{}_{:05}", new_group_name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx);
+                                        format!("{}_{}_{:05}", new_group_name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx)
                                     } else {
-                                        target_as = format!("{}_{}_{:05}", group.name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx);
-                                    }
+                                        format!("{}_{}_{:05}", group.name.to_ascii_uppercase(), GROUP_BY_DERIVED, idx)
+                                    };
                                     let target = format!("{}{}", target_field, target_as);
                                     target_sql.insert_str(first_span.start(), &target.clone());
                                     group_changes.insert("group_target".to_string(), target_as);
@@ -761,13 +779,16 @@ impl ShardingRewrite {
                 unreachable!()
              };
 
+
+            let sharding_column = rule.get_sharding_column().1.unwrap();
+            let algo = rule.get_algo().1.unwrap();
             self.change_insert_sql_inner(
                 &rule,
                 &table,
                 &inserts.get(&query_id).unwrap(),
                 &fields.get(&query_id).unwrap(),
-                &strategy.table_sharding_column,
-                &strategy.table_sharding_algorithm_name,
+                sharding_column,
+                algo,
                 *&strategy.sharding_count as u64,
             )
         }).collect::<Result<Vec<_>, _>>()?.into_iter().flatten().collect::<Vec<_>>();
@@ -800,13 +821,20 @@ impl ShardingRewrite {
             change_rows.entry(change.0).or_insert(target_row_prefix_text).push_str(&row_text);
         }
 
-        let ep = self.endpoints.iter().find(|e| e.name == rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+
+
+        let data_source = if self.has_rw {
+            DataSource::NodeGroup(rule.actual_datanodes[0].clone())
+        } else {
+            let ep = self.endpoints.iter().find(|e| e.name == rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+            DataSource::Endpoint(ep.clone())
+        };
 
         let outputs = change_rows.into_iter().map(|(_, v)| {
             ShardingRewriteOutput {
                 changes: vec![],
                 target_sql: v.trim_end_matches(", ").to_string(),
-                data_source: DataSource::Endpoint(ep.clone()),
+                data_source: data_source.clone(),
                 sharding_column: Some(sharding_column.to_string()),
             }
 
@@ -927,25 +955,30 @@ impl ShardingRewrite {
         let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
         let mut sharding_column = None; 
         let ep = self.endpoints[0].clone();
+        let mut data_source = None;
 
         for t in tables.iter() {
-            match t.1.table_strategy.as_ref().unwrap() {
-                StrategyType::TableStrategyConfig(config) => {
-                    sharding_column = Some(config.table_sharding_column.clone());
-                    for idx in 0..config.sharding_count as u64 {
-                        let target = self.change_table(t.2, "", idx);
+            // Fixme: it should execute only.
+            data_source = if self.has_rw {
+                Some(DataSource::NodeGroup(t.1.actual_datanodes[0].clone()))
+            } else {
+                Some(DataSource::Endpoint(self.endpoints[0].clone()))
+            };
 
-                        let change = DatabaseChange {
-                            span: t.2.span,
-                            target,
-                            shard_idx: idx as u64,
-                            rule: t.1.clone(),
-                        };
+            sharding_column = Some(t.1.get_sharding_column().1.unwrap().to_string());
+            let sharding_count = t.1.get_sharding_count().1.unwrap();
+            for idx in 0..sharding_count as u64 {
+                let target = self.change_table(t.2, "", idx);
 
-                        group_changes.entry(idx as usize).or_insert(vec![]).push(change);
-                    }
-                }
-                _ => unreachable!(),
+                let change = DatabaseChange {
+                    span: t.2.span,
+                    target,
+                    shard_idx: idx as u64,
+                    rule: t.1.clone(),
+                };
+
+
+                group_changes.entry(idx as usize).or_insert(vec![]).push(change);
             }
         }
 
@@ -976,7 +1009,7 @@ impl ShardingRewrite {
                     ShardingRewriteOutput {
                         changes: vec![RewriteChange::GroupChange(GroupChange{target: group_target})],
                         target_sql: target_sql.to_string(),
-                        data_source: DataSource::Endpoint(ep.clone()),
+                        data_source: data_source.as_ref().unwrap().clone(),
                         sharding_column: sharding_column.clone(),
                     }
                 )
@@ -990,7 +1023,7 @@ impl ShardingRewrite {
                 output.push(ShardingRewriteOutput {
                     changes: vec![RewriteChange::AvgChange(AvgChange{target})],
                     target_sql: target_sql.to_string(),
-                    data_source: DataSource::Endpoint(ep.clone()),
+                    data_source: data_source.as_ref().unwrap().clone(),
                     sharding_column: sharding_column.clone(),
                 });
             }
@@ -998,7 +1031,7 @@ impl ShardingRewrite {
             output.push(ShardingRewriteOutput {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql: target_sql.to_string(),
-                data_source: DataSource::Endpoint(ep.clone()),
+                data_source: data_source.as_ref().unwrap().clone(),
                 sharding_column: sharding_column.clone(),
             })
         }
@@ -1072,15 +1105,16 @@ impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
             return Ok(vec![]);
         }
 
+
         // Strategy according to first element of `try_tables`.
         let rule = &try_tables[0].1;
 
         if rule.database_strategy.is_some() {
-            return self.database_strategy(meta, try_tables)
+            return self.database_strategy(meta, try_tables);
         } 
 
         if rule.table_strategy.is_some() {
-            return self.table_strategy(meta, try_tables)
+            return self.table_strategy(meta, try_tables);
         }
 
         return Ok(vec![])
@@ -1093,7 +1127,7 @@ mod test {
     use mysql_parser::parser::Parser;
 
     use super::ShardingRewrite;
-    use crate::{config::{DatabaseStrategyConfig, Sharding, ShardingAlgorithmName, StrategyType}, rewrite::{ShardingRewriteInput, ShardingRewriter}};
+    use crate::{config::{DatabaseStrategyConfig, Sharding, ShardingAlgorithmName, StrategyType}, rewrite::{ShardingRewriteInput, ShardingRewriter}, sharding_rewrite::DataSource};
 
     fn get_database_sharding_config() -> (Vec<Sharding>, Vec<Endpoint>) {
         (
@@ -1167,7 +1201,7 @@ mod test {
         let raw_sql = "SELECT idx from `db`.tshard where idx = 3";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
@@ -1214,7 +1248,7 @@ mod test {
             ast: ast[0].clone(),
             default_db: None,
         };
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let res = sr.rewrite(input).unwrap();
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
@@ -1271,7 +1305,7 @@ mod test {
         let raw_sql = "INSERT INTO db.tshard(idx) VALUES (12), (13), (16)";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
@@ -1294,7 +1328,7 @@ mod test {
         let parser = Parser::new();
         let raw_sql = "SELECT AVG(price) FROM db.tshard WHERE idx > 3".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
@@ -1305,7 +1339,7 @@ mod test {
 
         let raw_sql = "SELECT AVG(pbl), AVG(znl), AVG(ngl) FROM db.tshard WHERE idx > 3".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(),None, false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
@@ -1316,7 +1350,7 @@ mod test {
 
         let raw_sql = "SELECT AVG(pbl) FROM db.tshard WHERE idx = 3".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
@@ -1327,7 +1361,7 @@ mod test {
 
         let raw_sql = "SELECT AVG(znl) FROM db.tshard".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(),None, false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
@@ -1338,7 +1372,7 @@ mod test {
  
         let raw_sql = "SELECT * from db.tshard where znl > (SELECT AVG(znl) from db.tshard)".to_string();
         let ast = parser.parse(&raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.clone(),
             ast: ast[0].clone(),
@@ -1355,7 +1389,7 @@ mod test {
         let raw_sql = "UPDATE db.tshard set a=1 where idx = 2";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
@@ -1391,7 +1425,7 @@ mod test {
         let raw_sql = "UPDATE tshard set a=1 where idx = 2";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
@@ -1412,7 +1446,7 @@ mod test {
         let parser = Parser::new();
         let raw_sql = "SELECT order_id, order_item_id FROM db.tshard ORDER BY user_id";
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             default_db: None,
             raw_sql: raw_sql.to_string(),
@@ -1426,7 +1460,7 @@ mod test {
 
         let raw_sql = "SELECT order_id, order_item_id FROM db.tshard GROUP BY user_id";
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             default_db: None,
             raw_sql: raw_sql.to_string(),
@@ -1440,7 +1474,7 @@ mod test {
 
         let raw_sql = "SELECT order_id, order_item_id from db.tshard where user_id > 3 ORDER BY user_id";
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             default_db: None,
             raw_sql: raw_sql.to_string(),
@@ -1454,7 +1488,7 @@ mod test {
 
         let raw_sql = "SELECT order_id, order_item_id FROM db.tshard WHERE id in (SELECT s_id, ngl, znl from db.tshard) ORDER BY user_id";
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             default_db: None,
             raw_sql: raw_sql.to_string(),
@@ -1468,7 +1502,7 @@ mod test {
 
         let raw_sql = "SELECT order_id, order_item_id from db.tshard where idx = 3 ORDER BY `user_id`";
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, false);
         let input = ShardingRewriteInput {
             default_db: None,
             raw_sql: raw_sql.to_string(),
@@ -1482,7 +1516,7 @@ mod test {
 
         let raw_sql = "SELECT id FROM db.tshard ORDER BY `id`";
         let ast = parser.parse(raw_sql).unwrap();
-        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), false);
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None,false);
         let input = ShardingRewriteInput {
             default_db: None,
             raw_sql: raw_sql.to_string(),
@@ -1490,5 +1524,24 @@ mod test {
         };
         let res = sr.rewrite(input).unwrap();
         assert_eq!(res[0].target_sql, "SELECT id FROM `db`.tshard_00000 ORDER BY `id`");
+    }
+
+    #[test]
+    fn test_table_sharding_strategy_rw() {
+        let config = get_table_sharding_config();
+        let parser = Parser::new();
+        let raw_sql = "SELECT id FROM db.tshard where idx = 10";
+        let ast = parser.parse(raw_sql).unwrap();
+        let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(), None, true);
+        let input = ShardingRewriteInput {
+            default_db: None,
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+        };
+        let res = sr.rewrite(input).unwrap();
+        assert_eq!(
+            res[0].data_source,
+            DataSource::NodeGroup("ds001".to_string())
+        );
     }
 }

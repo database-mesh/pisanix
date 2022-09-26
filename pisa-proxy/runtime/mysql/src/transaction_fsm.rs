@@ -175,49 +175,10 @@ pub fn route_sharding(
         }
     }
 }
-
-#[derive(Clone)]
-pub struct Driver;
-
-//async fn get_driver_conn(
-//    route_strategy: Arc<Mutex<RouteStrategy>>,
-//    pool: &mut Pool<ClientConn>,
-//    input: RouteInput<'_>,
-//) -> Result<(PoolConn<ClientConn>, Option<Endpoint>), Error> {
-//    let mut strategy = route_strategy.clone().lock_owned().await;
-//    let dispatch_res = strategy.dispatch(&input).unwrap();
-//    debug!("route_strategy to {:?} for input: {:?}", dispatch_res, input);
-//
-//    let endpoint = dispatch_res.0.unwrap();
-//    let factory = ClientConn::with_opts(
-//        endpoint.user.clone(),
-//        endpoint.password.clone(),
-//        endpoint.addr.clone(),
-//    );
-//    pool.set_factory(factory);
-//
-//    match pool.get_conn_with_endpoint(endpoint.addr.as_ref()).await {
-//        Ok(client_conn) => {
-//            if !client_conn.is_ready().await {
-//                return Ok((
-//                    pool.rebuild_conn().await.map_err(ErrorKind::Protocol)?,
-//                    Some(endpoint.clone()),
-//                ));
-//            }
-//            Ok((client_conn, Some(endpoint.clone())))
-//        }
-//        Err(err) => {
-//            println!("errr {:?}", err);
-//            Err(Error::new(ErrorKind::Protocol(err)))
-//        }
-//    }
-//}
-
 pub struct TransEvent {
     name: TransEventName,
     src_state: TransState,
     dst_state: TransState,
-    //driver: Option<Box<dyn ConnDriver + Send + Sync>>,
 }
 
 fn init_trans_events() -> Vec<TransEvent> {
@@ -410,37 +371,6 @@ impl TransFsm {
         }
         false
     }
-
-    //pub async fn trigger(
-    //    &mut self,
-    //    state_name: TransEventName,
-    //    input: RouteInput<'_>,
-    //) -> Result<(), Error> {
-    //    for event in &self.events {
-    //        if event.name == state_name && event.src_state == self.current_state {
-    //            match event.src_state {
-    //                TransState::TransDummyState => {
-    //                    let (mut client_conn, endpoint) = event
-    //                        .driver
-    //                        .as_ref()
-    //                        .unwrap()
-    //                        .get_driver_conn(self.route_strategy.clone(), &mut self.pool, input)
-    //                        .await?;
-
-    //                    client_conn.init(self.build_conn_attrs()).await;
-    //                    self.client_conn = Some(client_conn);
-
-    //                    self.endpoint = endpoint;
-    //                }
-    //                _ => {}
-    //            }
-    //            self.current_state = event.dst_state;
-    //            self.current_event = event.name;
-    //            return Ok(());
-    //        }
-    //    }
-    //    Ok(())
-    //}
 
     // when autocommit=0, should be reset fsm state
     pub fn reset_fsm_state(&mut self) {

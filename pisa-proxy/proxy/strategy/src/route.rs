@@ -114,7 +114,7 @@ pub enum ShardingRouteStrategy {
 impl ReadWriteSplittingRouteStrategy {
     pub fn new(config: config::ReadWriteSplitting, node_group_config: Option<config::NodeGroup>, endpoint_group: IndexMap<String, ReadWriteEndpoint>, rw_endpoint: ReadWriteEndpoint) -> Self {
         if let Some(config) = config.statics {
-            return Self::Static(ReadWriteSplittingStaticBuilder::build(config, endpoint_group, rw_endpoint));
+            return Self::Static(ReadWriteSplittingStaticBuilder::build(config, node_group_config, endpoint_group, rw_endpoint));
         }
 
         if let Some(config) = config.dynamic {
@@ -138,9 +138,9 @@ impl RouteStrategy {
 
         let rw_strategy = ReadWriteSplittingRouteStrategy::new(config, node_group_config.clone(), endpoint_group, rw_endpoint);
         if has_sharding {
-            Ok(Self::ReadWriteSplitting(rw_strategy))
-        } else {
             Ok(Self::ShardingReadWriteSplitting(rw_strategy))
+        } else {
+            Ok(Self::ReadWriteSplitting(rw_strategy))
         }
     }
 
