@@ -284,15 +284,18 @@ func (b *ProxyBuilder) Build() *Proxy {
 					}
 				}
 			}
-		} else if len(b.DataShard.Spec.Rules) != 0 {
-			// TODO: need to set DataShard and TrafficStrategy exclusive
+		}
+		if len(b.DataShard.Spec.Rules) != 0 {
 			proxy.Sharding = []Sharding{}
 			if len(b.DataShard.Spec.Rules) != 0 {
 				for _, r := range b.DataShard.Spec.Rules {
 					s := Sharding{
 						TableName: r.TableName,
-						// ActualDatanodes:  r.ActualDatanodes,
-						TableStrategy:    (*TableStrategy)(r.TableStrategy),
+						TableStrategy: &TableStrategy{
+							TableShardingAlgorithmName: r.TableStrategy.TableShardingAlgorithmName,
+							TableShardingColumn:        r.TableStrategy.TableShardingColumn,
+							ShardingCount:              r.TableStrategy.ShardingCount,
+						},
 						DatabaseStrategy: (*DatabaseStrategy)(r.DatabaseStrategy),
 						// DatabaseTableStrategy: r.DatabaseTableStrategy,
 					}
@@ -316,7 +319,6 @@ func (b *ProxyBuilder) Build() *Proxy {
 					proxy.Sharding = append(proxy.Sharding, s)
 				}
 			}
-		} else {
 		}
 
 		if b.TrafficStrategy.Spec.CircuitBreaks != nil || b.TrafficStrategy.Spec.ConcurrencyControls != nil {
