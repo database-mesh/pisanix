@@ -27,7 +27,7 @@ type PisaProxyConfig struct {
 }
 
 type NodeGroupConfig struct {
-	Members []NodeGroupMember `json:"member,omitempty"`
+	Members []NodeGroupMember `json:"member"`
 }
 
 type NodeGroupMember struct {
