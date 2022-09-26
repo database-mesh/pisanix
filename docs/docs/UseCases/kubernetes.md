@@ -61,10 +61,10 @@ helm uninstall pisa-controller -n pisa-system
 | `replicaCount`              | Pisa-Controller 节点数                         | `1`                    |
 | `image.repository`          | Pisa-Controller 镜像名                         | `pisanixio/controller` |
 | `image.pullPolicy`          | Pisa-Controller 镜像拉取策略                   | `IfNotPresent`         |
-| `image.tag`                 | Pisa-Controller 镜像标签                       | `v0.2.0`               |
+| `image.tag`                 | Pisa-Controller 镜像标签                       | `v0.3.0`               |
 | `imagePullSecrets`          | Docker 私有仓库的密钥，以数组形式注入          | `[]`                   |
 | `proxyImage.repository`     | Pisa-Proxy 的镜像名                            | `pisanixio/proxy`      |
-| `proxyImage.tag`            | Pisa-Proxy 镜像标签                            | `v0.2.0`               |
+| `proxyImage.tag`            | Pisa-Proxy 镜像标签                            | `v0.3.0`               |
 | `resources.limits`          | Pisa-Controller 资源限制数值                   | `{}`                   |
 | `resources.requests.cpu`    | Pisa-Controller 资源申请 cpu 核数              | `100m`                 |
 | `resources.requests.memory` | Pisa-Controller 资源申请内存数量               | `128Mi`                |
