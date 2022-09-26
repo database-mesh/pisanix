@@ -21,7 +21,7 @@ use super::{
     ReadWriteEndpoint,
 };
 use crate::{
-    config,
+    config::{self, NodeGroup},
     config::TargetRole,
     route::{BoxError, RouteBalance},
     Route, RouteInput,
@@ -32,11 +32,12 @@ pub struct ReadWriteSplittingStaticBuilder;
 impl ReadWriteSplittingStaticBuilder {
     pub fn build(
         config: config::ReadWriteSplittingStatic,
+        node_group_config: Option<NodeGroup>,
         endpoint_group: IndexMap<String, ReadWriteEndpoint>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> ReadWriteSplittingStatic {
         let rules_match =
-            RulesMatchBuilder::build(config.rules, config.default_target, endpoint_group, rw_endpoint);
+            RulesMatchBuilder::build(config.rules, config.default_target, node_group_config, endpoint_group, rw_endpoint);
 
         ReadWriteSplittingStatic { rules_match }
     }
@@ -117,7 +118,7 @@ mod test {
         };
 
         let endpoint_group: IndexMap<String, ReadWriteEndpoint> = IndexMap::new();
-        let mut rws = ReadWriteSplittingStaticBuilder::build(config.statics.unwrap(), endpoint_group, rw_endpoint);
+        let mut rws = ReadWriteSplittingStaticBuilder::build(config.statics.unwrap(), None, endpoint_group, rw_endpoint);
         let input = RouteInput::Statement("insert");
         let res = rws.dispatch(&input).unwrap();
         assert_eq!(res.0.unwrap().addr, "127.0.0.2");

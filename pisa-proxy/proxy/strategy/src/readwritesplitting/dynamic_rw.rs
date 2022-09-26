@@ -70,6 +70,7 @@ impl ReadWriteSplittingDynamicBuilder {
         let rules_match = RulesMatchBuilder::build(
             config.clone().rules,
             config.clone().default_target,
+            node_group_config.clone(),
             endpoint_group,
             rw_endpoint.clone(),
         );

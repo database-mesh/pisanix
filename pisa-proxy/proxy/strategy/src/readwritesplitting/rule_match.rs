@@ -21,7 +21,7 @@ use regex::Regex;
 
 use super::ReadWriteEndpoint;
 use crate::{
-    config::{GenericRule, ReadWriteSplittingRule, RegexRule, TargetRole},
+    config::{GenericRule, ReadWriteSplittingRule, RegexRule, TargetRole, NodeGroup},
     route::{RouteBalance, RouteRuleMatch, StragegyError},
     RouteInput,
 };
@@ -34,6 +34,7 @@ impl RulesMatchBuilder {
     pub fn build(
         rules: Vec<ReadWriteSplittingRule>,
         default_target: TargetRole,
+        _node_group_config: Option<NodeGroup>,
         endpoint_group: IndexMap<String, ReadWriteEndpoint>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> RulesMatch {
@@ -419,7 +420,7 @@ mod test {
         };
 
         let endpoint_group = IndexMap::new();
-        let mut m = RulesMatchBuilder::build(rules, default_target, endpoint_group, rw_endpoint);
+        let mut m = RulesMatchBuilder::build(rules, default_target, None, endpoint_group, rw_endpoint);
         let (b, target) = m.get(&RouteInput::Statement("insert"));
         let endpoint = b.next();
         assert_eq!(target, TargetRole::Read);
