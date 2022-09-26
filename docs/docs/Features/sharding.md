@@ -96,3 +96,25 @@ SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00
 |table_sharding_algorithm_name|enum|是|无|分片算法|
 |table_sharding_column|String|是|无|分片键|
 |sharding_count|u64|是|无|分片数|
+
+## CRD 配置示例
+```yaml
+apiVersion: core.database-mesh.io/v1alpha1
+kind: DataShard
+metadata:
+  name: catalogue
+  namespace: demotest
+  labels:
+    source: catalogue
+spec:
+  rules:
+  - tableName: "t_order"
+    tableStrategy:
+      tableShardingAlgorithmName: "mod"
+      tableShardingColumn: "id"
+      shardingCount: 4
+    actualDatanodes:
+      valueSource:
+        nodes:
+        - value: "ds001"
+```
