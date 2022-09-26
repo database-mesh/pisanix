@@ -49,18 +49,24 @@ func getConfig(ctx context.Context, c dynamic.Interface, namespace, appname stri
 		return nil, err
 	}
 
+	dslist, err := kubernetes.GetDataShardListWithContext(ctx, c, namespace)
+	if err != nil {
+		return nil, err
+	}
+
 	dbeplist, err := kubernetes.GetDatabaseEndpointListWithContext(ctx, c, namespace)
 	if err != nil {
 		return nil, err
 	}
 
-	return build(vdb, tslist, dbeplist)
+	return build(vdb, tslist, dslist, dbeplist)
 
 }
 
-func build(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dbeplist *client.DatabaseEndpointList) (*PisaProxyConfig, error) {
+func build(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dslist *client.DataShardList, dbeplist *client.DatabaseEndpointList) (*PisaProxyConfig, error) {
 	builder := NewPisaProxyConfigBuilder()
 	builders := []*ProxyBuilder{}
+	nodeGroupConfigBuilder := NewNodeGroupConfigBuilder()
 	for _, service := range vdb.Spec.Services {
 		builder := NewProxyBuilder().SetVirtualDatabaseService(service)
 
@@ -72,6 +78,14 @@ func build(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dbep
 			}
 		}
 
+		for _, ds := range dslist.Items {
+			if ds.Name == service.DataShard {
+				builder.SetDataShards(ds)
+				nodeGroupConfigBuilder.SetDataShards(ds)
+			}
+		}
+
+		//FIXME
 		dbeps := &client.DatabaseEndpointList{Items: []client.DatabaseEndpoint{}}
 		for _, dbep := range dbeplist.Items {
 			for k, v := range tsobj.Spec.Selector.MatchLabels {
@@ -95,6 +109,9 @@ func build(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dbep
 	mysqlConfigBuilder := NewMySQLConfigBuilder()
 	mysqlConfigBuilder.SetDatabaseEndpoints(dbeplist.Items)
 	builder.SetMySQLConfigBuilder(mysqlConfigBuilder)
+
+	nodeGroupConfigBuilder.SetDatabaseEndpoints(dbeplist.Items)
+	builder.SetNodeGroupConfigBuilder(nodeGroupConfigBuilder)
 
 	proxyconfig := builder.Build()
 

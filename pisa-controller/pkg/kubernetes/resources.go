@@ -37,6 +37,12 @@ var (
 		Resource: "trafficstrategies",
 	}
 
+	DataShardSchema = schema.GroupVersionResource{
+		Group:    "core.database-mesh.io",
+		Version:  "v1alpha1",
+		Resource: "datashards",
+	}
+
 	DatabaseEndpointSchema = schema.GroupVersionResource{
 		Group:    "core.database-mesh.io",
 		Version:  "v1alpha1",
@@ -81,6 +87,26 @@ func GetTrafficStrategyListWithContext(ctx context.Context, c dynamic.Interface,
 	}
 
 	return tslist, nil
+}
+
+func GetDataShardListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.DataShardList, error) {
+	dslist := &client.DataShardList{}
+	raw, err := c.Resource(DataShardSchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := raw.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(data, dslist)
+	if err != nil {
+		return nil, err
+	}
+
+	return dslist, nil
 }
 
 func GetDatabaseEndpointListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.DatabaseEndpointList, error) {
