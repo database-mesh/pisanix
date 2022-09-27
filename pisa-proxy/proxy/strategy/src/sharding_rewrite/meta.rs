@@ -21,7 +21,7 @@ enum ScanState {
     Empty,
     TableName,
     Field,
-    Order,
+    Order(OrderDirection),
     Group,
     Where(Vec<String>),
     OnCond(Vec<OnCond>),
@@ -51,6 +51,13 @@ impl FieldMeta {
 pub struct OrderMeta {
     pub span: mysql_parser::Span,
     pub name: String,
+    pub direction: OrderDirection,
+}
+
+#[derive(Debug, Clone)]
+pub enum OrderDirection {
+    Asc,
+    Desc,
 }
 
 #[derive(Debug)]
@@ -204,12 +211,6 @@ impl Transformer for RewriteMetaData {
                 self.push_table(t.table_name.clone());
             }
 
-            Node::DeleteStmt(t) => {
-                if let Some(table) = &t.table_name {
-                    self.push_table(table.clone());
-                }
-            }
-
             Node::FromClause(_) => {
                 self.state = ScanState::TableName;
             }
@@ -240,7 +241,15 @@ impl Transformer for RewriteMetaData {
                 }
             }
 
-            Node::OrderClause(_) => self.state = ScanState::Order,
+            Node::OrderExpr(val) => {
+                if let Some(direction) = &val.direction {
+                    if direction == "DESC" {
+                        self.state = ScanState::Order(OrderDirection::Desc);
+                        return true;
+                    }
+                }
+                self.state = ScanState::Order(OrderDirection::Asc);
+            }
 
             Node::GroupClause(_) => self.state = ScanState::Group,
 
@@ -275,8 +284,9 @@ impl Transformer for RewriteMetaData {
                     ScanState::Field => {
                         self.push_field(FieldMeta::Ident { span: *span, name: value.to_string() })
                     }
-                    ScanState::Order => {
-                        self.push_order(OrderMeta { span: *span, name: value.to_string() })
+                    ScanState::Order(direction) => {
+                        let direction = direction.clone();
+                        self.push_order(OrderMeta { span: *span, name: value.to_string(), direction })
                     }
                     ScanState::Group => {
                         self.push_group(GroupMeta { span: *span, name: value.to_string() })
@@ -356,6 +366,7 @@ impl Transformer for RewriteMetaData {
                 Expr::LiteralExpr(Value::Num { span, value, signed }) => {
                     match &mut self.state {
                         ScanState::Where(args) => {
+                            //println!("args {:?}", args);
                             if args.len() > 1 && args[0] == "=" {
                                 let right_value = if *signed {
                                     WhereMetaRightDataType::SignedNum(value.to_string())
@@ -449,16 +460,17 @@ mod test {
                 vec![],
                 vec![],
                 1,
-            ),
+            )
         ];
 
         let parser = Parser::new();
-        
+
         for input in inputs {
             let mut ast = parser.parse(input.0).unwrap();
             let mut meta = RewriteMetaData::default();
             let _ = ast[0].visit(&mut meta);
 
+            println!("meta {:#?}", meta);
             assert_eq!(
                 meta.tables
                     .values()
