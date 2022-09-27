@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use endpoint::endpoint::Endpoint;
+use indexmap::IndexMap;
 use loadbalance::balance::LoadBalance;
 
 use super::{
@@ -31,7 +32,7 @@ use crate::{
         read_only_monitor::ReadOnlyMonitorResponse,
         replication_lag_monitor::ReplicationLagMonitorResponse,
     },
-    route::{BoxError, RouteBalance},
+    route::{BoxError, RouteBalance, RouteStrategy},
     Route, RouteInput,
 };
 
@@ -62,20 +63,22 @@ impl MonitorResponseChannel {
 impl ReadWriteSplittingDynamicBuilder {
     pub fn build(
         config: config::ReadWriteSplittingDynamic,
+        node_group_config: Option<config::NodeGroup>,
+        endpoint_group: IndexMap<String, ReadWriteEndpoint>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> ReadWriteSplittingDynamic {
         let rules_match = RulesMatchBuilder::build(
             config.clone().rules,
             config.clone().default_target,
+            node_group_config.clone(),
+            endpoint_group,
             rw_endpoint.clone(),
         );
 
         let monitor_response_channel = MonitorResponseChannel::build();
 
-        let mut reciver: Option<crossbeam_channel::Receiver<ReadWriteEndpoint>> = None;
-
         // Match discovery type
-        match config.clone().discovery {
+        let reciver = match config.clone().discovery {
             // Use Master High Availability Discovery
             crate::config::Discovery::Mha(cc) => {
                 let monitors =
@@ -91,21 +94,22 @@ impl ReadWriteSplittingDynamicBuilder {
                 let mut monitor_reconcile =
                     MonitorReconcile::new(config.clone(), rw_endpoint.clone());
 
-                reciver = Some(monitor_reconcile.start_monitor_reconcile(
-                    cc.monitor_period,
+                monitor_reconcile.start_monitor_reconcile(
+                    cc.clone(),
                     monitor_response_channel.clone(),
                     monitors_len,
-                ));
+                )
             }
         };
 
-        ReadWriteSplittingDynamic { rx: reciver.unwrap(), rules: config.clone().rules, rules_match }
+        ReadWriteSplittingDynamic { rx: reciver, rules: config.clone().rules, node_group_config, rules_match }
     }
 }
 
 pub struct ReadWriteSplittingDynamic {
     rx: crossbeam_channel::Receiver<ReadWriteEndpoint>,
     rules: Vec<ReadWriteSplittingRule>,
+    node_group_config: Option<config::NodeGroup>,
     rules_match: RulesMatch,
 }
 
@@ -127,8 +131,12 @@ impl Route for ReadWriteSplittingDynamic {
                     &TargetRole::ReadWrite,
                     rw_endpoint.clone(),
                 );
+
+                // `unwrap` is safely`,  because has initilized success when to here.
+                let endpoint_group = RouteStrategy::get_endpoint_group(&self.node_group_config, rw_endpoint).unwrap();
                 self.rules_match.inner = RulesMatchBuilder::build_rules(
                     self.rules.clone(),
+                    endpoint_group,
                     rw_endpoint.clone(),
                     self.rules_match.default_target.clone(),
                 );

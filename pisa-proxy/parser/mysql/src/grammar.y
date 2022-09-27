@@ -209,9 +209,9 @@ select_stmt_with_into -> SelectStmt:
   | query_expression_parens into_clause
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.into_clause = Some($2);
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $1
@@ -234,24 +234,29 @@ query_expression -> SelectStmt:
     }
   | with_clause query_expression_body opt_order_clause opt_limit_clause
     {
-      match $2 {
+      let newq = match $2 {
         SelectStmt::Query(mut q) => {
-          q.with_clause = Some($1);
           q.order_clause = $3;
           q.limit_clause = $4;
           SelectStmt::Query(q)
         }
-
         _ => $2
-      }
+      };
+
+      SelectStmt::With(
+        Box::new(WithQuery {
+          with_clause: $1,
+          expr_body: newq,
+        })
+      )
     }
   | query_expression_parens order_clause opt_limit_clause
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.order_clause = Some($2);
           q.limit_clause = $3;
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $1
@@ -259,23 +264,29 @@ query_expression -> SelectStmt:
     }
   | with_clause query_expression_parens order_clause opt_limit_clause
     {
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.with_clause = Some($1);
+      let newq = match $2 {
+        SelectStmt::SubQuery(mut q) => {
           q.order_clause = Some($3);
           q.limit_clause = $4;
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $2
-      }
+      };
+
+      SelectStmt::With(
+        Box::new(WithQuery {
+          with_clause: $1,
+          expr_body: newq,
+        })
+      )
     }
   | query_expression_parens limit_clause
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.limit_clause = Some($2);
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $1
@@ -283,26 +294,30 @@ query_expression -> SelectStmt:
     }
   | with_clause query_expression_parens limit_clause
     {
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.with_clause = Some($1);
+      let newq = match $2 {
+        SelectStmt::SubQuery(mut q) => {
           q.limit_clause = Some($3);
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
 
         _ => $2
-      }
+      };
+
+      SelectStmt::With(
+        Box::new(WithQuery {
+          with_clause: $1,
+          expr_body: newq,
+        })
+      )
     }
   | with_clause query_expression_parens
     {
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.with_clause = Some($1);
-          SelectStmt::Query(q)
-        }
-
-        _ => $2
-      }
+      SelectStmt::With(
+        Box::new(WithQuery {
+          with_clause: $1,
+          expr_body: $2,
+        })
+      )
     }
   ;
 
@@ -325,10 +340,10 @@ query_expression_body -> SelectStmt:
   | query_expression_parens 'UNION' union_option query_primary
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.union_opt = $3;
           q.union_query = Some(Box::new($4));
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
         _ => $1
       }
@@ -347,10 +362,10 @@ query_expression_body -> SelectStmt:
   | query_expression_parens 'UNION' union_option query_expression_parens
     {
       match $1 {
-        SelectStmt::Query(mut q) => {
+        SelectStmt::SubQuery(mut q) => {
           q.union_opt = $3;
           q.union_query = Some(Box::new($4));
-          SelectStmt::Query(q)
+          SelectStmt::SubQuery(q)
         }
         _ => $1
       }
@@ -360,37 +375,56 @@ query_expression_body -> SelectStmt:
 query_expression_parens -> SelectStmt:
     '(' query_expression_parens ')'
     { 
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.is_embd = true;
-          SelectStmt::Query(q)
-        },
+    	SelectStmt::SubQuery(Box::new(
+		SubQuery {
+			span: $span,
+			query: $2,
+			into_clause: None,
+			union_opt: None,
+			union_query: None,
+			order_clause: None,
+			limit_clause: None,
+		}
 
-        _ => $2
-      }
+	))
     }
   | '(' query_expression ')'
     { 
-      match $2 {
-        SelectStmt::Query(mut q) => {
-          q.is_parens = true;
-          SelectStmt::Query(q)
-        },
+    	SelectStmt::SubQuery(Box::new(
+		SubQuery {
+			span: $span,
+			query: $2,
+			into_clause: None,
+			union_opt: None,
+			union_query: None,
+			order_clause: None,
+			limit_clause: None,
+		}
 
-        _ => $2
-      }
+	))
     }
   | '(' query_expression locking_clause_list ')'
     {
-      match $2 {
+      let newq = match $2 {
         SelectStmt::Query(mut q) => {
-          q.is_parens = true;
       	  q.lock_clauses = $3;
           SelectStmt::Query(q)
         },
 
         _ => $2
-      }
+      };
+
+      SelectStmt::SubQuery(Box::new(
+	SubQuery {
+		span: $span,
+		query: newq,
+		into_clause: None,
+		union_opt: None,
+		union_query: None,
+		order_clause: None,
+		limit_clause: None,
+	}
+      ))
     }
   ;
 
@@ -430,14 +464,11 @@ query_specification -> SelectStmt:
         group_clause: $7,
         having_clause: $8,
         window_clause: $9,
-        is_parens: false,
         limit_clause: None,
         lock_clauses: vec![],
-        with_clause: None,
         order_clause: None,
         union_opt: None,
         union_query: None,
-        is_embd: false,
       }))
     }
   | "SELECT"
@@ -458,15 +489,12 @@ query_specification -> SelectStmt:
         group_clause: $6,
         having_clause: $7,
         window_clause: $8,
-        is_parens: false,
         limit_clause: None,
         lock_clauses: vec![],
         into_clause: None,
-        with_clause: None,
         order_clause: None,
         union_opt: None,
         union_query: None,
-        is_embd: false,
       }))
     }
   ;
@@ -513,7 +541,7 @@ table_value_constructor -> Vec<Vec<Expr>>:
       }
   ;
 
-explicit_table -> String:
+explicit_table -> TableIdent:
     "TABLE" table_ident
     {
       $2
@@ -647,7 +675,7 @@ select_items -> Items:
     }
   | '*'
     {
-      Items::Wild
+      Items::Wild( ItemWild { span: $span } )
     }
   ;
 
@@ -1224,7 +1252,7 @@ simple_expr -> Expr:
     }
   | set_func_specification
     {
-      Expr::SetFuncSpecExpr($1)
+      Expr::SetFuncSpecExpr(Box::new($1))
     }
   | window_func_call
     {
@@ -1791,121 +1819,336 @@ udf_expr -> Expr:
       }
     ;
 
-set_func_specification -> Vec<Expr>:
+set_func_specification -> Expr:
       sum_expr            
       { 
-        vec![Expr::Ori(String::from($lexer.span_str($1)))]
+        $1
       }
     | grouping_operation  
       { 
-        vec![Expr::Ori(String::from($lexer.span_str($span)))]
+        Expr::Ori(String::from($lexer.span_str($span)))
       }
     ;
 
-sum_expr -> Span:
+sum_expr -> Expr:
     'AVG' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Avg,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'AVG' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Avg,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'BIT_AND'  '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::BitAnd,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'BIT_OR'  '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::BitOr,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'JSON_ARRAYAGG' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::JsonArrayAgg,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'JSON_OBJECTAGG' '(' in_sum_expr ',' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::JsonObjectAgg,
+        distinct: false,
+        exprs: vec![$3, $5],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'ST_COLLECT' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StCollect,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'ST_COLLECT' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StCollect,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'BIT_XOR' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::BitXor,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'COUNT' '(' opt_all '*' ')' opt_windowing_clause
     {
-      $span
+      let mut opt = String::with_capacity(4);
+      if $3 {
+        opt.push_str("ALL ");
+      }
+
+      opt.push('*');
+
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Count,
+        distinct: false,
+        exprs: vec![Expr::Ori(opt)],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'COUNT' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Count,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'COUNT' '(' 'DISTINCT' expr_list ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Count,
+        distinct: true,
+        exprs: $4,
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'MIN' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Min,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'MIN' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Min,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'MAX' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Max,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'MAX' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Max,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'STD' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Std,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'VARIANCE' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Variance,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'STDDEV' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StdDev,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'STDDEV_POP' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StdDevPop,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'STDDEV_SAMP' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::StdDevSamp,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'VAR_POP' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::VarPop,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'VAR_SAMP' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::VarSamp,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'SUM' '(' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Sum,
+        distinct: false,
+        exprs: vec![$3],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'SUM' '(' 'DISTINCT' in_sum_expr ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::Sum,
+        distinct: true,
+        exprs: vec![$4],
+        group_concat_distinct: None,
+        gorder_clause: vec![],
+        gconcat_separator: None,
+      })
     }
   | 'GROUP_CONCAT' '(' opt_distinct expr_list opt_gorder_clause opt_gconcat_separator ')' opt_windowing_clause
     {
-      $span
+      Expr::AggExpr( AggExpr {
+        span: $span,
+        name: AggFuncName::GroupConcat,
+        distinct: false,
+        group_concat_distinct: $3,
+        exprs: $4,
+        gorder_clause: $5,
+        gconcat_separator: $6,
+      })
     }
   ;
 
@@ -2898,11 +3141,11 @@ index_hints_list -> Span:
 
 opt_index_hints_list -> Option<String>:
     /* empty */       { None }
-  | index_hints_list  { Some(String::from($lexer.span_str($span))) }
+  | index_hints_list  { Some(String::from($lexer.span_str($1))) }
   ;
 
-opt_key_definition -> String:
-  opt_index_hints_list { String::from($lexer.span_str($span)) }
+opt_key_definition -> Option<String>:
+  opt_index_hints_list { $1 }
   ;
 
 opt_key_usage_list -> Span:
@@ -2995,9 +3238,9 @@ opt_table_alias -> Option<String>:
   | opt_as ident { Some($2.0) }
   ;
 
-opt_all -> Option<String>:
-  /* empty */ { None }
-| 'ALL' { Some(String::from("ALL")) }
+opt_all -> bool :
+  /* empty */ { false }
+| 'ALL' { true }
 ;
 
 opt_where_clause -> Option<WhereClause>:
@@ -3220,6 +3463,7 @@ limit_clause -> LimitClause:
 limit_options -> LimitClause:
     limit_option
     {
+      
       LimitClause {
         span: $span,
         opts: vec![$1],
@@ -3244,30 +3488,46 @@ limit_options -> LimitClause:
     }
   ;
 
-limit_option -> String:
+limit_option -> LimitOption:
     ident
     {
-      $1.0
+      LimitOption {
+        span: $span,
+        opt: $1.0,
+      }
     }
   | param_marker
     {
-      $1
+      LimitOption {
+        span: $span,
+        opt: $1,
+      }
     }
   | 'ULONGLONG_NUM'
     {
-      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+      LimitOption {
+        span: $span,
+        opt: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+      }
+      
     }
   | 'LONG_NUM'
     {
-      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+      LimitOption {
+        span: $span,
+        opt: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+      }
     }
   | 'NUM'
     {
-      String::from($lexer.span_str($1.as_ref().unwrap().span()))
+      LimitOption {
+        span: $span,
+        opt: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+      }
     }
   ;
 
-opt_simple_limit -> Option<String>:
+opt_simple_limit -> Option<LimitOption>:
     /* empty */        { None }
   | 'LIMIT' limit_option { Some($2)  }
   ;
@@ -3445,10 +3705,13 @@ opt_equal -> Option<&'input str>:
   | equal       { Some($1) }
   ;
 
-row_value -> Vec<Expr>:
+row_value -> RowValue:
   '(' opt_values ')' 
   { 
-    $2
+    RowValue {
+      span: $span,
+      values: $2,
+    }
   }
   ;
 
@@ -3493,18 +3756,22 @@ row_value_explicit -> Vec<Expr>:
     }
   ;
 
-table_ident -> String:
+table_ident -> TableIdent:
     ident
     {
-        $1.0
+    	TableIdent {
+	  span: $span,
+	  schema: None,
+	  name: $1.0,
+	}
     }
   | ident '.' ident
     {
-      let mut s = String::with_capacity($1.0.len()+1+$3.0.len());
-      s.push_str(&$1.0);
-      s.push('.');
-      s.push_str(&$3.0);
-      s
+    	TableIdent {
+          span: $span,
+          schema: Some($1.0),
+          name: $3.0,
+        }
     }
   ;
 
@@ -3566,14 +3833,14 @@ table_wild -> TableWild:
       TableWild {
         span: $span,
         table: $1.0,
-        scheme: None
+        schema: None
       }
     }
   | ident '.' ident '.' '*'
     {
       TableWild {
         span: $span,
-        scheme: Some($1.0),
+        schema: Some($1.0),
         table: $3.0
       }
     }
@@ -4225,6 +4492,7 @@ NUM_literal -> Value:
       Value::Num {
         span: $span,
         value: $1,
+        signed: false,
       }
     }
   | 'DECIMAL_NUM'
@@ -4232,6 +4500,7 @@ NUM_literal -> Value:
       Value::Num {
         span: $span,
         value: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+        signed: false,
       }
     }
   | 'FLOAT_NUM'
@@ -4239,6 +4508,7 @@ NUM_literal -> Value:
       Value::FloatNum {
         span: $span,
         value: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+        signed: false,
       }
     }
   ;
@@ -4461,7 +4731,13 @@ signed_literal -> Value:
     }
   | '-' NUM_literal
     {
-      $2
+      match $2 {
+        Value::Num { span, value, signed:_ } => {
+          Value::Num { span, value, signed: true}
+        },
+
+        _ => unreachable!()
+      }
     }
   ;
 
@@ -5344,7 +5620,7 @@ value_or_values -> ValOrVals:
   | VALUES    { ValOrVals::Values }
   ;
 
-values_list -> Vec<Vec<Expr>>:
+values_list -> Vec<RowValue>:
     values_list ','  row_value
     {
       $1.push($3);
@@ -5438,7 +5714,7 @@ update_stmt -> Box<UpdateStmt>:
     {
       Box::new(UpdateStmt {
 	      span: $span,
-	      with_clause: $1,
+        with_clause: $1,
 	      low_priority: $3,
 	      ignore: $4,
 	      table_refs: $5,
@@ -5532,7 +5808,7 @@ delete_stmt -> Box<DeleteStmt>:
     {
       Box::new(DeleteStmt {
 	      span: $span,
-	      with_clause: $1,
+        with_clause: $1,
         quick: $3,
         low_priority: $4,
         ignore: $5,

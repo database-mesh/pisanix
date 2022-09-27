@@ -20,9 +20,20 @@ import (
 )
 
 type PisaProxyConfig struct {
-	Admin AdminConfig `json:"admin"`
-	MySQL MySQLConfig `json:"mysql"`
-	Proxy ProxyConfig `json:"proxy"`
+	Admin     AdminConfig     `json:"admin"`
+	MySQL     MySQLConfig     `json:"mysql"`
+	Proxy     ProxyConfig     `json:"proxy"`
+	NodeGroup NodeGroupConfig `json:"node_group,omitempty"`
+}
+
+type NodeGroupConfig struct {
+	Members []NodeGroupMember `json:"member"`
+}
+
+type NodeGroupMember struct {
+	Name      string   `json:"name"`
+	Reads     []string `json:"reads"`
+	ReadWrite string   `json:"readwrite"`
 }
 
 type AdminConfig struct {
@@ -40,16 +51,18 @@ type ProxyConfig struct {
 }
 
 type PisaProxyConfigBuilder struct {
-	AdminConfigBuilder *AdminConfigBuilder
-	MySQLConfigBuilder *MySQLConfigBuilder
-	ProxyConfigBuilder *ProxyConfigBuilder
+	AdminConfigBuilder     *AdminConfigBuilder
+	MySQLConfigBuilder     *MySQLConfigBuilder
+	ProxyConfigBuilder     *ProxyConfigBuilder
+	NodeGroupConfigBuilder *NodeGroupConfigBuilder
 }
 
 func NewPisaProxyConfigBuilder() *PisaProxyConfigBuilder {
 	return &PisaProxyConfigBuilder{
-		AdminConfigBuilder: NewAdminConfigBuilder(),
-		MySQLConfigBuilder: NewMySQLConfigBuilder(),
-		ProxyConfigBuilder: NewProxyConfigBuilder(),
+		AdminConfigBuilder:     NewAdminConfigBuilder(),
+		MySQLConfigBuilder:     NewMySQLConfigBuilder(),
+		ProxyConfigBuilder:     NewProxyConfigBuilder(),
+		NodeGroupConfigBuilder: NewNodeGroupConfigBuilder(),
 	}
 }
 
@@ -68,11 +81,17 @@ func (b *PisaProxyConfigBuilder) SetProxyConfigBuilder(builder *ProxyConfigBuild
 	return b
 }
 
+func (b *PisaProxyConfigBuilder) SetNodeGroupConfigBuilder(builder *NodeGroupConfigBuilder) *PisaProxyConfigBuilder {
+	b.NodeGroupConfigBuilder = builder
+	return b
+}
+
 func (b *PisaProxyConfigBuilder) Build() *PisaProxyConfig {
 	config := &PisaProxyConfig{}
 	config.Admin = *b.AdminConfigBuilder.Build()
 	config.MySQL = *b.MySQLConfigBuilder.Build()
 	config.Proxy = *b.ProxyConfigBuilder.Build()
+	config.NodeGroup = *b.NodeGroupConfigBuilder.Build()
 
 	return config
 }
@@ -147,6 +166,7 @@ type ProxyBuilder struct {
 	VirtualDatabaseService client.VirtualDatabaseService
 	TrafficStrategy        client.TrafficStrategy
 	DatabaseEndpoints      []client.DatabaseEndpoint
+	DataShard              client.DataShard
 }
 
 func NewProxyBuilder() *ProxyBuilder {
@@ -168,6 +188,11 @@ func (b *ProxyBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *Pr
 	return b
 }
 
+func (b *ProxyBuilder) SetDataShards(shard client.DataShard) *ProxyBuilder {
+	b.DataShard = shard
+	return b
+}
+
 func (b *ProxyBuilder) Build() *Proxy {
 	proxy := &Proxy{}
 	proxy.Name = b.VirtualDatabaseService.Name
@@ -186,74 +211,112 @@ func (b *ProxyBuilder) Build() *Proxy {
 		proxy.ListenAddr = fmt.Sprintf("%s:%d", b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Host, b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.Port)
 		proxy.ServerVersion = b.VirtualDatabaseService.DatabaseService.DatabaseMySQL.ServerVersion
 
-		switch {
-		case b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting != nil:
-			{
+		if b.TrafficStrategy.Spec.LoadBalance != nil {
 
-				if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static != nil {
-					proxy.ReadWriteSplitting = &ReadWriteSplitting{
-						Static: &ReadWriteSplittingStatic{},
-					}
-					proxy.ReadWriteSplitting.Static.DefaultTarget = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
-					proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules))
-					for i := range b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules {
-						proxy.ReadWriteSplitting.Static.Rules[i].Name = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
-						proxy.ReadWriteSplitting.Static.Rules[i].Type = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
-						proxy.ReadWriteSplitting.Static.Rules[i].Target = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
-						proxy.ReadWriteSplitting.Static.Rules[i].Regex = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
-						proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
-					}
-				}
-				if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic != nil {
-					proxy.ReadWriteSplitting = &ReadWriteSplitting{
-						Dynamic: &ReadWriteSplittingDynamic{},
-					}
+			switch {
+			case b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting != nil:
+				{
 
-					proxy.ReadWriteSplitting.Dynamic.DefaultTarget = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.DefaultTarget
-					proxy.ReadWriteSplitting.Dynamic.Rules = make([]ReadWriteSplittingRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules))
-
-					for i := range b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules {
-						proxy.ReadWriteSplitting.Dynamic.Rules[i].Name = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Name
-						proxy.ReadWriteSplitting.Dynamic.Rules[i].Type = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Type)
-						proxy.ReadWriteSplitting.Dynamic.Rules[i].Target = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Target
-						proxy.ReadWriteSplitting.Dynamic.Rules[i].Regex = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Regex
-						proxy.ReadWriteSplitting.Dynamic.Rules[i].AlgorithmName = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].AlgorithmName)
+					if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static != nil {
+						proxy.ReadWriteSplitting = &ReadWriteSplitting{
+							Static: &ReadWriteSplittingStatic{},
+						}
+						proxy.ReadWriteSplitting.Static.DefaultTarget = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.DefaultTarget
+						proxy.ReadWriteSplitting.Static.Rules = make([]ReadWriteSplittingRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules))
+						for i := range b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules {
+							proxy.ReadWriteSplitting.Static.Rules[i].Name = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Name
+							proxy.ReadWriteSplitting.Static.Rules[i].Type = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Type)
+							proxy.ReadWriteSplitting.Static.Rules[i].Target = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Target
+							proxy.ReadWriteSplitting.Static.Rules[i].Regex = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].Regex
+							proxy.ReadWriteSplitting.Static.Rules[i].AlgorithmName = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Static.Rules[i].AlgorithmName)
+						}
 					}
+					if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic != nil {
+						proxy.ReadWriteSplitting = &ReadWriteSplitting{
+							Dynamic: &ReadWriteSplittingDynamic{},
+						}
 
-					if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability != nil {
-						proxy.ReadWriteSplitting.Dynamic.Discovery = ReadWriteDiscovery{
-							MasterHighAvailablity: &MasterHighAvailablity{
-								Type:                      "mha",
-								User:                      b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.User,
-								Password:                  b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.Password,
-								MonitorInterval:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.MonitorInterval,
-								ConnectInterval:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ConnectionProbe.PeriodMilliseconds,
-								ConnectTimeout:            b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ConnectionProbe.TimeoutMilliseconds,
-								ConnectMaxFailures:        b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ConnectionProbe.FailureThreshold,
-								PingInterval:              b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.PingProbe.PeriodMilliseconds,
-								PingTimeout:               b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.PingProbe.TimeoutMilliseconds,
-								PingMaxFailures:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.PingProbe.FailureThreshold,
-								ReplicationLagInterval:    b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.PeriodMilliseconds,
-								ReplicationLagTimeout:     b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.TimeoutMilliseconds,
-								ReplicationLagMaxFailures: b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.FailureThreshold,
-								MaxReplicationLag:         b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.MaxReplicationLag,
-								ReadOnlyInterval:          b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReadOnlyProbe.PeriodMilliseconds,
-								ReadOnlyTimeout:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReadOnlyProbe.TimeoutMilliseconds,
-								ReadOnlyMaxFailures:       b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReadOnlyProbe.FailureThreshold,
-							},
+						proxy.ReadWriteSplitting.Dynamic.DefaultTarget = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.DefaultTarget
+						proxy.ReadWriteSplitting.Dynamic.Rules = make([]ReadWriteSplittingRule, len(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules))
+
+						for i := range b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules {
+							proxy.ReadWriteSplitting.Dynamic.Rules[i].Name = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Name
+							proxy.ReadWriteSplitting.Dynamic.Rules[i].Type = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Type)
+							proxy.ReadWriteSplitting.Dynamic.Rules[i].Target = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Target
+							proxy.ReadWriteSplitting.Dynamic.Rules[i].Regex = b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].Regex
+							proxy.ReadWriteSplitting.Dynamic.Rules[i].AlgorithmName = string(b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Rules[i].AlgorithmName)
+						}
+
+						if b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability != nil {
+							proxy.ReadWriteSplitting.Dynamic.Discovery = ReadWriteDiscovery{
+								MasterHighAvailablity: &MasterHighAvailablity{
+									Type:                      "mha",
+									User:                      b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.User,
+									Password:                  b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.Password,
+									MonitorInterval:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.MonitorInterval,
+									ConnectInterval:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ConnectionProbe.PeriodMilliseconds,
+									ConnectTimeout:            b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ConnectionProbe.TimeoutMilliseconds,
+									ConnectMaxFailures:        b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ConnectionProbe.FailureThreshold,
+									PingInterval:              b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.PingProbe.PeriodMilliseconds,
+									PingTimeout:               b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.PingProbe.TimeoutMilliseconds,
+									PingMaxFailures:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.PingProbe.FailureThreshold,
+									ReplicationLagInterval:    b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.PeriodMilliseconds,
+									ReplicationLagTimeout:     b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.TimeoutMilliseconds,
+									ReplicationLagMaxFailures: b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.FailureThreshold,
+									MaxReplicationLag:         b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReplicationLagProbe.MaxReplicationLag,
+									ReadOnlyInterval:          b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReadOnlyProbe.PeriodMilliseconds,
+									ReadOnlyTimeout:           b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReadOnlyProbe.TimeoutMilliseconds,
+									ReadOnlyMaxFailures:       b.TrafficStrategy.Spec.LoadBalance.ReadWriteSplitting.Dynamic.Discovery.MasterHighAvailability.ReadOnlyProbe.FailureThreshold,
+								},
+							}
 						}
 					}
 				}
-			}
-		case b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil:
-			{
-				nodes := BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
-				proxy.SimpleLoadBalance = &SimpleLoadBalance{
-					BalancerType: string(b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance.Kind),
-					Nodes:        []string{},
+			case b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance != nil:
+				{
+					nodes := BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
+					proxy.SimpleLoadBalance = &SimpleLoadBalance{
+						BalancerType: string(b.TrafficStrategy.Spec.LoadBalance.SimpleLoadBalance.Kind),
+						Nodes:        []string{},
+					}
+					for _, node := range nodes {
+						proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
+					}
 				}
-				for _, node := range nodes {
-					proxy.SimpleLoadBalance.Nodes = append(proxy.SimpleLoadBalance.Nodes, node.Name)
+			}
+		}
+		if len(b.DataShard.Spec.Rules) != 0 {
+			proxy.Sharding = []Sharding{}
+			if len(b.DataShard.Spec.Rules) != 0 {
+				for _, r := range b.DataShard.Spec.Rules {
+					s := Sharding{
+						TableName: r.TableName,
+						TableStrategy: &TableStrategy{
+							TableShardingAlgorithmName: r.TableStrategy.TableShardingAlgorithmName,
+							TableShardingColumn:        r.TableStrategy.TableShardingColumn,
+							ShardingCount:              r.TableStrategy.ShardingCount,
+						},
+						DatabaseStrategy: (*DatabaseStrategy)(r.DatabaseStrategy),
+						// DatabaseTableStrategy: r.DatabaseTableStrategy,
+					}
+					actualNodes := []string{}
+					if r.ActualDatanodes.ValueSource != nil {
+						// if r.ActualDatanodes.ValueSource.ActualDatanodesExpressionValue != nil {					}
+						if r.ActualDatanodes.ValueSource.ActualDatanodesNodeValue != nil {
+							if len(r.ActualDatanodes.ValueSource.ActualDatanodesNodeValue.Nodes) != 0 {
+								for _, n := range r.ActualDatanodes.ValueSource.ActualDatanodesNodeValue.Nodes {
+									if n.Value != "" {
+										actualNodes = append(actualNodes, n.Value)
+									} else if n.ValueFromReadWriteSplitting != nil {
+										actualNodes = append(actualNodes, n.ValueFromReadWriteSplitting.Name)
+									} else {
+									}
+								}
+							}
+						}
+					}
+					s.ActualDatanodes = actualNodes
+					proxy.Sharding = append(proxy.Sharding, s)
 				}
 			}
 		}
@@ -278,6 +341,7 @@ func (b *ProxyBuilder) Build() *Proxy {
 				proxy.Plugin.ConcurrencyControls = append(proxy.Plugin.ConcurrencyControls, *(*ConcurrencyControl)(&control))
 			}
 		}
+
 	}
 
 	return proxy
@@ -341,6 +405,67 @@ func (b *MySQLConfigBuilder) Build() *MySQLConfig {
 	}
 
 	config.Nodes = BuildMySQLNodesFromDatabaseEndpoints(b.DatabaseEndpoints)
+
+	return config
+}
+
+type NodeGroupConfigBuilder struct {
+	DataShards        client.DataShard
+	DatabaseEndpoints []client.DatabaseEndpoint
+}
+
+func NewNodeGroupConfigBuilder() *NodeGroupConfigBuilder {
+	return &NodeGroupConfigBuilder{
+		DataShards: client.DataShard{},
+	}
+}
+
+func (b *NodeGroupConfigBuilder) SetDataShards(ds client.DataShard) *NodeGroupConfigBuilder {
+	b.DataShards = ds
+	return b
+}
+
+func (b *NodeGroupConfigBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *NodeGroupConfigBuilder {
+	b.DatabaseEndpoints = dbeps
+	return b
+}
+
+func (b *NodeGroupConfigBuilder) Build() *NodeGroupConfig {
+	dbepmap := map[string][]string{}
+	for _, dbep := range b.DatabaseEndpoints {
+		if dbep.Annotations[DatabaseEndpointRoleKey] == ReadWriteSplittingRoleRead {
+			dbepmap[ReadWriteSplittingRoleRead] = append(dbepmap[ReadWriteSplittingRoleRead], dbep.Name)
+		}
+		if dbep.Annotations[DatabaseEndpointRoleKey] == ReadWriteSplittingRoleReadWrite {
+			dbepmap[ReadWriteSplittingRoleReadWrite] = append(dbepmap[ReadWriteSplittingRoleReadWrite], dbep.Name)
+		}
+	}
+
+	config := &NodeGroupConfig{
+		Members: []NodeGroupMember{},
+	}
+
+	for _, r := range b.DataShards.Spec.Rules {
+		if r.ReadWriteSplittingGroup != nil {
+			for _, g := range r.ReadWriteSplittingGroup {
+				m := NodeGroupMember{
+					Name: g.Name,
+				}
+				for _, rule := range g.Rules {
+					//FIXME: if multiple dbeps share same role but belong to different node groups
+					if rule.Target == ReadWriteSplittingRoleRead {
+						m.Reads = dbepmap[rule.Target]
+					}
+					if rule.Target == ReadWriteSplittingRoleReadWrite {
+						m.ReadWrite = dbepmap[rule.Target][0]
+					}
+				}
+				config.Members = append(config.Members, m)
+				//FIXME: do not support multiple ReadWriteSplittingGroup now
+				break
+			}
+		}
+	}
 
 	return config
 }

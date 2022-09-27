@@ -44,6 +44,7 @@ var vdb = client.VirtualDatabase{
 				},
 				Name:            "catalogue",
 				TrafficStrategy: "catalogue",
+				DataShard:       "catalogue",
 			},
 		},
 	},
@@ -298,6 +299,19 @@ var expectedProxy = &Proxy{
 			},
 		},
 	},
+	Sharding: []Sharding{
+		{
+			TableName: "testshard",
+			ActualDatanodes: []string{
+				"ms001",
+			},
+			TableStrategy: &TableStrategy{
+				TableShardingAlgorithmName: "crc32mod",
+				TableShardingColumn:        "order_id",
+				ShardingCount:              4,
+			},
+		},
+	},
 	Plugin: &Plugin{
 		CircuitBreaks: []CircuitBreak{
 			{
@@ -313,6 +327,63 @@ var expectedProxy = &Proxy{
 				},
 				Duration:       10 * time.Second,
 				MaxConcurrency: 10,
+			},
+		},
+	},
+}
+
+var expectedrwProxy = &Proxy{
+	Name:          "catalogue",
+	BackendType:   "mysql",
+	DB:            "socksdb",
+	User:          "root",
+	Password:      "fake_password",
+	ServerVersion: "5.7.37",
+	PoolSize:      3,
+	ListenAddr:    "127.0.0.1:3306",
+	SimpleLoadBalance: &SimpleLoadBalance{
+		BalancerType: "roundrobin",
+		Nodes:        []string{"catalogue"},
+	},
+	Sharding: []Sharding{
+		{
+			TableName: "testshard",
+			ActualDatanodes: []string{
+				"ms001",
+			},
+			TableStrategy: &TableStrategy{
+				TableShardingAlgorithmName: "crc32mod",
+				TableShardingColumn:        "order_id",
+				ShardingCount:              4,
+			},
+		},
+	},
+}
+
+var expectedgeneralProxy = &Proxy{
+	Name:          "catalogue",
+	BackendType:   "mysql",
+	DB:            "socksdb",
+	User:          "root",
+	Password:      "fake_password",
+	ServerVersion: "5.7.37",
+	PoolSize:      3,
+	ListenAddr:    "127.0.0.1:3306",
+	SimpleLoadBalance: &SimpleLoadBalance{
+		BalancerType: "roundrobin",
+		Nodes:        []string{"catalogue"},
+	},
+	Sharding: []Sharding{
+		{
+			TableName: "testshard",
+			ActualDatanodes: []string{
+				"ds001",
+				"ds002",
+			},
+			TableStrategy: &TableStrategy{
+				TableShardingAlgorithmName: "crc32mod",
+				TableShardingColumn:        "order_id",
+				ShardingCount:              4,
 			},
 		},
 	},
@@ -343,6 +414,52 @@ func Test_ProxyBuilder(t *testing.T) {
 	}
 }
 
+var expectedShardedProxy = &Proxy{
+	Name:          "catalogue",
+	BackendType:   "mysql",
+	DB:            "socksdb",
+	User:          "root",
+	Password:      "fake_password",
+	ServerVersion: "5.7.37",
+	PoolSize:      3,
+	ListenAddr:    "127.0.0.1:3306",
+	Sharding: []Sharding{
+		{
+			TableName: "testshard",
+			ActualDatanodes: []string{
+				"ms001",
+			},
+			TableStrategy: &TableStrategy{
+				TableShardingAlgorithmName: "crc32mod",
+				TableShardingColumn:        "order_id",
+				ShardingCount:              4,
+			},
+		},
+	},
+}
+
+func Test_ShardedProxyBuilder(t *testing.T) {
+	builders := []*ProxyBuilder{
+		{
+			VirtualDatabaseService: vdb.Spec.Services[0],
+			// TODO: temp
+			DataShard:         rwshard,
+			DatabaseEndpoints: []client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
+		},
+		{
+			VirtualDatabaseService: vdb.Spec.Services[0],
+			// TODO: temp
+			DataShard:         generalshard,
+			DatabaseEndpoints: []client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
+		},
+	}
+
+	actualSharded := builders[0].Build()
+	assertProxy(t, expectedShardedProxy, actualSharded, "proxy should be correct")
+	actualGeneral := builders[1].Build()
+	assertProxy(t, expectedgeneralProxy, actualGeneral, "proxy should be correct")
+}
+
 func assertProxy(t *testing.T, exp, act *Proxy, msg ...interface{}) bool {
 	return assert.Equal(t, exp.BackendType, act.BackendType, "backendType should be equal") &&
 		assert.Equal(t, exp.DB, act.DB, "db should be equal") &&
@@ -354,10 +471,18 @@ func assertProxy(t *testing.T, exp, act *Proxy, msg ...interface{}) bool {
 		assert.Equal(t, exp.ServerVersion, act.ServerVersion, "serverVersion should be equal") &&
 		assertSimpleLoadBalance(t, exp.SimpleLoadBalance, act.SimpleLoadBalance, "simpleLoadBalance should be equal") &&
 		assertReadWriteSplitting(t, exp.ReadWriteSplitting, act.ReadWriteSplitting, "readWriteSplitting should be equal") &&
+		assertDataSharding(t, exp.Sharding, act.Sharding, "sharding should be equal") &&
 		assertPlugin(t, exp.Plugin, act.Plugin, "plugin should be equal")
 }
 
-func assertSimpleLoadBalance(t *testing.T, act, exp *SimpleLoadBalance, msg ...interface{}) bool {
+func assertDataSharding(t *testing.T, act, exp []Sharding, msg ...interface{}) bool {
+	if act != nil && exp != nil {
+		return assert.ElementsMatch(t, act, exp, "rules should be equal")
+	}
+	return true
+}
+
+func assertSimpleLoadBalance(t *testing.T, exp, act *SimpleLoadBalance, msg ...interface{}) bool {
 	if act != nil && exp != nil {
 		return assert.Equal(t, act.BalancerType, exp.BalancerType, "balancerType should be equal") &&
 			assert.ElementsMatch(t, act.Nodes, exp.Nodes, "nodes should be equal")
@@ -366,7 +491,7 @@ func assertSimpleLoadBalance(t *testing.T, act, exp *SimpleLoadBalance, msg ...i
 	return true
 }
 
-func assertReadWriteSplitting(t *testing.T, act, exp *ReadWriteSplitting, msg ...interface{}) bool {
+func assertReadWriteSplitting(t *testing.T, exp, act *ReadWriteSplitting, msg ...interface{}) bool {
 	if act != nil && exp != nil {
 		return assertReadWriteSplittingStatic(t, act.Static, exp.Static, "readWriteSplittingStatic should be equal") &&
 			assertReadWriteSplittingDynamic(t, act.Dynamic, exp.Dynamic, "readWriteSplittingDynamic should be equal")
@@ -414,7 +539,10 @@ func assertReadWriteDiscovery(t *testing.T, act, exp ReadWriteDiscovery, msg ...
 }
 
 func assertPlugin(t *testing.T, act, exp *Plugin, msg ...interface{}) bool {
-	return assertCircuitBreaks(t, act.CircuitBreaks, exp.CircuitBreaks, "circuitBreaks should be equal") && assertConcurrencyControls(t, act.ConcurrencyControls, exp.ConcurrencyControls, "concurrencyControls should be equal")
+	if act != nil && exp != nil {
+		return assertCircuitBreaks(t, act.CircuitBreaks, exp.CircuitBreaks, "circuitBreaks should be equal") && assertConcurrencyControls(t, act.ConcurrencyControls, exp.ConcurrencyControls, "concurrencyControls should be equal")
+	}
+	return true
 }
 
 func assertCircuitBreaks(t *testing.T, act, exp []CircuitBreak, msg ...interface{}) bool {
@@ -539,4 +667,291 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 	}
 
 	fmt.Printf("%s\n", string(data))
+}
+
+func Test_ShardingConfig(t *testing.T) {
+	config := PisaProxyConfig{
+		Admin: AdminConfig{
+			Host:     "0.0.0.0",
+			Port:     8082,
+			LogLevel: "INFO",
+		},
+		MySQL: MySQLConfig{
+			Nodes: []MySQLNode{
+				{
+					Name:     "ds001",
+					Db:       "socksdb",
+					User:     "root",
+					Password: "12345678",
+					Host:     "127.0.0.1",
+					Port:     3306,
+					// Weight:   1,
+					Role: "read",
+				},
+			},
+		},
+		Proxy: ProxyConfig{
+			Config: []Proxy{
+				{
+					ListenAddr:    "0.0.0.0:9088",
+					User:          "root",
+					Password:      "12345678",
+					DB:            "testrw",
+					BackendType:   "mysql",
+					PoolSize:      3,
+					ServerVersion: "",
+					Sharding: []Sharding{
+						{
+							TableName: "test_shard_hash",
+							ActualDatanodes: []string{
+								"ds001",
+							},
+							TableStrategy: &TableStrategy{
+								TableShardingAlgorithmName: "crc32mod",
+								TableShardingColumn:        "order_id",
+								ShardingCount:              4,
+							},
+							DatabaseStrategy: &DatabaseStrategy{
+								DatabaseShardingAlgorithmName: "mod",
+								DatabaseShardingColumn:        "id",
+							},
+							DatabaseTableStrategy: &DatabaseTableStrategy{
+								TableStrategy: TableStrategy{
+									TableShardingAlgorithmName: "crc32_mod",
+									TableShardingColumn:        "order_id",
+									ShardingCount:              4,
+								},
+								DatabaseStrategy: DatabaseStrategy{
+									DatabaseShardingAlgorithmName: "mod",
+									DatabaseShardingColumn:        "order_id",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		NodeGroup: NodeGroupConfig{
+			Members: []NodeGroupMember{
+				{
+					Name:      "ms001",
+					ReadWrite: "ds001",
+					Reads: []string{
+						"ds001",
+						"ds002",
+					},
+				},
+				{
+					Name:      "ms002",
+					ReadWrite: "ds002",
+					Reads: []string{
+						"ds002",
+						"ds003",
+					},
+				},
+			},
+		},
+	}
+
+	// data, _ := json.Marshal(config)
+}
+
+var dbepreadwrite = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "ds000",
+		Namespace: "demotest",
+		Annotations: map[string]string{
+			DatabaseEndpointRoleKey: ReadWriteSplittingRoleReadWrite,
+		},
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				DB:       "socksdb",
+				Host:     "catalogue-db.demotest",
+				Password: "fake_password",
+				Port:     3306,
+				User:     "root",
+			},
+		},
+	},
+}
+
+var dbepread1 = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "ds001",
+		Namespace: "demotest",
+		Annotations: map[string]string{
+			DatabaseEndpointRoleKey: ReadWriteSplittingRoleRead,
+		},
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				DB:       "socksdb",
+				Host:     "catalogue-db.demotest",
+				Password: "fake_password",
+				Port:     3306,
+				User:     "root",
+			},
+		},
+	},
+}
+
+var dbepread2 = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "ds002",
+		Namespace: "demotest",
+		Annotations: map[string]string{
+			DatabaseEndpointRoleKey: ReadWriteSplittingRoleRead,
+		},
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				DB:       "socksdb",
+				Host:     "catalogue-db.demotest",
+				Password: "fake_password",
+				Port:     3306,
+				User:     "root",
+			},
+		},
+	},
+}
+
+var generalshard = client.DataShard{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "catalogue",
+		Namespace: "demotest",
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
+	Spec: client.DataShardSpec{
+		Rules: []client.ShardingRule{
+			{
+				TableName: "testshard",
+				TableStrategy: &client.TableStrategy{
+					TableShardingAlgorithmName: "crc32mod",
+					TableShardingColumn:        "order_id",
+					ShardingCount:              4,
+				},
+				ActualDatanodes: client.ActualDatanodesValue{
+					ValueSource: &client.ValueSourceType{
+						ActualDatanodesNodeValue: &client.ActualDatanodesNodeValue{
+							Nodes: []client.ValueFrom{
+								{
+									Value: "ds001",
+								},
+								{
+									Value: "ds002",
+								},
+							},
+						},
+					},
+				},
+				ReadWriteSplittingGroup: []client.ReadWriteSplittingGroup{
+					{
+						Name: "ms001",
+						Rules: []client.ReadWriteSplittingRule{
+							{
+								Name:   "read",
+								Target: "read",
+							},
+							{
+								Name:   "readwrite",
+								Target: "readwrite",
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+}
+
+var rwshard = client.DataShard{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "catalogue",
+		Namespace: "demotest",
+		Labels: map[string]string{
+			"source": "catalogue",
+		},
+	},
+	Spec: client.DataShardSpec{
+		Rules: []client.ShardingRule{
+			{
+				TableName: "testshard",
+				TableStrategy: &client.TableStrategy{
+					TableShardingAlgorithmName: "crc32mod",
+					TableShardingColumn:        "order_id",
+					ShardingCount:              4,
+				},
+				ActualDatanodes: client.ActualDatanodesValue{
+					ValueSource: &client.ValueSourceType{
+						ActualDatanodesNodeValue: &client.ActualDatanodesNodeValue{
+							Nodes: []client.ValueFrom{
+								{
+									ValueFromReadWriteSplitting: &client.ValueFromReadWriteSplitting{
+										Name: "ms001",
+									},
+								},
+							},
+						},
+					},
+				},
+				ReadWriteSplittingGroup: []client.ReadWriteSplittingGroup{
+					{
+						Name: "ms001",
+						Rules: []client.ReadWriteSplittingRule{
+							{
+								Name:   "read",
+								Target: "read",
+							},
+							{
+								Name:   "readwrite",
+								Target: "readwrite",
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+}
+
+var expectedNodeGroup = NodeGroupConfig{
+	Members: []NodeGroupMember{
+		{
+			Name: "ms001",
+			Reads: []string{
+				"ds001",
+				"ds002",
+			},
+			ReadWrite: "ds000",
+		},
+	},
+}
+
+func Test_NodeGroupConfigBuilder(t *testing.T) {
+	builder := NewNodeGroupConfigBuilder().SetDataShards(rwshard).SetDatabaseEndpoints([]client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2})
+	cfg := builder.Build()
+	assert.Equal(t, len(expectedNodeGroup.Members), len(cfg.Members), "members in total should be equal")
+	for _, cfgm := range cfg.Members {
+		for _, expm := range expectedNodeGroup.Members {
+			if cfgm.Name == expm.Name {
+				assert.EqualValues(t, cfgm.ReadWrite, expm.ReadWrite, "readwrite should be equal")
+				assert.EqualValues(t, cfgm.Reads, expm.Reads, "read should be equal")
+			}
+		}
+	}
 }

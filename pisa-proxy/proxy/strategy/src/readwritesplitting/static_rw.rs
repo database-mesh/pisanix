@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use endpoint::endpoint::Endpoint;
+use indexmap::IndexMap;
 use loadbalance::balance::LoadBalance;
 
 use super::{
@@ -20,7 +21,7 @@ use super::{
     ReadWriteEndpoint,
 };
 use crate::{
-    config,
+    config::{self, NodeGroup},
     config::TargetRole,
     route::{BoxError, RouteBalance},
     Route, RouteInput,
@@ -31,10 +32,12 @@ pub struct ReadWriteSplittingStaticBuilder;
 impl ReadWriteSplittingStaticBuilder {
     pub fn build(
         config: config::ReadWriteSplittingStatic,
+        node_group_config: Option<NodeGroup>,
+        endpoint_group: IndexMap<String, ReadWriteEndpoint>,
         rw_endpoint: ReadWriteEndpoint,
     ) -> ReadWriteSplittingStatic {
         let rules_match =
-            RulesMatchBuilder::build(config.rules, config.default_target, rw_endpoint);
+            RulesMatchBuilder::build(config.rules, config.default_target, node_group_config, endpoint_group, rw_endpoint);
 
         ReadWriteSplittingStatic { rules_match }
     }
@@ -58,6 +61,7 @@ impl Route for ReadWriteSplittingStatic {
 #[cfg(test)]
 mod test {
     use endpoint::endpoint::Endpoint;
+    use indexmap::IndexMap;
     use loadbalance::balance::AlgorithmName;
 
     use crate::{
@@ -75,6 +79,7 @@ mod test {
                 regex: vec![String::from("^select")],
                 target: TargetRole::Read,
                 algorithm_name: AlgorithmName::Random,
+                node_group_name: vec![],
             }),
             ReadWriteSplittingRule::Regex(RegexRule {
                 name: String::from("t2"),
@@ -82,6 +87,7 @@ mod test {
                 regex: vec![String::from("^insert")],
                 target: TargetRole::ReadWrite,
                 algorithm_name: AlgorithmName::Random,
+                node_group_name: vec![],
             }),
         ];
 
@@ -108,9 +114,11 @@ mod test {
 
         let config = super::config::ReadWriteSplitting {
             statics: Some(super::config::ReadWriteSplittingStatic { default_target, rules }),
+            dynamic: None,
         };
 
-        let mut rws = ReadWriteSplittingStaticBuilder::build(config.statics.unwrap(), rw_endpoint);
+        let endpoint_group: IndexMap<String, ReadWriteEndpoint> = IndexMap::new();
+        let mut rws = ReadWriteSplittingStaticBuilder::build(config.statics.unwrap(), None, endpoint_group, rw_endpoint);
         let input = RouteInput::Statement("insert");
         let res = rws.dispatch(&input).unwrap();
         assert_eq!(res.0.unwrap().addr, "127.0.0.2");

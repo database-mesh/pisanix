@@ -34,7 +34,7 @@ use crate::{
     err::ProtocolError,
     mysql_const::*,
     row::{RowDataText, RowDataTyp},
-    util::{is_ok_header, length_encode_int},
+    util::{is_ok_header, BufExt},
 };
 
 #[derive(Debug, Default)]
@@ -235,7 +235,7 @@ impl ClientConn {
     ) -> Result<Option<QueryResultStream<'a, BytesMut>>, ProtocolError> {
         let mut stream = self.send_query(val).await?;
 
-        let header = match stream.next().await {
+        let mut header = match stream.next().await {
             Some(Ok(data)) => data,
             Some(Err(e)) => return Err(e),
             None => return Ok(None),
@@ -245,7 +245,8 @@ impl ClientConn {
             return Ok(None);
         }
 
-        let (cols, ..) = length_encode_int(&header[4..]);
+        let  _ = header.split_to(4);
+        let (cols, ..) = header.get_lenc_int();
 
         let mut col_buf = vec![];
         for _ in 0..cols {
@@ -282,6 +283,36 @@ impl ClientConn {
         let mut stream = self.send_common_command(COM_QUERY, val.as_bytes()).await?;
 
         while stream.next().await.is_some() {}
+
+        Ok(())
+    }
+
+    pub async fn send_query_without_stream<'a>(
+        &'a mut self,
+        val: &'a [u8],
+    ) -> Result<(), ProtocolError> {
+        let framed = self.framed.take().unwrap();
+
+        let mut resultset_codec = framed.into_resultset();
+
+        resultset_codec.send(ResultSendCommand::Binary((COM_QUERY, val))).await?;
+
+        self.framed = Some(Box::new(ClientCodec::Resultset(resultset_codec)));
+
+        Ok(())
+    }
+
+    pub async fn send_execute_without_stream<'a>(
+        &'a mut self,
+        val: &'a [u8],
+    ) -> Result<(), ProtocolError> {
+        let framed = self.framed.take().unwrap();
+        let mut resultset_codec = framed.into_resultset();
+        resultset_codec.codec_mut().with_binary(true);
+
+        resultset_codec.send(ResultSendCommand::Binary((COM_STMT_EXECUTE, val))).await?;
+
+        self.framed = Some(Box::new(ClientCodec::Resultset(resultset_codec)));
 
         Ok(())
     }
@@ -377,6 +408,7 @@ impl ConnAttr for ClientConn {
     }
 }
 
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum SessionAttr {
     DB(Option<String>),
@@ -387,7 +419,7 @@ pub enum SessionAttr {
 #[async_trait]
 impl ConnAttrMut for ClientConn {
     type Item = SessionAttr;
-    async fn init(&mut self, items: Vec<SessionAttr>) {
+    async fn init(&mut self, items: &[SessionAttr]) {
         for attr in items.iter() {
             match attr {
                 SessionAttr::DB(val) => {

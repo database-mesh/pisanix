@@ -79,10 +79,8 @@ macro_rules! collect_sql_processed_total {
 
 macro_rules! collect_sql_processed_duration {
     ($s:expr, $x:expr, $c:expr, $e:expr) => {
-        let now = SystemTime::now();
-        let duration = now.duration_since($e).unwrap();
         $s.metrics_collector
-            .set_sql_processed_duration(&[$s.name.as_str(), $x, $c], duration.as_secs_f64());
+            .set_sql_processed_duration(&[$s.name.as_str(), $x, $c], $e.as_secs_f64());
     };
 }
 

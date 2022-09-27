@@ -72,6 +72,31 @@ pub enum SqlStmt {
     None,
 }
 
+impl SqlStmt {
+    pub fn format(&self) -> String {
+        match self {
+            Self::SelectStmt(stmt) => {
+                stmt.format()
+            }
+
+            Self::InsertStmt(stmt) => {
+                stmt.format()
+            }
+
+            Self::UpdateStmt(stmt) => {
+                stmt.format()
+            }
+
+            Self::DeleteStmt(stmt) => {
+                stmt.format()
+            }
+
+            // Implements the format method when developing sharding in the future
+            _x => todo!(),
+        }
+    }
+}
+
 impl Visitor for SqlStmt {
     fn visit<T>(&mut self, tf: &mut T) -> Self
     where
@@ -79,7 +104,7 @@ impl Visitor for SqlStmt {
     {
         match self {
             Self::SelectStmt(stmt) => {
-                let mut node = Node::SelectStmt(stmt.clone());
+                let mut node = Node::SelectStmt(stmt);
                 tf.trans(&mut node);
 
                 let new_node = node.into_select_stmt().unwrap().visit(tf);
@@ -87,7 +112,7 @@ impl Visitor for SqlStmt {
             }
 
             Self::InsertStmt(stmt) => {
-                let mut node = Node::InsertStmt(*stmt.clone());
+                let mut node = Node::InsertStmt(stmt);
                 tf.trans(&mut node);
 
                 let new_node = node.into_insert_stmt().unwrap().visit(tf);
@@ -95,15 +120,23 @@ impl Visitor for SqlStmt {
             }
 
             Self::UpdateStmt(stmt) => {
-                let mut node = Node::UpdateStmt(*stmt.clone());
+                let mut node = Node::UpdateStmt(stmt);
                 tf.trans(&mut node);
 
                 let new_node = node.into_update_stmt().unwrap().visit(tf);
                 Self::UpdateStmt(Box::new(new_node))
             }
 
+            Self::DeleteStmt(stmt) => {
+                let mut node = Node::DeleteStmt(stmt);
+                tf.trans(&mut node);
+
+                let new_node = node.into_delete_stmt().unwrap().visit(tf);
+                Self::DeleteStmt(Box::new(new_node))
+            }
+
             Self::Set(stmt) => {
-                let mut node = Node::SetOptValues(*stmt.clone());
+                let mut node = Node::SetOptValues(stmt);
                 tf.trans(&mut node);
 
                 let new_node = node.into_set_opt_values().unwrap().visit(tf);
@@ -129,14 +162,14 @@ mod test {
         }
 
         impl Transformer for S {
-            fn trans(&mut self, node: &mut Node) -> Self {
+            fn trans(&mut self, node: &mut Node<'_>) -> bool {
                 match node {
                     Node::Value(Value::Text { span, value }) => {
                         *span = Span::new(1, 1);
                         *value = "transd".to_string();
                     }
 
-                    Node::Value(Value::Num { span: _, value }) => {
+                    Node::Value(Value::Num { span: _, value, signed: _ }) => {
                         *value = "2".to_string();
                     }
 
@@ -145,7 +178,7 @@ mod test {
 
                 self.a = "11111".to_string();
 
-                self.clone()
+                false
             }
         }
 
@@ -157,7 +190,7 @@ mod test {
 
         let mut s = S { a: "a".to_string() };
         let new_v = res[0].visit(&mut s);
-        println!("new value {:?}", new_v);
+        println!("new value {:?}", new_v.clone());
         assert_eq!(s.a, "11111")
         //println!("new s value {:?}", s);
     }

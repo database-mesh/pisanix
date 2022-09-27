@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use lrlex::{lrlex_mod, DefaultLexeme, LRNonStreamingLexer};
+use lrlex::{DefaultLexeme, LRNonStreamingLexer};
 use lrpar::{LexError, Lexeme, Span};
 
 use super::charsets::CHARSETS;
 
-lrlex_mod!("token_map");
-
-use token_map::*;
+use super::lex_token::*;
 
 keyword_size!();
 
@@ -149,6 +147,10 @@ impl<'a> Scanner<'a> {
                 '*' => {
                     if !self.is_comment_executable {
                         lexemes.push(Ok(DefaultLexeme::new(T_ASTERISK, self.pos, 1)));
+                    }
+
+                    if self.is_ident_dot {
+                        self.is_ident_dot = false
                     }
                 }
 
@@ -397,6 +399,8 @@ impl<'a> Scanner<'a> {
                     old_pos,
                     self.pos - old_pos + 1,
                 )));
+
+                self.is_ident_dot = false;
             }
 
             '.' => {
@@ -647,13 +651,13 @@ impl<'a> Scanner<'a> {
 
                 '_' | '$' | '\\' | '\t' => false,
 
-                '.' => {
-                    // If is_ident_dot is true, continue scanning until there is an  exit condition.
-                    match scanner.is_ident_dot {
-                        true => false,
-                        false => true,
-                    }
-                }
+                //'.' => {
+                //    // If is_ident_dot is true, continue scanning until there is an  exit condition.
+                //    match scanner.is_ident_dot {
+                //        true => false,
+                //        false => true,
+                //    }
+                //}
 
                 _ => true,
             }
@@ -663,13 +667,22 @@ impl<'a> Scanner<'a> {
 
         // Check whether has the `ident.ident` format.
         if self.is_ident_dot {
-            self.pos -= 1;
             // reset is_ident_dot is false
-            self.is_ident_dot = false;
+            self.is_ident_dot = self.peek() == '.';
+            self.pos -= 1;
+
             return DefaultLexeme::new(T_IDENT, old_pos, length);
         }
 
-        self.is_ident_dot = self.peek() == '.';
+        self.is_ident_dot = if self.peek() == '.' {
+            self.next();
+            let ch = self.peek();
+            self.pos -= 1;
+            !(ch == '`')
+        } else {
+            false
+        };
+        
 
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if is_x86_feature_detected!("sse2") {
@@ -1157,10 +1170,11 @@ mod test {
             //("SELECT 'тест' AS test\tkoi8r\tkoi8r_general_ci\tutf8mb4_0900_ai_ci;", 11),
             //("SELECT _yea | x'cafebabe' FROM at;", 11),
             //("SELECT w, SUM(w) OVER (ROWS BETWEEN CURRENT ROW AND 3 FOLLOWING) FROM t;", 11),
-            ("prepare stmt2 from @s", 5),
+            //("prepare stmt2 from @s", 5),
+            ("SELECT idx from db.`tshard` where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4", 11),
         ];
 
-        //println!("T_TEXT_STRING {:?} {:?}", );
+        println!("T_TEXT_STRING {:?}", T_IDENT_QUOTED);
         for (input, num) in inputs {
             let mut scanner = Scanner::new(input);
             println!("{:?}", scanner.chars);

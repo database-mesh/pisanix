@@ -20,9 +20,7 @@ use std::{
 };
 
 use bytes::{Buf, BufMut, BytesMut};
-use futures::Stream;
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
+use futures::{stream::Fuse, Stream};
 use pin_project::pin_project;
 use protocol_codegen::mysql_codec_convert;
 use tokio::io::Interest;
@@ -36,11 +34,8 @@ use super::{
 };
 use crate::{
     err::ProtocolError,
-    mysql_const::{
-        CLIENT_PROTOCOL_41, CLIENT_SESSION_TRACK, CLIENT_TRANSACTIONS, SERVER_SESSION_STATE_CHANGED,
-    },
-    row::{Row, RowData, RowDataTyp},
-    util::{get_length, is_eof, length_encode_int, length_encoded_string},
+    row::{RowData, RowDataTyp},
+    util::{get_length, is_eof}, client::resultset::DecodeResultsetState,
 };
 
 pub type SendCommand<'a> = (u8, &'a str);
@@ -103,6 +98,130 @@ impl ClientCodec {
     }
 }
 
+pub enum MergeResultsetState {
+    Header,
+    ColumnInfo,
+    ColumnEof,
+    Row,
+}
+
+#[pin_project]
+pub struct MergeStream<S>
+where
+    S: Stream + std::marker::Unpin,
+{
+    inner: Vec<Fuse<S>>,
+    idx: usize,
+    buf: Vec<Option<S::Item>>,
+    base_length: usize,
+    limit: usize,
+    limit_idx: usize,
+    none_count: usize,
+    state: MergeResultsetState,
+}
+
+impl<S> MergeStream<S>
+where
+    S: Stream + std::marker::Unpin,
+{
+    pub fn set_state(&mut self, state: MergeResultsetState) {
+        self.state = state;
+    }
+}
+
+impl<S> MergeStream<S>
+where
+    S: Stream + std::marker::Unpin,
+{
+    pub fn new(inner: Vec<Fuse<S>>, base_length: usize) -> Self {
+        let limit = base_length * 100;
+
+        MergeStream {
+            inner,
+            idx: 0,
+            buf: Vec::with_capacity(base_length),
+            base_length,
+            limit_idx: 0,
+            limit,
+            none_count: 0,
+            state: MergeResultsetState::Header,
+        }
+    }
+}
+
+impl<S> Stream for MergeStream<S>
+where
+    S: Stream + std::marker::Unpin,
+    <S as Stream>::Item: std::fmt::Debug,
+{
+    type Item = Vec<Option<S::Item>>;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let me = self.project();
+        loop {
+            let s = unsafe { Pin::new(me.inner.get_unchecked_mut(*me.idx)) };
+
+            match me.state {
+                MergeResultsetState::Header
+                | MergeResultsetState::ColumnInfo
+                | MergeResultsetState::ColumnEof => {
+                    match s.poll_next(cx) {
+                        Poll::Ready(data) => {
+                            *me.idx += 1;
+                            me.buf.push(data);
+                        }
+
+                        Poll::Pending => return Poll::Pending,
+                    };
+
+                    if *me.idx == *me.base_length {
+                        *me.idx = 0;
+                        break;
+                    }
+                }
+
+                MergeResultsetState::Row => {
+                    match s.poll_next(cx) {
+                        Poll::Ready(Some(data)) => {
+                            *me.idx += 1;
+                            *me.limit_idx += 1;
+                            me.buf.push(Some(data));
+                        }
+
+                        Poll::Ready(None) => {
+                            *me.idx += 1;
+                            *me.limit_idx += 1;
+                            *me.none_count += 1;    
+                        }
+
+                        Poll::Pending => return Poll::Pending,
+                    };
+
+
+                    if *me.idx == *me.base_length {
+                        *me.idx = 0;
+                        if *me.none_count == *me.base_length {
+                            *me.none_count = 0;
+                            break;
+                        }
+                    }
+
+                    if *me.limit_idx == *me.limit {
+                        *me.limit_idx = 0;
+                        *me.none_count = 0;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if me.buf.is_empty() {
+            return Poll::Ready(None);
+        } else {
+            return Poll::Ready(Some(std::mem::replace(me.buf, Vec::with_capacity(*me.limit))));
+        }
+    }
+}
+
 #[derive(Debug)]
 #[pin_project]
 pub struct ResultsetStream<'a> {
@@ -130,10 +249,21 @@ impl<'a> Stream for ResultsetStream<'a> {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
         let codec = Pin::new(me.framed);
-        let is_complete = codec.codec().next_state.is_complete();
+        //println!("rs {:?}", codec.codec().next_state);
+        let next_state = codec.codec().next_state.clone();
+        let is_complete = next_state.is_complete();
+        
 
         match codec.poll_next(cx) {
-            Poll::Ready(Some(Ok(data))) => Poll::Ready(Some(Ok(data.0))),
+            Poll::Ready(Some(Ok(data))) => {
+                if next_state == DecodeResultsetState::Row || next_state == DecodeResultsetState::RowBinary {
+                    if is_eof(&data.0) {
+                        return Poll::Ready(None)
+                    }
+                }
+
+                Poll::Ready(Some(Ok(data.0)))
+            }
 
             Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
 
@@ -151,19 +281,19 @@ impl<'a> Stream for ResultsetStream<'a> {
 }
 
 #[pin_project]
-pub struct QueryResultStream<'a, T: Row> {
+pub struct QueryResultStream<'a, T: AsRef<[u8]>> {
     #[pin]
     rs: ResultsetStream<'a>,
     row_data: RowDataTyp<T>,
 }
 
-impl<'a, T: Row> QueryResultStream<'a, T> {
+impl<'a, T: AsRef<[u8]>> QueryResultStream<'a, T> {
     pub fn new(rs: ResultsetStream<'a>, row_data: RowDataTyp<T>) -> Self {
         QueryResultStream { rs, row_data }
     }
 }
 
-impl<'a, T: Row + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
+impl<'a, T: AsRef<[u8]> + Clone + From<bytes::BytesMut>> Stream for QueryResultStream<'a, T> {
     type Item = Result<RowDataTyp<T>, ProtocolError>;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let me = self.project();
@@ -291,145 +421,11 @@ pub fn write_command<'a>(item: SendCommand<'a>, dst: &'a mut BytesMut) {
     dst.put(item.1.as_bytes());
 }
 
-#[derive(Debug, FromPrimitive)]
-#[repr(u8)]
-pub enum SessionStateType {
-    SystemVariables,            // Session system variables
-    Schema,                     // Current schema
-    StateChange,                // Session state changes
-    Gtids,                      // GTIDs
-    TransactionCharacteristics, // Transaction characteristics
-    TransactionState,           // Transaction state
-}
-
-#[derive(Debug)]
-pub enum SessionState {
-    SystemVariables(Vec<(Vec<u8>, Vec<u8>)>),
-    Schema(Vec<u8>),
-    StateChange(bool),
-    Gtids(Vec<u8>),
-    TransactionCharacteristics(Vec<u8>),
-    TransactionState(Vec<u8>),
-    Unknown(Vec<u8>),
-}
-
-impl SessionState {
-    pub fn decode(data: &mut BytesMut) -> SessionState {
-        let mut payload = data.split_off(1);
-        let (num, _, pos) = length_encode_int(&payload);
-        let _ = payload.split_to(pos as usize);
-        let mut payload = payload.split_to(num as usize);
-
-        match FromPrimitive::from_u8(data[0]) {
-            Some(SessionStateType::SystemVariables) => {
-                let mut pairs = Vec::new();
-                while !payload.is_empty() {
-                    let (name, _) = length_encoded_string(&mut payload);
-                    let (value, _) = length_encoded_string(&mut payload);
-                    pairs.push((name, value))
-                }
-
-                SessionState::SystemVariables(pairs)
-            }
-            Some(SessionStateType::Schema) => {
-                let (schema, _) = length_encoded_string(&mut payload);
-                SessionState::Schema(schema)
-            }
-            Some(SessionStateType::StateChange) => {
-                let (is_tracked, _) = length_encoded_string(&mut payload);
-                SessionState::StateChange(is_tracked == b"1")
-            }
-            Some(SessionStateType::Gtids) => {
-                let (gtids, _) = length_encoded_string(&mut payload);
-                SessionState::Gtids(gtids)
-            }
-            Some(SessionStateType::TransactionCharacteristics) => {
-                let (char, _) = length_encoded_string(&mut payload);
-                SessionState::TransactionCharacteristics(char)
-            }
-            Some(SessionStateType::TransactionState) => {
-                let (state, _) = length_encoded_string(&mut payload);
-                SessionState::TransactionState(state)
-            }
-            None => {
-                data.unsplit(payload);
-                SessionState::Unknown(data.to_vec())
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ResultOkInfo {
-    affected_rows: u64,
-    last_insert_id: u64,
-    status: Option<u16>,
-    warnings: Option<u16>,
-    info: Option<Vec<u8>>,
-    state_info: Option<SessionState>,
-}
-
-impl ResultOkInfo {
-    fn new() -> ResultOkInfo {
-        ResultOkInfo {
-            affected_rows: 0,
-            last_insert_id: 0,
-            status: None,
-            warnings: None,
-            info: None,
-            state_info: None,
-        }
-    }
-
-    pub fn decode(auth_info: &ClientAuth, data: &mut BytesMut) -> ResultOkInfo {
-        let mut ok_info = ResultOkInfo::new();
-
-        let (affect_rows, _, pos) = length_encode_int(data);
-        ok_info.affected_rows = affect_rows;
-        let _ = data.split_to(pos as usize);
-
-        let (last_inert_id, _, pos) = length_encode_int(data);
-        ok_info.last_insert_id = last_inert_id;
-        let _ = data.split_to(pos as usize);
-
-        if auth_info.capability & CLIENT_PROTOCOL_41 > 0 {
-            ok_info.status = Some(data.get_u16_le());
-            ok_info.warnings = Some(data.get_u16_le());
-        } else if auth_info.capability & CLIENT_TRANSACTIONS > 0 {
-            ok_info.status = Some(data.get_u16_le());
-        }
-
-        if data.is_empty() {
-            return ok_info;
-        }
-
-        if auth_info.capability & CLIENT_SESSION_TRACK > 0 {
-            let (info, _) = length_encoded_string(data);
-            ok_info.info = Some(info);
-
-            if let Some(status) = ok_info.status {
-                if status & SERVER_SESSION_STATE_CHANGED > 0 {
-                    let (_, _, pos) = length_encode_int(data);
-                    let _ = data.split_to(pos as usize);
-                    ok_info.state_info = Some(SessionState::decode(data))
-                }
-            }
-        } else {
-            let payload = data.split();
-            ok_info.info = Some(payload.to_vec())
-        }
-
-        ok_info
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use bytes::BytesMut;
     use tokio_stream::StreamExt;
 
-    use super::ResultOkInfo;
-    use crate::client::{codec::SessionState, conn::ClientConn};
+    use crate::client::conn::ClientConn;
 
     #[tokio::test]
     async fn test_handshake() {
@@ -474,80 +470,5 @@ mod test {
                 None => break,
             }
         }
-    }
-
-    #[tokio::test]
-    async fn test_decode_ok_packet_schema() {
-        let mut packet = BytesMut::from(
-            &[
-                0x13, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x00, 0x0a, 0x01,
-                0x05, 0x04, 0x74, 0x65, 0x73, 0x74, 0x02, 0x01, 0x31,
-            ][..],
-        );
-
-        let _ = packet.split_to(4 + 1);
-
-        let driver = ClientConn::test_conn(
-            "root".to_string(),
-            "123456".to_string(),
-            "127.0.0.1:13306".to_string(),
-        )
-        .await
-        .unwrap();
-
-        let auth_info = driver.framed.as_ref().unwrap();
-        let info = ResultOkInfo::decode(auth_info, &mut packet);
-
-        if let Some(SessionState::Schema(schema)) = info.state_info {
-            assert_eq!(b"test"[..], schema)
-        }
-    }
-
-    #[tokio::test]
-    async fn test_decode_ok_packet_vars() {
-        let mut packet = BytesMut::from(
-            &[
-                0x1d, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x14, 0x00,
-                0x0f, 0x0a, 0x61, 0x75, 0x74, 0x6f, 0x63, 0x6f, 0x6d, 0x6d, 0x69, 0x74, 0x03, 0x4f,
-                0x46, 0x46, 0x02, 0x01, 0x31,
-            ][..],
-        );
-
-        let _ = packet.split_to(4 + 1);
-
-        let driver = ClientConn::test_conn(
-            "root".to_string(),
-            "123456".to_string(),
-            "127.0.0.1:13306".to_string(),
-        )
-        .await
-        .unwrap();
-
-        let auth_info = driver.framed.as_ref().unwrap();
-        let info = ResultOkInfo::decode(auth_info, &mut packet);
-
-        if let Some(SessionState::SystemVariables(vars)) = info.state_info {
-            assert_eq!(b"autocommit"[..], vars[0].0);
-            assert_eq!(b"OFF"[..], vars[0].1);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_decode_ok_packet_common() {
-        let mut packet =
-            BytesMut::from(&[0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00][..]);
-
-        let _ = packet.split_to(4 + 1);
-        let driver = ClientConn::test_conn(
-            "root".to_string(),
-            "123456".to_string(),
-            "127.0.0.1:13306".to_string(),
-        )
-        .await
-        .unwrap();
-
-        let auth_info = driver.framed.as_ref().unwrap();
-        let info = ResultOkInfo::decode(auth_info, &mut packet);
-        assert_eq!(info.state_info.is_none(), true);
     }
 }

@@ -124,7 +124,7 @@ impl MonitorReplicationLag {
         while let Some(data) = res.next().await {
             let mut row = data.unwrap();
             let seconds_behind_master =
-                row.decode_with_name::<Option<u64>>("Seconds_Behind_Master").unwrap();
+                row.decode_with_name::<u64>("Seconds_Behind_Master").unwrap();
             match seconds_behind_master {
                 Some(lag) => reasponse_replication_lag = Some(lag),
                 None => reasponse_replication_lag = None,
@@ -136,7 +136,7 @@ impl MonitorReplicationLag {
 
 #[derive(Debug, Clone)]
 pub struct ReplicationLagResponseInner {
-    lag: u64,
+    pub lag: u64,
     pub is_latency: bool,
 }
 

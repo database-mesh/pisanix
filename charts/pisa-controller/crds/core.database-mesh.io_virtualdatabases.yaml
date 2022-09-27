@@ -30,7 +30,7 @@ spec:
     plural: virtualdatabases
     singular: virtualdatabase
     shortNames:
-      - vdb
+    - vdb 
   scope: Namespaced
   versions:
   - name: v1alpha1
@@ -51,12 +51,13 @@ spec:
           metadata:
             type: object
           spec:
-            description: VirtualDatabaseSpec defines the desired state of VirtualDatabase
             properties:
               services:
                 items:
                   description: Service Defines the content of a VirtualDatabase
                   properties:
+                    dataShard:
+                      type: string
                     databaseMySQL:
                       description: DatabaseMySQL The type one of VirtualDatabase.Represents
                         a virtual MySQL type
@@ -73,9 +74,9 @@ spec:
                         port:
                           format: int32
                           type: integer
-                        user:
-                          type: string
                         serverVersion:
+                          type: string
+                        user:
                           type: string
                       type: object
                     name:

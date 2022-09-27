@@ -1,0 +1,87 @@
+##
+## Copyright 2022 SphereEx Authors
+##
+## Licensed under the Apache License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+## http://www.apache.org/licenses/LICENSE-2.0
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+##
+
+name: release
+
+on:
+  push:
+    tags:        
+      - v*
+
+jobs:
+  pisa-controller:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "checkout codes"
+        uses: actions/checkout@v2
+      - name: Declare some variables
+        id: vars
+        shell: bash
+        run: |
+          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+             echo "##[set-output name=tags;]$(echo ${GITHUB_REF#refs/tags/})"  
+          else
+             echo "##[set-output name=tags;]$(echo '')"
+          fi
+          if [[ $GITHUB_REF == refs/heads/* ]]; then
+             echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"  
+          else
+             echo "##[set-output name=branch;]$(echo '')"
+          fi
+      - name: "Kaniko build"
+        uses: mlycore/action-kaniko@master
+        with:
+          image: pisanixio/controller
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          build_file: pisa-controller/hack/Dockerfile 
+          tag: ${{ steps.vars.outputs.tags }}
+          tag_with_latest: true
+          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+
+
+  pisa-proxy:
+    runs-on: ubuntu-latest 
+    steps:
+      - name: "checkout codes"
+        uses: actions/checkout@v2
+      - name: Declare some variables
+        id: vars
+        shell: bash
+        run: |
+          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+             echo "##[set-output name=tags;]$(echo ${GITHUB_REF#refs/tags/})"  
+          else
+             echo "##[set-output name=tags;]$(echo '')"
+          fi
+          if [[ $GITHUB_REF == refs/heads/* ]]; then
+             echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"  
+          else
+             echo "##[set-output name=branch;]$(echo '')"
+          fi
+      - name: "Kaniko build"
+        uses: mlycore/action-kaniko@master
+        with:
+          image: pisanixio/proxy
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          build_file: pisa-proxy/hack/Dockerfile
+          tag: ${{ steps.vars.outputs.tags }}
+          tag_with_latest: true
+          extra_args: --build-arg GIT_BRANCH=${{ steps.vars.outputs.branch }} --build-arg GIT_COMMIT=${{ steps.vars.outputs.sha_short }} --build-arg GIT_TAG=${{ steps.vars.outputs.tags }}
+

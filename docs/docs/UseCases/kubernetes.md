@@ -22,13 +22,15 @@ sidebar_position: 1
 
 ### 源码安装
 
-通过 Helm 构建依赖并安装 ***Pisanix*** 到指定 namespace
+通过 Helm 构建依赖并安装 ***Pisanix*** 到 namespace `pisa-system`
 
 ```shell
+kubectl create namespace pisa-system
+
 cd charts/pisa-controller 
 helm dependency build
 cd ..
-helm install pisa-controller pisa-controller -n <your namespace>
+helm install pisa-controller pisa-controller -n pisa-system 
 ```
 
 Helm 将安装如下资源
@@ -48,7 +50,7 @@ Helm 将安装如下资源
 测试完成后使用 Helm 命令卸载 ***Pisanix***
 
 ```
-helm uninstall pisa-controller -n <your namespace>
+helm uninstall pisa-controller -n pisa-system 
 ```
 
 ## Helm values 配置项介绍
@@ -59,10 +61,10 @@ helm uninstall pisa-controller -n <your namespace>
 | `replicaCount`              | Pisa-Controller 节点数                         | `1`                    |
 | `image.repository`          | Pisa-Controller 镜像名                         | `pisanixio/controller` |
 | `image.pullPolicy`          | Pisa-Controller 镜像拉取策略                   | `IfNotPresent`         |
-| `image.tag`                 | Pisa-Controller 镜像标签                       | `v0.1.0`               |
+| `image.tag`                 | Pisa-Controller 镜像标签                       | `v0.3.0`               |
 | `imagePullSecrets`          | Docker 私有仓库的密钥，以数组形式注入          | `[]`                   |
 | `proxyImage.repository`     | Pisa-Proxy 的镜像名                            | `pisanixio/proxy`      |
-| `proxyImage.tag`            | Pisa-Proxy 镜像标签                            | `v0.1.0`               |
+| `proxyImage.tag`            | Pisa-Proxy 镜像标签                            | `v0.3.0`               |
 | `resources.limits`          | Pisa-Controller 资源限制数值                   | `{}`                   |
 | `resources.requests.cpu`    | Pisa-Controller 资源申请 cpu 核数              | `100m`                 |
 | `resources.requests.memory` | Pisa-Controller 资源申请内存数量               | `128Mi`                |
@@ -148,22 +150,25 @@ annotations:
 
 ### 示例业务部署
 
-以 [Weaveworks Socks-shop(github.com)](https://github.com/microservices-demo/microservices-demo) 为运行应用 Demo，下列演示将展示怎么样在 microservices-demo 使用 ***Pisanix***
+以 [Weaveworks Socks-shop(github.com)](https://github.com/database-mesh/microservices-demo) 为运行应用 Demo，下列演示将展示怎么样在 microservices-demo 使用 ***Pisanix***
 
 首先利用 Helm 部署 microservices-demo 
 
 ```shell
+git clone https://github.com/database-mesh/microservices-demo.git
 kubectl create ns demotest
 cd deploy/kubernetes/helm-chart
 helm dependency build
 cd ..
 helm install microservices-demo helm-chart -n demotest
 ```
-检查 Helm 命令部署情况
+检查 Helm 命令部署情况：
 
 ![socks-shop-deployed](/img/socks-shop-deployed.png)
 
-等待程序启动并看到如下页面后确认已正确运行
+等待程序启动并看到如下页面后确认已正确运行：
+
+注：如果前面执行 `helm dependency build` 提示 nginx ingress 报错，可以跳过继续执行后面的 `helm install` 命令，最终查看部署结果使用的是 `kubectl port-forward` 子命令而非 `ingress`。 
 
 ![socks-shop-preview](/img/socks-shop-preview.png)
 
@@ -232,7 +237,6 @@ spec:
       db: "socksdb"
 ```
 
-
 #### 应用访问数据库切换至 Pisanix
 
 为 namespace 添加标签以开启注入
@@ -241,7 +245,7 @@ spec:
 kubectl label ns demotest pisanix.io/inject=enabled
 ```
 
-修改 catalogue-dep.yaml 来为 catalogue deployment 添加标签以开启注入，
+检查 catalogue-dep.yaml 或 catalogue deployment 以确认是否已添加标签并开启注入：
 
 ```yaml
 ---
@@ -312,4 +316,7 @@ spec:
 helm upgrade  microservices-demo  helm-chart -n demotest
 ```
 
-等待程序正常启动，并测试访问即可验证
+等待程序正常启动，并测试访问即可验证（ FRONT_END_POD_NAME 为 front-end 的 Pod 名）
+```shell
+kubectl port-forward pod/${FRONT_END_POD_NAME} -n demotest 8080:8079
+```

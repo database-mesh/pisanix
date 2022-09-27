@@ -15,6 +15,27 @@
 use loadbalance::balance::AlgorithmName;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NodeGroup {
+    #[serde(rename = "member")]
+    pub members: Vec<Member>,
+}
+
+impl Default for NodeGroup {
+    fn default() -> Self {
+       Self { 
+        members: vec![] 
+       } 
+    } 
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Member {
+    pub name: String,
+    pub readwrite: String,
+    pub reads: Vec<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ReadWriteSplitting {
     #[serde(rename = "static")]
@@ -82,6 +103,10 @@ pub struct MasterHighAvailability {
     pub read_only_timeout: u64,
     #[serde(default = "default_read_only_failure_threshold")]
     pub read_only_failure_threshold: u64,
+    #[serde(default = "default_read_only_enabled")]
+    pub read_only_enabled: bool,
+    #[serde(default = "default_replication_lag_enabled")]
+    pub replication_lag_enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -92,6 +117,8 @@ pub struct RegexRule {
     pub regex: Vec<String>,
     pub target: TargetRole,
     pub algorithm_name: AlgorithmName,
+    #[serde(default)]
+    pub node_group_name: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -100,6 +127,8 @@ pub struct GenericRule {
     #[serde(rename = "type")]
     pub rule_type: String,
     pub algorithm_name: AlgorithmName,
+    #[serde(default)]
+    pub node_group_name: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -113,6 +142,62 @@ impl Default for TargetRole {
     fn default() -> Self {
         Self::ReadWrite
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Sharding {
+    pub table_name: String,
+    pub actual_datanodes: Vec<String>,
+    pub binding_tables: Option<Vec<String>>,
+    pub broadcast_tables: Option<Vec<String>>,
+    pub database_strategy: Option<StrategyType>,
+    pub table_strategy: Option<StrategyType>,
+    pub database_table_strategy: Option<StrategyType>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum StrategyType {
+    DatabaseStrategyConfig(DatabaseStrategyConfig),
+    DatabaseStrategyInline(StrategyInline),
+    TableStrategyConfig(TableStrategyConfig),
+    TableStrategyInline(StrategyInline),
+    DatabaseTableStrategyConfig(DatabaseTableStrategyConfig),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum ShardingAlgorithmName {
+    Mod,
+    CRC32Mod,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DatabaseStrategyConfig {
+    pub database_sharding_algorithm_name: ShardingAlgorithmName,
+    pub database_sharding_column: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StrategyInline {
+    pub algorithm_expression: String,
+    pub allow_range_query_with_inline_sharding: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TableStrategyConfig {
+    pub table_sharding_algorithm_name: ShardingAlgorithmName,
+    pub table_sharding_column: String,
+    pub sharding_count: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DatabaseTableStrategyConfig {
+    pub database_sharding_algorithm_name: ShardingAlgorithmName,
+    pub table_sharding_algorithm_name: ShardingAlgorithmName,
+    pub database_sharding_column: String,
+    pub table_sharding_column: String,
+    pub shading_count: u32,
 }
 
 fn default_monitor_period() -> u64 {
@@ -169,4 +254,12 @@ fn default_read_only_timeout() -> u64 {
 
 fn default_read_only_failure_threshold() -> u64 {
     1
+}
+
+fn default_read_only_enabled() -> bool {
+    true
+}
+
+fn default_replication_lag_enabled() -> bool {
+    true
 }

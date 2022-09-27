@@ -14,7 +14,7 @@
 
 pub mod charset;
 pub mod client;
-mod column;
+pub mod column;
 pub mod err;
 mod macros;
 pub mod mysql_const;
@@ -22,6 +22,8 @@ pub mod row;
 pub mod server;
 pub mod util;
 mod value;
+pub mod session;
+pub mod common_packet;
 
 #[macro_use]
 extern crate lazy_static;

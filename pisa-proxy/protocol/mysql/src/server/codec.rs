@@ -12,38 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{ptr::copy_nonoverlapping, sync::atomic::AtomicU32};
+use std::ptr::copy_nonoverlapping;
 
 use bytes::{BufMut, BytesMut};
-use futures::SinkExt;
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{err::ProtocolError, mysql_const::*, util::get_length};
+use super::auth::ServerHandshakeCodec;
+use crate::{err::ProtocolError, mysql_const::*, server::err::MySQLError, util::get_length};
 
-/// Used to reading packet from client side
+/// The `CommonPacket` trait contains generic methods for handling the mysql protocol
+pub trait CommonPacket {
+    fn make_packet_header(&mut self, length: usize, data: &mut [u8], offset: usize);
+    fn reset_seq(&mut self);
+    fn get_session(&mut self) -> &mut ServerHandshakeCodec;
+}
+
+/// Used to reading packet from client side to parseing mysql protocol
 pub struct PacketCodec {
+    session: ServerHandshakeCodec,
     buf: BytesMut,
-    is_complete: bool,
     // Whether the payload is greater than MAX_PAYLOAD_LEN
     is_max: bool,
     seq: u8,
 }
 
 impl PacketCodec {
-    pub fn new(init_size: usize) -> Self {
-        Self { buf: BytesMut::with_capacity(init_size), is_complete: false, is_max: false, seq: 0 }
-    }
-
-    #[inline]
-    pub fn make_packet_header(&mut self, length: usize, data: &mut [u8], offset: usize) {
-        // we have ensured length is 3bytes, so we can use unsafe block
-        unsafe {
-            let bytes = *(&(length as u64).to_le() as *const u64 as *const [u8; 8]);
-            let data_ptr = data.as_mut_ptr().add(offset);
-            copy_nonoverlapping(bytes.as_ptr(), data_ptr, 3);
-        }
-
-        self.set_seq_id(data, offset)
+    pub fn new(session: ServerHandshakeCodec, init_size: usize) -> Self {
+        Self { session, buf: BytesMut::with_capacity(init_size), is_max: false, seq: 0 }
     }
 
     #[inline]
@@ -58,20 +53,53 @@ impl PacketCodec {
 
     #[inline]
     fn encode_packet(&mut self, item: &[u8], dst: &mut BytesMut) {
-        let mut length = item.len();
+        self.encode_packet_offset(item, dst, 0);
+    }
+
+    #[inline]
+    fn encode_packet_offset(&mut self, item: &[u8], dst: &mut BytesMut, offset: usize) {
+        let length = item.len();
         dst.reserve(length);
 
-        let mut idx: usize = 0;
-        while length >= MAX_PAYLOAD_LEN + 4 {
-            dst.extend_from_slice(&item[idx..idx + MAX_PAYLOAD_LEN + 4]);
-            self.make_packet_header(MAX_PAYLOAD_LEN, dst, idx);
+        let num = length / MAX_PAYLOAD_LEN;
+        let remain = length % MAX_PAYLOAD_LEN;
+        let mut offset = offset;
 
-            length -= MAX_PAYLOAD_LEN + 4;
-            idx += MAX_PAYLOAD_LEN + 4;
+        for i in 0..num {
+            dst.put_bytes(0, 4);
+            dst.extend_from_slice(&item[i * MAX_PAYLOAD_LEN..(i + 1) * MAX_PAYLOAD_LEN]);
+            self.make_packet_header(MAX_PAYLOAD_LEN, dst, offset);
+
+            offset += MAX_PAYLOAD_LEN + 4;
         }
 
-        dst.extend_from_slice(&item[idx..]);
-        self.make_packet_header(length - 4, dst, idx);
+        dst.put_bytes(0, 4);
+        dst.extend_from_slice(&item[num * MAX_PAYLOAD_LEN..]);
+
+        self.make_packet_header(remain, dst, offset);
+    }
+}
+
+impl CommonPacket for PacketCodec {
+    #[inline]
+    fn make_packet_header(&mut self, length: usize, data: &mut [u8], offset: usize) {
+        // we have ensured length is 3bytes, so we can use unsafe block
+        unsafe {
+            let bytes = *(&(length as u64).to_le() as *const u64 as *const [u8; 8]);
+            let data_ptr = data.as_mut_ptr().add(offset);
+            copy_nonoverlapping(bytes.as_ptr(), data_ptr, 3);
+        }
+
+        self.set_seq_id(data, offset)
+    }
+
+    #[inline]
+    fn reset_seq(&mut self) {
+        self.seq = 0
+    }
+
+    fn get_session(&mut self) -> &mut ServerHandshakeCodec {
+        &mut self.session
     }
 }
 
@@ -90,68 +118,97 @@ impl Decoder for PacketCodec {
             return Ok(None);
         }
 
-        self.seq = self.seq.wrapping_add(1);
-
-        if length < MAX_PAYLOAD_LEN {
-            self.is_complete = true;
-            if self.is_max == false {
-                return Ok(Some(src.split()));
-            } else {
-                self.is_max = false;
-                self.buf.extend_from_slice(&src.split());
-                return Ok(Some(self.buf.split()));
-            }
+        if length == MAX_PAYLOAD_LEN {
+            self.is_max = true
         }
 
-        self.is_max = true;
+        self.seq = self.seq.wrapping_add(1);
+        let _ = src.split_to(4);
+        self.buf.extend_from_slice(&src.split_to(length));
 
-        self.buf.extend_from_slice(&src.split_to(length + 4));
-
-        src.reserve(MAX_PAYLOAD_LEN);
+        if length < MAX_PAYLOAD_LEN {
+            return Ok(Some(self.buf.split()));
+        }
 
         self.decode(src)
     }
 }
 
-impl Encoder<BytesMut> for PacketCodec {
+pub enum PacketSend<T> {
+    Origin(T),
+    Encode(T),
+    EncodeOffset(T, usize),
+}
+
+impl<T: AsRef<[u8]>> Encoder<PacketSend<T>> for PacketCodec {
     type Error = ProtocolError;
 
-    fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        self.encode_packet(&item, dst);
+    fn encode(&mut self, item: PacketSend<T>, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        match item {
+            PacketSend::Origin(data) => dst.extend_from_slice(data.as_ref()),
+            PacketSend::Encode(data) => self.encode_packet(data.as_ref(), dst),
+            PacketSend::EncodeOffset(data, offset) => {
+                self.encode_packet_offset(data.as_ref(), dst, offset)
+            }
+        };
+
         Ok(())
     }
 }
 
-impl Encoder<&[u8]> for PacketCodec {
-    type Error = ProtocolError;
+#[inline]
+pub fn make_eof_packet() -> [u8; 9] {
+    [5, 0, 0, 0, 0xfe, 0, 0, 2, 0]
+}
 
-    fn encode(&mut self, item: &[u8], dst: &mut BytesMut) -> Result<(), Self::Error> {
-        self.encode_packet(item, dst);
-        Ok(())
-    }
+#[inline]
+pub fn ok_packet() -> [u8; 11] {
+    [7, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0]
+}
+
+#[inline]
+pub fn make_err_packet(err: MySQLError) -> Vec<u8> {
+    let mut data = BytesMut::with_capacity(128);
+    data.extend_from_slice(&[0; 4]);
+    data.put_u8(0xff);
+    data.extend_from_slice(&[err.code as u8, (err.code >> 8) as u8]);
+    data.put_u8(b'#');
+    data.extend_from_slice(&err.state);
+    data.put_u8(b' ');
+    data.extend_from_slice(err.msg.as_bytes());
+
+    data.to_vec()
 }
 
 #[cfg(test)]
 mod test {
-    use bytes::BufMut;
+    use bytes::BytesMut;
     use futures::{SinkExt, StreamExt};
-    use tokio::io::AsyncWriteExt;
     use tokio_util::codec::Framed;
 
     use super::PacketCodec;
-    use crate::mysql_const::MAX_PAYLOAD_LEN;
+    use crate::{
+        mysql_const::MAX_PAYLOAD_LEN,
+        server::{codec::PacketSend, auth::ServerHandshakeCodec},
+    };
 
     #[tokio::test]
     async fn test_packetcodec_normal() {
-        let packet = PacketCodec::new(8196);
-        let mut data = 16_u32.to_le_bytes()[0..3].to_vec();
-        data.put_u8(0);
-        data.extend_from_slice(&vec![1; 16]);
+        let handshake_codec = ServerHandshakeCodec::new(
+            "root".to_string(),
+            "123456".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        let packet = PacketCodec::new(handshake_codec, 8196);
+        //let mut data = 16_u32.to_le_bytes()[0..3].to_vec();
+        //data.put_u8(0);
+        let data = vec![3; 16];
 
         let (client, server) = tokio::io::duplex(128);
 
         let mut framed = Framed::new(client, packet);
-        let _ = framed.send(&data[..]).await;
+        let _ = framed.send(PacketSend::Encode(&data[..])).await;
         let mut parts = framed.into_parts();
         parts.io = server;
         let mut framed = Framed::from_parts(parts);
@@ -163,31 +220,55 @@ mod test {
 
     #[tokio::test]
     async fn test_packetcodec_max() {
-        let packet = PacketCodec::new(8196);
-        let length: u32 = MAX_PAYLOAD_LEN as u32 * 2 + 16;
+        let handshake_codec = ServerHandshakeCodec::new(
+            "root".to_string(),
+            "123456".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        let packet = PacketCodec::new(handshake_codec, 8196);
+        let length: u32 = MAX_PAYLOAD_LEN as u32 * 2 + 16 + 12;
 
-        let (client, server) = tokio::io::duplex((length + 12) as usize);
+        let (client, server) = tokio::io::duplex(length as usize);
 
-        let mut data = MAX_PAYLOAD_LEN.to_le_bytes()[0..3].to_vec();
-        data.put_u8(0);
-        data.extend_from_slice(&vec![0; MAX_PAYLOAD_LEN]);
-
-        data.extend_from_slice(&MAX_PAYLOAD_LEN.to_le_bytes()[0..3]);
-        data.put_u8(1);
-        data.extend_from_slice(&vec![0; MAX_PAYLOAD_LEN]);
-
-        data.extend_from_slice(&16_u32.to_le_bytes()[0..3]);
-        data.put_u8(2);
-        data.extend_from_slice(&vec![0; 16]);
+        let mut payload_data: Vec<u8> = vec![];
+        payload_data.extend_from_slice(&vec![1; MAX_PAYLOAD_LEN]);
+        payload_data.extend_from_slice(&vec![2; MAX_PAYLOAD_LEN]);
+        payload_data.extend_from_slice(&vec![3; 16]);
 
         let mut framed = Framed::new(client, packet);
-        let _ = framed.send(&data[..]).await;
+        let _ = framed.send(PacketSend::Encode(&payload_data[..])).await;
         let mut parts = framed.into_parts();
         parts.io = server;
         let mut framed = Framed::from_parts(parts);
 
         let framed_data = framed.next().await.unwrap().unwrap();
 
-        assert_eq!(data, framed_data);
+        assert_eq!(payload_data, framed_data);
+    }
+
+    #[test]
+    fn test_encode_offset() {
+        let handshake_codec = ServerHandshakeCodec::new(
+            "root".to_string(),
+            "123456".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        let packet = PacketCodec::new(handshake_codec, 8196);
+        let (client, _) = tokio::io::duplex(100);
+
+        let mut framed = Framed::new(client, packet);
+        let mut buf = BytesMut::with_capacity(10);
+        let data = vec![1, 2, 3, 4, 5];
+
+        let length = buf.len();
+        framed.codec_mut().encode_packet_offset(&data[..], &mut buf, length);
+
+        let data = vec![7, 8, 9];
+        let length = buf.len();
+        framed.codec_mut().encode_packet_offset(&data[..], &mut buf, length);
+
+        assert_eq!(&buf[..], &[5, 0, 0, 0, 1, 2, 3, 4, 5, 3, 0, 0, 1, 7, 8, 9])
     }
 }

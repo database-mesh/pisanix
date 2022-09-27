@@ -18,6 +18,7 @@ use std::{env, fs::File, io::prelude::*};
 use api::config::Admin;
 use clap::{value_parser, Arg, Command};
 use proxy::proxy::{MySQLNode, MySQLNodes, ProxiesConfig, ProxyConfig};
+use strategy::config::NodeGroup;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
@@ -154,6 +155,7 @@ impl PisaProxyConfigBuilder {
             )
             .arg(
                 Arg::new("loglevel")
+                    .short('l')
                     .long("log-level")
                     .help("Log level")
                     .default_value(DEFAULT_PISA_PROXY_ADMIN_LOG_LEVEL)
@@ -218,7 +220,7 @@ impl PisaProxyConfigBuilder {
                 "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
                 self._pisa_controller_host, self._deployed_ns, self._deployed_name
             );
-            builder.build_from_http(http_path).unwrap()
+            builder.build_from_http(http_path).unwrap_or_default()
         };
 
         if !self._log_level.is_empty() {
@@ -243,6 +245,7 @@ pub struct PisaProxyConfig {
     pub admin: Admin,
     pub proxy: Option<ProxiesConfig>,
     pub mysql: Option<MySQLNodes>,
+    pub node_group: Option<NodeGroup>,
     pub shardingsphere_proxy: Option<MySQLNodes>,
     pub version: Option<String>,
 }

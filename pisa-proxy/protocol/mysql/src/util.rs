@@ -14,8 +14,8 @@
 
 use std::{cmp::Ordering, io::Read, ptr::copy_nonoverlapping};
 
-use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Buf, BufMut, BytesMut};
+use byteorder::{LittleEndian, ByteOrder};
 use chrono::prelude::*;
 use crypto::{self, digest::Digest};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -111,15 +111,15 @@ pub fn compare(a: &[u8], b: &[u8]) -> bool {
 pub fn length_encode_int(data: &[u8]) -> (u64, bool, u64) {
     match data[0] {
         0xfb => (0, true, 1),
-        0xfc => (LittleEndian::read_uint(data, 2), false, 3),
-        0xfd => (LittleEndian::read_uint(data, 3), false, 4),
-        0xfe => (LittleEndian::read_uint(data, 8), false, 9),
+        0xfc => (LittleEndian::read_uint(&data[1..], 2), false, 3),
+        0xfd => (LittleEndian::read_uint(&data[1..], 3), false, 4),
+        0xfe => (LittleEndian::read_uint(&data[1..], 8), false, 9),
         x => (x as u64, false, 1),
     }
 }
 
 pub trait BufExt: Buf {
-    fn get_lenc_int(&mut self) -> (u64, bool, u64) {
+    fn get_lenc_int(&mut self) -> (u64, bool, u8) {
         let first = self.get_u8();
         match first {
             0xfb => (0, true, 1),
@@ -133,12 +133,10 @@ pub trait BufExt: Buf {
     fn get_lenc_str_bytes(&mut self) -> (Vec<u8>, bool) {
         let (length, is_null, _) = self.get_lenc_int();
 
-        if length < 1 {
-            return (vec![0], is_null);
-        }
-
-        if !self.has_remaining() {
-            return (vec![], false);
+        // When length < 1 means that the origin bytes is 0x00 or 0xfb, 
+        // In the str context, means the str is null, so return true here.
+        if length < 1 || is_null || !self.has_remaining() {
+            return (vec![0], true);
         }
 
         let mut data = vec![0; length as usize];
@@ -151,6 +149,7 @@ pub trait BufExt: Buf {
         let (length, ..) = self.get_lenc_int();
         self.advance(length as usize)
     }
+
 }
 
 //impl<T: AsRef<[u8]> + Buf> BufExt for T {}
@@ -159,12 +158,22 @@ impl BufExt for &[u8] {}
 impl BufExt for BytesMut {}
 
 pub trait BufMutExt: BufMut {
-    fn put_lenc_int(&mut self, n: u64) {
+    fn put_lenc_int(&mut self, n: u64, is_num: bool) {
+        // See https://dev.mysql.com/doc/internals/en/integer.html#length-encoded-integer
+        if n == 0 {
+            if is_num {
+                self.put_u8(0);
+            } else {
+                self.put_u8(0xfb);
+            }
+            return;
+        }
+
         if n <= 250 {
             self.put_u8(n as u8);
         } else if n <= 0xffff {
             self.put_u8(0xfc);
-            self.put_uint(n, 2);
+            self.put_uint_le(n, 2);
         } else if n <= 0xffffff {
             self.put_u8(0xfd);
             self.put_uint_le(n, 3);
@@ -176,11 +185,10 @@ pub trait BufMutExt: BufMut {
 }
 
 impl BufMutExt for Vec<u8> {}
+impl BufMutExt for BytesMut {}
 
 pub fn length_encoded_string(data: &mut BytesMut) -> (Vec<u8>, bool) {
-    let (num, is_null, pos) = length_encode_int(data);
-
-    let _ = data.split_to(pos as usize);
+    let (num, is_null, _) = data.get_lenc_int();
 
     if num < 1 {
         return (vec![0xfb], is_null);
@@ -230,7 +238,7 @@ mod test {
     use super::{length_encoded_string, BufExt};
     use crate::util::{
         calc_caching_sha2password, calc_password, compare, get_length, is_eof, is_ok,
-        length_encode_int, random_buf,
+        random_buf,
     };
 
     #[test]
@@ -281,32 +289,32 @@ mod test {
 
     #[test]
     fn test_length_encode_int() {
-        let data = [0xfb, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
-        let (a, b, c) = length_encode_int(&data[..]);
+        let mut data = &[0xfb, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37][..];
+        let (a, b, c) = data.get_lenc_int();
         assert_eq!(a, 0);
         assert_eq!(b, true);
         assert_eq!(c, 1);
 
-        let data = [0xfc, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
-        let (a, b, c) = length_encode_int(&data[..]);
-        assert_eq!(a, 12796);
+        let mut data = &[0xfc, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37][..];
+        let (a, b, c) = data.get_lenc_int();
+        assert_eq!(a, 12849);
         assert_eq!(b, false);
         assert_eq!(c, 3);
 
-        let data = [0xfd, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
-        let (a, b, c) = length_encode_int(&data[..]);
-        assert_eq!(a, 3289597);
+        let mut data = &[0xfd, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37][..];
+        let (a, b, c) = data.get_lenc_int();
+        assert_eq!(a, 3355185);
         assert_eq!(b, false);
         assert_eq!(c, 4);
 
-        let data = [0xfe, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
-        let (a, b, c) = length_encode_int(&data[..]);
-        assert_eq!(a, 3978425819141911038);
+        let mut data = &[0xfe, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38][..];
+        let (a, b, c) = data.get_lenc_int();
+        assert_eq!(a, 4050765991979987505);
         assert_eq!(b, false);
         assert_eq!(c, 9);
 
-        let data = [0x00, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
-        let (a, b, c) = length_encode_int(&data[..]);
+        let mut data = &[0x00, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37][..];
+        let (a, b, c) = data.get_lenc_int();
         assert_eq!(a, 0);
         assert_eq!(b, false);
         assert_eq!(c, 1);

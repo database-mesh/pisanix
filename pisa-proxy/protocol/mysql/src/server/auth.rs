@@ -1,6 +1,6 @@
 // Copyright 2022 SphereEx Authors
 //
-// Licensed under the Ap&ache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -22,11 +22,13 @@ use futures::{SinkExt, StreamExt};
 use tokio_util::codec::{Decoder, Encoder, Framed};
 use tracing::debug;
 
-use super::{codec::PacketCodec, err::MySQLError, stream::LocalStream};
+use super::{err::MySQLError, stream::LocalStream};
 use crate::{
     charset::{COLLATION_NAME_ID_MYSQL5, DEFAULT_CHARSET_NAME},
     err::ProtocolError,
     mysql_const::*,
+    server::codec::{make_err_packet, ok_packet},
+    session::{Session, SessionMut},
     util::*,
 };
 
@@ -63,7 +65,7 @@ pub enum ServerHandshakeStatus {
 }
 
 pub struct ServerHandshakeCodec {
-    packet_codec: PacketCodec,
+    seq: u8,
     server_version: String,
     connection_id: u32,
     capability: u32,
@@ -75,21 +77,16 @@ pub struct ServerHandshakeCodec {
     password: String,
     auth_data: BytesMut,
     auth_plugin_name: String,
+    autocommit: Option<String>,
     next_handshake_status: ServerHandshakeStatus,
 }
 
 impl ServerHandshakeCodec {
-    pub fn new(
-        packet_codec: PacketCodec,
-        user: String,
-        password: String,
-        db: String,
-        server_version: String,
-    ) -> Self {
+    pub fn new(user: String, password: String, db: String, server_version: String) -> Self {
         CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
 
         Self {
-            packet_codec,
+            seq: 0,
             server_version,
             connection_id: CONNECTION_ID.load(Ordering::Relaxed),
             capability: 0,
@@ -101,6 +98,7 @@ impl ServerHandshakeCodec {
             password,
             auth_data: BytesMut::with_capacity(20),
             auth_plugin_name: "".to_string(),
+            autocommit: None,
             next_handshake_status: ServerHandshakeStatus::ReadResponseFirst,
         }
     }
@@ -170,7 +168,7 @@ impl ServerHandshakeCodec {
     fn decode_handshake_response(&mut self, data: &mut BytesMut) -> Result<(), ProtocolError> {
         let idx = data.iter().position(|&x| x == 0).unwrap();
         let user = str::from_utf8(&data.split_to(idx)).unwrap().to_string();
-        println!("user: {}, self.user: {}", user, self.user);
+        debug!("user: {}, self.user: {}", user, self.user);
 
         if user != self.user {
             self.user = user;
@@ -336,12 +334,13 @@ impl Decoder for ServerHandshakeCodec {
             return Ok(None);
         }
 
-        src.split_to(4);
+        let _ = src.split_to(4);
+        self.seq += 1;
 
         match self.next_handshake_status {
             ServerHandshakeStatus::ReadResponseFirst => {
                 let is_empty = self.decode_first(src);
-                
+
                 if is_empty {
                     self.next_handshake_status = ServerHandshakeStatus::SwitchToTLS;
                 } else {
@@ -357,7 +356,7 @@ impl Decoder for ServerHandshakeCodec {
             ServerHandshakeStatus::ReadResponse => {
                 self.decode_first(src);
                 self.decode_handshake_response(src)?;
-                
+
                 if self.next_handshake_status == ServerHandshakeStatus::CompareAuthData {
                     self.compare_auth_data()?;
                 }
@@ -381,22 +380,54 @@ impl Encoder<BytesMut> for ServerHandshakeCodec {
         if self.next_handshake_status == ServerHandshakeStatus::WriteAutoSwitch {
             self.next_handshake_status = ServerHandshakeStatus::ReadAutoSwitchResponse;
         }
-        self.packet_codec.encode(item, dst)
+
+        dst.extend_from_slice(&item[..]);
+
+        let length = item.len() - 4;
+        // we have ensured length is 3bytes, so we can use unsafe block
+        unsafe {
+            let bytes = *(&(length as u64).to_le() as *const u64 as *const [u8; 8]);
+            let data_ptr = dst.as_mut_ptr();
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), data_ptr, 3);
+            *data_ptr.add(3) = self.seq;
+        }
+
+        self.seq += 1;
+
+        Ok(())
     }
 }
 
-#[inline]
-pub fn make_err_packet(err: MySQLError) -> Vec<u8> {
-    let mut data = BytesMut::with_capacity(128);
-    data.extend_from_slice(&[0; 4]);
-    data.put_u8(0xff);
-    data.extend_from_slice(&[err.code as u8, (err.code >> 8) as u8]);
-    data.put_u8(b'#');
-    data.extend_from_slice(&err.state);
-    data.put_u8(b' ');
-    data.extend_from_slice(err.msg.as_bytes());
+impl Session for ServerHandshakeCodec {
+    fn get_db(&self) -> Option<String> {
+        if self.db.is_empty() {
+            None
+        } else {
+            Some(self.db.clone())
+        }
+    }
 
-    data.to_vec()
+    fn get_charset(&self) -> Option<String> {
+        Some(self.charset.clone())
+    }
+
+    fn get_autocommit(&self) -> Option<String> {
+        self.autocommit.clone()
+    }
+}
+
+impl SessionMut for ServerHandshakeCodec {
+    fn set_db(&mut self, db: String) {
+        self.db = db
+    }
+
+    fn set_charset(&mut self, charset: String) {
+        self.charset = charset
+    }
+
+    fn set_autocommit(&mut self, autocommit: String) {
+        self.autocommit = Some(autocommit)
+    }
 }
 
 pub async fn handshake(
@@ -409,7 +440,7 @@ pub async fn handshake(
     loop {
         if let Err(ProtocolError::AuthFailed(data)) = framed.next().await.unwrap() {
             framed.send(BytesMut::from(&data[..])).await?;
-            return Ok((framed, false))
+            return Ok((framed, false));
         }
 
         let next_state = &framed.codec().next_handshake_status;
@@ -419,6 +450,7 @@ pub async fn handshake(
                 parts.io.make_tls().await?;
 
                 framed = Framed::from_parts(parts);
+                framed.codec_mut().next_handshake_status = ServerHandshakeStatus::ReadResponse;
             }
 
             ServerHandshakeStatus::WriteAutoSwitch => {
@@ -432,50 +464,55 @@ pub async fn handshake(
         }
     }
 
+    framed.send(BytesMut::from(&ok_packet()[..])).await?;
+
     Ok((framed, true))
 }
 
 #[cfg(test)]
 mod test {
-    use tokio::io::{AsyncWriteExt, DuplexStream, AsyncReadExt};
-    use tokio_util::codec::Framed;
-    use futures::{SinkExt, StreamExt};
-
-    use crate::server::{codec::PacketCodec, auth::{ServerHandshakeCodec, ServerHandshakeStatus}};
-    use crate::err::ProtocolError;
     use bytes::BytesMut;
+    use futures::{SinkExt, StreamExt};
+    use tokio_util::codec::Framed;
+
+    use crate::{
+        err::ProtocolError,
+        server::{
+            auth::{ServerHandshakeCodec, ServerHandshakeStatus},
+        },
+    };
 
     #[tokio::test]
     async fn test_handshake() {
-        let packet_codec = PacketCodec::new(8192);
+        //let packet_codec = PacketCodec::new(8192);
         let user = "root".to_string();
         let password = "123456".to_string();
         let db = "sbtest_pisa".to_string();
         let server_version = "5.7.36".to_string();
-        let hs = ServerHandshakeCodec::new(packet_codec, user, password, db, server_version);
-        
-        let (mut client, mut server) = tokio::io::duplex(512);
+        let hs = ServerHandshakeCodec::new(user, password, db, server_version);
+
+        let (client, server) = tokio::io::duplex(512);
         let mut framed = Framed::new(client, hs);
 
         let client_reponse_data = [
-            0xaf, 0x00, 0x00, 0x01, 0x8d, 0xa2, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x40, 0x08, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x72, 0x6f, 0x6f, 0x74, 0x00, 0x14, 0x38, 0x80, 0xb3, 0xc9, 0xc7, 0x29,
-            0x71, 0x1d, 0xeb, 0xf2, 0xe9, 0x43, 0x36, 0x24, 0x4c, 0x71, 0xef, 0x32, 0x1a, 0x5d, 0x73, 0x62,
-            0x74, 0x65, 0x73, 0x74, 0x5f, 0x70, 0x69, 0x73, 0x61, 0x00, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x5f,
-            0x6e, 0x61, 0x74, 0x69, 0x76, 0x65, 0x5f, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x00,
-            0x52, 0x03, 0x5f, 0x6f, 0x73, 0x05, 0x4c, 0x69, 0x6e, 0x75, 0x78, 0x0c, 0x5f, 0x63, 0x6c, 0x69,
-            0x65, 0x6e, 0x74, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x08, 0x6c, 0x69, 0x62, 0x6d, 0x79, 0x73, 0x71,
-            0x6c, 0x04, 0x5f, 0x70, 0x69, 0x64, 0x04, 0x35, 0x32, 0x38, 0x31, 0x0f, 0x5f, 0x63, 0x6c, 0x69,
-            0x65, 0x6e, 0x74, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x06, 0x35, 0x2e, 0x36, 0x2e,
-            0x35, 0x31, 0x09, 0x5f, 0x70, 0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x06, 0x78, 0x38, 0x36,
-            0x5f, 0x36, 0x34
+            0xaf, 0x00, 0x00, 0x01, 0x8d, 0xa2, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x40, 0x08, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x72, 0x6f, 0x6f, 0x74, 0x00, 0x14,
+            0x38, 0x80, 0xb3, 0xc9, 0xc7, 0x29, 0x71, 0x1d, 0xeb, 0xf2, 0xe9, 0x43, 0x36, 0x24,
+            0x4c, 0x71, 0xef, 0x32, 0x1a, 0x5d, 0x73, 0x62, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x70,
+            0x69, 0x73, 0x61, 0x00, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x5f, 0x6e, 0x61, 0x74, 0x69,
+            0x76, 0x65, 0x5f, 0x70, 0x61, 0x73, 0x73, 0x77, 0x6f, 0x72, 0x64, 0x00, 0x52, 0x03,
+            0x5f, 0x6f, 0x73, 0x05, 0x4c, 0x69, 0x6e, 0x75, 0x78, 0x0c, 0x5f, 0x63, 0x6c, 0x69,
+            0x65, 0x6e, 0x74, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x08, 0x6c, 0x69, 0x62, 0x6d, 0x79,
+            0x73, 0x71, 0x6c, 0x04, 0x5f, 0x70, 0x69, 0x64, 0x04, 0x35, 0x32, 0x38, 0x31, 0x0f,
+            0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f,
+            0x6e, 0x06, 0x35, 0x2e, 0x36, 0x2e, 0x35, 0x31, 0x09, 0x5f, 0x70, 0x6c, 0x61, 0x74,
+            0x66, 0x6f, 0x72, 0x6d, 0x06, 0x78, 0x38, 0x36, 0x5f, 0x36, 0x34,
         ];
 
-        framed.send(BytesMut::from(&client_reponse_data[..])).await;
+        let _ = framed.send(BytesMut::from(&client_reponse_data[..])).await;
 
         let mut parts = framed.into_parts();
-        client = parts.io;
         parts.io = server;
 
         framed = Framed::from_parts(parts);
@@ -489,40 +526,40 @@ mod test {
 
     #[tokio::test]
     async fn test_handshake_auto_switch() {
-        let packet_codec = PacketCodec::new(8192);
         let user = "root".to_string();
         let password = "123456".to_string();
         let db = "sbtest_pisa".to_string();
         let server_version = "5.7.36".to_string();
-        let hs = ServerHandshakeCodec::new(packet_codec, user, password, db, server_version);
-        
+        let hs = ServerHandshakeCodec::new(user, password, db, server_version);
+
         let (mut client, mut server) = tokio::io::duplex(512);
         let mut framed = Framed::new(client, hs);
 
         let client_reponse_data = [
-            0xae, 0x00, 0x00, 0x01, 0x8d, 0xa2, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x40, 0x08, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x72, 0x6f, 0x6f, 0x74, 0x00, 0x14, 0x38, 0x80, 0xb3, 0xc9, 0xc7, 0x29,
-            0x71, 0x1d, 0xeb, 0xf2, 0xe9, 0x43, 0x36, 0x24, 0x4c, 0x71, 0xef, 0x32, 0x1a, 0x5d, 0x73, 0x62,
-            0x74, 0x65, 0x73, 0x74, 0x5f, 0x70, 0x69, 0x73, 0x61, 0x00, 116, 101, 115, 116, 95, 112, 97, 
-            115, 115, 119, 111, 114, 100, 95, 112, 108, 117, 103, 105, 110, 0x00,
-            0x52, 0x03, 0x5f, 0x6f, 0x73, 0x05, 0x4c, 0x69, 0x6e, 0x75, 0x78, 0x0c, 0x5f, 0x63, 0x6c, 0x69,
-            0x65, 0x6e, 0x74, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x08, 0x6c, 0x69, 0x62, 0x6d, 0x79, 0x73, 0x71,
-            0x6c, 0x04, 0x5f, 0x70, 0x69, 0x64, 0x04, 0x35, 0x32, 0x38, 0x31, 0x0f, 0x5f, 0x63, 0x6c, 0x69,
-            0x65, 0x6e, 0x74, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x06, 0x35, 0x2e, 0x36, 0x2e,
-            0x35, 0x31, 0x09, 0x5f, 0x70, 0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x06, 0x78, 0x38, 0x36,
-            0x5f, 0x36, 0x34
+            0xae, 0x00, 0x00, 0x01, 0x8d, 0xa2, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x40, 0x08, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x72, 0x6f, 0x6f, 0x74, 0x00, 0x14,
+            0x38, 0x80, 0xb3, 0xc9, 0xc7, 0x29, 0x71, 0x1d, 0xeb, 0xf2, 0xe9, 0x43, 0x36, 0x24,
+            0x4c, 0x71, 0xef, 0x32, 0x1a, 0x5d, 0x73, 0x62, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x70,
+            0x69, 0x73, 0x61, 0x00, 116, 101, 115, 116, 95, 112, 97, 115, 115, 119, 111, 114, 100,
+            95, 112, 108, 117, 103, 105, 110, 0x00, 0x52, 0x03, 0x5f, 0x6f, 0x73, 0x05, 0x4c, 0x69,
+            0x6e, 0x75, 0x78, 0x0c, 0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f, 0x6e, 0x61,
+            0x6d, 0x65, 0x08, 0x6c, 0x69, 0x62, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x04, 0x5f, 0x70,
+            0x69, 0x64, 0x04, 0x35, 0x32, 0x38, 0x31, 0x0f, 0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e,
+            0x74, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x06, 0x35, 0x2e, 0x36, 0x2e,
+            0x35, 0x31, 0x09, 0x5f, 0x70, 0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x06, 0x78,
+            0x38, 0x36, 0x5f, 0x36, 0x34,
         ];
 
-        framed.send(BytesMut::from(&client_reponse_data[..])).await;
+        let _ = framed.send(BytesMut::from(&client_reponse_data[..])).await;
 
         let mut parts = framed.into_parts();
         client = parts.io;
         parts.io = server;
         framed = Framed::from_parts(parts);
 
-        let res = framed.next().await.unwrap();
-        
+        let _res = framed.next().await.unwrap();
+
         assert_eq!(framed.codec().next_handshake_status, ServerHandshakeStatus::WriteAutoSwitch);
 
         framed.codec_mut().next_handshake_status = ServerHandshakeStatus::ReadAutoSwitchResponse;
@@ -533,14 +570,13 @@ mod test {
         framed = Framed::from_parts(parts);
 
         let auto_switch_response_data = [
-            0x14, 0x00, 0x00, 0x03, 0x38, 0x80, 0xb3, 0xc9, 0xc7, 0x29, 0x71, 0x1d, 0xeb, 0xf2, 0xe9, 0x43,
-            0x36, 0x24, 0x4c, 0x71, 0xef, 0x32, 0x1a, 0x5d
+            0x14, 0x00, 0x00, 0x03, 0x38, 0x80, 0xb3, 0xc9, 0xc7, 0x29, 0x71, 0x1d, 0xeb, 0xf2,
+            0xe9, 0x43, 0x36, 0x24, 0x4c, 0x71, 0xef, 0x32, 0x1a, 0x5d,
         ];
 
-        framed.send(BytesMut::from(&auto_switch_response_data[..])).await;
+        let _ = framed.send(BytesMut::from(&auto_switch_response_data[..])).await;
 
         let mut parts = framed.into_parts();
-        client = parts.io;
         parts.io = server;
         framed = Framed::from_parts(parts);
 
@@ -550,6 +586,5 @@ mod test {
         if let Err(ProtocolError::AuthFailed(_data)) = res {
             assert!(true);
         }
-
     }
 }
