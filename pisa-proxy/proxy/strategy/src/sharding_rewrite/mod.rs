@@ -243,7 +243,6 @@ impl ShardingRewrite {
                 Some((idx, num, _)) => Some((idx, num)),
                 None => None,
             }
-        
         ).collect::<Vec<_>>();
 
         let expect_sum = wheres[0].1 as usize * wheres.len();
@@ -258,7 +257,9 @@ impl ShardingRewrite {
             .filter_map(|x| {
                 let w = wheres.iter().find(|w| w.0 == x.0);
                 if let Some(w) = w {
-                    let target = self.change_table(x.2, &x.1.actual_datanodes[w.1 as usize], 0);
+                    let node = &x.1.actual_datanodes[w.1 as usize];
+                    let ep = self.endpoints.iter().find(|x| x.name.eq(node)).unwrap();
+                    let target = self.change_table(x.2, &ep.db, 0);
                     Some(DatabaseChange {
                         span: x.2.span,
                         shard_idx: w.1,
@@ -329,7 +330,6 @@ impl ShardingRewrite {
             return self.change_insert_sql(try_tables, fields, inserts);
         }
 
-        
         if wheres.is_empty() {
             return Ok(self.table_strategy_iproduct(try_tables.clone(), avgs, fields, orders, groups));
         }
@@ -932,7 +932,8 @@ impl ShardingRewrite {
             }
 
             for (idx, node) in t.1.actual_datanodes.iter().enumerate() {
-                let target = self.change_table(t.2, node, 0);
+                let ep = self.endpoints.iter().find(|e| e.name.eq(node)).unwrap();
+                let target = self.change_table(t.2, &ep.db, 0);
 
                 let change = DatabaseChange {
                     span: t.2.span,
@@ -1101,7 +1102,6 @@ impl ShardingRewrite {
         for _ in 0..span.len() {
             target_sql.remove(span.start() + offset);
         }
-
         target_sql.insert_str(span.start() + offset, target);
     }
 

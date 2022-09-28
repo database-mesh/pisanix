@@ -67,7 +67,6 @@ where
 {
     pub async fn shard_query_executor(
         req: &mut ReqContext<T, C>,
-        // rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
         is_get_conn: bool,
     ) -> Result<(), Error> {
@@ -354,7 +353,6 @@ where
 
     pub async fn shard_prepare_executor(
         req: &mut ReqContext<T, C>,
-        // rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
         _is_get_conn: bool,
     ) -> Result<(Vec<Stmt>, Vec<PoolConn<ClientConn>>), Error> {
