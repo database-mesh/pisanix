@@ -225,9 +225,15 @@ impl Visitor for Query {
         T: Transformer,
     {
         let mut items = Node::Items(&mut self.items);
-        tf.trans(&mut items);
-        let new_items = items.into_items().unwrap().visit(tf);
-        self.items = new_items;
+        let is_skip = tf.trans(&mut items);
+        let new_items = items.into_items().unwrap();
+        if is_skip {
+            tf.complete(&mut Node::Items(new_items));
+            self.items = new_items.clone();
+        } else {
+            let new_items = new_items.visit(tf);
+            self.items = new_items;
+        }
 
         if let Some(v) = &mut self.into_clause {
             let mut node = Node::IntoClause(v);
@@ -383,8 +389,15 @@ impl Visitor for Items {
                 let mut new_items = Vec::with_capacity(items.len());
                 for v in items {
                     let mut node = Node::Item(v);
-                    tf.trans(&mut node);
+                    let is_skip = tf.trans(&mut node);
                     let new_node = node.into_item().unwrap();
+
+                    if is_skip {
+                        tf.complete(&mut Node::Item(new_node));
+                        new_items.push(new_node.clone());
+                        continue;
+                    }
+                    
                     new_items.push(new_node.visit(tf));
                 }
 
