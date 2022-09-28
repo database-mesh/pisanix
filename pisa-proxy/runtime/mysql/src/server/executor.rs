@@ -72,7 +72,7 @@ where
     ) -> Result<(), Error> {
         let mut curr_server_stmt_id: Option<u32> = None;
         let mut curr_cached_stmt_id = vec![];
-    
+
         let conns = if is_get_conn {
             Self::get_shard_conns(&req.rewrite_outputs, req.pool.clone(), attrs).await?
         } else {
