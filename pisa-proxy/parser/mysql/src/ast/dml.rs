@@ -393,8 +393,8 @@ impl Visitor for Items {
                     let new_node = node.into_item().unwrap();
 
                     if is_skip {
+                        tf.complete(&mut Node::Item(new_node));
                         new_items.push(new_node.clone());
-                        println!("{:?}", 22222);
                         continue;
                     }
                     
