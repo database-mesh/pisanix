@@ -67,13 +67,12 @@ where
 {
     pub async fn shard_query_executor(
         req: &mut ReqContext<T, C>,
-        // rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
         is_get_conn: bool,
     ) -> Result<(), Error> {
         let mut curr_server_stmt_id: Option<u32> = None;
         let mut curr_cached_stmt_id = vec![];
-
+    
         let conns = if is_get_conn {
             Self::get_shard_conns(&req.rewrite_outputs, req.pool.clone(), attrs).await?
         } else {
@@ -354,7 +353,6 @@ where
 
     pub async fn shard_prepare_executor(
         req: &mut ReqContext<T, C>,
-        // rewrite_outputs: Vec<ShardingRewriteOutput>,
         attrs: Vec<SessionAttr>,
         _is_get_conn: bool,
     ) -> Result<(Vec<Stmt>, Vec<PoolConn<ClientConn>>), Error> {
