@@ -932,12 +932,7 @@ impl ShardingRewrite {
             }
 
             for (idx, node) in t.1.actual_datanodes.iter().enumerate() {
-<<<<<<< HEAD
-                let endpoints = &self.endpoints;
-                let ep = endpoints.iter().find(|e| e.name.eq(node)).unwrap();
-=======
                 let ep = self.endpoints.iter().find(|e| e.name.eq(node)).unwrap();
->>>>>>> ba283c4575dcd64955d9d53496bcc3720a5d074b
                 let target = self.change_table(t.2, &ep.db, 0);
 
                 let change = DatabaseChange {
