@@ -258,7 +258,7 @@ impl ShardingRewrite {
                 let w = wheres.iter().find(|w| w.0 == x.0);
                 if let Some(w) = w {
                     let node = &x.1.actual_datanodes[w.1 as usize];
-                    let ep = &self.endpoints.iter().find(|x| x.name.eq(node)).unwrap();
+                    let ep = self.endpoints.iter().find(|x| x.name.eq(node)).unwrap();
                     let target = self.change_table(x.2, &ep.db, 0);
                     Some(DatabaseChange {
                         span: x.2.span,
@@ -932,7 +932,7 @@ impl ShardingRewrite {
             }
 
             for (idx, node) in t.1.actual_datanodes.iter().enumerate() {
-                let ep = &self.endpoints.iter().find(|e| e.name.eq(node)).unwrap();
+                let ep = self.endpoints.iter().find(|e| e.name.eq(node)).unwrap();
                 let target = self.change_table(t.2, &ep.db, 0);
 
                 let change = DatabaseChange {
