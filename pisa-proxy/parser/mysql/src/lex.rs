@@ -275,7 +275,7 @@ impl<'a> Scanner<'a> {
                 '&' => {
                     self.next();
                     if self.peek() == '&' {
-                        lexemes.push(Ok(DefaultLexeme::new(T_AND_AND, old_pos, 2)));
+                        lexemes.push(Ok(DefaultLexeme::new(T_AND, old_pos, 2)));
                     } else {
                         lexemes.push(Ok(DefaultLexeme::new(T_AND_OP, old_pos, 1)));
                         continue;
@@ -292,7 +292,7 @@ impl<'a> Scanner<'a> {
                 }
 
                 '^' => {
-                    lexemes.push(Ok(DefaultLexeme::new(T_XOR, self.pos, 1)));
+                    lexemes.push(Ok(DefaultLexeme::new(T_XOR_OP, self.pos, 1)));
                 }
 
                 '|' => {
