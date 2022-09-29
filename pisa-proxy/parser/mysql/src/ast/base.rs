@@ -28,18 +28,16 @@ pub enum Op {
     ShiftLeft,
     ShiftRight,
     OR,
+    BitOr,
     AND,
+    BitAnd,
     PLUS,
     MINUS,
     MUL,
     DIV,
     MOD,
-    XOR,
+    BitXor,
     NOT,
-    TRUE,
-    FALSE,
-    UNKNOWN,
-    NULL,
     NEG,
 }
 
@@ -55,19 +53,17 @@ impl Op {
             Self::LE => "<=",
             Self::ShiftLeft => "<<",
             Self::ShiftRight => ">>",
+            Self::BitXor => "^",
             Self::OR => "OR",
+            Self::BitOr => "|",
             Self::AND => "AND",
+            Self::BitAnd => "&",
             Self::PLUS => "+",
             Self::MINUS => "-",
             Self::MUL => "*",
             Self::DIV => "/",
             Self::MOD => "%",
-            Self::XOR => "^",
             Self::NOT => "NOT",
-            Self::TRUE => "TRUE",
-            Self::FALSE => "FALSE",
-            Self::UNKNOWN => "UNKNOWN",
-            Self::NULL => "NULL",
             Self::NEG => "~",
         };
 
@@ -88,10 +84,20 @@ pub enum Expr {
         expr: Box<Expr>,
         operator: Op,
     },
-    IsExpr {
+    IsTruthExpr {
         span: Span,
         expr: Box<Expr>,
-        operator: Op,
+        is_not: bool,
+        is_true: bool,
+    },
+    IsUnknownExpr {
+        span: Span,
+        expr: Box<Expr>,
+        is_not: bool,
+    },
+    IsNullExpr {
+        span: Span,
+        expr: Box<Expr>,
         is_not: bool,
     },
     InExpr {
@@ -199,15 +205,47 @@ impl Expr {
                 vals.join(" ")
             }
 
-            Self::IsExpr { span: _, expr, operator, is_not } => {
-                let mut vals = Vec::with_capacity(3);
+            Self::IsTruthExpr { span: _, expr, is_not, is_true } => {
+                let mut vals = Vec::with_capacity(5);
+                vals.push(expr.format());
+                vals.push("IS".to_string());
 
                 if *is_not {
                     vals.push("NOT".to_string());
                 }
 
-                vals.push(operator.format());
+                match is_true {
+                    true => vals.push("TRUE".to_string()),
+                    false => vals.push("FALSE".to_string())
+                };
+
+                vals.join(" ")
+            }
+
+            Self::IsUnknownExpr { span:_, expr, is_not } => {
+                let mut vals = Vec::with_capacity(5);
                 vals.push(expr.format());
+                vals.push("IS".to_string());
+
+                if *is_not {
+                    vals.push("NOT".to_string());
+                }
+
+                vals.push("UNKNOWN".to_string());
+
+                vals.join(" ")
+            }
+
+            Self::IsNullExpr { span:_, expr, is_not } => {
+                let mut vals = Vec::with_capacity(5);
+                vals.push(expr.format());
+                vals.push("IS".to_string());
+
+                if *is_not {
+                    vals.push("NOT".to_string());
+                }
+
+                vals.push("NULL".to_string());
 
                 vals.join(" ")
             }
@@ -453,14 +491,39 @@ impl Visitor for Expr {
                 }
             }
 
-            Self::IsExpr { span, expr, operator, is_not } => {
+            Self::IsTruthExpr { span, expr, is_not, is_true } => {
                 let mut new_expr = Node::Expr(expr);
                 tf.trans(&mut new_expr);
+                let new_expr = new_expr.into_expr().unwrap();
 
-                Self::IsExpr {
+                Self::IsTruthExpr {
                     span: *span,
-                    operator: *operator,
-                    expr: Box::new(new_expr.into_expr().unwrap().visit(tf)),
+                    expr: Box::new(new_expr.visit(tf)),
+                    is_not: *is_not,
+                    is_true: *is_true,
+                }
+            }
+
+            Self::IsUnknownExpr { span, expr, is_not } => {
+                let mut new_expr = Node::Expr(expr);
+                tf.trans(&mut new_expr);
+                let new_expr = new_expr.into_expr().unwrap();
+
+                Self::IsUnknownExpr {
+                    span: *span,
+                    expr: Box::new(new_expr.visit(tf)),
+                    is_not: *is_not,
+                }
+            }
+
+            Self::IsNullExpr { span, expr, is_not } => {
+                let mut new_expr = Node::Expr(expr);
+                tf.trans(&mut new_expr);
+                let new_expr = new_expr.into_expr().unwrap();
+
+                Self::IsNullExpr {
+                    span: *span,
+                    expr: Box::new(new_expr.visit(tf)),
                     is_not: *is_not,
                 }
             }

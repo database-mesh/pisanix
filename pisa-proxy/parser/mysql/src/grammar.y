@@ -743,7 +743,7 @@ expr -> Expr:
         span: $span,
         left: Box::new($1),
         right: Box::new($3),
-        operator: Op::XOR
+        operator: Op::BitXor
       }
     }
   | expr 'AND' expr %prec 'AND'
@@ -765,56 +765,54 @@ expr -> Expr:
     }
   | bool_pri 'IS' 'TRUE' %prec 'IS'
     {
-      Expr::IsExpr {
+      Expr::IsTruthExpr {
         span: $span,
-        operator: Op::TRUE,
         expr: Box::new($1),
-        is_not: false
+        is_not: false,
+        is_true: true,
       }
     }
   | bool_pri 'IS' not 'TRUE' %prec 'IS'
     {
-      Expr::IsExpr {
+      Expr::IsTruthExpr {
         span: $span,
-        operator: Op::TRUE,
         expr: Box::new($1),
-        is_not: true
+        is_not: true,
+        is_true: true,
       }
     }
   | bool_pri 'IS' 'FALSE' %prec 'IS'
     {
-      Expr::IsExpr {
+      Expr::IsTruthExpr {
         span: $span,
-        operator: Op::FALSE,
         expr: Box::new($1),
-        is_not: false
+        is_not: false,
+        is_true: false,
       }
     }
   | bool_pri 'IS' not 'FALSE' %prec 'IS'
     {
-      Expr::IsExpr {
+      Expr::IsTruthExpr {
         span: $span,
-        operator: Op::FALSE,
         expr: Box::new($1),
-        is_not: true
+        is_not: true,
+        is_true: false,
       }
     }
   | bool_pri 'IS' 'UNKNOWN' %prec 'IS'
     {
-      Expr::IsExpr {
+      Expr::IsUnknownExpr {
         span: $span,
-        operator: Op::UNKNOWN,
         expr: Box::new($1),
         is_not: false
       }
     }
   | bool_pri 'IS' not 'UNKNOWN' %prec 'IS'
     {
-      Expr::IsExpr {
+      Expr::IsUnknownExpr {
         span: $span,
-        operator: Op::UNKNOWN,
         expr: Box::new($1),
-        is_not: true
+        is_not: true,
       }
     }
   | bool_pri %prec 'SET_VAR'
@@ -826,18 +824,16 @@ expr -> Expr:
 bool_pri -> Expr:
     bool_pri 'IS' 'NULL' %prec 'IS'
     {
-      Expr::IsExpr {
+      Expr::IsNullExpr {
         span: $span,
-        operator: Op::NULL,
         expr: Box::new($1),
         is_not: false
       }
     }
   | bool_pri 'IS' not 'NULL' %prec 'IS'
     {
-      Expr::IsExpr {
+      Expr::IsNullExpr {
         span: $span,
-        operator: Op::NULL,
         expr: Box::new($1),
         is_not: true
       }
@@ -1034,7 +1030,7 @@ bit_expr -> Expr:
         span: $span,
         left: Box::new($1),
         right: Box::new($3),
-        operator: Op::OR
+        operator: Op::BitOr
       }
     }
   | bit_expr '&' bit_expr %prec '&'
@@ -1043,7 +1039,7 @@ bit_expr -> Expr:
         span: $span,
         left: Box::new($1),
         right: Box::new($3),
-        operator: Op::AND
+        operator: Op::BitAnd
       }
     }
   | bit_expr 'SHIFT_LEFT' bit_expr %prec 'SHIFT_LEFT'
@@ -1149,7 +1145,7 @@ bit_expr -> Expr:
         span: $span,
         left: Box::new($1),
         right: Box::new($3),
-        operator: Op::XOR
+        operator: Op::BitXor
       }
     }
   | simple_expr %prec 'SET_VAR'
