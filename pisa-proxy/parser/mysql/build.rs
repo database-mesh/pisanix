@@ -50,7 +50,7 @@ const TOKENS_MAP: &[(&str, &str)] = &[
     (";", "SEMICOLON"),
     (",", "COMMA"),
     ("/", "SLASH"),
-    ("^", "CARET"),
+    ("^", "XOR_OP"),
     (".", "DOT"),
     ("\\", "BACKSLASH"),
     ("&&", "AND_AND"),
