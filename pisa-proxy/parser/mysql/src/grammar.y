@@ -743,7 +743,7 @@ expr -> Expr:
         span: $span,
         left: Box::new($1),
         right: Box::new($3),
-        operator: Op::BitXor
+        operator: Op::BIT_XOR
       }
     }
   | expr 'AND' expr %prec 'AND'
@@ -1030,7 +1030,7 @@ bit_expr -> Expr:
         span: $span,
         left: Box::new($1),
         right: Box::new($3),
-        operator: Op::BitOr
+        operator: Op::BIT_OR
       }
     }
   | bit_expr '&' bit_expr %prec '&'
@@ -1039,7 +1039,7 @@ bit_expr -> Expr:
         span: $span,
         left: Box::new($1),
         right: Box::new($3),
-        operator: Op::BitAnd
+        operator: Op::BIT_AND
       }
     }
   | bit_expr 'SHIFT_LEFT' bit_expr %prec 'SHIFT_LEFT'
@@ -1048,7 +1048,7 @@ bit_expr -> Expr:
         span: $span,
         left: Box::new($1),
         right: Box::new($3),
-        operator: Op::ShiftLeft
+        operator: Op::SHIFT_LEFT
       }
     }
   | bit_expr 'SHIFT_RIGHT' bit_expr %prec 'SHIFT_RIGHT'
@@ -1057,7 +1057,7 @@ bit_expr -> Expr:
         span: $span,
         left: 	Box::new($1),
         right: Box::new($3),
-        operator: Op::ShiftRight
+        operator: Op::SHIFT_RIGHT
       }
     }
   | bit_expr '+' bit_expr %prec '+'
@@ -1145,7 +1145,7 @@ bit_expr -> Expr:
         span: $span,
         left: Box::new($1),
         right: Box::new($3),
-        operator: Op::BitXor
+        operator: Op::BIT_XOR
       }
     }
   | simple_expr %prec 'SET_VAR'
@@ -1190,7 +1190,7 @@ not2 -> Span:
 
 comp_op -> Op:
     'EQ'     { Op::EQ }
-  | 'ASSIGN_EQ' { Op::AssignEQ }
+  | 'ASSIGN_EQ' { Op::ASSIGN_EQ }
   | 'GE' { Op::GE }
   | 'GT' { Op::GT }
   | 'LE' { Op::LE }
