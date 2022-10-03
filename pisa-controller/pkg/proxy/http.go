@@ -25,11 +25,11 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
-func GetConfig(ctx *gin.Context) {
+func GetProxyConfig(ctx *gin.Context) {
 	namespace := ctx.Param("namespace")
 	appname := ctx.Param("appname")
 	c := client.GetClient()
-	proxyConfig, err := getConfig(ctx, c.Client, namespace, appname)
+	proxyConfig, err := getProxyConfig(ctx, c.Client, namespace, appname)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, err)
 		return
@@ -38,7 +38,7 @@ func GetConfig(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, proxyConfig)
 }
 
-func getConfig(ctx context.Context, c dynamic.Interface, namespace, appname string) (interface{}, error) {
+func getProxyConfig(ctx context.Context, c dynamic.Interface, namespace, appname string) (interface{}, error) {
 	vdb, err := kubernetes.GetVirtualDatabaseWithContext(ctx, c, namespace, appname)
 	if err != nil {
 		return nil, err
@@ -59,11 +59,11 @@ func getConfig(ctx context.Context, c dynamic.Interface, namespace, appname stri
 		return nil, err
 	}
 
-	return build(vdb, tslist, dslist, dbeplist)
+	return proxyConfigBuild(vdb, tslist, dslist, dbeplist)
 
 }
 
-func build(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dslist *client.DataShardList, dbeplist *client.DatabaseEndpointList) (*PisaProxyConfig, error) {
+func proxyConfigBuild(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dslist *client.DataShardList, dbeplist *client.DatabaseEndpointList) (*PisaProxyConfig, error) {
 	builder := NewPisaProxyConfigBuilder()
 	builders := []*ProxyBuilder{}
 	nodeGroupConfigBuilder := NewNodeGroupConfigBuilder()
@@ -116,4 +116,19 @@ func build(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dsli
 	proxyconfig := builder.Build()
 
 	return proxyconfig, nil
+}
+
+func GetDaemonConfig(ctx *gin.Context) {
+	proxyConfig, err := getDaemonConfig(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, proxyConfig)
+}
+
+func getDaemonConfig(ctx context.Context) (interface{}, error) {
+	cfg := PisaDaemonConfig{}
+	return cfg, nil
 }
