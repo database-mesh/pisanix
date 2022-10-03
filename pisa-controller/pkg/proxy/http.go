@@ -129,5 +129,6 @@ func GetDaemonConfig(ctx *gin.Context) {
 }
 
 func getDaemonConfig(ctx context.Context) (interface{}, error) {
-	return PisaDaemonConfig{}, nil
+	cfg := PisaDaemonConfig{}
+	return cfg, nil
 }
