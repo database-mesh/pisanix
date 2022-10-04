@@ -670,88 +670,90 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 }
 
 func Test_ShardingConfig(t *testing.T) {
-	config := PisaProxyConfig{
-		Admin: AdminConfig{
-			Host:     "0.0.0.0",
-			Port:     8082,
-			LogLevel: "INFO",
-		},
-		MySQL: MySQLConfig{
-			Nodes: []MySQLNode{
-				{
-					Name:     "ds001",
-					Db:       "socksdb",
-					User:     "root",
-					Password: "12345678",
-					Host:     "127.0.0.1",
-					Port:     3306,
-					// Weight:   1,
-					Role: "read",
+	/*
+		config := PisaProxyConfig{
+			Admin: AdminConfig{
+				Host:     "0.0.0.0",
+				Port:     8082,
+				LogLevel: "INFO",
+			},
+			MySQL: MySQLConfig{
+				Nodes: []MySQLNode{
+					{
+						Name:     "ds001",
+						Db:       "socksdb",
+						User:     "root",
+						Password: "12345678",
+						Host:     "127.0.0.1",
+						Port:     3306,
+						// Weight:   1,
+						Role: "read",
+					},
 				},
 			},
-		},
-		Proxy: ProxyConfig{
-			Config: []Proxy{
-				{
-					ListenAddr:    "0.0.0.0:9088",
-					User:          "root",
-					Password:      "12345678",
-					DB:            "testrw",
-					BackendType:   "mysql",
-					PoolSize:      3,
-					ServerVersion: "",
-					Sharding: []Sharding{
-						{
-							TableName: "test_shard_hash",
-							ActualDatanodes: []string{
-								"ds001",
-							},
-							TableStrategy: &TableStrategy{
-								TableShardingAlgorithmName: "crc32mod",
-								TableShardingColumn:        "order_id",
-								ShardingCount:              4,
-							},
-							DatabaseStrategy: &DatabaseStrategy{
-								DatabaseShardingAlgorithmName: "mod",
-								DatabaseShardingColumn:        "id",
-							},
-							DatabaseTableStrategy: &DatabaseTableStrategy{
-								TableStrategy: TableStrategy{
-									TableShardingAlgorithmName: "crc32_mod",
+			Proxy: ProxyConfig{
+				Config: []Proxy{
+					{
+						ListenAddr:    "0.0.0.0:9088",
+						User:          "root",
+						Password:      "12345678",
+						DB:            "testrw",
+						BackendType:   "mysql",
+						PoolSize:      3,
+						ServerVersion: "",
+						Sharding: []Sharding{
+							{
+								TableName: "test_shard_hash",
+								ActualDatanodes: []string{
+									"ds001",
+								},
+								TableStrategy: &TableStrategy{
+									TableShardingAlgorithmName: "crc32mod",
 									TableShardingColumn:        "order_id",
 									ShardingCount:              4,
 								},
-								DatabaseStrategy: DatabaseStrategy{
+								DatabaseStrategy: &DatabaseStrategy{
 									DatabaseShardingAlgorithmName: "mod",
-									DatabaseShardingColumn:        "order_id",
+									DatabaseShardingColumn:        "id",
+								},
+								DatabaseTableStrategy: &DatabaseTableStrategy{
+									TableStrategy: TableStrategy{
+										TableShardingAlgorithmName: "crc32_mod",
+										TableShardingColumn:        "order_id",
+										ShardingCount:              4,
+									},
+									DatabaseStrategy: DatabaseStrategy{
+										DatabaseShardingAlgorithmName: "mod",
+										DatabaseShardingColumn:        "order_id",
+									},
 								},
 							},
 						},
 					},
 				},
 			},
-		},
-		NodeGroup: NodeGroupConfig{
-			Members: []NodeGroupMember{
-				{
-					Name:      "ms001",
-					ReadWrite: "ds001",
-					Reads: []string{
-						"ds001",
-						"ds002",
+			NodeGroup: NodeGroupConfig{
+				Members: []NodeGroupMember{
+					{
+						Name:      "ms001",
+						ReadWrite: "ds001",
+						Reads: []string{
+							"ds001",
+							"ds002",
+						},
 					},
-				},
-				{
-					Name:      "ms002",
-					ReadWrite: "ds002",
-					Reads: []string{
-						"ds002",
-						"ds003",
+					{
+						Name:      "ms002",
+						ReadWrite: "ds002",
+						Reads: []string{
+							"ds002",
+							"ds003",
+						},
 					},
 				},
 			},
-		},
-	}
+		}
+	*/
 
 	// data, _ := json.Marshal(config)
 }
