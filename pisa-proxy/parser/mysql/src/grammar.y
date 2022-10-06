@@ -7914,11 +7914,11 @@ opt_part_values -> (PartitionType, Option<Vec<Vec<PartValueItem>>>):
       {
             (PartitionType::Hash, None)
       }
-    | %prec 'VALUES' 'LESS' 'THAN' part_func_max
+    | 'VALUES' 'LESS' 'THAN' part_func_max
       {
             (PartitionType::Range, $4)
       }
-    | %prec 'VALUES' 'IN' part_values_in
+    | 'VALUES' 'IN' part_values_in
       {
             (PartitionType::List, Some($3))
       }
@@ -7978,7 +7978,7 @@ part_value_item -> PartValueItem:
 
 opt_sub_partition -> Option<Vec<SubPartDefinition>>:
       /* empty */           { None }
-    | %prec '(' sub_part_list ')' { Some($2) }
+    | '(' sub_part_list ')' { Some($2) }
 ;
 
 sub_part_list -> Vec<SubPartDefinition>:
