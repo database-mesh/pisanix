@@ -37,6 +37,6 @@ func Handler() http.Handler {
 	g := r.Group("/apis/configs.database-mesh.io/v1alpha1")
 
 	g.GET("/namespaces/:namespace/proxyconfigs/:appname", GetProxyConfig)
-	g.GET("/namespaces/:namespace/proxyconfigs/:appname", GetDaemonConfig)
+	g.GET("/namespaces/:namespace/daemonconfigs/:appname", GetDaemonConfig)
 	return r
 }

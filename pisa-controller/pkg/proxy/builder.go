@@ -472,7 +472,7 @@ func (b *NodeGroupConfigBuilder) Build() *NodeGroupConfig {
 
 type PisaDaemonConfig struct {
 	Global GlobalConfig `json:"global"`
-	Apps   []App        `json:"app"`
+	Apps   []App        `json:"app,omitempty"`
 }
 
 type GlobalConfig struct {
@@ -482,13 +482,13 @@ type GlobalConfig struct {
 
 type App struct {
 	Name     string    `json:"name"`
-	Services []Service `json:"service"`
+	Services []Service `json:"service,omitempty"`
 }
 
 type Service struct {
 	Name      string     `json:"name"`
 	QoSClass  string     `json:"qos_class,omitempty"`
-	QoSGroups []QoSGroup `json:"qos_group"`
+	QoSGroups []QoSGroup `json:"qos_group,omitempty"`
 }
 
 type QoSClassKind string

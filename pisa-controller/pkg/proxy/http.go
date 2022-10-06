@@ -119,13 +119,13 @@ func proxyConfigBuild(vdb *client.VirtualDatabase, tslist *client.TrafficStrateg
 }
 
 func GetDaemonConfig(ctx *gin.Context) {
-	proxyConfig, err := getDaemonConfig(ctx)
+	daemonConfig, err := getDaemonConfig(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, err)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, proxyConfig)
+	ctx.JSON(http.StatusOK, daemonConfig)
 }
 
 func getDaemonConfig(ctx context.Context) (interface{}, error) {
