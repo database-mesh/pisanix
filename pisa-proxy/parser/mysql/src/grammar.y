@@ -7311,14 +7311,17 @@ table_constraint_def -> TableConstraintDef:
       }
     | opt_constraint_name constraint_key_type opt_index_name_and_type '(' key_list_with_expression ')' opt_index_options
       {
+           let mut index_name = Some(String::from(""));
            let (name, index_type) = $3;
            if name.is_none() {
-               name = $1;
+               index_name = $1;
+           } else {
+               index_name = name;
            }
            TableConstraintDef::InlineIndex(InlineIndexDefinition {
                span: $span,
                key_type: $2,
-               index_name: name,
+               index_name: index_name,
                index_type: index_type,
                key_list_with_expression: $5,
                opt_index_options: Some($7),
@@ -7879,8 +7882,8 @@ opt_num_subparts -> String:
 ;
 
 opt_part_defs -> Option<Vec<PartDefinition>>:
-      /* empty */           { None }
-    | %prec '(' part_def_list ')' { $3 }
+      /* empty */    %prec EMPTY  { None }
+    | '(' part_def_list ')' { Some($2) }
 ;
 
 part_def_list -> Vec<PartDefinition>:
@@ -7924,9 +7927,9 @@ opt_part_values -> (PartitionType, Option<Vec<Vec<PartValueItem>>>):
       }
 ;
 
-part_func_max -> Option<Vec<PartValueItem>>:
+part_func_max -> Option<Vec<Vec<PartValueItem>>>:
       'MAX_VALUE'   { None }
-    | part_value_item_list_paren { Some($1) }
+    | part_value_item_list_paren { Some(vec![$1]) }
 ;
 
 part_values_in -> Vec<Vec<PartValueItem>>:

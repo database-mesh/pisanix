@@ -14,7 +14,7 @@
 
 use lrpar::Span;
 
-use crate::ast::{base::*, dml::TableIdent, CreateUser, FieldType, SelectStmt, dml};
+use crate::ast::{base::*, dml::TableIdent, CreateUser, FieldType, SelectStmt};
 
 #[derive(Debug, Clone)]
 pub enum Create {
