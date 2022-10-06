@@ -70,6 +70,10 @@
 %left 'EMPTY_FROM_CLAUSE'
 %right 'INTO'
 
+%left 'VALUES'
+%left 'KEY'
+%left 'UNIQUE'
+
 
 %start StartRule
 
@@ -7182,10 +7186,10 @@ create_table_stmt -> CreateTableStmt:
                span: $span,
                is_temporary: $2,
                is_not_exists: $4,
-               table_name: $5,
-               table_element_list: $7,
-               opt_create_table_options_etc: $9,
-               like_table_name: None,
+               table_ident: $5,
+               table_element_list: Some($7),
+               opt_create_table_options_etc: Some($9),
+               like_table_ident: None,
            }
       }
     | 'CREATE' opt_temporary 'TABLE' opt_if_not_exists table_ident opt_create_table_options_etc
@@ -7194,10 +7198,10 @@ create_table_stmt -> CreateTableStmt:
                span: $span,
                is_temporary: $2,
                is_not_exists: $4,
-               table_name: $5,
+               table_ident: $5,
                table_element_list: None,
-               opt_create_table_options_etc: $6,
-               like_table_name: None,
+               opt_create_table_options_etc: Some($6),
+               like_table_ident: None,
            }
       }
     | 'CREATE' opt_temporary 'TABLE' opt_if_not_exists table_ident 'LIKE' table_ident
@@ -7206,10 +7210,10 @@ create_table_stmt -> CreateTableStmt:
                span: $span,
                is_temporary: $2,
                is_not_exists: $4,
-               table_name: $5,
+               table_ident: $5,
                table_element_list: None,
                opt_create_table_options_etc: None,
-               like_table_name: $7,
+               like_table_ident: Some($7),
            }
       }
     | 'CREATE' opt_temporary 'TABLE' opt_if_not_exists table_ident '(' 'LIKE' table_ident ')'
@@ -7218,10 +7222,10 @@ create_table_stmt -> CreateTableStmt:
                span: $span,
                is_temporary: $2,
                is_not_exists: $4,
-               table_name: $5,
+               table_ident: $5,
                table_element_list: None,
                opt_create_table_options_etc: None,
-               like_table_name: $8,
+               like_table_ident: Some($8),
            }
       }
 ;
@@ -7274,7 +7278,9 @@ table_constraint_def -> TableConstraintDef:
                index_name: $2.0,
                index_type: $2.1,
                key_list_with_expression: $4,
-               opt_index_options: $6,
+               opt_index_options: Some($6),
+               opt_fulltext_index_options: None,
+               opt_spatial_index_options: None,
            })
       }
     | 'FULLTEXT' opt_key_or_index opt_ident '(' key_list_with_expression ')' opt_fulltext_index_options
@@ -7285,7 +7291,9 @@ table_constraint_def -> TableConstraintDef:
                index_name: $3,
                index_type: None,
                key_list_with_expression: $5,
-               opt_index_options: $7,
+               opt_index_options: None,
+               opt_fulltext_index_options: Some($7),
+               opt_spatial_index_options: None,
            })
       }
     | 'SPATIAL' opt_key_or_index opt_ident '(' key_list_with_expression ')' opt_spatial_index_options
@@ -7296,22 +7304,26 @@ table_constraint_def -> TableConstraintDef:
                index_name: $3,
                index_type: None,
                key_list_with_expression: $5,
-               opt_index_options: $7,
+               opt_index_options: None,
+               opt_fulltext_index_options: None,
+               opt_spatial_index_options: Some($7),
            })
       }
     | opt_constraint_name constraint_key_type opt_index_name_and_type '(' key_list_with_expression ')' opt_index_options
       {
-           let (name, type) = $3;
-           if name.is_none {
+           let (name, index_type) = $3;
+           if name.is_none() {
                name = $1;
            }
            TableConstraintDef::InlineIndex(InlineIndexDefinition {
                span: $span,
                key_type: $2,
                index_name: name,
-               index_type: type,
+               index_type: index_type,
                key_list_with_expression: $5,
-               opt_index_options: $7,
+               opt_index_options: Some($7),
+               opt_fulltext_index_options: None,
+               opt_spatial_index_options: None,
            })
       }
     | opt_constraint_name 'FOREIGN' 'KEY' opt_ident '(' key_list ')' references
@@ -7378,7 +7390,7 @@ field_def -> FieldDef:
                data_type: $1,
                opt_collate: $2,
                is_generated_always: $3,
-               expr: $6,
+               expr: Some($6),
                opt_stored_attribute: $8,
                opt_column_attribute_list: $9,
            }
@@ -7401,7 +7413,7 @@ references -> References:
     {
          References {
              span: $span,
-             table_name: $2,
+             table_ident: $2,
              opt_ref_list: $3,
              opt_match_clause: $4,
              opt_on_update_delete: $5,
@@ -7417,7 +7429,7 @@ opt_ref_list -> Option<Vec<String>>:
 reference_list -> Vec<String>:
       reference_list ',' ident
       {
-           s1.push($3.0);
+           $1.push($3.0);
            $1
       }
     | ident
@@ -7442,7 +7454,7 @@ opt_on_update_delete -> Option<OnUpdateDelete>:
       {
            Some(OnUpdateDelete {
                span: $span,
-               update_option: $3,
+               update_option: Some($3),
                delete_option: None,
            })
       }
@@ -7451,23 +7463,23 @@ opt_on_update_delete -> Option<OnUpdateDelete>:
            Some(OnUpdateDelete {
                span: $span,
                update_option: None,
-               delete_option: $3,
+               delete_option: Some($3),
            })
       }
     | 'ON' 'UPDATE' delete_option 'ON' 'DELETE' delete_option
       {
            Some(OnUpdateDelete {
                span: $span,
-               update_option: $3,
-               delete_option: $6,
+               update_option: Some($3),
+               delete_option: Some($6),
            })
       }
     | 'ON' 'DELETE' delete_option 'ON' 'UPDATE' delete_option
       {
            Some(OnUpdateDelete {
                span: $span,
-               update_option: $6,
-               delete_option: $3,
+               update_option: Some($6),
+               delete_option: Some($3),
            })
       }
 ;
@@ -7480,19 +7492,19 @@ delete_option -> ReferenceOption:
     | 'SET' 'DEFAULT' { ReferenceOption::SetDefault  }
 ;
 
-constraint_key_type -> KetType:
-      'PRIMARY' 'KEY' { KetType::Primary }
-    | 'UNIQUE' opt_key_or_index { PRIMARY::Unique }
+constraint_key_type -> KeyType:
+      'PRIMARY' 'KEY' { KeyType::Primary }
+    | 'UNIQUE' opt_key_or_index { KeyType::Unique }
 ;
 
-opt_key_or_index -> Option<KeysOrIndex>:
+opt_key_or_index -> Option<&'input str>:
       /* empty */ { None }
-    | key_or_index { $1 }
+    | key_or_index { Some($1) }
 ;
 
 opt_column_attribute_list -> Option<Vec<ColumnAttribute>>:
       /* empty */      { None }
-    | column_attribute_list   { $1 }
+    | column_attribute_list   { Some($1) }
 ;
 
 column_attribute_list -> Vec<ColumnAttribute>:
@@ -7546,9 +7558,9 @@ column_attribute -> ColumnAttribute:
       }
     | 'UNIQUE'
       {
-            ColumnAttribute::Unique
+           ColumnAttribute::Unique
       }
-    | 'UNIQUE' 'KEY'
+    | %prec 'UNIQUE' 'KEY'
       {
             ColumnAttribute::Unique
       }
@@ -7566,7 +7578,7 @@ column_attribute -> ColumnAttribute:
       }
     | 'STORAGE' storage_media
       {
-            ColumnAttribute::StorageMedia($2)
+            ColumnAttribute::Storage($2)
       }
     | 'SRID' real_ulonglong_num
       {
@@ -7574,7 +7586,7 @@ column_attribute -> ColumnAttribute:
       }
     | opt_constraint_name check_constraint
       {
-            ColumnAttribute::check(CheckDefinition {
+            ColumnAttribute::Check(CheckDefinition {
                 span: $span,
                 name: $1,
                 check_expr: $2,
@@ -7583,7 +7595,7 @@ column_attribute -> ColumnAttribute:
       }
     | constraint_enforcement
       {
-            ColumnAttribute::check($1)
+            ColumnAttribute::Enforcement($1)
       }
     | 'ENGINE_ATTRIBUTE' opt_equal json_attribute
       {
@@ -7616,7 +7628,7 @@ column_attribute -> ColumnAttribute:
 ;
 
 opt_primary -> bool:
-      /* empty */   { false }
+      /* empty */   %prec EMPTY { false }
     | 'PRIMARY'   { true }
 ;
 
@@ -7632,8 +7644,14 @@ storage_media -> StorageMedia:
     | 'MEMORY'  { StorageMedia::Memory }
 ;
 
-now_or_signed_literal -> String:
-      now  { $1 }
+now_or_signed_literal -> Value:
+      now
+      {
+           Value::Text {
+               span: $span,
+               value: $1,
+           }
+      }
     | signed_literal_or_null { $1 }
 ;
 
@@ -7645,7 +7663,7 @@ signed_literal_or_null -> Value:
 null_as_literal -> Value:
     'NULL'
     {
-         Value::null
+         Value::Null
     }
 ;
 
@@ -7672,7 +7690,7 @@ opt_create_partitioning_etc -> CreateTableOptions:
       {
            CreateTableOptions {
                opt_create_table_options: $2.opt_create_table_options,
-               opt_partitioning: $1,
+               opt_partitioning: Some($1),
                on_duplicate: $2.on_duplicate,
                opt_query_expression: $2.opt_query_expression,
            }
@@ -7696,7 +7714,7 @@ opt_duplicate_as_qe -> CreateTableOptions:
                opt_create_table_options: None,
                opt_partitioning: None,
                on_duplicate: $1,
-               opt_query_expression: $2,
+               opt_query_expression: Some($2),
            }
       }
     | as_create_query_expression
@@ -7705,14 +7723,14 @@ opt_duplicate_as_qe -> CreateTableOptions:
                opt_create_table_options: None,
                opt_partitioning: None,
                on_duplicate: OnDuplicate::Error,
-               opt_query_expression: $1,
+               opt_query_expression: Some($1),
            }
       }
 ;
 
 opt_duplicate -> OnDuplicate:
       /* empty */ { OnDuplicate::Error }
-    | duplicate
+    | duplicate { $1 }
 ;
 
 duplicate -> OnDuplicate:
@@ -7779,7 +7797,7 @@ part_type_def -> PartTypeDef:
       }
     | 'LIST' 'COLUMNS' '(' name_list ')'
       {
-            PartTypeDef::List {
+            PartTypeDef::ListColumns {
                 span: $span,
                 name_list: $4,
             }
@@ -7803,11 +7821,11 @@ opt_key_algo -> Option<KeyAlgorithm>:
       }
 ;
 
-opt_num_parts -> String:
-      /* empty */ { String::from("0") }
+opt_num_parts -> Option<String>:
+      /* empty */ { Some(String::from("0")) }
     | 'PARTITIONS' real_ulong_num
       {
-            $2
+            Some($2)
       }
 ;
 
@@ -7824,19 +7842,19 @@ opt_sub_part -> Option<SubPartition>:
       }
     | 'SUBPARTITION' 'BY' opt_linear 'KEY' opt_key_algo '(' name_list ')' opt_num_subparts
       {
-            Some(SubPartition::Hash {
+            Some(SubPartition::Key {
                 span: $span,
                 is_linear: $3,
                 opt_key_algo: $5,
                 name_list: $7,
-                opt_num_subparts: $8,
+                opt_num_subparts: $9,
             })
       }
 ;
 
-opt_name_list -> Option<String>:
+opt_name_list -> Option<Vec<String>>:
       /* empty */ { None }
-    | name_list  { $1 }
+    | name_list  { Some($1) }
 ;
 
 
@@ -7847,7 +7865,7 @@ name_list -> Vec<String>:
       }
     | name_list ',' ident
       {
-           $1.push($3);
+           $1.push($3.0);
            $1
       }
 ;
@@ -7862,7 +7880,7 @@ opt_num_subparts -> String:
 
 opt_part_defs -> Option<Vec<PartDefinition>>:
       /* empty */           { None }
-    | '(' part_def_list ')' { $2 }
+    | %prec '(' part_def_list ')' { $3 }
 ;
 
 part_def_list -> Vec<PartDefinition>:
@@ -7882,7 +7900,7 @@ part_definition -> PartDefinition:
     {
          PartDefinition {
              span: $span,
-             partition_name: $2,
+             partition_name: $2.0,
              partition_type: $3.0,
              partition_value: $3.1,
              opt_part_options: $4,
@@ -7891,16 +7909,16 @@ part_definition -> PartDefinition:
     }
 ;
 
-opt_part_values -> (PartitionType, Option<Vec<PartValueItem>>):
+opt_part_values -> (PartitionType, Option<Vec<Vec<PartValueItem>>>):
       /* empty */
       {
             (PartitionType::Hash, None)
       }
-    | 'VALUES' 'LESS' 'THAN' part_func_max
+    | %prec 'VALUES' 'LESS' 'THAN' part_func_max
       {
             (PartitionType::Range, $4)
       }
-    | 'VALUES' 'IN' part_values_in
+    | %prec 'VALUES' 'IN' part_values_in
       {
             (PartitionType::List, Some($3))
       }
@@ -7911,10 +7929,10 @@ part_func_max -> Option<Vec<PartValueItem>>:
     | part_value_item_list_paren { Some($1) }
 ;
 
-part_values_in -> Vec<PartValueItem>:
+part_values_in -> Vec<Vec<PartValueItem>>:
        part_value_item_list_paren
        {
-            $1
+            vec![$1]
        }
     | '(' part_value_list ')'
        {
@@ -7922,10 +7940,10 @@ part_values_in -> Vec<PartValueItem>:
        }
 ;
 
-part_value_list -> Vec<PartValueItem>:
+part_value_list -> Vec<Vec<PartValueItem>>:
       part_value_item_list_paren
       {
-            $1
+            vec![$1]
       }
     | part_value_list ',' part_value_item_list_paren
       {
@@ -7955,12 +7973,12 @@ part_value_item_list -> Vec<PartValueItem>:
 
 part_value_item -> PartValueItem:
       'MAX_VALUE'   { PartValueItem::MaxValue }
-    | bit_expr      { PartValueItem::BitExpr }
+   /* | bit_expr      { PartValueItem::BitExpr($1) } */
 ;
 
 opt_sub_partition -> Option<Vec<SubPartDefinition>>:
       /* empty */           { None }
-    | '(' sub_part_list ')' { Some($2) }
+    | %prec '(' sub_part_list ')' { Some($2) }
 ;
 
 sub_part_list -> Vec<SubPartDefinition>:
@@ -8011,24 +8029,20 @@ part_option -> PartitionOption:
               None => false,
           };
           PartitionOption::Tablespace {
-              span: Span,
+              span: $span,
               is_equal: is_equal,
               tablespace_name: $3.0,
           }
       }
     | opt_storage 'ENGINE' opt_equal ident_or_text
       {
-          let is_storage = match $1 {
+          let is_equal = match $3 {
               Some(_) => true,
               None => false,
           };
-          let is_equal = match $2 {
-              Some(_) => true,
-              None => false,
-          };
-          PartitionOption::Tablespace {
-              span: Span,
-              is_storage: is_storage,
+          PartitionOption::Engine {
+              span: $span,
+              is_storage: $1,
               is_equal: is_equal,
               engine_name: $4,
           }
@@ -8040,7 +8054,7 @@ part_option -> PartitionOption:
               None => false,
           };
           PartitionOption::NodeGroup {
-              span: Span,
+              span: $span,
               is_equal: is_equal,
               group_num: $3,
           }
@@ -8052,7 +8066,7 @@ part_option -> PartitionOption:
               None => false,
           };
           PartitionOption::MaxRows {
-              span: Span,
+              span: $span,
               is_equal: is_equal,
               rows_num: $3,
           }
@@ -8064,7 +8078,7 @@ part_option -> PartitionOption:
               None => false,
           };
           PartitionOption::MinRows {
-              span: Span,
+              span: $span,
               is_equal: is_equal,
               rows_num: $3,
           }
@@ -8076,7 +8090,7 @@ part_option -> PartitionOption:
               None => false,
           };
           PartitionOption::DataDirectory {
-              span: Span,
+              span: $span,
               is_equal: is_equal,
               data_dir: $4,
           }
@@ -8088,21 +8102,21 @@ part_option -> PartitionOption:
               None => false,
           };
           PartitionOption::IndexDirectory {
-              span: Span,
+              span: $span,
               is_equal: is_equal,
               index_dir: $4,
           }
       }
     | 'COMMENT' opt_equal TEXT_STRING_sys
       {
-          let is_equal = match $3 {
+          let is_equal = match $2 {
               Some(_) => true,
               None => false,
           };
           PartitionOption::Comment {
-              span: Span,
+              span: $span,
               is_equal: is_equal,
-              comment: $4,
+              comment: $3,
           }
       }
 ;
@@ -8297,7 +8311,8 @@ create_table_option -> CreateTableOption:
             CreateTableOption::StatsSamplePages {
                 span: $span,
                 is_equal: is_equal,
-                value: $3,
+                is_default: false,
+                value: Some($3),
             }
       }
     | 'STATS_SAMPLE_PAGES' opt_equal 'DEFAULT'
@@ -8309,7 +8324,8 @@ create_table_option -> CreateTableOption:
             CreateTableOption::StatsSamplePages {
                 span: $span,
                 is_equal: is_equal,
-                value: $3,
+                is_default: true,
+                value: None,
             }
       }
     | 'CHECKSUM' opt_equal ulong_num
@@ -8354,7 +8370,7 @@ create_table_option -> CreateTableOption:
                 Some(_) => true,
                 None => false,
             };
-            CreateTableOption::DelayKeyWrite {
+            CreateTableOption::RowFormat {
                 span: $span,
                 is_equal: is_equal,
                 row_types: $3,
@@ -8369,16 +8385,16 @@ create_table_option -> CreateTableOption:
             CreateTableOption::Union {
                 span: $span,
                 is_equal: is_equal,
-                opt_table_list: $3,
+                opt_table_list: $4,
             }
       }
     | default_charset
       {
-            CreateTableOption::DefaultCharset($1);
+            CreateTableOption::DefaultCharset($1)
       }
     | default_collation
       {
-            CreateTableOption::DefaultCollation($1);
+            CreateTableOption::DefaultCollation($1)
       }
     | 'INSERT_METHOD' opt_equal merge_insert_types
       {
@@ -8490,16 +8506,16 @@ create_table_option -> CreateTableOption:
       }
     | option_autoextend_size
       {
-            CreateTableOption::OptionAutoextendSize($1);
+            CreateTableOption::OptionAutoextendSize($1)
       }
 ;
 
 ternary_option -> Ternary:
       ulong_num
       {
-           match($1) {
-               0 => Ternary::OFF,
-               1 => Ternary::ON,
+           match $1.as_str() {
+               "0" => Ternary::Off,
+               "1" => Ternary::On,
                _ => panic!("unsupport"),
             }
       }
@@ -8515,12 +8531,12 @@ row_types -> RowTypes:
     | 'COMPACT'    { RowTypes::Compact }
 ;
 
-opt_table_list -> Option<Vec<String>>:
+opt_table_list -> Option<Vec<TableIdent>>:
       /* empty */  { None }
     | table_list   { Some($1) }
 ;
 
-table_list -> Vec<String>:
+table_list -> Vec<TableIdent>:
       table_ident
       {
             vec![$1]
@@ -8645,7 +8661,7 @@ fulltext_index_option -> FullTextIndexOption:
 opt_index_name_and_type -> (Option<String>, Option<IndexType>):
       opt_ident                      { ($1, None) }
     | opt_ident 'USING' index_type   { ($1, Some($3)) }
-    | ident 'TYPE' index_type        { (Some($1), Some($3)) }
+    | ident 'TYPE' index_type        { (Some($1.0), Some($3)) }
 ;
 
 opt_index_type_clause -> Option<IndexTypeClause>:

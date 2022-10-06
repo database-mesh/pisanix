@@ -14,7 +14,7 @@
 
 use lrpar::Span;
 
-use crate::ast::{base::*, dml::TableIdent, CreateUser, FieldType, SelectStmt};
+use crate::ast::{base::*, dml::TableIdent, CreateUser, FieldType, SelectStmt, dml};
 
 #[derive(Debug, Clone)]
 pub enum Create {
@@ -522,18 +522,18 @@ pub struct CreateTableStmt {
     pub span: Span,
     pub is_temporary: bool,
     pub is_not_exists: bool,
-    pub table_name: String,
+    pub table_ident: TableIdent,
     pub table_element_list: Option<Vec<TableElement>>,
     pub opt_create_table_options_etc: Option<CreateTableOptions>,
-    pub like_table_name: Option<String>,
+    pub like_table_ident: Option<TableIdent>,
 }
 
 #[derive(Debug, Clone)]
 pub struct CreateTableOptions {
     pub opt_create_table_options: Option<Vec<CreateTableOption>>,
-    pub opt_partitioning: Option<String>,
+    pub opt_partitioning: Option<Partition>,
     pub on_duplicate: OnDuplicate,
-    pub opt_query_expression: Option<String>,
+    pub opt_query_expression: Option<SelectStmt>,
 }
 
 #[derive(Debug, Clone)]
@@ -541,8 +541,8 @@ pub struct Partition {
     pub span: Span,
     pub part_type_def: PartTypeDef,
     pub opt_num_parts: Option<String>,
-    pub opt_sub_part: Option<String>,
-    pub opt_part_defs: Option<Strin>,
+    pub opt_sub_part: Option<SubPartition>,
+    pub opt_part_defs: Option<Vec<PartDefinition>>,
 }
 
 #[derive(Debug, Clone)]
@@ -579,7 +579,7 @@ pub enum StoredAttribute {
 #[derive(Debug, Clone)]
 pub struct References {
     pub span: Span,
-    pub table_name: String,
+    pub table_ident: TableIdent,
     pub opt_ref_list: Option<Vec<String>>,
     pub opt_match_clause: Option<MatchClause>,
     pub opt_on_update_delete: Option<OnUpdateDelete>,
@@ -623,13 +623,15 @@ pub struct InlineIndexDefinition {
     pub index_type: Option<IndexType>,
     pub key_list_with_expression: Vec<KeyPartWithExpression>,
     pub opt_index_options: Option<Vec<IndexOption>>,
+    pub opt_fulltext_index_options: Option<Vec<FullTextIndexOption>>,
+    pub opt_spatial_index_options: Option<Vec<SpatialIndexOption>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ForeignKeyDefinition {
     pub span: Span,
-    pub constraint_name: String,
-    pub key_name: String,
+    pub constraint_name: Option<String>,
+    pub key_name: Option<String>,
     pub key_list: Vec<KeyPart>,
     pub references: References,
 }
@@ -637,7 +639,7 @@ pub struct ForeignKeyDefinition {
 #[derive(Debug, Clone)]
 pub struct CheckDefinition {
     pub span: Span,
-    pub name: String,
+    pub name: Option<String>,
     pub check_expr: Expr,
     pub is_enforced: bool,
 }
@@ -657,7 +659,7 @@ pub enum ColumnAttribute {
     Null,
     NotNull,
     NotSecondary,
-    DefaultLiteral,
+    DefaultLiteral(Value),
     DefaultExpr(Expr),
     OnUpdate(String),
     AutoInc,
@@ -760,7 +762,8 @@ pub enum CreateTableOption {
     StatsSamplePages {
         span: Span,
         is_equal: bool,
-        value: String,
+        is_default: bool,
+        value: Option<String>,
     },
     Checksum {
         span: Span,
@@ -785,7 +788,7 @@ pub enum CreateTableOption {
     Union {
         span: Span,
         is_equal: bool,
-        opt_table_list: Option<Vec<String>>,
+        opt_table_list: Option<Vec<TableIdent>>,
     },
     DefaultCharset(DefaultCharset),
     DefaultCollation(DefaultCollation),
@@ -920,7 +923,7 @@ pub enum SubPartition {
     Key {
         span: Span,
         is_linear: bool,
-        opt_key_algo: Expr,
+        opt_key_algo: Option<KeyAlgorithm>,
         name_list: Vec<String>,
         opt_num_subparts: String,
     },
@@ -931,9 +934,9 @@ pub struct PartDefinition {
     pub span: Span,
     pub partition_name: String,
     pub partition_type: PartitionType,
-    pub partition_value: Option<Vec<PartValueItem>>,
+    pub partition_value: Option<Vec<Vec<PartValueItem>>>,
     pub opt_part_options: Option<Vec<PartitionOption>>,
-    pub opt_sub_partition: SubPartDefinition,
+    pub opt_sub_partition: Option<Vec<SubPartDefinition>>,
 }
 
 #[derive(Debug, Clone)]
@@ -949,7 +952,7 @@ pub enum PartValueItem {
     BitExpr(Expr),
 }
 
-#[derive(Debug, Close)]
+#[derive(Debug, Clone)]
 pub enum PartitionOption {
     Tablespace {
         span: Span,
@@ -994,7 +997,7 @@ pub enum PartitionOption {
     }
 }
 
-#[derive(Debug, Close)]
+#[derive(Debug, Clone)]
 pub struct SubPartDefinition {
     pub span: Span,
     pub name: String,
