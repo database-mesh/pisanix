@@ -39,7 +39,7 @@ func Test_build(t *testing.T) {
 			dbep,
 		},
 	}
-	actual, _ := build(&vdb, tslist, dslist, dbeplist)
+	actual, _ := proxyConfigBuild(&vdb, tslist, dslist, dbeplist)
 
 	expected := &PisaProxyConfig{
 		Admin: AdminConfig{
