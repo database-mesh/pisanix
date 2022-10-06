@@ -469,3 +469,43 @@ func (b *NodeGroupConfigBuilder) Build() *NodeGroupConfig {
 
 	return config
 }
+
+type PisaDaemonConfig struct {
+	Global GlobalConfig `json:"global"`
+	Apps   []App        `json:"app,omitempty"`
+}
+
+type GlobalConfig struct {
+	EgressDevice  string `json:"egress_device"`
+	IngressDevice string `json:"ingress_device"`
+}
+
+type App struct {
+	Name                 string                `json:"name"`
+	PodContainerBindings []PodContainerBinding `json:"podContainerBinding,omitempty"`
+	Services             []Service             `json:"service,omitempty"`
+}
+
+type PodContainerBinding struct {
+	PodName     string `json:"podName"`
+	ContainerId string `json:"containerId"`
+}
+
+type Service struct {
+	Name      string     `json:"name"`
+	QoSClass  string     `json:"qos_class,omitempty"`
+	QoSGroups []QoSGroup `json:"qos_group,omitempty"`
+}
+
+type QoSClassKind string
+
+const (
+	QoSClassKindGuaranteed = "guaranteed"
+	QoSClassKindBurstable  = "burstable"
+	QoSClassKindBestEffort = "besteffort"
+)
+
+type QoSGroup struct {
+	Rate string `json:"rate,omitempty"`
+	Ceil string `json:"ceil,omitempty"`
+}
