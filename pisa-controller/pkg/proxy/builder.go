@@ -481,8 +481,14 @@ type GlobalConfig struct {
 }
 
 type App struct {
-	Name     string    `json:"name"`
-	Services []Service `json:"service,omitempty"`
+	Name                 string                `json:"name"`
+	PodContainerBindings []PodContainerBinding `json:"podContainerBinding,omitempty"`
+	Services             []Service             `json:"service,omitempty"`
+}
+
+type PodContainerBinding struct {
+	PodName     string `json:"podName"`
+	ContainerId string `json:"containerId"`
 }
 
 type Service struct {
