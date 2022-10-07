@@ -7976,6 +7976,7 @@ part_value_item_list -> Vec<PartValueItem>:
 
 part_value_item -> PartValueItem:
       'MAX_VALUE'   { PartValueItem::MaxValue }
+   //TODO Reduce/Reduce conflicts: Reduce(predicate: "bit_expr") / Reduce(part_value_item: "bit_expr")
    /* | bit_expr      { PartValueItem::BitExpr($1) } */
 ;
 
