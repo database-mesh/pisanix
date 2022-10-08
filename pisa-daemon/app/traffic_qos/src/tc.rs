@@ -125,7 +125,13 @@ name = "test1"
 [[app.service]]
 name = "svc"
 qos_class = "guaranteed" # "burstable" | "besteffort"
+[[app.service.endpoints]]
+ip = "1.1.1.1"
+port = 3306
 
+[[app.service.endpoints]]
+ip = "1.1.1.1"
+port = 3307
 [app.service.qos_group]
 rate = "1mbps"
 ceil = "1mbps"
@@ -136,6 +142,13 @@ name = "app1"
 [[app.service]]
 name = "test"
 qos_class = "guaranteed" # "burstable" | "besteffort"
+[[app.service.endpoints]]
+ip = "2.2.2.2"
+port = 3306
+
+[[app.service.endpoints]]
+ip = "2.2.2.2"
+port = 3307
 
 [app.service.qos_group]
 rate = "2mbps"
@@ -145,6 +158,7 @@ ceil = "2mbps"
     #[test]
     fn test_sort_app_service() {
         let mut config: Config = toml::from_str(config_str).unwrap();
+        println!("config {:?}", config);
         sort_app_serivce(&mut config);
         assert_eq!(config.app[0].name, "app1");
     }
