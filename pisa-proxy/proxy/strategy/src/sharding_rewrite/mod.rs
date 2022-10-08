@@ -804,19 +804,17 @@ impl ShardingRewrite {
             let mut sharding_column: &str = "";
             let mut algo: &ShardingAlgorithmName = &ShardingAlgorithmName::Mod;
 
-            if let Some(strategy) = &rule.table_strategy {
-                if let StrategyType::TableStrategyConfig(_config) = strategy {
-                    sharding_count = rule.get_sharding_count().1.unwrap();
-                    sharding_column = rule.get_sharding_column().1.unwrap();
-                    algo = rule.get_algo().1.unwrap();
-                } else {
-                    unreachable!()
-                }
-            } else {
+            if rule.table_strategy.is_some() {
+                sharding_count = rule.get_sharding_count().1.unwrap();
+                sharding_column = rule.get_sharding_column().1.unwrap();
+                algo = rule.get_algo().1.unwrap();
+            } else if rule.database_strategy.is_some() {
                 sharding_count = rule.get_sharding_count().0.unwrap();
                 sharding_column = rule.get_sharding_column().0.unwrap();
                 algo = rule.get_algo().0.unwrap();
-            };
+            } else {
+                unreachable!()
+            }
 
             self.change_insert_sql_inner(
                 &rule,
