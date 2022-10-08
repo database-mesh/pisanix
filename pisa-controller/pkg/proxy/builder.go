@@ -487,7 +487,13 @@ type App struct {
 
 type Service struct {
 	Name      string     `json:"name"`
-	QoSGroups []QoSGroup `json:"qos_group"`
+	QoSGroup  QoSGroup   `json:"qos_group"`
+	Endpoints []Endpoint `json:"endpoints"`
+}
+
+type Endpoint struct {
+	IP   string `json:"ip"`
+	Port uint32 `json:"port"`
 }
 
 type QoSClassKind string
