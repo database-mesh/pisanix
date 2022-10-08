@@ -235,9 +235,6 @@ impl ShardingRewrite {
         let wheres = meta.get_wheres();
         let inserts = meta.get_inserts();
         let fields = meta.get_fields();
-        let avgs = meta.get_avgs();
-        let orders = meta.get_orders();
-        let groups = meta.get_groups();
 
         if !inserts.is_empty() {
             if fields.is_empty() {
@@ -851,7 +848,6 @@ impl ShardingRewrite {
         let mut idx: usize = 0;
 
         for change in changes.iter() {
-            idx = change.0 as usize;
             let target_table = self.change_table(table, "", change.0);
             let mut target_row_prefix_text = row_prefix_text.to_string();
             if rule.table_strategy.is_some() {
