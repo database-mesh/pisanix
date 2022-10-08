@@ -233,6 +233,16 @@ impl ShardingRewrite {
         try_tables: Vec<(u8, Sharding, &TableIdent)>,
     ) -> Result<Vec<ShardingRewriteOutput>, ShardingRewriteError> {
         let wheres = meta.get_wheres();
+        let inserts = meta.get_inserts();
+        let fields = meta.get_fields();
+
+        if !inserts.is_empty() {
+            if fields.is_empty() {
+                return Err(ShardingRewriteError::FieldsIsEmpty)
+            }
+
+            return self.change_insert_sql(try_tables, fields, inserts);
+        }
 
         if wheres.is_empty() {
             return Ok(self.database_strategy_iproduct(try_tables));
@@ -790,19 +800,22 @@ impl ShardingRewrite {
 
     fn change_insert_sql(&self, try_tables: Vec<(u8, Sharding, &TableIdent)>, fields: &IndexMap<u8, Vec<FieldMeta>>,inserts: &IndexMap<u8, Vec<InsertValsMeta>>) -> Result<Vec<ShardingRewriteOutput>, ShardingRewriteError> {
         let outputs = try_tables.into_iter().map(|(query_id, rule, table)| {
-            let strategy = if let Some(strategy) = &rule.table_strategy {
-                if let StrategyType::TableStrategyConfig(config) = strategy {
-                    config
-                } else {
-                    unreachable!()
-                }
-             } else {
+            let mut sharding_count: u64 = 0;
+            let mut sharding_column: &str = "";
+            let mut algo: &ShardingAlgorithmName = &ShardingAlgorithmName::Mod;
+
+            if rule.table_strategy.is_some() {
+                sharding_count = rule.get_sharding_count().1.unwrap();
+                sharding_column = rule.get_sharding_column().1.unwrap();
+                algo = rule.get_algo().1.unwrap();
+            } else if rule.database_strategy.is_some() {
+                sharding_count = rule.get_sharding_count().0.unwrap();
+                sharding_column = rule.get_sharding_column().0.unwrap();
+                algo = rule.get_algo().0.unwrap();
+            } else {
                 unreachable!()
-             };
+            }
 
-
-            let sharding_column = rule.get_sharding_column().1.unwrap();
-            let algo = rule.get_algo().1.unwrap();
             self.change_insert_sql_inner(
                 &rule,
                 &table,
@@ -810,10 +823,9 @@ impl ShardingRewrite {
                 &fields.get(&query_id).unwrap(),
                 sharding_column,
                 algo,
-                *&strategy.sharding_count as u64,
+                sharding_count,
             )
         }).collect::<Result<Vec<_>, _>>()?.into_iter().flatten().collect::<Vec<_>>();
-
         Ok(outputs)
     }
 
@@ -828,29 +840,38 @@ impl ShardingRewrite {
         sharding_count: u64,
     ) -> Result<Vec<ShardingRewriteOutput>, ShardingRewriteError> {
         let changes = Self::change_insert(inserts, fields, sharding_column, algo, sharding_count)?;
-
         let row_start_idx = changes[0].1.start();
         let row_prefix_text = &self.raw_sql[0..row_start_idx];
-
         let mut change_rows = IndexMap::<u64, String>::new();
+        let mut idx: usize = 0;
+
         for change in changes.iter() {
             let target_table = self.change_table(table, "", change.0);
             let mut target_row_prefix_text = row_prefix_text.to_string();
-            Self::change_sql(&mut target_row_prefix_text, table.span, &target_table, 0);
+            if rule.table_strategy.is_some() {
+                Self::change_sql(&mut target_row_prefix_text, table.span, &target_table, 0);
+            } else if rule.database_strategy.is_some() {
+                idx = change.0 as usize;
+            }
             let mut row_text = self.raw_sql[change.1.start()..change.1.end()].to_string();
             row_text.push_str(", ");
             change_rows.entry(change.0).or_insert(target_row_prefix_text).push_str(&row_text);
         }
 
-
-
         let data_source = if self.has_rw {
             DataSource::NodeGroup(rule.actual_datanodes[0].clone())
         } else {
-            let ep = self.endpoints.iter().find(|e| e.name == rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
-            DataSource::Endpoint(ep.clone())
+            if rule.table_strategy.is_some() {
+                let ep = self.endpoints.iter().find(|e| e.name == rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+                DataSource::Endpoint(ep.clone())
+            } else if rule.database_strategy.is_some() {
+                let ep = &self.endpoints[idx];
+                DataSource::Endpoint(ep.clone())
+            } else {
+                unreachable!()
+            }
         };
-
+    
         let outputs = change_rows.into_iter().map(|(_, v)| {
             ShardingRewriteOutput {
                 changes: vec![],
