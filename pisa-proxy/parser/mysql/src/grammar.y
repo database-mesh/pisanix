@@ -7311,7 +7311,7 @@ table_constraint_def -> TableConstraintDef:
       }
     | opt_constraint_name constraint_key_type opt_index_name_and_type '(' key_list_with_expression ')' opt_index_options
       {
-           let mut index_name = Some(String::from(""));
+           let index_name;
            let (name, index_type) = $3;
            if name.is_none() {
                index_name = $1;
@@ -7912,7 +7912,7 @@ part_definition -> PartDefinition:
     }
 ;
 
-opt_part_values -> (PartitionType, Option<Vec<Vec<PartValueItem>>>):
+opt_part_values -> (PartitionType, Option<Vec<PartValueItem>>):
       /* empty */
       {
             (PartitionType::Hash, None)
@@ -7921,44 +7921,21 @@ opt_part_values -> (PartitionType, Option<Vec<Vec<PartValueItem>>>):
       {
             (PartitionType::Range, $4)
       }
-    | 'VALUES' 'IN' part_values_in
+    | 'VALUES' 'IN' part_value_item_list_paren
       {
-            (PartitionType::List, Some($3))
+            (PartitionType::List, $3)
       }
 ;
 
-part_func_max -> Option<Vec<Vec<PartValueItem>>>:
+part_func_max -> Option<Vec<PartValueItem>>:
       'MAX_VALUE'   { None }
-    | part_value_item_list_paren { Some(vec![$1]) }
+    | part_value_item_list_paren { $1 }
 ;
 
-part_values_in -> Vec<Vec<PartValueItem>>:
-       part_value_item_list_paren
-       {
-            vec![$1]
-       }
-    | '(' part_value_list ')'
-       {
-            $2
-       }
-;
-
-part_value_list -> Vec<Vec<PartValueItem>>:
-      part_value_item_list_paren
-      {
-            vec![$1]
-      }
-    | part_value_list ',' part_value_item_list_paren
-      {
-            $1.push($3);
-            $1
-      }
-;
-
-part_value_item_list_paren -> Vec<PartValueItem>:
+part_value_item_list_paren -> Option<Vec<PartValueItem>>:
     '(' part_value_item_list ')'
      {
-           $2
+           Some($2)
      }
 ;
 
@@ -7976,8 +7953,7 @@ part_value_item_list -> Vec<PartValueItem>:
 
 part_value_item -> PartValueItem:
       'MAX_VALUE'   { PartValueItem::MaxValue }
-   //TODO Reduce/Reduce conflicts: Reduce(predicate: "bit_expr") / Reduce(part_value_item: "bit_expr")
-   /* | bit_expr      { PartValueItem::BitExpr($1) } */
+    | bit_expr      { PartValueItem::BitExpr($1) }
 ;
 
 opt_sub_partition -> Option<Vec<SubPartDefinition>>:

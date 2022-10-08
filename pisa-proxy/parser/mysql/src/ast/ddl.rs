@@ -934,7 +934,7 @@ pub struct PartDefinition {
     pub span: Span,
     pub partition_name: String,
     pub partition_type: PartitionType,
-    pub partition_value: Option<Vec<Vec<PartValueItem>>>,
+    pub partition_value: Option<Vec<PartValueItem>>,
     pub opt_part_options: Option<Vec<PartitionOption>>,
     pub opt_sub_partition: Option<Vec<SubPartDefinition>>,
 }
