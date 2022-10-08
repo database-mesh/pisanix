@@ -471,13 +471,8 @@ func (b *NodeGroupConfigBuilder) Build() *NodeGroupConfig {
 }
 
 type PisaDaemonConfig struct {
-<<<<<<< HEAD
 	// Global GlobalConfig `json:"global"`
 	Apps []App `json:"app"`
-=======
-	Global GlobalConfig `json:"global"`
-	Apps   []App        `json:"app,omitempty"`
->>>>>>> fix(controller): fix daemon config
 }
 
 type GlobalConfig struct {
@@ -486,24 +481,13 @@ type GlobalConfig struct {
 }
 
 type App struct {
-	Name                 string                `json:"name"`
-	PodContainerBindings []PodContainerBinding `json:"podContainerBinding,omitempty"`
-	Services             []Service             `json:"service,omitempty"`
-}
-
-type PodContainerBinding struct {
-	PodName     string `json:"podName"`
-	ContainerId string `json:"containerId"`
+	Name     string    `json:"name"`
+	Services []Service `json:"service,omitempty"`
 }
 
 type Service struct {
 	Name      string     `json:"name"`
-<<<<<<< HEAD
 	QoSGroups []QoSGroup `json:"qos_group"`
-=======
-	QoSClass  string     `json:"qos_class,omitempty"`
-	QoSGroups []QoSGroup `json:"qos_group,omitempty"`
->>>>>>> fix(controller): fix daemon config
 }
 
 type QoSClassKind string
