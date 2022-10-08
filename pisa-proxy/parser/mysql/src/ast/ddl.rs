@@ -494,17 +494,512 @@ pub struct CreateServer {
 
 #[derive(Debug, Clone)]
 pub enum ServerOption {
-    User(StringOption),
-    Host(StringOption),
-    Database(StringOption),
-    Owner(StringOption),
-    Password(StringOption),
-    Socket(StringOption),
-    Port(StringOption),
+    User(String),
+    Host(String),
+    Database(String),
+    Owner(String),
+    Password(String),
+    Socket(String),
+    Port(String),
 }
 
 #[derive(Debug, Clone)]
 pub struct StringOption {
     pub span: Span,
+    pub is_equal: bool,
     pub content: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct TernaryOption {
+    pub span: Span,
+    pub is_equal: bool,
+    pub option: Ternary,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateTableStmt {
+    pub span: Span,
+    pub is_temporary: bool,
+    pub is_not_exists: bool,
+    pub table_ident: TableIdent,
+    pub table_element_list: Option<Vec<TableElement>>,
+    pub opt_create_table_options_etc: Option<CreateTableOptions>,
+    pub like_table_ident: Option<TableIdent>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateTableOptions {
+    pub opt_create_table_options: Option<Vec<CreateTableOption>>,
+    pub opt_partitioning: Option<Partition>,
+    pub on_duplicate: OnDuplicate,
+    pub opt_query_expression: Option<SelectStmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Partition {
+    pub span: Span,
+    pub part_type_def: PartTypeDef,
+    pub opt_num_parts: Option<String>,
+    pub opt_sub_part: Option<SubPartition>,
+    pub opt_part_defs: Option<Vec<PartDefinition>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TableElement {
+    ColumnDef(ColumnDef),
+    TableConstraintDef(TableConstraintDef),
+}
+
+#[derive(Debug, Clone)]
+pub struct ColumnDef {
+    pub span: Span,
+    pub column_name: String,
+    pub field_def: FieldDef,
+    pub opt_references: Option<References>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldDef {
+    pub span: Span,
+    pub data_type: FieldType,
+    pub opt_collate: Option<String>,
+    pub is_generated_always: bool,
+    pub expr: Option<Expr>,
+    pub opt_stored_attribute: Option<StoredAttribute>,
+    pub opt_column_attribute_list: Option<Vec<ColumnAttribute>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum StoredAttribute {
+    Virtual,
+    Stored,
+}
+
+#[derive(Debug, Clone)]
+pub struct References {
+    pub span: Span,
+    pub table_ident: TableIdent,
+    pub opt_ref_list: Option<Vec<String>>,
+    pub opt_match_clause: Option<MatchClause>,
+    pub opt_on_update_delete: Option<OnUpdateDelete>,
+}
+
+#[derive(Debug, Clone)]
+pub enum MatchClause {
+    Full,
+    Partial,
+    Simple,
+}
+
+#[derive(Debug, Clone)]
+pub struct OnUpdateDelete {
+    pub span: Span,
+    pub update_option: Option<ReferenceOption>,
+    pub delete_option: Option<ReferenceOption>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ReferenceOption {
+    Restrict,
+    Cascade,
+    SetNull,
+    NoAction,
+    SetDefault,
+}
+
+#[derive(Debug, Clone)]
+pub enum TableConstraintDef {
+    InlineIndex(InlineIndexDefinition),
+    ForeignKey(ForeignKeyDefinition),
+    Check(CheckDefinition),
+}
+
+#[derive(Debug, Clone)]
+pub struct InlineIndexDefinition {
+    pub span: Span,
+    pub key_type: KeyType,
+    pub index_name: Option<String>,
+    pub index_type: Option<IndexType>,
+    pub key_list_with_expression: Vec<KeyPartWithExpression>,
+    pub opt_index_options: Option<Vec<IndexOption>>,
+    pub opt_fulltext_index_options: Option<Vec<FullTextIndexOption>>,
+    pub opt_spatial_index_options: Option<Vec<SpatialIndexOption>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ForeignKeyDefinition {
+    pub span: Span,
+    pub constraint_name: Option<String>,
+    pub key_name: Option<String>,
+    pub key_list: Vec<KeyPart>,
+    pub references: References,
+}
+
+#[derive(Debug, Clone)]
+pub struct CheckDefinition {
+    pub span: Span,
+    pub name: Option<String>,
+    pub check_expr: Expr,
+    pub is_enforced: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum KeyType {
+    Primary,
+    Unique,
+    Multiple,
+    FullText,
+    Spatial,
+    Foreign,
+}
+
+#[derive(Debug, Clone)]
+pub enum ColumnAttribute {
+    Null,
+    NotNull,
+    NotSecondary,
+    DefaultLiteral(Value),
+    DefaultExpr(Expr),
+    OnUpdate(String),
+    AutoInc,
+    SerialDefaultValue,
+    PrimaryKey,
+    Unique,
+    Comment(String),
+    Collate(String),
+    ColumnFormat(ColumnFormat),
+    Storage(StorageMedia),
+    Srid(String),
+    Check(CheckDefinition),
+    Enforcement(bool),
+    Engine(AttributeOption),
+    SecondaryEngine(AttributeOption),
+    Visibility,
+}
+
+#[derive(Debug, Clone)]
+pub enum ColumnFormat {
+    Default,
+    Fixed,
+    Dynamic,
+}
+
+#[derive(Debug, Clone)]
+pub enum StorageMedia {
+    Default,
+    Disk,
+    Memory,
+}
+
+#[derive(Debug, Clone)]
+pub enum CreateTableOption {
+    Engine {
+        span: Span,
+        is_equal: bool,
+        engine_name: String,
+    },
+    SecondaryEngine {
+        span: Span,
+        is_equal: bool,
+        engine_name: Option<String>,
+    },
+    MaxRows {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    MinRows {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    AvgRowLength {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    Password {
+        span: Span,
+        is_equal: bool,
+        content: String,
+    },
+    Comment {
+        span: Span,
+        is_equal: bool,
+        content: String,
+    },
+    Compression {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    Encryption {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    AutoInc {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    PackKeys {
+        span: Span,
+        is_equal: bool,
+        option: Ternary,
+    },
+    StatsAutoRecalc {
+        span: Span,
+        is_equal: bool,
+        option: Ternary,
+    },
+    StatsPersistent {
+        span: Span,
+        is_equal: bool,
+        option: Ternary,
+    },
+    StatsSamplePages {
+        span: Span,
+        is_equal: bool,
+        is_default: bool,
+        value: Option<String>,
+    },
+    Checksum {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    TableChecksum {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    DelayKeyWrite {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    RowFormat {
+        span: Span,
+        is_equal: bool,
+        row_types: RowTypes,
+    },
+    Union {
+        span: Span,
+        is_equal: bool,
+        opt_table_list: Option<Vec<TableIdent>>,
+    },
+    DefaultCharset(DefaultCharset),
+    DefaultCollation(DefaultCollation),
+    InsertMethod {
+        span: Span,
+        is_equal: bool,
+        merge_insert_types: MergeInsertTypes,
+    },
+    DataDirectory {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    IndexDirectory {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    Tablespace {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    StorageDisk,
+    StorageMemory,
+    Connection {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    KeyBlockSize {
+        span: Span,
+        is_equal: bool,
+        value: String,
+    },
+    StartTransaction,
+    EngineAttribute {
+        span: Span,
+        is_equal: bool,
+        json_attribute: String,
+    },
+    SecondaryEngineAttribute {
+        span: Span,
+        is_equal: bool,
+        json_attribute: String,
+    },
+    OptionAutoextendSize(SizeOption),
+}
+
+#[derive(Debug, Clone)]
+pub enum Ternary {
+    Default,
+    On,
+    Off,
+}
+
+#[derive(Debug, Clone)]
+pub enum RowTypes {
+    Default,
+    Fixed,
+    Dynamic,
+    Compressed,
+    Redundant,
+    Compact,
+}
+
+#[derive(Debug, Clone)]
+pub enum MergeInsertTypes {
+    Disabled,
+    First,
+    Last,
+}
+
+#[derive(Debug, Clone)]
+pub enum OnDuplicate {
+    Error,
+    Replace,
+    Ignore,
+}
+
+#[derive(Debug, Clone)]
+pub enum PartTypeDef {
+    Key {
+        span: Span,
+        is_linear: bool,
+        opt_key_algo: Option<KeyAlgorithm>,
+        opt_name_list: Option<Vec<String>>,
+    },
+
+    Hash {
+        span: Span,
+        is_linear: bool,
+        bit_expr: Expr,
+    },
+
+    Range {
+        span: Span,
+        bit_expr: Expr,
+    },
+
+    RangeColumns {
+        span: Span,
+        name_list: Vec<String>,
+    },
+
+    List {
+        span: Span,
+        bit_expr: Expr,
+    },
+
+    ListColumns {
+        span: Span,
+        name_list: Vec<String>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct KeyAlgorithm {
+    pub span: Span,
+    pub eq: Op,
+    pub num: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum SubPartition {
+    Hash {
+        span: Span,
+        is_linear: bool,
+        bit_expr: Expr,
+        opt_num_subparts: String,
+    },
+    Key {
+        span: Span,
+        is_linear: bool,
+        opt_key_algo: Option<KeyAlgorithm>,
+        name_list: Vec<String>,
+        opt_num_subparts: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct PartDefinition {
+    pub span: Span,
+    pub partition_name: String,
+    pub partition_type: PartitionType,
+    pub partition_value: Option<Vec<PartValueItem>>,
+    pub opt_part_options: Option<Vec<PartitionOption>>,
+    pub opt_sub_partition: Option<Vec<SubPartDefinition>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum PartitionType {
+    Hash,
+    Range,
+    List,
+}
+
+#[derive(Debug, Clone)]
+pub enum PartValueItem {
+    MaxValue,
+    BitExpr(Expr),
+}
+
+#[derive(Debug, Clone)]
+pub enum PartitionOption {
+    Tablespace {
+        span: Span,
+        is_equal: bool,
+        tablespace_name: String,
+    },
+    Engine {
+        span: Span,
+        is_storage: bool,
+        is_equal: bool,
+        engine_name: String,
+    },
+    NodeGroup {
+        span: Span,
+        is_equal: bool,
+        group_num: String,
+    },
+    MaxRows {
+        span: Span,
+        is_equal: bool,
+        rows_num: String,
+    },
+    MinRows {
+        span: Span,
+        is_equal: bool,
+        rows_num: String,
+    },
+    DataDirectory {
+        span: Span,
+        is_equal: bool,
+        data_dir: String,
+    },
+    IndexDirectory {
+        span: Span,
+        is_equal: bool,
+        index_dir: String,
+    },
+    Comment {
+        span: Span,
+        is_equal: bool,
+        comment: String,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SubPartDefinition {
+    pub span: Span,
+    pub name: String,
+    pub opt_part_options: Option<Vec<PartitionOption>>,
 }
