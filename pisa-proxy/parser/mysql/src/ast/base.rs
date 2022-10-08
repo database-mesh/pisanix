@@ -19,55 +19,51 @@ use crate::ast::{api::*, dml::*};
 #[derive(Debug, Copy, Clone)]
 pub enum Op {
     EQ,
-    AssignEQ,
+    ASSIGN_EQ,
     NE,
     GT,
     GE,
     LT,
     LE,
-    ShiftLeft,
-    ShiftRight,
+    SHIFT_LEFT,
+    SHIFT_RIGHT,
     OR,
+    BIT_OR,
     AND,
+    BIT_AND,
     PLUS,
     MINUS,
     MUL,
     DIV,
     MOD,
-    XOR,
+    BIT_XOR,
     NOT,
-    TRUE,
-    FALSE,
-    UNKNOWN,
-    NULL,
     NEG,
 }
 
 impl Op {
     pub fn format(&self) -> String {
         let op = match self {
-            Self::AssignEQ => ":=",
+            Self::ASSIGN_EQ => ":=",
             Self::EQ => "=",
             Self::NE => "!=",
             Self::GT => ">",
             Self::GE => ">=",
             Self::LT => "<",
             Self::LE => "<=",
-            Self::ShiftLeft => "<<",
-            Self::ShiftRight => ">>",
+            Self::SHIFT_LEFT => "<<",
+            Self::SHIFT_RIGHT => ">>",
+            Self::BIT_XOR => "^",
             Self::OR => "OR",
+            Self::BIT_OR => "|",
             Self::AND => "AND",
+            Self::BIT_AND => "&",
             Self::PLUS => "+",
             Self::MINUS => "-",
             Self::MUL => "*",
             Self::DIV => "/",
             Self::MOD => "%",
-            Self::XOR => "^",
             Self::NOT => "NOT",
-            Self::TRUE => "TRUE",
-            Self::FALSE => "FALSE",
-            Self::UNKNOWN => "UNKNOWN",
-            Self::NULL => "NULL",
             Self::NEG => "~",
         };
 
@@ -88,10 +84,20 @@ pub enum Expr {
         expr: Box<Expr>,
         operator: Op,
     },
-    IsExpr {
+    IsTruthExpr {
         span: Span,
         expr: Box<Expr>,
-        operator: Op,
+        is_not: bool,
+        is_true: bool,
+    },
+    IsUnknownExpr {
+        span: Span,
+        expr: Box<Expr>,
+        is_not: bool,
+    },
+    IsNullExpr {
+        span: Span,
+        expr: Box<Expr>,
         is_not: bool,
     },
     InExpr {
@@ -183,7 +189,7 @@ pub enum Expr {
 
     Ori(String),
 
-    AggExpr(AggExpr)
+    AggExpr(AggExpr),
 }
 
 impl Expr {
@@ -199,15 +205,47 @@ impl Expr {
                 vals.join(" ")
             }
 
-            Self::IsExpr { span: _, expr, operator, is_not } => {
-                let mut vals = Vec::with_capacity(3);
+            Self::IsTruthExpr { span: _, expr, is_not, is_true } => {
+                let mut vals = Vec::with_capacity(5);
+                vals.push(expr.format());
+                vals.push("IS".to_string());
 
                 if *is_not {
                     vals.push("NOT".to_string());
                 }
 
-                vals.push(operator.format());
+                match is_true {
+                    true => vals.push("TRUE".to_string()),
+                    false => vals.push("FALSE".to_string()),
+                };
+
+                vals.join(" ")
+            }
+
+            Self::IsUnknownExpr { span: _, expr, is_not } => {
+                let mut vals = Vec::with_capacity(5);
                 vals.push(expr.format());
+                vals.push("IS".to_string());
+
+                if *is_not {
+                    vals.push("NOT".to_string());
+                }
+
+                vals.push("UNKNOWN".to_string());
+
+                vals.join(" ")
+            }
+
+            Self::IsNullExpr { span: _, expr, is_not } => {
+                let mut vals = Vec::with_capacity(5);
+                vals.push(expr.format());
+                vals.push("IS".to_string());
+
+                if *is_not {
+                    vals.push("NOT".to_string());
+                }
+
+                vals.push("NULL".to_string());
 
                 vals.join(" ")
             }
@@ -453,14 +491,39 @@ impl Visitor for Expr {
                 }
             }
 
-            Self::IsExpr { span, expr, operator, is_not } => {
+            Self::IsTruthExpr { span, expr, is_not, is_true } => {
                 let mut new_expr = Node::Expr(expr);
                 tf.trans(&mut new_expr);
+                let new_expr = new_expr.into_expr().unwrap();
 
-                Self::IsExpr {
+                Self::IsTruthExpr {
                     span: *span,
-                    operator: *operator,
-                    expr: Box::new(new_expr.into_expr().unwrap().visit(tf)),
+                    expr: Box::new(new_expr.visit(tf)),
+                    is_not: *is_not,
+                    is_true: *is_true,
+                }
+            }
+
+            Self::IsUnknownExpr { span, expr, is_not } => {
+                let mut new_expr = Node::Expr(expr);
+                tf.trans(&mut new_expr);
+                let new_expr = new_expr.into_expr().unwrap();
+
+                Self::IsUnknownExpr {
+                    span: *span,
+                    expr: Box::new(new_expr.visit(tf)),
+                    is_not: *is_not,
+                }
+            }
+
+            Self::IsNullExpr { span, expr, is_not } => {
+                let mut new_expr = Node::Expr(expr);
+                tf.trans(&mut new_expr);
+                let new_expr = new_expr.into_expr().unwrap();
+
+                Self::IsNullExpr {
+                    span: *span,
+                    expr: Box::new(new_expr.visit(tf)),
                     is_not: *is_not,
                 }
             }
@@ -963,12 +1026,12 @@ impl Value {
                 var_ident
             }
 
-            Self::Num { span: _, signed, value } | Self::FloatNum { span:_, value, signed }=> {
+            Self::Num { span: _, signed, value } | Self::FloatNum { span: _, value, signed } => {
                 let mut value = (*value).to_string();
                 if *signed {
                     value.insert(0, '-');
                 }
-                
+
                 value
             }
 
@@ -1512,25 +1575,25 @@ impl AsRef<str> for AggFuncName {
     #[inline]
     fn as_ref(&self) -> &str {
         match self {
-            Self::Avg               => "AVG",
-            Self::Count             => "COUNT",
-            Self::BitAnd            => "BIT_AND",
-            Self::BitOr             => "BIT_OR",
-            Self::BitXor            => "BIT_XOR",
-            Self::JsonArrayAgg      => "JSON_ARRAYAGG",
-            Self::JsonObjectAgg     => "JSON_OBJECTAGG",
-            Self::StCollect         => "ST_COLLECT",
-            Self::Min               => "MIN",
-            Self::Max               => "MAX",
-            Self::Variance          => "VARIANCE",
-            Self::Std               => "Std",
-            Self::StdDev            => "STDDEV",
-            Self::StdDevPop         => "STDDEV_POP",
-            Self::StdDevSamp        => "STDDEV_SAMP",
-            Self::VarPop            => "VAR_POP",
-            Self::VarSamp           => "VAR_SAMP",
-            Self::Sum               => "SUM",
-            Self::GroupConcat       => "GROUP_CONCAT",
+            Self::Avg => "AVG",
+            Self::Count => "COUNT",
+            Self::BitAnd => "BIT_AND",
+            Self::BitOr => "BIT_OR",
+            Self::BitXor => "BIT_XOR",
+            Self::JsonArrayAgg => "JSON_ARRAYAGG",
+            Self::JsonObjectAgg => "JSON_OBJECTAGG",
+            Self::StCollect => "ST_COLLECT",
+            Self::Min => "MIN",
+            Self::Max => "MAX",
+            Self::Variance => "VARIANCE",
+            Self::Std => "Std",
+            Self::StdDev => "STDDEV",
+            Self::StdDevPop => "STDDEV_POP",
+            Self::StdDevSamp => "STDDEV_SAMP",
+            Self::VarPop => "VAR_POP",
+            Self::VarSamp => "VAR_SAMP",
+            Self::Sum => "SUM",
+            Self::GroupConcat => "GROUP_CONCAT",
         }
     }
 }
@@ -1542,7 +1605,7 @@ pub struct AggExpr {
     pub distinct: bool,
     pub exprs: Vec<Expr>,
 
-    // GroupConcat info 
+    // GroupConcat info
     pub group_concat_distinct: Option<String>,
     pub gorder_clause: Vec<OrderExpr>,
     pub gconcat_separator: Option<String>,
@@ -1555,14 +1618,13 @@ impl AggExpr {
         agg.push("(".to_string());
 
         let exprs = self.exprs.iter().map(|x| x.format()).collect::<Vec<_>>().join(", ");
-        
+
         if self.name != AggFuncName::GroupConcat {
             if self.distinct {
                 agg.push("DISTINCT".to_string());
             }
 
             agg.push(exprs);
-
         } else {
             if let Some(opt) = &self.group_concat_distinct {
                 agg.push(opt.clone());
@@ -1611,7 +1673,7 @@ mod test {
     #[test]
     fn test_value() {
         impl Transformer for S {
-            fn trans(&mut self, node: &mut Node) ->  bool {
+            fn trans(&mut self, node: &mut Node) -> bool {
                 match node {
                     Node::Value(Value::Text { span: _, value }) => {
                         if self.is_default {
@@ -1651,10 +1713,10 @@ mod test {
     }
 
     fn test_value_num(s: &mut S) {
-        let mut val = Value::Num { span: Span::new(1, 1), value: "1".to_string() , signed: false};
+        let mut val = Value::Num { span: Span::new(1, 1), value: "1".to_string(), signed: false };
 
         let new_val = val.visit(s);
-        if let Value::Num { span: _, value, signed: _} = new_val {
+        if let Value::Num { span: _, value, signed: _ } = new_val {
             assert_eq!(value, "2")
         }
     }

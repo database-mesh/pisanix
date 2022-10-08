@@ -35,8 +35,15 @@ pub struct App {
 #[derive(Debug, Deserialize, Default)]
 pub struct Service {
     pub name: String,
+    pub endpoints: Vec<Endpoint>,
     pub qos_class: Option<QosClass>,
-    pub qos_group: Vec<QosGroup>,
+    pub qos_group: Option<QosGroup>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct Endpoint {
+    pub ip: String,
+    pub port: u16,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -77,14 +84,18 @@ name = "testapp"
 [[app.service]]
 name = "test"
 qos_class = "guaranteed" # "burstable" | "besteffort"
+[[app.service.endpoints]]
+ip = "1.1.1.1"
+port = 3306
 
-[[app.service.qos_group]]
+[[app.service.endpoints]]
+ip = "1.1.1.1"
+port = 3307
+
+[app.service.qos_group]
 rate = "1MB"
 ceil = "1MB"
 
-[[app.service.qos_group]]
-rate = "1MB"
-ceil = "1MB"
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
         println!("{:?}", config) ;

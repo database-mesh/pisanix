@@ -16,9 +16,9 @@ use std::process::Command;
 
 #[derive(Clone)]
 pub struct QdiscRootAttr<'a> {
-    netns: Option<&'a str>,
-    device: &'a str,
-    typ: &'a str,
+    pub netns: Option<&'a str>,
+    pub device: &'a str,
+    pub typ: &'a str,
 }
 
 pub fn add_root_qdisc<'a>(attr: &QdiscRootAttr<'a>) -> bool {
@@ -78,12 +78,12 @@ pub fn show_qdisc(device: String) -> bool {
 }
 
 pub struct ClassAttr<'a> {
-    netns: Option<&'a str>,
-    device: &'a str,
-    parent: Option<&'a str>,
-    class_id: &'a str,
-    rate: &'a str,
-    ceil: Option<&'a str>,
+    pub netns: Option<&'a str>,
+    pub device: &'a str,
+    pub parent: Option<&'a str>,
+    pub class_id: &'a str,
+    pub rate: &'a str,
+    pub ceil: Option<&'a str>,
 }
 
 pub fn add_class<'a>(attr: &ClassAttr<'a>) -> bool {

@@ -48,6 +48,12 @@ var (
 		Version:  "v1alpha1",
 		Resource: "databaseendpoints",
 	}
+
+	TrafficQoSSchema = schema.GroupVersionResource{
+		Group:    "core.database-mesh.io",
+		Version:  "v1alpha1",
+		Resource: "trafficqoses",
+	}
 )
 
 func GetVirtualDatabaseWithContext(ctx context.Context, c dynamic.Interface, namespace, name string) (*client.VirtualDatabase, error) {
@@ -67,6 +73,26 @@ func GetVirtualDatabaseWithContext(ctx context.Context, c dynamic.Interface, nam
 	}
 
 	return vdb, nil
+}
+
+func GetVirtualDatabaseListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.VirtualDatabaseList, error) {
+	vdblist := &client.VirtualDatabaseList{}
+	raw, err := c.Resource(VirtualDatabaseSchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := raw.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(data, vdblist)
+	if err != nil {
+		return nil, err
+	}
+
+	return vdblist, nil
 }
 
 func GetTrafficStrategyListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.TrafficStrategyList, error) {
@@ -127,4 +153,23 @@ func GetDatabaseEndpointListWithContext(ctx context.Context, c dynamic.Interface
 	}
 
 	return dbeplist, nil
+}
+
+func GetTrafficQoSWithContext(ctx context.Context, c dynamic.Interface, namespace, name string) (*client.TrafficQoS, error) {
+	raw, err := c.Resource(TrafficQoSSchema).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	tq := &client.TrafficQoS{}
+	data, err := raw.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(data, tq)
+	if err != nil {
+		return nil, err
+	}
+
+	return tq, nil
 }

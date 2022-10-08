@@ -475,17 +475,17 @@ func assertProxy(t *testing.T, exp, act *Proxy, msg ...interface{}) bool {
 		assertPlugin(t, exp.Plugin, act.Plugin, "plugin should be equal")
 }
 
-func assertDataSharding(t *testing.T, act, exp []Sharding, msg ...interface{}) bool {
+func assertDataSharding(t *testing.T, exp, act []Sharding, msg ...interface{}) bool {
 	if act != nil && exp != nil {
-		return assert.ElementsMatch(t, act, exp, "rules should be equal")
+		return assert.ElementsMatch(t, exp, act, "rules should be equal")
 	}
 	return true
 }
 
 func assertSimpleLoadBalance(t *testing.T, exp, act *SimpleLoadBalance, msg ...interface{}) bool {
 	if act != nil && exp != nil {
-		return assert.Equal(t, act.BalancerType, exp.BalancerType, "balancerType should be equal") &&
-			assert.ElementsMatch(t, act.Nodes, exp.Nodes, "nodes should be equal")
+		return assert.Equal(t, exp.BalancerType, act.BalancerType, "balancerType should be equal") &&
+			assert.ElementsMatch(t, exp.Nodes, act.Nodes, "nodes should be equal")
 
 	}
 	return true
@@ -493,64 +493,64 @@ func assertSimpleLoadBalance(t *testing.T, exp, act *SimpleLoadBalance, msg ...i
 
 func assertReadWriteSplitting(t *testing.T, exp, act *ReadWriteSplitting, msg ...interface{}) bool {
 	if act != nil && exp != nil {
-		return assertReadWriteSplittingStatic(t, act.Static, exp.Static, "readWriteSplittingStatic should be equal") &&
-			assertReadWriteSplittingDynamic(t, act.Dynamic, exp.Dynamic, "readWriteSplittingDynamic should be equal")
+		return assertReadWriteSplittingStatic(t, exp.Static, act.Static, "readWriteSplittingStatic should be equal") &&
+			assertReadWriteSplittingDynamic(t, exp.Dynamic, act.Dynamic, "readWriteSplittingDynamic should be equal")
 	}
 	return true
 }
 
-func assertReadWriteSplittingStatic(t *testing.T, act, exp *ReadWriteSplittingStatic, msg ...interface{}) bool {
+func assertReadWriteSplittingStatic(t *testing.T, exp, act *ReadWriteSplittingStatic, msg ...interface{}) bool {
 	if act != nil && exp != nil {
-		return assert.Equal(t, act.DefaultTarget, exp.DefaultTarget, "defaultTarget should be equal") &&
+		return assert.Equal(t, exp.DefaultTarget, act.DefaultTarget, "defaultTarget should be equal") &&
 			//TODO: check if this is valid
-			assert.Equal(t, act.Rules, exp.Rules, "rules should be equal")
+			assert.Equal(t, exp.Rules, act.Rules, "rules should be equal")
 	}
 	return true
 }
 
-func assertReadWriteSplittingDynamic(t *testing.T, act, exp *ReadWriteSplittingDynamic, msg ...interface{}) bool {
+func assertReadWriteSplittingDynamic(t *testing.T, exp, act *ReadWriteSplittingDynamic, msg ...interface{}) bool {
 	if act != nil && exp != nil {
-		return assert.Equal(t, act.DefaultTarget, exp.DefaultTarget, "defaultType should be equal") &&
-			assert.Equal(t, act.Rules, exp.Rules, "rules should be equal") &&
-			assertReadWriteDiscovery(t, act.Discovery, exp.Discovery, "discovery should be equal")
+		return assert.Equal(t, exp.DefaultTarget, act.DefaultTarget, "defaultType should be equal") &&
+			assert.Equal(t, exp.Rules, act.Rules, "rules should be equal") &&
+			assertReadWriteDiscovery(t, exp.Discovery, act.Discovery, "discovery should be equal")
 
 	}
 	return true
 }
 
-func assertReadWriteDiscovery(t *testing.T, act, exp ReadWriteDiscovery, msg ...interface{}) bool {
-	return assert.Equal(t, act.Type, exp.Type, "type should be equal") &&
-		assert.Equal(t, act.User, exp.User, "user should be equal") &&
-		assert.Equal(t, act.Password, exp.Password, "password should be equal") &&
-		assert.Equal(t, act.MonitorInterval, exp.MonitorInterval, "monitorInterval should be equal") &&
-		assert.Equal(t, act.ConnectInterval, exp.ConnectInterval, "connectInterval should be equal") &&
-		assert.Equal(t, act.ConnectTimeout, exp.ConnectTimeout, "connectTimeout should be equal") &&
-		assert.Equal(t, act.ConnectMaxFailures, exp.ConnectMaxFailures, "connectMaxFailures should be equal") &&
-		assert.Equal(t, act.PingInterval, exp.PingInterval, "pingInterval should be equal") &&
-		assert.Equal(t, act.PingTimeout, exp.PingTimeout, "pingTimeout should be equal") &&
-		assert.Equal(t, act.PingMaxFailures, exp.PingMaxFailures, "pingMaxFailures should be equal") &&
-		assert.Equal(t, act.ReplicationLagInterval, exp.ReplicationLagInterval, "replicationLagInterval should be equal") &&
-		assert.Equal(t, act.ReplicationLagTimeout, exp.ReplicationLagTimeout, "replicationLagTimeout should be equal") &&
-		assert.Equal(t, act.ReplicationLagMaxFailures, exp.ReplicationLagMaxFailures, "replicationLagMaxFailures should be equal") &&
-		assert.Equal(t, act.MaxReplicationLag, exp.MaxReplicationLag, "maxReplicationLagLag should be equal") &&
-		assert.Equal(t, act.ReadOnlyInterval, exp.ReadOnlyInterval, "readOnlyInterval should be equal") &&
-		assert.Equal(t, act.ReadOnlyTimeout, exp.ReadOnlyTimeout, "readOnlyTimeout should be equal") &&
-		assert.Equal(t, act.ReadOnlyMaxFailures, exp.ReadOnlyMaxFailures, "readOnlyMaxFailures should be equal")
+func assertReadWriteDiscovery(t *testing.T, exp, act ReadWriteDiscovery, msg ...interface{}) bool {
+	return assert.Equal(t, exp.Type, act.Type, "type should be equal") &&
+		assert.Equal(t, exp.User, act.User, "user should be equal") &&
+		assert.Equal(t, exp.Password, act.Password, "password should be equal") &&
+		assert.Equal(t, exp.MonitorInterval, act.MonitorInterval, "monitorInterval should be equal") &&
+		assert.Equal(t, exp.ConnectInterval, act.ConnectInterval, "connectInterval should be equal") &&
+		assert.Equal(t, exp.ConnectTimeout, act.ConnectTimeout, "connectTimeout should be equal") &&
+		assert.Equal(t, exp.ConnectMaxFailures, act.ConnectMaxFailures, "connectMaxFailures should be equal") &&
+		assert.Equal(t, exp.PingInterval, act.PingInterval, "pingInterval should be equal") &&
+		assert.Equal(t, exp.PingTimeout, act.PingTimeout, "pingTimeout should be equal") &&
+		assert.Equal(t, exp.PingMaxFailures, act.PingMaxFailures, "pingMaxFailures should be equal") &&
+		assert.Equal(t, exp.ReplicationLagInterval, act.ReplicationLagInterval, "replicationLagInterval should be equal") &&
+		assert.Equal(t, exp.ReplicationLagTimeout, act.ReplicationLagTimeout, "replicationLagTimeout should be equal") &&
+		assert.Equal(t, exp.ReplicationLagMaxFailures, act.ReplicationLagMaxFailures, "replicationLagMaxFailures should be equal") &&
+		assert.Equal(t, exp.MaxReplicationLag, act.MaxReplicationLag, "maxReplicationLagLag should be equal") &&
+		assert.Equal(t, exp.ReadOnlyInterval, act.ReadOnlyInterval, "readOnlyInterval should be equal") &&
+		assert.Equal(t, exp.ReadOnlyTimeout, act.ReadOnlyTimeout, "readOnlyTimeout should be equal") &&
+		assert.Equal(t, exp.ReadOnlyMaxFailures, act.ReadOnlyMaxFailures, "readOnlyMaxFailures should be equal")
 }
 
-func assertPlugin(t *testing.T, act, exp *Plugin, msg ...interface{}) bool {
+func assertPlugin(t *testing.T, exp, act *Plugin, msg ...interface{}) bool {
 	if act != nil && exp != nil {
-		return assertCircuitBreaks(t, act.CircuitBreaks, exp.CircuitBreaks, "circuitBreaks should be equal") && assertConcurrencyControls(t, act.ConcurrencyControls, exp.ConcurrencyControls, "concurrencyControls should be equal")
+		return assertCircuitBreaks(t, exp.CircuitBreaks, act.CircuitBreaks, "circuitBreaks should be equal") && assertConcurrencyControls(t, exp.ConcurrencyControls, act.ConcurrencyControls, "concurrencyControls should be equal")
 	}
 	return true
 }
 
-func assertCircuitBreaks(t *testing.T, act, exp []CircuitBreak, msg ...interface{}) bool {
-	return assert.ElementsMatch(t, act, exp, "circuitBreaks should be equal")
+func assertCircuitBreaks(t *testing.T, exp, act []CircuitBreak, msg ...interface{}) bool {
+	return assert.ElementsMatch(t, exp, act, "circuitBreaks should be equal")
 }
 
-func assertConcurrencyControls(t *testing.T, act, exp []ConcurrencyControl, msg ...interface{}) bool {
-	return assert.ElementsMatch(t, act, exp, "concurrencyControls should be equal")
+func assertConcurrencyControls(t *testing.T, exp, act []ConcurrencyControl, msg ...interface{}) bool {
+	return assert.ElementsMatch(t, exp, act, "concurrencyControls should be equal")
 }
 func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 	builder := &ProxyBuilder{
@@ -670,88 +670,90 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 }
 
 func Test_ShardingConfig(t *testing.T) {
-	config := PisaProxyConfig{
-		Admin: AdminConfig{
-			Host:     "0.0.0.0",
-			Port:     8082,
-			LogLevel: "INFO",
-		},
-		MySQL: MySQLConfig{
-			Nodes: []MySQLNode{
-				{
-					Name:     "ds001",
-					Db:       "socksdb",
-					User:     "root",
-					Password: "12345678",
-					Host:     "127.0.0.1",
-					Port:     3306,
-					// Weight:   1,
-					Role: "read",
+	/*
+		config := PisaProxyConfig{
+			Admin: AdminConfig{
+				Host:     "0.0.0.0",
+				Port:     8082,
+				LogLevel: "INFO",
+			},
+			MySQL: MySQLConfig{
+				Nodes: []MySQLNode{
+					{
+						Name:     "ds001",
+						Db:       "socksdb",
+						User:     "root",
+						Password: "12345678",
+						Host:     "127.0.0.1",
+						Port:     3306,
+						// Weight:   1,
+						Role: "read",
+					},
 				},
 			},
-		},
-		Proxy: ProxyConfig{
-			Config: []Proxy{
-				{
-					ListenAddr:    "0.0.0.0:9088",
-					User:          "root",
-					Password:      "12345678",
-					DB:            "testrw",
-					BackendType:   "mysql",
-					PoolSize:      3,
-					ServerVersion: "",
-					Sharding: []Sharding{
-						{
-							TableName: "test_shard_hash",
-							ActualDatanodes: []string{
-								"ds001",
-							},
-							TableStrategy: &TableStrategy{
-								TableShardingAlgorithmName: "crc32mod",
-								TableShardingColumn:        "order_id",
-								ShardingCount:              4,
-							},
-							DatabaseStrategy: &DatabaseStrategy{
-								DatabaseShardingAlgorithmName: "mod",
-								DatabaseShardingColumn:        "id",
-							},
-							DatabaseTableStrategy: &DatabaseTableStrategy{
-								TableStrategy: TableStrategy{
-									TableShardingAlgorithmName: "crc32_mod",
+			Proxy: ProxyConfig{
+				Config: []Proxy{
+					{
+						ListenAddr:    "0.0.0.0:9088",
+						User:          "root",
+						Password:      "12345678",
+						DB:            "testrw",
+						BackendType:   "mysql",
+						PoolSize:      3,
+						ServerVersion: "",
+						Sharding: []Sharding{
+							{
+								TableName: "test_shard_hash",
+								ActualDatanodes: []string{
+									"ds001",
+								},
+								TableStrategy: &TableStrategy{
+									TableShardingAlgorithmName: "crc32mod",
 									TableShardingColumn:        "order_id",
 									ShardingCount:              4,
 								},
-								DatabaseStrategy: DatabaseStrategy{
+								DatabaseStrategy: &DatabaseStrategy{
 									DatabaseShardingAlgorithmName: "mod",
-									DatabaseShardingColumn:        "order_id",
+									DatabaseShardingColumn:        "id",
+								},
+								DatabaseTableStrategy: &DatabaseTableStrategy{
+									TableStrategy: TableStrategy{
+										TableShardingAlgorithmName: "crc32_mod",
+										TableShardingColumn:        "order_id",
+										ShardingCount:              4,
+									},
+									DatabaseStrategy: DatabaseStrategy{
+										DatabaseShardingAlgorithmName: "mod",
+										DatabaseShardingColumn:        "order_id",
+									},
 								},
 							},
 						},
 					},
 				},
 			},
-		},
-		NodeGroup: NodeGroupConfig{
-			Members: []NodeGroupMember{
-				{
-					Name:      "ms001",
-					ReadWrite: "ds001",
-					Reads: []string{
-						"ds001",
-						"ds002",
+			NodeGroup: NodeGroupConfig{
+				Members: []NodeGroupMember{
+					{
+						Name:      "ms001",
+						ReadWrite: "ds001",
+						Reads: []string{
+							"ds001",
+							"ds002",
+						},
 					},
-				},
-				{
-					Name:      "ms002",
-					ReadWrite: "ds002",
-					Reads: []string{
-						"ds002",
-						"ds003",
+					{
+						Name:      "ms002",
+						ReadWrite: "ds002",
+						Reads: []string{
+							"ds002",
+							"ds003",
+						},
 					},
 				},
 			},
-		},
-	}
+		}
+	*/
 
 	// data, _ := json.Marshal(config)
 }
@@ -949,8 +951,8 @@ func Test_NodeGroupConfigBuilder(t *testing.T) {
 	for _, cfgm := range cfg.Members {
 		for _, expm := range expectedNodeGroup.Members {
 			if cfgm.Name == expm.Name {
-				assert.EqualValues(t, cfgm.ReadWrite, expm.ReadWrite, "readwrite should be equal")
-				assert.EqualValues(t, cfgm.Reads, expm.Reads, "read should be equal")
+				assert.EqualValues(t, expm.ReadWrite, cfgm.ReadWrite, "readwrite should be equal")
+				assert.EqualValues(t, expm.Reads, cfgm.Reads, "read should be equal")
 			}
 		}
 	}
