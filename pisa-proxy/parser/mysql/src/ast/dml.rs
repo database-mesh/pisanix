@@ -442,8 +442,12 @@ impl Visitor for Item {
             }
             Self::ItemExpr(item) => {
                 let mut node = Node::ItemExpr(item);
-                tf.trans(&mut node);
+                let is_skip = tf.trans(&mut node);
                 let new_node = node.into_item_expr().unwrap();
+                if is_skip {
+                    tf.complete(&mut Node::ItemExpr(new_node));
+                    return Item::ItemExpr(Box::new(new_node.clone()));
+                }
                 Item::ItemExpr(Box::new(new_node.visit(tf)))
             }
         }
