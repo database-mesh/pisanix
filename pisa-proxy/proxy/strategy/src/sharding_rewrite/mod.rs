@@ -16,17 +16,21 @@ mod meta;
 mod rewrite_const;
 mod generic_meta;
 
+use std::vec;
+
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
 use crc32fast::Hasher;
 use mysql_parser::ast::{SqlStmt, Visitor, TableIdent };
 use crate::config::NodeGroup;
 use crate::sharding_rewrite::meta::AvgMeta;
+use crate::sharding_rewrite::meta::FieldWrapFunc;
 use crate::sharding_rewrite::meta::GroupMeta;
 use crate::sharding_rewrite::meta::OrderMeta;
 use crate::sharding_rewrite::rewrite_const::*;
 use crate::sharding_rewrite::meta::OrderDirection;
 
+use self::meta::FieldMetaIdent;
 use self::{meta::{
     FieldMeta, InsertValsMeta, RewriteMetaData, WhereMeta, WhereMetaRightDataType,
 }, generic_meta::ShardingMeta};
@@ -95,7 +99,7 @@ pub enum RewriteChange {
     GroupChange(GroupChange),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DatabaseChange {
     pub span: mysql_parser::Span,
     pub target: String,
@@ -144,6 +148,7 @@ pub struct ShardingRewriteOutput {
     pub target_sql: String,
     pub data_source: DataSource,
     pub sharding_column: Option<String>,
+    pub min_max_fields: Vec<FieldMetaIdent>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -265,7 +270,7 @@ impl ShardingRewrite {
             return Ok(self.database_strategy_iproduct(try_tables, avgs, fields, orders, groups));
         }
 
-        let would_changes: Vec<DatabaseChange> = try_tables
+        let would_changes = try_tables
             .iter()
             .filter_map(|x| {
                 let w = wheres.iter().find(|w| w.0 == x.0);
@@ -273,12 +278,12 @@ impl ShardingRewrite {
                     let node = &x.1.actual_datanodes[w.1 as usize];
                     let ep = self.endpoints.iter().find(|x| x.name.eq(node)).unwrap();
                     let target = self.change_table(x.2, &ep.db, 0);
-                    Some(DatabaseChange {
+                    Some((x.0, DatabaseChange {
                         span: x.2.span,
                         shard_idx: w.1,
                         target,
                         rule: x.1.clone(),
-                    })
+                    }))
                 } else {
                     None
                 }
@@ -287,17 +292,16 @@ impl ShardingRewrite {
 
         let mut target_sql = self.raw_sql.to_string();
         let mut offset = 0;
-        let shard_idx = would_changes[0].shard_idx;
-        let sharding_rule = &would_changes[0].rule.clone();
-        let mut output = vec![];
+        let shard_idx = would_changes[0].1.shard_idx;
+        let sharding_rule = &would_changes[0].1.rule.clone();
 
         let changes = would_changes
             .into_iter()
             .map(|x| {
-                Self::change_sql(&mut target_sql, x.span, &x.target, offset);
-                offset = x.target.len() - x.span.len();
+                Self::change_sql(&mut target_sql, x.1.span, &x.1.target, offset);
+                offset = x.1.target.len() - x.1.span.len();
 
-                RewriteChange::DatabaseChange(x)
+                (x.0, RewriteChange::DatabaseChange(x.1))
             })
             .collect::<Vec<_>>();
 
@@ -312,58 +316,36 @@ impl ShardingRewrite {
             DataSource::Endpoint(ep.clone())
         };
 
-        let sharding_column = if let Some(StrategyType::DatabaseStrategyConfig(strategy)) = &sharding_rule.database_strategy {
-            strategy.database_sharding_column.to_string() 
-        } else {
-            unreachable!()
-        };
+        let sharding_column = sharding_rule.database_strategy.as_ref().unwrap().get_sharding_column().0.unwrap().to_string();
+        let min_max_fields = changes.iter().map(|x| self.find_min_max_fields(&x.0, fields)).flatten().collect();
 
-        let (order_changes, group_changes) = Self::change_order_group(&mut target_sql, orders, groups, fields, shard_idx);
+        let mut changes = changes.into_iter().map(|x| x.1).collect::<Vec<_>>();
 
-        if !order_changes.target.is_empty() {
-                output.push(
-                    ShardingRewriteOutput {
-                        changes: vec![RewriteChange::OrderChange(order_changes)],
-                        target_sql: target_sql.to_string(),
-                        data_source: data_source.clone(),
-                        sharding_column: Some(sharding_column.to_string()),
-                    }
-                )
+        let (order_change, group_change) = Self::change_order_group(&mut target_sql, orders, groups, fields, shard_idx);
+
+        if !order_change.target.is_empty() {
+            changes.push(RewriteChange::OrderChange(order_change))
         }
            
-        if !group_changes.target.is_empty() {
-                output.push(
-                    ShardingRewriteOutput {
-                        changes: vec![RewriteChange::GroupChange(group_changes)],
-                        target_sql: target_sql.to_string(),
-                        data_source: data_source.clone(),
-                        sharding_column: Some(sharding_column.to_string()),
-                    }
-                )
+        if !group_change.target.is_empty() {
+            changes.push(RewriteChange::GroupChange(group_change))
         }
 
         if !avgs.is_empty() {
             let target = Self::change_avg(&mut target_sql, avgs, shard_idx, 0);
-            output.push(
-                ShardingRewriteOutput {
-                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
-                    target_sql: target_sql.to_string(),
-                    data_source: data_source.clone(),
-                    sharding_column: Some(sharding_column.to_string()),
-                }
-            );
+            changes.push(RewriteChange::AvgChange(AvgChange{target}));
         }
 
-        output.push(
-            ShardingRewriteOutput { 
-                changes, 
-                target_sql: target_sql.to_string(), 
-                data_source,
-                sharding_column: Some(sharding_column.to_string()),
-            }
-        );
         Ok(
-            output
+            vec![
+                ShardingRewriteOutput { 
+                    changes,
+                    target_sql, 
+                    data_source,
+                    sharding_column: Some(sharding_column),
+                    min_max_fields,
+                }
+            ]
         )
     }
 
@@ -409,18 +391,18 @@ impl ShardingRewrite {
             return Ok(self.table_strategy_iproduct(try_tables, avgs, fields, orders, groups));
         }
 
-        let would_changes: Vec<DatabaseChange> = try_tables
+        let would_changes = try_tables
             .iter()
             .filter_map(|x| {
                 let w = wheres.iter().find(|w| w.0 == x.0);
                 if let Some(w) = w {
                     let target = self.change_table(x.2, "", w.1);
-                    Some(DatabaseChange {
+                    Some((x.0, DatabaseChange {
                         span: x.2.span,
                         shard_idx: w.1,
                         target,
                         rule: x.1.clone(),
-                    })
+                    }))
                 } else {
                     None
                 }
@@ -429,18 +411,16 @@ impl ShardingRewrite {
 
         let mut target_sql = self.raw_sql.clone();
         let mut offset = 0;
-        let sharding_rule = &would_changes[0].rule.clone();
+        let sharding_rule = &would_changes[0].1.rule.clone();
         let mut shard_idx: u64 = 0;
-
-        let mut output = vec![];
 
         let changes = would_changes
             .into_iter()
             .map(|x| {
-                Self::change_sql(&mut target_sql, x.span, &x.target, offset);
-                offset = x.target.len() - x.span.len();
-                shard_idx = x.shard_idx;
-                RewriteChange::DatabaseChange(x)
+                Self::change_sql(&mut target_sql, x.1.span, &x.1.target, offset);
+                offset = x.1.target.len() - x.1.span.len();
+                shard_idx = x.1.shard_idx;
+                (x.0, RewriteChange::DatabaseChange(x.1))
             })
             .collect::<Vec<_>>();
     
@@ -453,53 +433,61 @@ impl ShardingRewrite {
         
         let sharding_column = sharding_rule.get_sharding_column().1.unwrap();
 
-        let (order_changes, group_changes) = Self::change_order_group(&mut target_sql, orders, groups, fields, shard_idx);
+        let min_max_fields = changes.iter().map(|x| self.find_min_max_fields(&x.0, fields)).flatten().collect();
+        let mut changes = changes.into_iter().map(|x| x.1).collect::<Vec<_>>();
 
-        if !order_changes.target.is_empty() {
-                output.push(
-                    ShardingRewriteOutput {
-                        changes: vec![RewriteChange::OrderChange(order_changes)],
-                        target_sql: target_sql.to_string(),
-                        data_source: data_source.clone(),
-                        sharding_column: Some(sharding_column.to_string()),
-                    }
-                )
+        let (order_change, group_change) = Self::change_order_group(&mut target_sql, orders, groups, fields, shard_idx);
+
+        if !order_change.target.is_empty() {
+            changes.push(RewriteChange::OrderChange(order_change));
+                //output.push(
+                //    ShardingRewriteOutput {
+                //        changes: vec![RewriteChange::OrderChange(order_changes)],
+                //        target_sql: target_sql.to_string(),
+                //        data_source: data_source.clone(),
+                //        sharding_column: Some(sharding_column.to_string()),
+                //        min_max_fields: vec![],
+                //    }
+                //)
         }
            
-        if !group_changes.target.is_empty() {
-                output.push(
-                    ShardingRewriteOutput {
-                        changes: vec![RewriteChange::GroupChange(group_changes)],
-                        target_sql: target_sql.to_string(),
-                        data_source: data_source.clone(),
-                        sharding_column: Some(sharding_column.to_string()),
-                    }
-                )
+        if !group_change.target.is_empty() {
+            changes.push(RewriteChange::GroupChange(group_change));
+                //output.push(
+                //    ShardingRewriteOutput {
+                //        changes: vec![RewriteChange::GroupChange(group_changes)],
+                //        target_sql: target_sql.to_string(),
+                //        data_source: data_source.clone(),
+                //        sharding_column: Some(sharding_column.to_string()),
+                //        min_max_fields: vec![],
+                //    }
+                //)
         }
 
         if !avgs.is_empty() {
             let target = Self::change_avg(&mut target_sql, avgs, shard_idx, 0);
-            output.push(
-                ShardingRewriteOutput {
-                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
-                    target_sql: target_sql.to_string(),
-                    data_source: data_source.clone(),
-                    sharding_column: Some(sharding_column.to_string()),
-                }
-            );
+            changes.push(RewriteChange::AvgChange(AvgChange { target }));
+            //output.push(
+            //    ShardingRewriteOutput {
+            //        changes: vec![RewriteChange::AvgChange(AvgChange{target})],
+            //        target_sql: target_sql.to_string(),
+            //        data_source: data_source.clone(),
+            //        sharding_column: Some(sharding_column.to_string()),
+            //        min_max_fields: vec![],
+            //    }
+            //);
         }
 
-        output.push(
-            ShardingRewriteOutput { 
-                changes, 
-                target_sql: target_sql.to_string(), 
-                data_source,
-                sharding_column: Some(sharding_column.to_string()),
-            }
-        );
-
         Ok(
-            output
+            vec![
+                ShardingRewriteOutput { 
+                    changes, 
+                    target_sql: target_sql.to_string(), 
+                    data_source,
+                    sharding_column: Some(sharding_column.to_string()),
+                    min_max_fields,
+                }
+            ]
         )
     }
 
@@ -685,14 +673,14 @@ impl ShardingRewrite {
         for (query_id, field) in fields.iter() {
             if *query_id == 1 {
                 let last_span = match &field[&field.len() - 1] {
-                    FieldMeta::Ident{span, name: _} => {
-                        span
+                    FieldMeta::Ident(field) => {
+                        field.span
                     }
                     _ => unreachable!(),
                 };
                 let first_span = match &field[0] {
-                    FieldMeta::Ident{span, name: _} => {
-                        span
+                    FieldMeta::Ident(field) => {
+                        field.span
                     },
                     _ => unreachable!(),
                 };
@@ -702,9 +690,9 @@ impl ShardingRewrite {
                 let mut ori_field = String::with_capacity(len);
                 let fields_list = field.iter().map(|x| {
                     match x {
-                        FieldMeta::Ident{span: _, name} => {
-                            ori_field += &format!("{}, ", name).to_string();
-                            name
+                        FieldMeta::Ident(field) => {
+                            ori_field += &format!("{}, ", &field.name).to_string();
+                            field.name.clone()
                         },
                         _ => unreachable!()
                     }
@@ -745,8 +733,8 @@ impl ShardingRewrite {
                             for order in order_metas.into_iter() {
                                 if let None = field_meta.into_iter().find(|&x| {
                                     match x {
-                                        FieldMeta::Ident{span: _, name} => {
-                                            if *name == order.name {
+                                        FieldMeta::Ident(field) => {
+                                            if *field.name == order.name {
                                                 true
                                             } else {
                                                 false
@@ -779,8 +767,8 @@ impl ShardingRewrite {
                             for group in group_metas.into_iter() {
                                 if let None = field_meta.into_iter().find(|&x| {
                                     match x {
-                                        FieldMeta::Ident{span: _, name} => {
-                                            if *name == group.name {
+                                        FieldMeta::Ident(field) => {
+                                            if *field.name == group.name {
                                                 true
                                             } else {
                                                 false
@@ -824,13 +812,13 @@ impl ShardingRewrite {
             }
     
             for avg_meta in avg {
-                res.insert(AVG_FIELD.to_string(), format!("AVG({})", avg_meta.name));
-                let target_count = &format!("{}({}) {} ", COUNT, avg_meta.name, AS);
-                let target_count_as = &format!("{}_{}_{:05}", avg_meta.name.to_ascii_uppercase(), AVG_DERIVED_COUNT, idx);
+                res.insert(AVG_FIELD.to_string(), avg_meta.avg_field_name.clone());
+                let target_count = &format!("{}({}) {} ", COUNT, avg_meta.field_name, AS);
+                let target_count_as = &format!("{}_{}_{:05}", avg_meta.field_name.to_ascii_uppercase(), AVG_DERIVED_COUNT, idx);
                 res.insert(AVG_COUNT.to_string(), target_count_as.to_string());
 
-                let target_sum = &format!("{}({}) {} ", SUM, avg_meta.name, AS);
-                let target_sum_as = &format!("{}_{}_{:05}", avg_meta.name.to_ascii_uppercase(), AVG_DERIVED_SUM, idx);
+                let target_sum = &format!("{}({}) {} ", SUM, avg_meta.field_name, AS);
+                let target_sum_as = &format!("{}_{}_{:05}", avg_meta.field_name.to_ascii_uppercase(), AVG_DERIVED_SUM, idx);
                 res.insert(AVG_SUM.to_string(), target_sum_as.to_string());
 
                 target += &format!("{}{}, {}{}", target_count, target_count_as, target_sum, target_sum_as);
@@ -847,21 +835,14 @@ impl ShardingRewrite {
 
     fn change_insert_sql(&self, try_tables: Vec<(u8, Sharding, &TableIdent)>, fields: &IndexMap<u8, Vec<FieldMeta>>,inserts: &IndexMap<u8, Vec<InsertValsMeta>>) -> Result<Vec<ShardingRewriteOutput>, ShardingRewriteError> {
         let outputs = try_tables.into_iter().map(|(query_id, rule, table)| {
-            let mut sharding_count: u64 = 0;
-            let mut sharding_column: &str = "";
-            let mut algo: &ShardingAlgorithmName = &ShardingAlgorithmName::Mod;
+            let (sharding_count, sharding_column, algo ) = if rule.table_strategy.is_some() {
+                (rule.get_sharding_count().1.unwrap(), rule.get_sharding_column().1.unwrap(), rule.get_algo().1.unwrap())
 
-            if rule.table_strategy.is_some() {
-                sharding_count = rule.get_sharding_count().1.unwrap();
-                sharding_column = rule.get_sharding_column().1.unwrap();
-                algo = rule.get_algo().1.unwrap();
             } else if rule.database_strategy.is_some() {
-                sharding_count = rule.get_sharding_count().0.unwrap();
-                sharding_column = rule.get_sharding_column().0.unwrap();
-                algo = rule.get_algo().0.unwrap();
+                (rule.get_sharding_count().0.unwrap(), rule.get_sharding_column().0.unwrap(), rule.get_algo().0.unwrap())
             } else {
                 unreachable!()
-            }
+            };
 
             self.change_insert_sql_inner(
                 &rule,
@@ -925,6 +906,7 @@ impl ShardingRewrite {
                 target_sql: v.trim_end_matches(", ").to_string(),
                 data_source: data_source.clone(),
                 sharding_column: Some(sharding_column.to_string()),
+                min_max_fields: vec![],
             }
 
         }).collect::<Vec<ShardingRewriteOutput>>();
@@ -964,9 +946,9 @@ impl ShardingRewrite {
             .iter()
             .enumerate()
             .find_map(|x| {
-                if let FieldMeta::Ident { span, name } = x.1 {
-                    if name == sharding_column {
-                        return Some((x.0, *span, name.clone()));
+                if let FieldMeta::Ident(field) = x.1 {
+                    if field.name == sharding_column {
+                        return Some((x.0, field.span, field.name.clone()));
                     }
                 }
 
@@ -995,8 +977,9 @@ impl ShardingRewrite {
         groups: &IndexMap<u8, Vec<GroupMeta>>,
     ) -> Vec<ShardingRewriteOutput> {
         let mut output = vec![];
-        let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
+        
         let mut sharding_column = None;
+        let mut group_changes = IndexMap::<usize, (u8, Vec<DatabaseChange>)>::new();
 
         for t in tables.iter() {
             if let StrategyType::DatabaseStrategyConfig(config) = &t.1.database_strategy.as_ref().unwrap() {
@@ -1014,7 +997,7 @@ impl ShardingRewrite {
                     rule: t.1.clone(),
                 };
 
-                group_changes.entry(idx).or_insert(vec![]).push(change);
+                group_changes.entry(idx).or_insert((t.0, vec![])).1.push(change);
             }
         }
 
@@ -1023,51 +1006,39 @@ impl ShardingRewrite {
             let mut target_sql = self.raw_sql.to_string();
             let ep = self.endpoints[group].clone();
 
-            for change in changes.iter() {
+            for change in changes.1.iter() {
                 Self::change_sql(&mut target_sql, change.span, &change.target, offset);
                 offset = change.target.len() - change.span.len();
             }
 
-            let (order_changes, group_changes) = Self::change_order_group(&mut target_sql, orders, groups, fields, changes[0].shard_idx);
+            let min_max_fields = self.find_min_max_fields(&changes.0, fields);
+            let (order_change, group_change) = Self::change_order_group(&mut target_sql, orders, groups, fields, changes.1[0].shard_idx);
 
-            if !order_changes.target.is_empty() {
-                output.push(
-                    ShardingRewriteOutput {
-                        changes: vec![RewriteChange::OrderChange(order_changes)],
-                        target_sql: target_sql.to_string(),
-                        data_source: DataSource::Endpoint(ep.clone()),
-                        sharding_column: sharding_column.clone(),
-                    }
-                )
-            } else if !group_changes.target.is_empty() {
-                output.push(
-                    ShardingRewriteOutput {
-                        changes: vec![RewriteChange::GroupChange(group_changes)],
-                        target_sql: target_sql.to_string(),
-                        data_source: DataSource::Endpoint(ep.clone()),
-                        sharding_column: sharding_column.clone(),
-                    }
-                )
-            } else if !avgs.is_empty() {
-                if changes[0].span.start() > avgs[0][0].span.start() {
+            let mut rewrite_changes: Vec<RewriteChange> = changes.1.iter().map(|x| RewriteChange::DatabaseChange(x.clone())).collect();
+
+            if !order_change.target.is_empty() {
+                rewrite_changes.push(RewriteChange::OrderChange(order_change))
+            }
+            
+            if !group_change.target.is_empty() {
+                rewrite_changes.push(RewriteChange::GroupChange(group_change))
+            }
+            
+            if !avgs.is_empty() {
+                if changes.1[0].span.start() > avgs[0][0].span.start() {
                     offset = 0; 
                 }
-                let target = Self::change_avg(&mut target_sql, avgs, changes[0].shard_idx, offset);
-
-                output.push(ShardingRewriteOutput {
-                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
-                    target_sql: target_sql.to_string(),
-                    data_source: DataSource::Endpoint(ep.clone()),
-                    sharding_column: sharding_column.clone(),
-                });
-            } else {
-                output.push(ShardingRewriteOutput {
-                    changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
-                    target_sql,
-                    data_source: DataSource::Endpoint(ep.clone()),
-                    sharding_column: sharding_column.clone(),
-                });
+                let target = Self::change_avg(&mut target_sql, avgs, changes.1[0].shard_idx, offset);
+                rewrite_changes.push(RewriteChange::AvgChange(AvgChange { target }))
             }
+
+            output.push(ShardingRewriteOutput {
+                changes: rewrite_changes,
+                target_sql,
+                data_source: DataSource::Endpoint(ep),
+                sharding_column: sharding_column.clone(),
+                min_max_fields,
+            })
         }
         output
     }
@@ -1081,13 +1052,12 @@ impl ShardingRewrite {
         groups: &IndexMap<u8, Vec<GroupMeta>>,
     ) -> Vec<ShardingRewriteOutput> {
         let mut output = vec![];
-        let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
+        let mut group_changes = IndexMap::<usize, (u8, Vec<DatabaseChange>)>::new();
         let mut sharding_column = None; 
-        let ep = self.endpoints[0].clone();
         let mut data_source = None;
 
         for t in tables.iter() {
-            // Fixme: it should execute only.
+            // Fixme: it should execute once only.
             data_source = if self.has_rw {
                 Some(DataSource::NodeGroup(t.1.actual_datanodes[0].clone()))
             } else {
@@ -1107,7 +1077,7 @@ impl ShardingRewrite {
                 };
 
 
-                group_changes.entry(idx as usize).or_insert(vec![]).push(change);
+                group_changes.entry(idx as usize).or_insert((t.0, vec![])).1.push(change);
             }
         }
 
@@ -1115,51 +1085,43 @@ impl ShardingRewrite {
             let mut offset = 0;
             let mut target_sql = self.raw_sql.clone();
 
-            for change in changes.iter() {
+            for change in changes.1.iter() {
                 Self::change_sql(&mut target_sql, change.span, &change.target, offset);
                 offset = change.target.len() - change.span.len();
               
             }
 
-            let (order_changes, group_changes) = Self::change_order_group(&mut target_sql, orders, groups, fields, changes[0].shard_idx);
-            if !order_changes.target.is_empty() {
-                output.push(
-                    ShardingRewriteOutput {
-                        changes: vec![RewriteChange::OrderChange(order_changes)],
-                        target_sql: target_sql.to_string(),
-                        data_source: DataSource::Endpoint(ep.clone()),
-                        sharding_column: sharding_column.clone(),
-                    }
-                )
-            } else if !group_changes.target.is_empty() {
-                output.push(
-                    ShardingRewriteOutput {
-                        changes: vec![RewriteChange::GroupChange(group_changes)],
-                        target_sql: target_sql.to_string(),
-                        data_source: data_source.as_ref().unwrap().clone(),
-                        sharding_column: sharding_column.clone(),
-                    }
-                )
-            } else if !avgs.is_empty() {
-                if changes[0].span.start() > avgs[0][0].span.start() {
+            let min_max_fields = self.find_min_max_fields(&changes.0, fields);
+
+            let (order_change, group_change) = Self::change_order_group(&mut target_sql, orders, groups, fields, changes.1[0].shard_idx);
+
+            let mut rewrite_changes: Vec<RewriteChange> = changes.1.iter().map(|x| RewriteChange::DatabaseChange(x.clone())).collect();
+
+            if !order_change.target.is_empty() {
+                rewrite_changes.push(RewriteChange::OrderChange(order_change))
+            }
+           
+            if !group_change.target.is_empty() {
+                rewrite_changes.push(RewriteChange::GroupChange(group_change));
+            }
+
+            if !avgs.is_empty() {
+                if changes.1[0].span.start() > avgs[0][0].span.start() {
                     offset = 0; 
                 }
-                let target = Self::change_avg(&mut target_sql, avgs, changes[0].shard_idx, offset);
-                output.push(ShardingRewriteOutput {
-                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
-                    target_sql: target_sql.to_string(),
-                    data_source: data_source.as_ref().unwrap().clone(),
-                    sharding_column: sharding_column.clone(),
-                });
-            } else {
-                output.push(ShardingRewriteOutput {
-                    changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
-                    target_sql: target_sql.to_string(),
-                    data_source: data_source.as_ref().unwrap().clone(),
-                    sharding_column: sharding_column.clone(),
-                })
+                let target = Self::change_avg(&mut target_sql, avgs, changes.1[0].shard_idx, offset);
+                rewrite_changes.push(RewriteChange::AvgChange(AvgChange{target}));
             }
+
+            output.push(ShardingRewriteOutput {
+                changes: rewrite_changes, 
+                target_sql: target_sql.to_string(),
+                data_source: data_source.as_ref().unwrap().clone(),
+                sharding_column: sharding_column.clone(),
+                min_max_fields,
+            })
         }
+
         output
     }
 
@@ -1209,9 +1171,33 @@ impl ShardingRewrite {
     }
 
     fn get_meta(&self, ast: &mut SqlStmt) -> RewriteMetaData {
-        let mut meta = RewriteMetaData::default();
+        let mut meta = RewriteMetaData::new(self.raw_sql.clone());
         let _ = ast.visit(&mut meta);
         meta
+    }
+
+    fn find_min_max_fields(&self, idx: &u8, fields: &IndexMap<u8, Vec<FieldMeta>>) -> Vec<FieldMetaIdent> {
+        match fields.get(idx) {
+            Some(fields) => {
+                let mut min_max_fields = vec![];
+                for f in fields.into_iter() {
+                    match f {
+                        FieldMeta::Ident(field) => {
+                            match field.wrap_func {
+                                FieldWrapFunc::Min | FieldWrapFunc::Max => {
+                                    min_max_fields.push(FieldMetaIdent { span: field.span, name: field.name.clone(), wrap_func: field.wrap_func.clone() })
+                                },
+                                _ => {}
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+                min_max_fields
+            },
+
+            None => vec![]
+        }
     }
 }
 
@@ -1273,7 +1259,7 @@ mod test {
                 Endpoint {
                     weight: 1,
                     name: String::from("ds0"),
-                    db: String::from("db"),
+                    db: String::from("db0"),
                     user: String::from("user"),
                     password: String::from("password"),
                     addr: String::from("127.0.0.1"),
@@ -1281,7 +1267,7 @@ mod test {
                 Endpoint {
                     weight: 1,
                     name: String::from("ds1"),
-                    db: String::from("db"),
+                    db: String::from("db1"),
                     user: String::from("user"),
                     password: String::from("password"),
                     addr: String::from("127.0.0.2"),
@@ -1331,7 +1317,7 @@ mod test {
             default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from `db`.tshard where idx = 3");
+        assert_eq!(res[0].target_sql, "SELECT idx from `db1`.tshard where idx = 3");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let ast = parser.parse(raw_sql).unwrap();
@@ -1341,7 +1327,7 @@ mod test {
             default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)");
+        assert_eq!(res[0].target_sql, "SELECT idx from db1.tshard where idx = 3 and idx = (SELECT idx from db1.tshard where idx = 3)");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)";
         let ast = parser.parse(raw_sql).unwrap();
@@ -1354,10 +1340,10 @@ mod test {
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)", 
-                "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)", 
+                "SELECT idx from db0.tshard where idx = 3 and idx = (SELECT idx from db0.tshard where idx = 4)", 
+                "SELECT idx from db1.tshard where idx = 3 and idx = (SELECT idx from db1.tshard where idx = 4)", 
             ],
-        )
+        );
     }
 
     #[test]
@@ -1421,6 +1407,7 @@ mod test {
                 "SELECT idx from `db`.tshard_00003 where idx = 3 and idx = (SELECT idx from `db`.tshard_00003 where idx = 4)",
             ],
         );
+
     }
 
     #[test]
@@ -1483,11 +1470,11 @@ mod test {
         let res = sr.rewrite(input).unwrap();
         assert_eq!(res[0].target_sql, "SELECT COUNT(pbl) AS PBL_AVG_DERIVED_COUNT_00003, SUM(pbl) AS PBL_AVG_DERIVED_SUM_00003 FROM `db`.tshard_00003 WHERE idx = 3");
 
-        let raw_sql = "SELECT AVG(znl) FROM db.tshard".to_string();
-        let ast = parser.parse(&raw_sql).unwrap();
+        let raw_sql = "SELECT AVG(znl) FROM db.tshard";
+        let ast = parser.parse(raw_sql).unwrap();
         let mut sr = ShardingRewrite::new(config.0.clone(), config.1.clone(),None, false);
         let input = ShardingRewriteInput {
-            raw_sql: raw_sql.clone(),
+            raw_sql: raw_sql.to_string(),
             ast: ast[0].clone(),
             default_db: None,
         };

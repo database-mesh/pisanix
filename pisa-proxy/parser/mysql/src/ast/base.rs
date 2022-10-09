@@ -16,6 +16,7 @@ use lrpar::Span;
 
 use crate::ast::{api::*, dml::*};
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, Copy, Clone)]
 pub enum Op {
     EQ,
