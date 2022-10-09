@@ -289,7 +289,6 @@ impl ShardingRewrite {
         let mut offset = 0;
         let shard_idx = would_changes[0].shard_idx;
         let sharding_rule = &would_changes[0].rule.clone();
-
         let mut output = vec![];
 
         let changes = would_changes
@@ -310,7 +309,7 @@ impl ShardingRewrite {
         let data_source = if self.has_rw {
             DataSource::NodeGroup(sharding_rule.actual_datanodes[0].clone())
         } else {
-            let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+            // let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
             DataSource::Endpoint(ep.clone())
         };
 
@@ -356,18 +355,9 @@ impl ShardingRewrite {
             );
         }
 
-        println!("{:#?}", output);
-
+        println!("output >>> {:#?}", output);
         Ok(
             output
-            // vec![
-            //     ShardingRewriteOutput { 
-            //         changes, 
-            //         target_sql, 
-            //         data_source: DataSource::Endpoint(ep.clone()),
-            //         sharding_column: Some(sharding_column)
-            //     }
-            // ]
         )
     }
 
@@ -1001,22 +991,14 @@ impl ShardingRewrite {
         let mut output = vec![];
         let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
         let mut sharding_column = None;
-        let mut data_source = None;
-        let ep = self.endpoints[0].clone();
 
         for t in tables.iter() {
-            data_source = if self.has_rw {
-                Some(DataSource::NodeGroup(t.1.actual_datanodes[0].clone()))
-            } else {
-                Some(DataSource::Endpoint(self.endpoints[0].clone()))
-            };
-
             if let StrategyType::DatabaseStrategyConfig(config) = &t.1.database_strategy.as_ref().unwrap() {
                 sharding_column = Some(config.database_sharding_column.clone())
             }
 
             for (idx, node) in t.1.actual_datanodes.iter().enumerate() {
-                let ep = self.endpoints.iter().find(|e| e.name.eq(node)).unwrap();
+                let ep = self.endpoints.iter().find(|e| e.name.eq(node)).unwrap().clone();
                 let target = self.change_table(t.2, &ep.db, 0);
 
                 let change = DatabaseChange {
@@ -1033,12 +1015,15 @@ impl ShardingRewrite {
         for (group, changes) in group_changes.into_iter() {
             let mut offset = 0;
             let mut target_sql = self.raw_sql.to_string();
+            let ep = self.endpoints[group].clone();
+
             for change in changes.iter() {
                 Self::change_sql(&mut target_sql, change.span, &change.target, offset);
                 offset = change.target.len() - change.span.len();
             }
 
             let (order_changes, group_changes) = Self::change_order_group(&mut target_sql, orders, groups, fields, changes[0].shard_idx);
+
             if !order_changes.target.is_empty() {
                 output.push(
                     ShardingRewriteOutput {
@@ -1049,13 +1034,13 @@ impl ShardingRewrite {
                     }
                 )
             }
-           
+               
             if !group_changes.target.is_empty() {
                 output.push(
                     ShardingRewriteOutput {
                         changes: vec![RewriteChange::GroupChange(group_changes)],
                         target_sql: target_sql.to_string(),
-                        data_source: data_source.as_ref().unwrap().clone(),
+                        data_source: DataSource::Endpoint(ep.clone()),
                         sharding_column: sharding_column.clone(),
                     }
                 )
@@ -1070,20 +1055,20 @@ impl ShardingRewrite {
                 output.push(ShardingRewriteOutput {
                     changes: vec![RewriteChange::AvgChange(AvgChange{target})],
                     target_sql: target_sql.to_string(),
-                    data_source: data_source.as_ref().unwrap().clone(),
+                    data_source: DataSource::Endpoint(ep.clone()),
                     sharding_column: sharding_column.clone(),
                 });
             }
 
-            let ep = self.endpoints[group].clone();
             output.push(ShardingRewriteOutput {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
                 target_sql,
-                data_source: DataSource::Endpoint(ep),
+                data_source: DataSource::Endpoint(ep.clone()),
                 sharding_column: sharding_column.clone(),
-            })
+            });
         }
 
+        println!("4444 >>> {:#?}", output);
         output
     }
 
