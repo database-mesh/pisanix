@@ -235,6 +235,9 @@ impl ShardingRewrite {
         let wheres = meta.get_wheres();
         let inserts = meta.get_inserts();
         let fields = meta.get_fields();
+        let avgs = meta.get_avgs();
+        let orders = meta.get_orders();
+        let groups = meta.get_groups();
 
         if !inserts.is_empty() {
             if fields.is_empty() {
@@ -245,7 +248,7 @@ impl ShardingRewrite {
         }
 
         if wheres.is_empty() {
-            return Ok(self.database_strategy_iproduct(try_tables));
+            return Ok(self.database_strategy_iproduct(try_tables, avgs, fields, orders, groups));
         }
 
         let wheres = Self::find_try_where(StrategyTyp::Database, &try_tables, wheres)?.into_iter().filter_map(|x| 
@@ -259,7 +262,7 @@ impl ShardingRewrite {
         let sum: usize = wheres.iter().map(|x| x.1).sum::<u64>() as usize;
 
         if expect_sum != sum {
-            return Ok(self.database_strategy_iproduct(try_tables));
+            return Ok(self.database_strategy_iproduct(try_tables, avgs, fields, orders, groups));
         }
 
         let would_changes: Vec<DatabaseChange> = try_tables
@@ -287,6 +290,8 @@ impl ShardingRewrite {
         let shard_idx = would_changes[0].shard_idx;
         let sharding_rule = &would_changes[0].rule.clone();
 
+        let mut output = vec![];
+
         let changes = would_changes
             .into_iter()
             .map(|x| {
@@ -302,21 +307,67 @@ impl ShardingRewrite {
             .iter()
             .find(|e| e.name == sharding_rule.actual_datanodes[shard_idx as usize]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
 
+        let data_source = if self.has_rw {
+            DataSource::NodeGroup(sharding_rule.actual_datanodes[0].clone())
+        } else {
+            let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+            DataSource::Endpoint(ep.clone())
+        };
+
         let sharding_column = if let Some(StrategyType::DatabaseStrategyConfig(strategy)) = &sharding_rule.database_strategy {
             strategy.database_sharding_column.to_string() 
         } else {
             unreachable!()
         };
 
-        Ok(
-            vec![
-                ShardingRewriteOutput { 
-                    changes, 
-                    target_sql, 
-                    data_source: DataSource::Endpoint(ep.clone()),
-                    sharding_column: Some(sharding_column)
+        let (order_changes, group_changes) = Self::change_order_group(&mut target_sql, orders, groups, fields, shard_idx);
+
+        if !order_changes.target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::OrderChange(order_changes)],
+                        target_sql: target_sql.to_string(),
+                        data_source: data_source.clone(),
+                        sharding_column: Some(sharding_column.to_string()),
+                    }
+                )
+        }
+           
+        if !group_changes.target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::GroupChange(group_changes)],
+                        target_sql: target_sql.to_string(),
+                        data_source: data_source.clone(),
+                        sharding_column: Some(sharding_column.to_string()),
+                    }
+                )
+        }
+
+        if !avgs.is_empty() {
+            let target = Self::change_avg(&mut target_sql, avgs, shard_idx, 0);
+            output.push(
+                ShardingRewriteOutput {
+                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
+                    target_sql: target_sql.to_string(),
+                    data_source: data_source.clone(),
+                    sharding_column: Some(sharding_column.to_string()),
                 }
-            ]
+            );
+        }
+
+        println!("{:#?}", output);
+
+        Ok(
+            output
+            // vec![
+            //     ShardingRewriteOutput { 
+            //         changes, 
+            //         target_sql, 
+            //         data_source: DataSource::Endpoint(ep.clone()),
+            //         sharding_column: Some(sharding_column)
+            //     }
+            // ]
         )
     }
 
@@ -942,12 +993,24 @@ impl ShardingRewrite {
     fn database_strategy_iproduct(
         &self,
         tables: Vec<(u8, Sharding, &TableIdent)>,
+        avgs: &IndexMap<u8, Vec<AvgMeta>>,
+        fields: &IndexMap<u8, Vec<FieldMeta>>,
+        orders: &IndexMap<u8, Vec<OrderMeta>>,
+        groups: &IndexMap<u8, Vec<GroupMeta>>,
     ) -> Vec<ShardingRewriteOutput> {
         let mut output = vec![];
         let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
         let mut sharding_column = None;
+        let mut data_source = None;
+        let ep = self.endpoints[0].clone();
 
         for t in tables.iter() {
+            data_source = if self.has_rw {
+                Some(DataSource::NodeGroup(t.1.actual_datanodes[0].clone()))
+            } else {
+                Some(DataSource::Endpoint(self.endpoints[0].clone()))
+            };
+
             if let StrategyType::DatabaseStrategyConfig(config) = &t.1.database_strategy.as_ref().unwrap() {
                 sharding_column = Some(config.database_sharding_column.clone())
             }
@@ -975,6 +1038,43 @@ impl ShardingRewrite {
                 offset = change.target.len() - change.span.len();
             }
 
+            let (order_changes, group_changes) = Self::change_order_group(&mut target_sql, orders, groups, fields, changes[0].shard_idx);
+            if !order_changes.target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::OrderChange(order_changes)],
+                        target_sql: target_sql.to_string(),
+                        data_source: DataSource::Endpoint(ep.clone()),
+                        sharding_column: sharding_column.clone(),
+                    }
+                )
+            }
+           
+            if !group_changes.target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::GroupChange(group_changes)],
+                        target_sql: target_sql.to_string(),
+                        data_source: data_source.as_ref().unwrap().clone(),
+                        sharding_column: sharding_column.clone(),
+                    }
+                )
+            }
+
+            if !avgs.is_empty() {
+                if changes[0].span.start() > avgs[0][0].span.start() {
+                    offset = 0; 
+                }
+                let target = Self::change_avg(&mut target_sql, avgs, changes[0].shard_idx, offset);
+
+                output.push(ShardingRewriteOutput {
+                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
+                    target_sql: target_sql.to_string(),
+                    data_source: data_source.as_ref().unwrap().clone(),
+                    sharding_column: sharding_column.clone(),
+                });
+            }
+
             let ep = self.endpoints[group].clone();
             output.push(ShardingRewriteOutput {
                 changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
@@ -983,6 +1083,7 @@ impl ShardingRewrite {
                 sharding_column: sharding_column.clone(),
             })
         }
+
         output
     }
 
