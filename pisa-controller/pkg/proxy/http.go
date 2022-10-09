@@ -119,7 +119,8 @@ func proxyConfigBuild(vdb *client.VirtualDatabase, tslist *client.TrafficStrateg
 }
 
 func GetDaemonConfig(ctx *gin.Context) {
-	daemonConfig, err := getDaemonConfig(ctx)
+	c := client.GetClient()
+	daemonConfig, err := getDaemonConfig(ctx, c.Client)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, err)
 		return
@@ -128,6 +129,45 @@ func GetDaemonConfig(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, daemonConfig)
 }
 
-func getDaemonConfig(ctx context.Context) (interface{}, error) {
-	return PisaDaemonConfig{}, nil
+func getDaemonConfig(ctx context.Context, c dynamic.Interface) (interface{}, error) {
+	vdblist, err := kubernetes.GetVirtualDatabaseListWithContext(ctx, c, "")
+	if err != nil {
+		return nil, err
+	}
+
+	tslist, err := kubernetes.GetTrafficStrategyListWithContext(ctx, c, "")
+	if err != nil {
+		return nil, err
+	}
+
+	qclist, err := kubernetes.GetQoSClaimListWithContext(ctx, c, "")
+	if err != nil {
+		return nil, err
+	}
+
+	dbeplist, err := kubernetes.GetDatabaseEndpointListWithContext(ctx, c, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return daemonConfigBuild(vdblist, tslist, qclist, dbeplist)
+}
+
+func daemonConfigBuild(vdblist *client.VirtualDatabaseList, tslist *client.TrafficStrategyList, qclist *client.QoSClaimList, dbeplist *client.DatabaseEndpointList) (interface{}, error) {
+	appbuilders := []*AppBuilder{}
+	for _, vdb := range vdblist.Items {
+		var targetVdb bool
+		for _, svc := range vdb.Spec.Services {
+			if svc.QoSClaim != "" {
+				targetVdb = true
+				break
+			}
+		}
+		if targetVdb {
+			appbuilder := NewAppBuilder().SetVirtualDatabase(vdb).SetQoSClaims(qclist.Items).SetTrafficStrategies(tslist.Items).SetDatabaseEndpoints(dbeplist.Items)
+			appbuilders = append(appbuilders, appbuilder)
+		}
+	}
+	daemonConfig := NewPisaDaemonConfigBuilder().SetAppBuilders(appbuilders).Build()
+	return daemonConfig, nil
 }
