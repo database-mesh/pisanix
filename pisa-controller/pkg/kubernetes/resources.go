@@ -49,10 +49,10 @@ var (
 		Resource: "databaseendpoints",
 	}
 
-	TrafficQoSSchema = schema.GroupVersionResource{
+	QoSClaimSchema = schema.GroupVersionResource{
 		Group:    "core.database-mesh.io",
 		Version:  "v1alpha1",
-		Resource: "trafficqoses",
+		Resource: "qosclaims",
 	}
 )
 
@@ -155,21 +155,22 @@ func GetDatabaseEndpointListWithContext(ctx context.Context, c dynamic.Interface
 	return dbeplist, nil
 }
 
-func GetTrafficQoSWithContext(ctx context.Context, c dynamic.Interface, namespace, name string) (*client.TrafficQoS, error) {
-	raw, err := c.Resource(TrafficQoSSchema).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+func GetQoSClaimListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.QoSClaimList, error) {
+	qclist := &client.QoSClaimList{}
+	raw, err := c.Resource(QoSClaimSchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	tq := &client.TrafficQoS{}
 	data, err := raw.MarshalJSON()
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(data, tq)
+
+	err = json.Unmarshal(data, qclist)
 	if err != nil {
 		return nil, err
 	}
 
-	return tq, nil
+	return qclist, nil
 }
