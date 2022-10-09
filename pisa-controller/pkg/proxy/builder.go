@@ -508,3 +508,152 @@ type QoSGroup struct {
 	Rate string `json:"rate,omitempty"`
 	Ceil string `json:"ceil,omitempty"`
 }
+
+type PisaDaemonConfigBuilder struct {
+	AppBuilders []*AppBuilder
+}
+
+func NewPisaDaemonConfigBuilder() *PisaDaemonConfigBuilder {
+	return &PisaDaemonConfigBuilder{}
+}
+
+func (b *PisaDaemonConfigBuilder) SetAppBuilders(bs []*AppBuilder) *PisaDaemonConfigBuilder {
+	b.AppBuilders = bs
+	return b
+}
+
+func (b *PisaDaemonConfigBuilder) Build() *PisaDaemonConfig {
+	config := &PisaDaemonConfig{
+		Apps: []App{},
+	}
+	for _, ab := range b.AppBuilders {
+		config.Apps = append(config.Apps, ab.Build())
+	}
+	return config
+}
+
+type AppBuilder struct {
+	VirtualDatabase   client.VirtualDatabase
+	TrafficStrategies []client.TrafficStrategy
+	DatabaseEndpoints []client.DatabaseEndpoint
+	QoSClaims         []client.QoSClaim
+	// DataShard         client.DataShard
+}
+
+func NewAppBuilder() *AppBuilder {
+	return &AppBuilder{}
+}
+
+func (b *AppBuilder) SetVirtualDatabase(vdb client.VirtualDatabase) *AppBuilder {
+	b.VirtualDatabase = vdb
+	return b
+}
+
+func (b *AppBuilder) SetTrafficStrategies(tses []client.TrafficStrategy) *AppBuilder {
+	b.TrafficStrategies = tses
+	return b
+}
+
+func (b *AppBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *AppBuilder {
+	b.DatabaseEndpoints = dbeps
+	return b
+}
+
+func (b *AppBuilder) SetQoSClaims(qcs []client.QoSClaim) *AppBuilder {
+	b.QoSClaims = qcs
+	return b
+}
+
+func (b *AppBuilder) Build() App {
+	app := App{}
+	app.Name = b.VirtualDatabase.Name
+	app.Services = []Service{}
+
+	for _, vsvc := range b.VirtualDatabase.Spec.Services {
+		svcbuilder := NewServiceBuilder()
+
+		svcbuilder.SetVirtualDatabaseService(vsvc)
+		for _, ts := range b.TrafficStrategies {
+			if ts.Name == vsvc.TrafficStrategy {
+				svcbuilder.SetTrafficStrategy(ts)
+
+				dbeps := []client.DatabaseEndpoint{}
+				for _, dbep := range b.DatabaseEndpoints {
+					for k, v := range ts.Spec.Selector.MatchLabels {
+						if dbep.Labels[k] == v {
+							dbeps = append(dbeps, dbep)
+						}
+					}
+				}
+
+				svcbuilder.SetDatabaseEndpoints(dbeps)
+
+				break
+			}
+		}
+
+		for _, qc := range b.QoSClaims {
+			if qc.Name == vsvc.QoSClaim {
+				svcbuilder.SetQoSClaim(qc)
+				break
+			}
+		}
+
+		svc := svcbuilder.Build()
+		app.Services = append(app.Services, svc)
+	}
+
+	return app
+}
+
+type ServiceBuilder struct {
+	VirtualDatabaseService client.VirtualDatabaseService
+	TrafficStrategy        client.TrafficStrategy
+	QoSClaim               client.QoSClaim
+	DatabaseEndpoints      []client.DatabaseEndpoint
+}
+
+func NewServiceBuilder() *ServiceBuilder {
+	return &ServiceBuilder{}
+}
+
+func (b *ServiceBuilder) SetVirtualDatabaseService(vsvc client.VirtualDatabaseService) *ServiceBuilder {
+	b.VirtualDatabaseService = vsvc
+	return b
+}
+
+func (b *ServiceBuilder) SetTrafficStrategy(ts client.TrafficStrategy) *ServiceBuilder {
+	b.TrafficStrategy = ts
+	return b
+}
+
+func (b *ServiceBuilder) SetQoSClaim(qc client.QoSClaim) *ServiceBuilder {
+	b.QoSClaim = qc
+	return b
+}
+
+func (b *ServiceBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *ServiceBuilder {
+	b.DatabaseEndpoints = dbeps
+	return b
+}
+
+func (b *ServiceBuilder) Build() Service {
+	endpoints := []Endpoint{}
+	for _, dbep := range b.DatabaseEndpoints {
+		ep := Endpoint{
+			IP:   dbep.Spec.Database.MySQL.Host,
+			Port: dbep.Spec.Database.MySQL.Port,
+		}
+		endpoints = append(endpoints, ep)
+	}
+
+	svc := Service{
+		Name: b.VirtualDatabaseService.Name,
+		QoSGroup: QoSGroup{
+			Rate: b.QoSClaim.Spec.TrafficQoS.QoSGroup.Rate,
+			Ceil: b.QoSClaim.Spec.TrafficQoS.QoSGroup.Ceil,
+		},
+		Endpoints: endpoints,
+	}
+	return svc
+}
