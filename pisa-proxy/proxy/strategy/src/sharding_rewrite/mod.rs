@@ -355,6 +355,15 @@ impl ShardingRewrite {
             );
         }
 
+        output.push(
+            ShardingRewriteOutput { 
+                changes, 
+                target_sql: target_sql.to_string(), 
+                data_source,
+                sharding_column: Some(sharding_column.to_string()),
+            }
+        );
+
         println!("output >>> {:#?}", output);
         Ok(
             output
@@ -1033,9 +1042,7 @@ impl ShardingRewrite {
                         sharding_column: sharding_column.clone(),
                     }
                 )
-            }
-               
-            if !group_changes.target.is_empty() {
+            } else if !group_changes.target.is_empty() {
                 output.push(
                     ShardingRewriteOutput {
                         changes: vec![RewriteChange::GroupChange(group_changes)],
@@ -1044,9 +1051,7 @@ impl ShardingRewrite {
                         sharding_column: sharding_column.clone(),
                     }
                 )
-            }
-
-            if !avgs.is_empty() {
+            } else if !avgs.is_empty() {
                 if changes[0].span.start() > avgs[0][0].span.start() {
                     offset = 0; 
                 }
@@ -1058,16 +1063,15 @@ impl ShardingRewrite {
                     data_source: DataSource::Endpoint(ep.clone()),
                     sharding_column: sharding_column.clone(),
                 });
+            } else {
+                output.push(ShardingRewriteOutput {
+                    changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
+                    target_sql,
+                    data_source: DataSource::Endpoint(ep.clone()),
+                    sharding_column: sharding_column.clone(),
+                });
             }
-
-            output.push(ShardingRewriteOutput {
-                changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
-                target_sql,
-                data_source: DataSource::Endpoint(ep.clone()),
-                sharding_column: sharding_column.clone(),
-            });
         }
-
         println!("4444 >>> {:#?}", output);
         output
     }
@@ -1131,9 +1135,7 @@ impl ShardingRewrite {
                         sharding_column: sharding_column.clone(),
                     }
                 )
-            }
-           
-            if !group_changes.target.is_empty() {
+            } else if !group_changes.target.is_empty() {
                 output.push(
                     ShardingRewriteOutput {
                         changes: vec![RewriteChange::GroupChange(group_changes)],
@@ -1142,9 +1144,7 @@ impl ShardingRewrite {
                         sharding_column: sharding_column.clone(),
                     }
                 )
-            }
-
-            if !avgs.is_empty() {
+            } else if !avgs.is_empty() {
                 if changes[0].span.start() > avgs[0][0].span.start() {
                     offset = 0; 
                 }
@@ -1155,14 +1155,14 @@ impl ShardingRewrite {
                     data_source: data_source.as_ref().unwrap().clone(),
                     sharding_column: sharding_column.clone(),
                 });
+            } else {
+                output.push(ShardingRewriteOutput {
+                    changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
+                    target_sql: target_sql.to_string(),
+                    data_source: data_source.as_ref().unwrap().clone(),
+                    sharding_column: sharding_column.clone(),
+                })
             }
-
-            output.push(ShardingRewriteOutput {
-                changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
-                target_sql: target_sql.to_string(),
-                data_source: data_source.as_ref().unwrap().clone(),
-                sharding_column: sharding_column.clone(),
-            })
         }
         output
     }
@@ -1335,7 +1335,7 @@ mod test {
             default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from `ds1`.tshard where idx = 3");
+        assert_eq!(res[0].target_sql, "SELECT idx from `db`.tshard where idx = 3");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let ast = parser.parse(raw_sql).unwrap();
@@ -1345,7 +1345,7 @@ mod test {
             default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3 and idx = (SELECT idx from ds1.tshard where idx = 3)");
+        assert_eq!(res[0].target_sql, "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)";
         let ast = parser.parse(raw_sql).unwrap();
@@ -1358,8 +1358,8 @@ mod test {
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "SELECT idx from ds0.tshard where idx = 3 and idx = (SELECT idx from ds0.tshard where idx = 4)", 
-                "SELECT idx from ds1.tshard where idx = 3 and idx = (SELECT idx from ds1.tshard where idx = 4)", 
+                "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)", 
+                "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)", 
             ],
         )
     }
