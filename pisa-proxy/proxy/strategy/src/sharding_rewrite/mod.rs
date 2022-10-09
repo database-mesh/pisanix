@@ -235,6 +235,9 @@ impl ShardingRewrite {
         let wheres = meta.get_wheres();
         let inserts = meta.get_inserts();
         let fields = meta.get_fields();
+        let avgs = meta.get_avgs();
+        let orders = meta.get_orders();
+        let groups = meta.get_groups();
 
         if !inserts.is_empty() {
             if fields.is_empty() {
@@ -245,7 +248,7 @@ impl ShardingRewrite {
         }
 
         if wheres.is_empty() {
-            return Ok(self.database_strategy_iproduct(try_tables));
+            return Ok(self.database_strategy_iproduct(try_tables, avgs, fields, orders, groups));
         }
 
         let wheres = Self::find_try_where(StrategyTyp::Database, &try_tables, wheres)?.into_iter().filter_map(|x| 
@@ -259,7 +262,7 @@ impl ShardingRewrite {
         let sum: usize = wheres.iter().map(|x| x.1).sum::<u64>() as usize;
 
         if expect_sum != sum {
-            return Ok(self.database_strategy_iproduct(try_tables));
+            return Ok(self.database_strategy_iproduct(try_tables, avgs, fields, orders, groups));
         }
 
         let would_changes: Vec<DatabaseChange> = try_tables
@@ -286,6 +289,7 @@ impl ShardingRewrite {
         let mut offset = 0;
         let shard_idx = would_changes[0].shard_idx;
         let sharding_rule = &would_changes[0].rule.clone();
+        let mut output = vec![];
 
         let changes = would_changes
             .into_iter()
@@ -302,21 +306,64 @@ impl ShardingRewrite {
             .iter()
             .find(|e| e.name == sharding_rule.actual_datanodes[shard_idx as usize]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
 
+        let data_source = if self.has_rw {
+            DataSource::NodeGroup(sharding_rule.actual_datanodes[0].clone())
+        } else {
+            DataSource::Endpoint(ep.clone())
+        };
+
         let sharding_column = if let Some(StrategyType::DatabaseStrategyConfig(strategy)) = &sharding_rule.database_strategy {
             strategy.database_sharding_column.to_string() 
         } else {
             unreachable!()
         };
 
-        Ok(
-            vec![
-                ShardingRewriteOutput { 
-                    changes, 
-                    target_sql, 
-                    data_source: DataSource::Endpoint(ep.clone()),
-                    sharding_column: Some(sharding_column)
+        let (order_changes, group_changes) = Self::change_order_group(&mut target_sql, orders, groups, fields, shard_idx);
+
+        if !order_changes.target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::OrderChange(order_changes)],
+                        target_sql: target_sql.to_string(),
+                        data_source: data_source.clone(),
+                        sharding_column: Some(sharding_column.to_string()),
+                    }
+                )
+        }
+           
+        if !group_changes.target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::GroupChange(group_changes)],
+                        target_sql: target_sql.to_string(),
+                        data_source: data_source.clone(),
+                        sharding_column: Some(sharding_column.to_string()),
+                    }
+                )
+        }
+
+        if !avgs.is_empty() {
+            let target = Self::change_avg(&mut target_sql, avgs, shard_idx, 0);
+            output.push(
+                ShardingRewriteOutput {
+                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
+                    target_sql: target_sql.to_string(),
+                    data_source: data_source.clone(),
+                    sharding_column: Some(sharding_column.to_string()),
                 }
-            ]
+            );
+        }
+
+        output.push(
+            ShardingRewriteOutput { 
+                changes, 
+                target_sql: target_sql.to_string(), 
+                data_source,
+                sharding_column: Some(sharding_column.to_string()),
+            }
+        );
+        Ok(
+            output
         )
     }
 
@@ -942,6 +989,10 @@ impl ShardingRewrite {
     fn database_strategy_iproduct(
         &self,
         tables: Vec<(u8, Sharding, &TableIdent)>,
+        avgs: &IndexMap<u8, Vec<AvgMeta>>,
+        fields: &IndexMap<u8, Vec<FieldMeta>>,
+        orders: &IndexMap<u8, Vec<OrderMeta>>,
+        groups: &IndexMap<u8, Vec<GroupMeta>>,
     ) -> Vec<ShardingRewriteOutput> {
         let mut output = vec![];
         let mut group_changes = IndexMap::<usize, Vec<DatabaseChange>>::new();
@@ -953,7 +1004,7 @@ impl ShardingRewrite {
             }
 
             for (idx, node) in t.1.actual_datanodes.iter().enumerate() {
-                let ep = self.endpoints.iter().find(|e| e.name.eq(node)).unwrap();
+                let ep = self.endpoints.iter().find(|e| e.name.eq(node)).unwrap().clone();
                 let target = self.change_table(t.2, &ep.db, 0);
 
                 let change = DatabaseChange {
@@ -970,18 +1021,53 @@ impl ShardingRewrite {
         for (group, changes) in group_changes.into_iter() {
             let mut offset = 0;
             let mut target_sql = self.raw_sql.to_string();
+            let ep = self.endpoints[group].clone();
+
             for change in changes.iter() {
                 Self::change_sql(&mut target_sql, change.span, &change.target, offset);
                 offset = change.target.len() - change.span.len();
             }
 
-            let ep = self.endpoints[group].clone();
-            output.push(ShardingRewriteOutput {
-                changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
-                target_sql,
-                data_source: DataSource::Endpoint(ep),
-                sharding_column: sharding_column.clone(),
-            })
+            let (order_changes, group_changes) = Self::change_order_group(&mut target_sql, orders, groups, fields, changes[0].shard_idx);
+
+            if !order_changes.target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::OrderChange(order_changes)],
+                        target_sql: target_sql.to_string(),
+                        data_source: DataSource::Endpoint(ep.clone()),
+                        sharding_column: sharding_column.clone(),
+                    }
+                )
+            } else if !group_changes.target.is_empty() {
+                output.push(
+                    ShardingRewriteOutput {
+                        changes: vec![RewriteChange::GroupChange(group_changes)],
+                        target_sql: target_sql.to_string(),
+                        data_source: DataSource::Endpoint(ep.clone()),
+                        sharding_column: sharding_column.clone(),
+                    }
+                )
+            } else if !avgs.is_empty() {
+                if changes[0].span.start() > avgs[0][0].span.start() {
+                    offset = 0; 
+                }
+                let target = Self::change_avg(&mut target_sql, avgs, changes[0].shard_idx, offset);
+
+                output.push(ShardingRewriteOutput {
+                    changes: vec![RewriteChange::AvgChange(AvgChange{target})],
+                    target_sql: target_sql.to_string(),
+                    data_source: DataSource::Endpoint(ep.clone()),
+                    sharding_column: sharding_column.clone(),
+                });
+            } else {
+                output.push(ShardingRewriteOutput {
+                    changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
+                    target_sql,
+                    data_source: DataSource::Endpoint(ep.clone()),
+                    sharding_column: sharding_column.clone(),
+                });
+            }
         }
         output
     }
@@ -1045,9 +1131,7 @@ impl ShardingRewrite {
                         sharding_column: sharding_column.clone(),
                     }
                 )
-            }
-           
-            if !group_changes.target.is_empty() {
+            } else if !group_changes.target.is_empty() {
                 output.push(
                     ShardingRewriteOutput {
                         changes: vec![RewriteChange::GroupChange(group_changes)],
@@ -1056,9 +1140,7 @@ impl ShardingRewrite {
                         sharding_column: sharding_column.clone(),
                     }
                 )
-            }
-
-            if !avgs.is_empty() {
+            } else if !avgs.is_empty() {
                 if changes[0].span.start() > avgs[0][0].span.start() {
                     offset = 0; 
                 }
@@ -1069,14 +1151,14 @@ impl ShardingRewrite {
                     data_source: data_source.as_ref().unwrap().clone(),
                     sharding_column: sharding_column.clone(),
                 });
+            } else {
+                output.push(ShardingRewriteOutput {
+                    changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
+                    target_sql: target_sql.to_string(),
+                    data_source: data_source.as_ref().unwrap().clone(),
+                    sharding_column: sharding_column.clone(),
+                })
             }
-
-            output.push(ShardingRewriteOutput {
-                changes: changes.into_iter().map(|x| RewriteChange::DatabaseChange(x)).collect(),
-                target_sql: target_sql.to_string(),
-                data_source: data_source.as_ref().unwrap().clone(),
-                sharding_column: sharding_column.clone(),
-            })
         }
         output
     }
@@ -1249,7 +1331,7 @@ mod test {
             default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from `ds1`.tshard where idx = 3");
+        assert_eq!(res[0].target_sql, "SELECT idx from `db`.tshard where idx = 3");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let ast = parser.parse(raw_sql).unwrap();
@@ -1259,7 +1341,7 @@ mod test {
             default_db: None,
         };
         let res = sr.rewrite(input).unwrap();
-        assert_eq!(res[0].target_sql, "SELECT idx from ds1.tshard where idx = 3 and idx = (SELECT idx from ds1.tshard where idx = 3)");
+        assert_eq!(res[0].target_sql, "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)");
 
         let raw_sql = "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)";
         let ast = parser.parse(raw_sql).unwrap();
@@ -1272,8 +1354,8 @@ mod test {
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "SELECT idx from ds0.tshard where idx = 3 and idx = (SELECT idx from ds0.tshard where idx = 4)", 
-                "SELECT idx from ds1.tshard where idx = 3 and idx = (SELECT idx from ds1.tshard where idx = 4)", 
+                "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)", 
+                "SELECT idx from db.tshard where idx = 3 and idx = (SELECT idx from db.tshard where idx = 4)", 
             ],
         )
     }
