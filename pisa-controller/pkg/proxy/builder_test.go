@@ -957,3 +957,339 @@ func Test_NodeGroupConfigBuilder(t *testing.T) {
 		}
 	}
 }
+
+var vdb1 = client.VirtualDatabase{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "vdb1",
+		Namespace: "test",
+	},
+	Spec: client.VirtualDatabaseSpec{
+		Services: []client.VirtualDatabaseService{
+			{
+				Name:            "svc1",
+				TrafficStrategy: "ts1",
+				QoSClaim:        "qc1",
+				DatabaseService: client.DatabaseService{
+					DatabaseMySQL: &client.DatabaseMySQL{
+						Host:     "127.0.0.1",
+						Port:     3306,
+						User:     "root",
+						Password: "root",
+					},
+				},
+			},
+			{
+				Name:            "svc2",
+				TrafficStrategy: "ts2",
+				QoSClaim:        "qc2",
+				DatabaseService: client.DatabaseService{
+					DatabaseMySQL: &client.DatabaseMySQL{
+						Host:     "127.0.0.1",
+						Port:     3307,
+						User:     "root",
+						Password: "root",
+					},
+				},
+			},
+		},
+	},
+}
+
+var qc1 = client.QoSClaim{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "qc1",
+		Namespace: "test",
+	},
+	Spec: client.QoSClaimSpec{
+		TrafficQoS: client.TrafficQoS{
+			Name: "svc1",
+			QoSGroup: client.QoSGroup{
+				Rate: "1MB",
+				Ceil: "1MB",
+			},
+		},
+	},
+}
+
+var ts1 = client.TrafficStrategy{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "ts1",
+		Namespace: "test",
+	},
+	Spec: client.TrafficStrategySpec{
+		Selector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"source": "ts1",
+			},
+		},
+	},
+}
+
+var dbep1a = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "dbep-1a",
+		Namespace: "test",
+		Labels: map[string]string{
+			"source": "ts1",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				Host:     "1.1.1.1",
+				Port:     3306,
+				User:     "root",
+				Password: "root",
+			},
+		},
+	},
+}
+
+var dbep1b = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "dbep-1b",
+		Namespace: "test",
+		Labels: map[string]string{
+			"source": "ts1",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				Host:     "1.1.1.1",
+				Port:     3307,
+				User:     "root",
+				Password: "root",
+			},
+		},
+	},
+}
+
+var qc2 = client.QoSClaim{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "qc2",
+		Namespace: "test",
+	},
+	Spec: client.QoSClaimSpec{
+		TrafficQoS: client.TrafficQoS{
+			Name: "svc2",
+			QoSGroup: client.QoSGroup{
+				Rate: "2MB",
+				Ceil: "2MB",
+			},
+		},
+	},
+}
+
+var ts2 = client.TrafficStrategy{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "ts2",
+		Namespace: "test",
+	},
+	Spec: client.TrafficStrategySpec{
+		Selector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"source": "ts2",
+			},
+		},
+	},
+}
+
+var dbep2a = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "dbep-2a",
+		Namespace: "test",
+		Labels: map[string]string{
+			"source": "ts2",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				Host:     "1.1.1.2",
+				Port:     3306,
+				User:     "root",
+				Password: "root",
+			},
+		},
+	},
+}
+
+var dbep2b = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "dbep-2b",
+		Namespace: "test",
+		Labels: map[string]string{
+			"source": "ts2",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				Host:     "1.1.1.2",
+				Port:     3307,
+				User:     "root",
+				Password: "root",
+			},
+		},
+	},
+}
+
+var vdb3 = client.VirtualDatabase{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "vdb3",
+		Namespace: "test",
+	},
+	Spec: client.VirtualDatabaseSpec{
+		Services: []client.VirtualDatabaseService{
+			{
+				Name:            "svc3",
+				TrafficStrategy: "ts3",
+				QoSClaim:        "qc3",
+				DatabaseService: client.DatabaseService{
+					DatabaseMySQL: &client.DatabaseMySQL{
+						Host:     "127.0.0.3",
+						Port:     3306,
+						User:     "root",
+						Password: "root",
+					},
+				},
+			},
+		},
+	},
+}
+
+var qc3 = client.QoSClaim{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "qc3",
+		Namespace: "test",
+	},
+	Spec: client.QoSClaimSpec{
+		TrafficQoS: client.TrafficQoS{
+			Name: "svc3",
+			QoSGroup: client.QoSGroup{
+				Rate: "3MB",
+				Ceil: "3MB",
+			},
+		},
+	},
+}
+
+var ts3 = client.TrafficStrategy{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "ts3",
+		Namespace: "test",
+	},
+	Spec: client.TrafficStrategySpec{
+		Selector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"source": "ts3",
+			},
+		},
+	},
+}
+
+var dbep3 = client.DatabaseEndpoint{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "dbep-3",
+		Namespace: "test",
+		Labels: map[string]string{
+			"source": "ts3",
+		},
+	},
+	Spec: client.DatabaseEndpointSpec{
+		Database: client.Database{
+			MySQL: &client.MySQL{
+				Host:     "1.1.1.3",
+				Port:     3306,
+				User:     "root",
+				Password: "root",
+			},
+		},
+	},
+}
+
+var expectedDaemonConfig = PisaDaemonConfig{
+	Apps: []App{
+		{
+			Name: "vdb1",
+			Services: []Service{
+				{
+					Name: "svc1",
+					QoSGroup: QoSGroup{
+						Rate: "1MB",
+						Ceil: "1MB",
+					},
+					Endpoints: []Endpoint{
+						{
+							IP:   "1.1.1.1",
+							Port: 3306,
+						},
+						{
+							IP:   "1.1.1.1",
+							Port: 3307,
+						},
+					},
+				},
+				{
+					Name: "svc2",
+					QoSGroup: QoSGroup{
+						Rate: "2MB",
+						Ceil: "2MB",
+					},
+					Endpoints: []Endpoint{
+						{
+							IP:   "1.1.1.2",
+							Port: 3306,
+						},
+						{
+							IP:   "1.1.1.2",
+							Port: 3307,
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "vdb3",
+			Services: []Service{
+				{
+					Name: "svc3",
+					QoSGroup: QoSGroup{
+						Rate: "3MB",
+						Ceil: "3MB",
+					},
+					Endpoints: []Endpoint{
+						{
+							IP:   "1.1.1.3",
+							Port: 3306,
+						},
+					},
+				},
+			},
+		},
+	},
+}
+
+func Test_PisaDaemonConfigBuilder(t *testing.T) {
+	appbuilder1 := NewAppBuilder().SetVirtualDatabase(vdb1).SetTrafficStrategies([]client.TrafficStrategy{ts1, ts2}).SetDatabaseEndpoints([]client.DatabaseEndpoint{dbep1a, dbep1b, dbep2a, dbep2b}).SetQoSClaims([]client.QoSClaim{qc1, qc2})
+	appbuilder3 := NewAppBuilder().SetVirtualDatabase(vdb3).SetTrafficStrategies([]client.TrafficStrategy{ts3}).SetDatabaseEndpoints([]client.DatabaseEndpoint{dbep3}).SetQoSClaims([]client.QoSClaim{qc3})
+	cases := []struct {
+		builder PisaDaemonConfigBuilder
+		exp     PisaDaemonConfig
+		message string
+	}{
+		{
+			builder: *NewPisaDaemonConfigBuilder().SetAppBuilders([]*AppBuilder{appbuilder1, appbuilder3}),
+			exp:     expectedDaemonConfig,
+			message: "DaemonConfig should be equal",
+		},
+	}
+
+	for _, c := range cases {
+		cfg := c.builder.Build()
+		assert.Equal(t, len(c.exp.Apps), len(cfg.Apps), c.message)
+		assert.ElementsMatch(t, c.exp.Apps, cfg.Apps, c.message)
+	}
+
+}
