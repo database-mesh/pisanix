@@ -309,7 +309,6 @@ impl ShardingRewrite {
         let data_source = if self.has_rw {
             DataSource::NodeGroup(sharding_rule.actual_datanodes[0].clone())
         } else {
-            // let ep = self.endpoints.iter().find(|e| e.name == sharding_rule.actual_datanodes[0]).ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
             DataSource::Endpoint(ep.clone())
         };
 
@@ -363,8 +362,6 @@ impl ShardingRewrite {
                 sharding_column: Some(sharding_column.to_string()),
             }
         );
-
-        println!("output >>> {:#?}", output);
         Ok(
             output
         )
@@ -1072,7 +1069,6 @@ impl ShardingRewrite {
                 });
             }
         }
-        println!("4444 >>> {:#?}", output);
         output
     }
 
