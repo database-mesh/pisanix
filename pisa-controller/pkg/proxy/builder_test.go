@@ -1135,6 +1135,29 @@ var dbep2b = client.DatabaseEndpoint{
 	},
 }
 
+var vdb2 = client.VirtualDatabase{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "vdb3",
+		Namespace: "test",
+	},
+	Spec: client.VirtualDatabaseSpec{
+		Services: []client.VirtualDatabaseService{
+			{
+				Name:            "svc3",
+				TrafficStrategy: "ts3",
+				DatabaseService: client.DatabaseService{
+					DatabaseMySQL: &client.DatabaseMySQL{
+						Host:     "127.0.0.3",
+						Port:     3306,
+						User:     "root",
+						Password: "root",
+					},
+				},
+			},
+		},
+	},
+}
+
 var vdb3 = client.VirtualDatabase{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "vdb3",
@@ -1291,5 +1314,34 @@ func Test_PisaDaemonConfigBuilder(t *testing.T) {
 		assert.Equal(t, len(c.exp.Apps), len(cfg.Apps), c.message)
 		assert.ElementsMatch(t, c.exp.Apps, cfg.Apps, c.message)
 	}
+}
 
+func Test_daemonConfigBuild(t *testing.T) {
+	vdblist := client.VirtualDatabaseList{Items: []client.VirtualDatabase{vdb1, vdb2, vdb3}}
+	tslist := client.TrafficStrategyList{Items: []client.TrafficStrategy{ts1, ts2, ts3}}
+	dbeplist := client.DatabaseEndpointList{Items: []client.DatabaseEndpoint{dbep1a, dbep1b, dbep2a, dbep2b, dbep3}}
+	qclist := client.QoSClaimList{Items: []client.QoSClaim{qc1, qc2, qc3}}
+	cases := []struct {
+		vdblist  client.VirtualDatabaseList
+		tslist   client.TrafficStrategyList
+		dbeplist client.DatabaseEndpointList
+		qclist   client.QoSClaimList
+		exp      PisaDaemonConfig
+		message  string
+	}{
+		{
+			vdblist:  vdblist,
+			tslist:   tslist,
+			dbeplist: dbeplist,
+			qclist:   qclist,
+			exp:      expectedDaemonConfig,
+			message:  "DaemonConfig should be equal",
+		},
+	}
+
+	for _, c := range cases {
+		cfg, _ := daemonConfigBuild(&c.vdblist, &c.tslist, &c.qclist, &c.dbeplist)
+		assert.Equal(t, len(c.exp.Apps), len(cfg.(*PisaDaemonConfig).Apps), c.message)
+		assert.ElementsMatch(t, c.exp.Apps, cfg.(*PisaDaemonConfig).Apps, c.message)
+	}
 }
