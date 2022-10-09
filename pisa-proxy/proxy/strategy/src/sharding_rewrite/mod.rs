@@ -440,42 +440,15 @@ impl ShardingRewrite {
 
         if !order_change.target.is_empty() {
             changes.push(RewriteChange::OrderChange(order_change));
-                //output.push(
-                //    ShardingRewriteOutput {
-                //        changes: vec![RewriteChange::OrderChange(order_changes)],
-                //        target_sql: target_sql.to_string(),
-                //        data_source: data_source.clone(),
-                //        sharding_column: Some(sharding_column.to_string()),
-                //        min_max_fields: vec![],
-                //    }
-                //)
         }
            
         if !group_change.target.is_empty() {
             changes.push(RewriteChange::GroupChange(group_change));
-                //output.push(
-                //    ShardingRewriteOutput {
-                //        changes: vec![RewriteChange::GroupChange(group_changes)],
-                //        target_sql: target_sql.to_string(),
-                //        data_source: data_source.clone(),
-                //        sharding_column: Some(sharding_column.to_string()),
-                //        min_max_fields: vec![],
-                //    }
-                //)
         }
 
         if !avgs.is_empty() {
             let target = Self::change_avg(&mut target_sql, avgs, shard_idx, 0);
             changes.push(RewriteChange::AvgChange(AvgChange { target }));
-            //output.push(
-            //    ShardingRewriteOutput {
-            //        changes: vec![RewriteChange::AvgChange(AvgChange{target})],
-            //        target_sql: target_sql.to_string(),
-            //        data_source: data_source.clone(),
-            //        sharding_column: Some(sharding_column.to_string()),
-            //        min_max_fields: vec![],
-            //    }
-            //);
         }
 
         Ok(
