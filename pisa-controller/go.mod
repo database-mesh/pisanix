@@ -3,6 +3,7 @@ module github.com/database-mesh/pisanix/pisa-controller
 go 1.18
 
 require (
+	github.com/database-mesh/golang-sdk v0.0.0-20221009055142-cfc861ab5f3b
 	github.com/gin-gonic/gin v1.7.7
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
@@ -13,7 +14,6 @@ require (
 )
 
 require (
-	github.com/database-mesh/golang-sdk v0.0.0-20221006030104-abaa246d73c4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-logr/logr v1.2.0 // indirect
