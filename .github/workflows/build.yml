@@ -46,7 +46,6 @@ jobs:
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
-          registry: uhub.service.ucloud.cn
           image: pisanixio/controller
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -80,7 +79,6 @@ jobs:
       - name: "Kaniko build"
         uses: mlycore/action-kaniko@master
         with:
-          registry: uhub.service.ucloud.cn
           image: pisanixio/proxy
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
