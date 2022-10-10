@@ -374,7 +374,7 @@ port = 3308
 role = "readwrite"
 ```
 
-#### 基于分片键的分片配置
+#### 基于分片键的分片配置，单库分表场景
 ```
 # api 配置块，对应命令行参数和环境变量
 [admin]
@@ -408,7 +408,7 @@ server_version = ""
 balance_type = "random"
 nodes = ["ds001"]
 
-#后端数据源配置
+# 分片配置
 [[proxy.config.sharding]]
 # 逻辑表名
 table_name = "t_order"
@@ -428,6 +428,7 @@ table_sharding_column = "id"
 # 分片数
 sharding_count = 4
 
+# 后端数据源配置
 [mysql]
 [[mysql.node]]
 # 数据源 name
@@ -442,6 +443,98 @@ password = "12345678"
 host = "127.0.0.1"
 # 数据库端口
 port = 3306
+# 负载均衡节点权重
+weight = 1
+# 后端数据源角色
+role = "read"
+```
+
+#### 基于分片键的分片配置，分库场景
+
+```
+# api 配置块，对应命令行参数和环境变量
+[admin]
+# api 地址
+host = "0.0.0.0"
+# api 端口
+port = 8082
+# 日志级别
+log_level = "INFO"
+
+# pisa-proxy 代理配置块
+[proxy]
+# config a proxy
+[[proxy.config]]
+# proxy 代理地址
+listen_addr = "0.0.0.0:9088"
+# proxy 认证用户名
+user = "root"
+# proxy 认证密码
+password = "12345678"
+# proxy schema
+db = "test_shard"
+# 配置后端数据源类型
+backend_type = "mysql"
+# proxy 与后端数据库建连连接池大小，值范围：1 ~ 255, 默认值：64
+pool_size = 3
+# 服务端版本
+server_version = ""
+
+[proxy.config.simple_loadbalance]
+balance_type = "random"
+nodes = ["ds001", "ds002"]
+
+# 分片配置
+[[proxy.config.sharding]]
+# 逻辑表名
+table_name = "t_order"
+# 后端节点, 对应 mysql.node 的 name
+actual_datanodes = ["ds001"]
+# 暂不支持
+binding_tables = []
+# 暂不支持
+broadcast_tables = []
+
+# 分库配置
+[proxy.config.sharding.database_strategy]
+# 分片算法， mod | crc32_mod
+database_sharding_algorithm_name = "mod" 
+# 分片键
+database_sharding_column = "id"
+
+# 分片配置
+[mysql]
+[[mysql.node]]
+# 数据源 name
+name = "ds001"
+# database name
+db = "test_shard"
+# 数据库 user
+user = "root"
+# 数据库 password
+password = "12345678"
+# 数据库地址
+host = "127.0.0.1"
+# 数据库端口
+port = 3306
+# 负载均衡节点权重
+weight = 1
+# 后端数据源角色
+role = "read"
+
+[[mysql.node]]
+# 数据源 name
+name = "ds002"
+# database name
+db = "test_shard"
+# 数据库 user
+user = "root"
+# 数据库 password
+password = "12345678"
+# 数据库地址
+host = "127.0.0.1"
+# 数据库端口
+port = 3308
 # 负载均衡节点权重
 weight = 1
 # 后端数据源角色

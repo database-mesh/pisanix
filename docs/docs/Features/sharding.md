@@ -77,6 +77,7 @@ SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00
 - 基于单 shard-key 的静态分片规则
 - 分片算法：crc32mod 和 mod
 - 单库水平分表
+- 分库
 - 基于分片的查询，更新，删除，修改
 
 #### 使用限制
@@ -96,8 +97,12 @@ SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00
 |table_sharding_algorithm_name|enum|是|无|分片算法|
 |table_sharding_column|String|是|无|分片键|
 |sharding_count|u64|是|无|分片数|
+|database_sharding_algorithm_name|enum|是|无|分片算法|
+|database_sharding_column|String|是|无|分片键|
 
 ## CRD 配置示例
+
+1. 单库分表场景
 ```yaml
 apiVersion: core.database-mesh.io/v1alpha1
 kind: DataShard
@@ -113,6 +118,27 @@ spec:
       tableShardingAlgorithmName: "mod"
       tableShardingColumn: "id"
       shardingCount: 4
+    actualDatanodes:
+      valueSource:
+        nodes:
+        - value: "ds001"
+```
+
+2. 分库场景
+```yaml
+apiVersion: core.database-mesh.io/v1alpha1
+kind: DataShard
+metadata:
+  name: catalogue
+  namespace: demotest
+  labels:
+    source: catalogue
+spec:
+  rules:
+  - tableName: "t_order"
+    databaseStrategy:
+      databaseShardingAlgorithmName: "mod"
+      databaseShardingColumn: "id"
     actualDatanodes:
       valueSource:
         nodes:
