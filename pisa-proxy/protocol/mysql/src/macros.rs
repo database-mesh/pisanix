@@ -27,6 +27,12 @@ macro_rules! gen_row_data {
                     $($name::$var(x) => x.decode_with_name(name),)*
                 }
             }
+
+            fn get_row_data_with_name(&mut self, name: &str) -> value::Result<RowPartData> {
+                match self {
+                    $($name::$var(x) => x.get_row_data_with_name(name),)*
+                }
+            }
         }
     }
 }

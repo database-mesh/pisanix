@@ -15,10 +15,10 @@
 use std::{
     marker::PhantomData,
     sync::{atomic::Ordering, Arc},
-    vec,
+    vec, ops::Div,
 };
 
-use bytes::BytesMut;
+use bytes::{BytesMut, BufMut, Buf};
 use conn_pool::{Pool, PoolConn};
 use futures::{stream::FuturesOrdered, SinkExt, StreamExt};
 use mysql_protocol::{
@@ -27,16 +27,16 @@ use mysql_protocol::{
         conn::{ClientConn, SessionAttr},
         stmt::Stmt,
     },
-    column::{Column, ColumnInfo},
+    column::{Column, ColumnInfo, decode_column},
     err::ProtocolError,
     mysql_const::*,
     row::{RowData, RowDataBinary, RowDataText, RowDataTyp},
     server::codec::{make_eof_packet, CommonPacket, PacketSend},
-    util::{is_eof, length_encode_int},
+    util::{is_eof, length_encode_int, BufMutExt},
 };
 use pisa_error::error::{Error, ErrorKind};
 use rayon::prelude::*;
-use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput, RewriteChange};
+use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput, RewriteChange, meta::FieldWrapFunc, rewrite_const::{AVG_COUNT, AVG_SUM, AVG_FIELD}};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -119,7 +119,7 @@ where
         is_binary: bool,
     ) -> Result<(), Error> {
         let header = merge_stream.next().await;
-        let header = if let Some(header) = Self::get_shard_one_data(header)? {
+        let mut header = if let Some(header) = Self::get_shard_one_data(header)? {
             header.1
         } else {
             return Ok(());
@@ -139,6 +139,19 @@ where
 
         let mut buf = BytesMut::with_capacity(1 << 16);
 
+        let ro = &req.rewrite_outputs[0];
+        let avg_change = ro.changes.iter().find_map(|x| {
+            if let RewriteChange::AvgChange(change) = x {
+                Some(change)
+            } else {
+                None
+            }
+        });
+
+        if let Some(_) = avg_change {
+            header[4] = header[4] - 1;
+        }
+        
         let _ = req
             .framed
             .codec_mut()
@@ -186,28 +199,108 @@ where
             }
         };
 
+        // Save min or max row data
+        let mut agg_buf = Vec::with_capacity(1024);
+
         while let Some(chunk) = stream.next().await {
             let mut chunk = chunk
                 .into_par_iter().map(|x| x.unwrap()).collect::<Result<Vec<_>, _>>().map_err(ErrorKind::from)?;
 
-            if is_binary {
-                if let Some(name) = &sharding_column {
+            
+            let ro = &req.rewrite_outputs[0];
+            Self::handle_min_max(ro, &mut chunk, row_data.clone(), is_binary, &mut agg_buf)?;
+            
+            let mut avg_chunk = vec![];
+
+            let avg_change = ro.changes.iter().find_map(|x| {
+                if let RewriteChange::AvgChange(change) = x {
+                    Some(change)
+                } else {
+                    None
+                }
+            });
+
+            if let Some(avg) = avg_change {
+                let count_field = avg.target.get(AVG_COUNT).unwrap();
+                let sum_field = avg.target.get(AVG_SUM).unwrap();
+                avg_chunk = chunk.par_iter().map(|x| {
+                    let mut row_data = row_data.clone();
+                    
+                    row_data.with_buf(&x[4..]);
+                    if is_binary {
+                        let count = row_data.decode_with_name::<u64>(count_field).unwrap().unwrap();
+                        let sum = row_data.decode_with_name::<u64>(sum_field).unwrap().unwrap();
+                        (count, sum)
+                    } else {
+                        let count = row_data.decode_with_name::<String>(count_field).unwrap().unwrap();
+                        let count = count.parse::<u64>().unwrap();
+
+                        let sum = row_data.decode_with_name::<String>(sum_field).unwrap().unwrap();
+                        let sum = sum.parse::<u64>().unwrap();
+                        (count, sum)
+                    }
+                }).collect::<Vec<_>>();
+
+                let count: u64 = avg_chunk.par_iter().map(|x| x.0).sum();
+                let sum: u64 = avg_chunk.par_iter().map(|x| x.1).sum();
+
+                let _ = chunk.par_iter_mut().map(|x| {
+                    let mut row_data = row_data.clone();
+                    let mut data = x.split_off(4);
+                    row_data.with_buf(&data[..]);
+
+                    let count_data = row_data.get_row_data_with_name(count_field).unwrap().unwrap();
+                    let sum_data = row_data.get_row_data_with_name(sum_field).unwrap().unwrap();
+
+                    for _ in count_data.start_idx .. sum_data.end_part_idx + 2 {
+                        data.get_u8();
+                    }
+
+                    x.extend_from_slice(&data[..]);
+
+                    let mut buf = Vec::with_capacity(32);
+                    let avg = format!("{:.4}", (sum as f64 / count as f64));
+                    buf.put_lenc_int(avg.len() as u64, true);
+                    buf.put_slice(avg.as_bytes());
+                    x.put_slice(&buf);
+                }).collect::<Vec<_>>();
+
+                // When columns has count and sum field only, return directly.
+                if col_info.len() == 2 {
+                    let _ = req
+                        .framed
+                        .codec_mut()
+                        .encode(PacketSend::EncodeOffset(chunk[0][4..].into(), buf.len()), buf);
+                    return Ok(());
+                }
+            }
+            
+            if col_info.len() == ro.min_max_fields.len() {
+                if is_binary {
+                    agg_buf.insert(0, 0);
+                    for  _ in 0..(col_info.len() + 7 + 2) >> 3 {
+                        agg_buf.insert(1, 0);
+                    }
+                }
+                let _ = req
+                    .framed
+                    .codec_mut()
+                    .encode(PacketSend::EncodeOffset(agg_buf[..].into(), buf.len()), buf);
+                return Ok(());
+            }
+
+            if let Some(name) = &sharding_column {
+                if let Some(_) = col_info.iter().find(|col_info| col_info.column_name.eq(name)) {
                     chunk.par_sort_by_cached_key(|x| {
                         let mut row_data = row_data.clone();
                         row_data.with_buf(&x[4..]);
-                        row_data.decode_with_name::<u64>(&name).unwrap()
-                    })
-                }
-            } else {
-                if let Some(name) = &sharding_column {
-                    if let Some(_) = col_info.iter().find(|col_info| col_info.column_name.eq(name)) {
-                        chunk.par_sort_by_cached_key(|x| {
-                            let mut row_data = row_data.clone();
-                            row_data.with_buf(&x[4..]);
+                        if is_binary {
+                            row_data.decode_with_name::<u64>(&name).unwrap().unwrap()
+                        } else {
                             let value = row_data.decode_with_name::<String>(&name).unwrap().unwrap();
                             value.parse::<u64>().unwrap()
-                        })
-                    }
+                        }
+                    })
                 }
             }
 
@@ -216,6 +309,70 @@ where
                     .framed
                     .codec_mut()
                     .encode(PacketSend::EncodeOffset(row[4..].into(), buf.len()), buf);
+            }
+        }
+
+        Ok(())
+    }
+    
+    fn handle_min_max<B: BufMut>(ro: &ShardingRewriteOutput, chunk: &mut [BytesMut], row_data: RowDataTyp<&[u8]>, is_binary: bool, agg_buf: &mut B) -> Result<(), Error> {
+        for (idx, mmf) in ro.min_max_fields.iter().enumerate() {
+            match mmf.wrap_func {
+                FieldWrapFunc::Max => {
+                    chunk.par_sort_unstable_by(|a, b| {
+                        let mut row_data = row_data.clone();
+                        
+                        row_data.with_buf(&a[4..]);
+                        let a = if is_binary {
+                            row_data.decode_with_name::<u64>(&mmf.name).unwrap().unwrap()
+                        } else {
+                            let value = row_data.decode_with_name::<String>(&mmf.name).unwrap().unwrap();
+                            value.parse::<u64>().unwrap()
+                        };
+
+                        row_data.with_buf(&b[4..]);
+                        let b = if is_binary {
+                            row_data.decode_with_name::<u64>(&mmf.name).unwrap().unwrap()
+                        } else {
+                            let value = row_data.decode_with_name::<String>(&mmf.name).unwrap().unwrap();
+                            value.parse::<u64>().unwrap()
+                        };
+
+                        b.cmp(&a)
+                    });
+                }
+                FieldWrapFunc::Min => {
+                    chunk.par_sort_unstable_by(|a, b| {
+                        let mut row_data = row_data.clone();
+                        
+                        row_data.with_buf(&a[4..]);
+                        let a = if is_binary {
+                            row_data.decode_with_name::<u64>(&mmf.name).unwrap().unwrap()
+                        } else {
+                            let value = row_data.decode_with_name::<String>(&mmf.name).unwrap().unwrap();
+                            value.parse::<u64>().unwrap()
+                        };
+
+                        row_data.with_buf(&b[4..]);
+                        let b = if is_binary {
+                            row_data.decode_with_name::<u64>(&mmf.name).unwrap().unwrap()
+                        } else {
+                            let value = row_data.decode_with_name::<String>(&mmf.name).unwrap().unwrap();
+                            value.parse::<u64>().unwrap()
+                        };
+
+                        a.cmp(&b)
+                    });
+
+                }
+                FieldWrapFunc::None => break
+            }
+
+            let mut row_data = row_data.clone();
+            row_data.with_buf(&chunk[0][4..]);
+            let row = row_data.get_row_data_with_name(&mmf.name).map_err(|e| ErrorKind::Runtime(e))?;
+            if let Some(row) = row {
+                agg_buf.put_slice(&row.data);
             }
         }
 
@@ -230,6 +387,35 @@ where
     ) -> Result<Arc<[ColumnInfo]>, Error> {
         let mut col_buf = Vec::with_capacity(100);
         let mut idx: Option<usize> = None;
+
+        let ro = &req.rewrite_outputs[0];
+        let avg_change = ro.changes.iter().find_map(|x| {
+            if let RewriteChange::AvgChange(change) = x {
+                Some(change)
+            } else {
+                None
+            }
+        });
+
+        let mut avg_column_buf = Vec::with_capacity(128);
+        if let Some(change) = avg_change {
+            let avg_field = change.target.get(AVG_FIELD).unwrap();
+            let avg_column = ColumnInfo {
+                schema: None,
+                table_name: None,
+                column_name: avg_field.to_string(),
+                charset: 0x3f,
+                column_length: 0x46,
+                column_type: ColumnType::MYSQL_TYPE_NEWDECIMAL,
+                column_flag: 0x0080,
+                decimals: 4,
+            };
+
+            avg_column.encode(&mut avg_column_buf);
+        }
+        
+        //let column_infos = Vec::with_capacity(column_length as usize);
+        let mut is_add_avg_column  = false;
 
         for _ in 0..column_length {
             let data = stream.next().await;
@@ -256,6 +442,23 @@ where
             };
 
             col_buf.extend_from_slice(&data[..]);
+            let column_info = decode_column(&data[4..]);
+            if let Some(change) = avg_change {
+                let avg_count = change.target.get(AVG_COUNT).unwrap();
+                let avg_sum = change.target.get(AVG_SUM).unwrap();
+                if &column_info.column_name == avg_count || &column_info.column_name == avg_sum {
+                    if !is_add_avg_column {
+                        let _ = req
+                            .framed
+                            .codec_mut()
+                            .encode(PacketSend::EncodeOffset(avg_column_buf[..].into(), buf.len()), buf);
+                    }
+
+                    is_add_avg_column = true;
+                    continue;
+                }
+            }
+
             let _ = req
                 .framed
                 .codec_mut()

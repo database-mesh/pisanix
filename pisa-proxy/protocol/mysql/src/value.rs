@@ -17,7 +17,7 @@ use chrono::{Duration, NaiveDateTime, NaiveDate, NaiveTime};
 
 use crate::err::DecodeRowError;
 
-pub type Result<T> = std::result::Result<Option<T>, Box<dyn std::error::Error>>;
+pub type Result<T> = std::result::Result<Option<T>, Box<dyn std::error::Error + Send + Sync>>;
 
 pub trait Value: Sized {
     type Item: Convert<Self>;
