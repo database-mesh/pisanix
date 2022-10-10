@@ -30,15 +30,22 @@ Pisanix now supports `TrafficStrategy` of [Database Mesh Specificiation](https:/
       - [x] Dynamic
         - [x] Master-Slave Replication
         - [x] MHA
-  - Sharding
-    - [ ] Sharding with keys  
-  - Auditing
-    - [ ] Audit with AWS    
-  - AccessControl
-    - [ ] Fine-Grained Access Control   
   - Plugins
     - [x] Circuit Break
     - [x] Concurrency Control
+- DataStrategy
+  - Sharding
+    - [x] Sharding with keys  
+       - [x] Single Database Sharding Tables  
+       - [ ] Sharding Databases
+       - [ ] Sharding Databases with Sharding Tables
+- AuditRequest
+  - [ ] Audit with AWS    
+- AccessControl
+  - [ ] Fine-Grained Access Control   
+- QoSClaim  
+  - [ ] TrafficQoS
+ 
 
 # Getting Started
 - [Quick Start](https://www.pisanix.io/docs/quickstart)
