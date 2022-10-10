@@ -193,7 +193,7 @@ iota! {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 #[repr(u8)]
 pub enum ColumnType {
     MYSQL_TYPE_DECIMAL,

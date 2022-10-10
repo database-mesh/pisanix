@@ -18,7 +18,7 @@ use std::{
     vec,
 };
 
-use bytes::BytesMut;
+use bytes::{BytesMut, BufMut};
 use conn_pool::{Pool, PoolConn};
 use futures::{stream::FuturesOrdered, SinkExt, StreamExt};
 use mysql_protocol::{
@@ -36,7 +36,7 @@ use mysql_protocol::{
 };
 use pisa_error::error::{Error, ErrorKind};
 use rayon::prelude::*;
-use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput, RewriteChange};
+use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput, RewriteChange, meta::FieldWrapFunc};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -186,36 +186,119 @@ where
             }
         };
 
+        // Save min or max row data
+        let mut agg_buf = Vec::with_capacity(1024);
+
         while let Some(chunk) = stream.next().await {
             let mut chunk = chunk
                 .into_par_iter().map(|x| x.unwrap()).collect::<Result<Vec<_>, _>>().map_err(ErrorKind::from)?;
 
-            if is_binary {
-                if let Some(name) = &sharding_column {
+            
+            let ro = &req.rewrite_outputs[0];
+            Self::handle_min_max(ro, &mut chunk, row_data.clone(), is_binary, &mut agg_buf)?;
+
+            if col_info.len() == ro.min_max_fields.len() {
+                if is_binary {
+                    agg_buf.insert(0, 0);
+                    for  _ in 0..(col_info.len() + 7 + 2) >> 3 {
+                        agg_buf.insert(1, 0);
+                    }
+                }
+                let _ = req
+                    .framed
+                    .codec_mut()
+                    .encode(PacketSend::EncodeOffset(agg_buf[..].into(), buf.len()), buf);
+                return Ok(());
+            }
+
+            if let Some(name) = &sharding_column {
+                if let Some(_) = col_info.iter().find(|col_info| col_info.column_name.eq(name)) {
                     chunk.par_sort_by_cached_key(|x| {
                         let mut row_data = row_data.clone();
                         row_data.with_buf(&x[4..]);
-                        row_data.decode_with_name::<u64>(&name).unwrap()
-                    })
-                }
-            } else {
-                if let Some(name) = &sharding_column {
-                    if let Some(_) = col_info.iter().find(|col_info| col_info.column_name.eq(name)) {
-                        chunk.par_sort_by_cached_key(|x| {
-                            let mut row_data = row_data.clone();
-                            row_data.with_buf(&x[4..]);
+                        if is_binary {
+                            row_data.decode_with_name::<u64>(&name).unwrap().unwrap()
+                        } else {
                             let value = row_data.decode_with_name::<String>(&name).unwrap().unwrap();
                             value.parse::<u64>().unwrap()
-                        })
-                    }
+                        }
+                    })
                 }
             }
+
+
 
             for row in chunk.iter() {
                 let _ = req
                     .framed
                     .codec_mut()
                     .encode(PacketSend::EncodeOffset(row[4..].into(), buf.len()), buf);
+            }
+        }
+
+        Ok(())
+    }
+    
+    fn handle_min_max<B: BufMut>(ro: &ShardingRewriteOutput, chunk: &mut [BytesMut], row_data: RowDataTyp<&[u8]>, is_binary: bool, agg_buf: &mut B) -> Result<(), Error> {
+        for (idx, mmf) in ro.min_max_fields.iter().enumerate() {
+            match mmf.wrap_func {
+                FieldWrapFunc::Max => {
+                    chunk.par_sort_unstable_by(|a, b| {
+                        let mut row_data = row_data.clone();
+                        
+                        row_data.with_buf(&a[4..]);
+                        let a = if is_binary {
+                            row_data.decode_with_name::<u64>(&mmf.name).unwrap().unwrap()
+                        } else {
+                            let value = row_data.decode_with_name::<String>(&mmf.name).unwrap().unwrap();
+                            value.parse::<u64>().unwrap()
+                        };
+
+                        row_data.with_buf(&b[4..]);
+                        let b = if is_binary {
+                            row_data.decode_with_name::<u64>(&mmf.name).unwrap().unwrap()
+                        } else {
+                            let value = row_data.decode_with_name::<String>(&mmf.name).unwrap().unwrap();
+                            value.parse::<u64>().unwrap()
+                        };
+
+                        b.cmp(&a)
+                    });
+                }
+                FieldWrapFunc::Min => {
+                    chunk.par_sort_unstable_by(|a, b| {
+                        let mut row_data = row_data.clone();
+                        
+                        row_data.with_buf(&a[4..]);
+                        let a = if is_binary {
+                            row_data.decode_with_name::<u64>(&mmf.name).unwrap().unwrap()
+                        } else {
+                            let value = row_data.decode_with_name::<String>(&mmf.name).unwrap().unwrap();
+                            value.parse::<u64>().unwrap()
+                        };
+
+                        row_data.with_buf(&b[4..]);
+                        let b = if is_binary {
+                            row_data.decode_with_name::<u64>(&mmf.name).unwrap().unwrap()
+                        } else {
+                            let value = row_data.decode_with_name::<String>(&mmf.name).unwrap().unwrap();
+                            value.parse::<u64>().unwrap()
+                        };
+
+                        a.cmp(&b)
+                    });
+
+                }
+                FieldWrapFunc::None => break
+            }
+
+            let mut row_data = row_data.clone();
+            row_data.with_buf(&chunk[0][4..]);
+            let row = row_data.get_row_data_with_name(&mmf.name).map_err(|e| ErrorKind::Runtime(e))?;
+            if let Some(row) = row {
+                println!("buf {:?}", &chunk[0][..]);
+                println!("buf row {:?}", &row.0[..]);
+                agg_buf.put_slice(&row.0);
             }
         }
 

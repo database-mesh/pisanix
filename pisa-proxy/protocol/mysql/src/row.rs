@@ -17,20 +17,21 @@ use std::sync::Arc;
 use crate::{
     column::ColumnInfo,
     err::DecodeRowError,
-    util::{BufExt, length_encode_int},
-    value::{self, Value},
     mysql_const::*,
+    util::{length_encode_int, BufExt},
+    value::{self, Value},
 };
 
 pub trait RowData<T: AsRef<[u8]>> {
     fn with_buf(&mut self, buf: T);
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V>;
+    fn get_row_data_with_name(&mut self, name: &str) -> value::Result<(Box<[u8]>, usize, usize)>;
 }
 
 #[derive(Clone)]
 pub enum RowDataTyp<T: AsRef<[u8]>> {
     Text(RowDataText<T>),
-    Binary(RowDataBinary<T>)
+    Binary(RowDataBinary<T>),
 }
 
 crate::gen_row_data!(RowDataTyp, Text(RowDataText), Binary(RowDataBinary));
@@ -45,8 +46,10 @@ impl RowDataCommon {
         RowDataCommon { columns }
     }
 
-    fn get_idx(&mut self, name: &str) -> std::result::Result<usize, DecodeRowError> {
-        self.columns.iter().position(|x| x.column_name == name)
+    fn get_idx(&self, name: &str) -> std::result::Result<usize, DecodeRowError> {
+        self.columns
+            .iter()
+            .position(|x| x.column_name == name)
             .ok_or_else(|| DecodeRowError::ColumnNotFound(name.to_string()))
     }
 }
@@ -71,6 +74,15 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
     }
     // The method must be called in column order
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
+        let row_data = self.get_row_data_with_name(name)?;
+        match row_data {
+            Some((data, start, end)) => Value::from(&data[start..end]),
+
+            _ => Ok(None),
+        }
+    }
+
+    fn get_row_data_with_name(&mut self, name: &str) -> value::Result<(Box<[u8]>, usize, usize)> {
         let name_idx = self.common.get_idx(name)?;
         let mut idx: usize = 0;
         for _ in 0..name_idx {
@@ -83,9 +95,12 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
             return Ok(None);
         }
 
-        let row_data = &self.buf.as_ref()[idx + pos as usize .. idx + (pos + length) as usize];
-
-        Value::from(row_data)
+        //return Ok(Some(self.buf.as_ref()[idx + pos as usize .. idx + (pos + length) as usize].into()));
+        return Ok(Some((
+            self.buf.as_ref()[idx..idx + (pos + length) as usize].into(),
+            pos as usize,
+            (pos + length) as usize,
+        )));
     }
 }
 
@@ -94,12 +109,13 @@ pub struct RowDataBinary<T: AsRef<[u8]>> {
     common: RowDataCommon,
     null_map: Vec<u8>,
     buf: T,
+    start_pos: usize,
 }
 
 impl<T: BufExt + AsRef<[u8]>> RowDataBinary<T> {
     pub fn new(columns: Arc<[ColumnInfo]>, buf: T) -> RowDataBinary<T> {
         let common = RowDataCommon::new(columns);
-        RowDataBinary { common, null_map: vec![], buf }
+        RowDataBinary { common, null_map: vec![], buf, start_pos: 0 }
     }
 
     #[cfg(test)]
@@ -114,7 +130,7 @@ impl<T: BufExt + AsRef<[u8]>> RowDataBinary<T> {
 
         let mut null_map = vec![0; null_map_length];
         buf.copy_to_slice(&mut null_map);
-        RowDataBinary { common, null_map, buf }
+        RowDataBinary { common, null_map, buf, start_pos: 0, }
     }
 }
 
@@ -122,76 +138,91 @@ use bytes::Buf;
 
 impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
     fn with_buf(&mut self, buf: T) {
+        println!("raw buf {:?}", &buf.as_ref()[..]);
         let column_length = self.common.columns.len();
         // See https://dev.mysql.com/doc/internals/en/binary-protocol-resultset-row.html
         // NULL Bitmap length: (column-count + 7 + 2) / 8
         let null_map_length = (column_length + 7 + 2) >> 3;
 
         // Eat packet header
-        buf.as_ref().get_u8();
+        //buf.as_ref().get_u8();
 
         let mut null_map = vec![0; null_map_length];
         buf.as_ref().copy_to_slice(&mut null_map);
+        println!("raw null map {:?}", null_map);
         self.null_map = null_map;
-
-        self.buf = buf; 
+        
+        println!("raw buf111 {:?}", &buf.as_ref()[..]);
+        
+        self.start_pos = 1 + null_map_length;
+        self.buf = buf;
     }
     // The method must be called in column order
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
-        let mut start_pos = 0;
+        let row_data = self.get_row_data_with_name(name)?;
+        match row_data {
+            Some((data, start, end)) => Value::from(&data),
+            None => Ok(None),
+        }
+    }
 
+    fn get_row_data_with_name(&mut self, name: &str) -> value::Result<(Box<[u8]>, usize, usize)> {
+        let mut start_pos = self.start_pos;
         for (idx, info) in self.common.columns.iter().enumerate() {
             if self.null_map[(idx + 2) / 8] & (1 << (idx + 2) as u8 % 8) > 0 {
                 continue;
             }
 
             let (length, is_null, pos) = match info.column_type {
-                ColumnType::MYSQL_TYPE_STRING | ColumnType::MYSQL_TYPE_VARCHAR | ColumnType::MYSQL_TYPE_VAR_STRING | ColumnType::MYSQL_TYPE_ENUM | ColumnType::MYSQL_TYPE_SET
-                | ColumnType::MYSQL_TYPE_LONG_BLOB | ColumnType::MYSQL_TYPE_MEDIUM_BLOB | ColumnType::MYSQL_TYPE_BLOB | ColumnType::MYSQL_TYPE_TINY_BLOB | ColumnType::MYSQL_TYPE_GEOMETRY
-                | ColumnType::MYSQL_TYPE_BIT | ColumnType::MYSQL_TYPE_DECIMAL | ColumnType::MYSQL_TYPE_NEWDECIMAL => {
+                ColumnType::MYSQL_TYPE_STRING
+                | ColumnType::MYSQL_TYPE_VARCHAR
+                | ColumnType::MYSQL_TYPE_VAR_STRING
+                | ColumnType::MYSQL_TYPE_ENUM
+                | ColumnType::MYSQL_TYPE_SET
+                | ColumnType::MYSQL_TYPE_LONG_BLOB
+                | ColumnType::MYSQL_TYPE_MEDIUM_BLOB
+                | ColumnType::MYSQL_TYPE_BLOB
+                | ColumnType::MYSQL_TYPE_TINY_BLOB
+                | ColumnType::MYSQL_TYPE_GEOMETRY
+                | ColumnType::MYSQL_TYPE_BIT
+                | ColumnType::MYSQL_TYPE_DECIMAL
+                | ColumnType::MYSQL_TYPE_NEWDECIMAL => {
                     let (length, is_null, pos) = length_encode_int(&self.buf.as_ref()[start_pos..]);
                     (length, is_null, pos)
                 }
 
-                ColumnType::MYSQL_TYPE_LONGLONG => {
-                    (8, false, 0)
-                }
+                ColumnType::MYSQL_TYPE_LONGLONG => (8, false, 0),
 
-                ColumnType::MYSQL_TYPE_LONG | ColumnType::MYSQL_TYPE_INT24 => {
-                    (4, false, 0)
-                }
+                ColumnType::MYSQL_TYPE_LONG | ColumnType::MYSQL_TYPE_INT24 => (4, false, 0),
 
-                ColumnType::MYSQL_TYPE_SHORT | ColumnType::MYSQL_TYPE_YEAR => {
-                    (2, false, 0)
-                }
+                ColumnType::MYSQL_TYPE_SHORT | ColumnType::MYSQL_TYPE_YEAR => (2, false, 0),
 
-                ColumnType::MYSQL_TYPE_TINY => {
-                    (1, false, 0)
-                }
+                ColumnType::MYSQL_TYPE_TINY => (1, false, 0),
 
-                ColumnType::MYSQL_TYPE_DOUBLE => {
-                    (8, false, 0)
-                }
+                ColumnType::MYSQL_TYPE_DOUBLE => (8, false, 0),
 
-                ColumnType::MYSQL_TYPE_FLOAT => {
-                    (4, false, 0)
-                }
+                ColumnType::MYSQL_TYPE_FLOAT => (4, false, 0),
 
-                ColumnType::MYSQL_TYPE_DATE | ColumnType::MYSQL_TYPE_DATETIME | ColumnType::MYSQL_TYPE_TIMESTAMP => {
-                    let (length, _, pos) = length_encode_int(&self.buf.as_ref()[start_pos..]);
+                ColumnType::MYSQL_TYPE_DATE
+                | ColumnType::MYSQL_TYPE_DATETIME
+                | ColumnType::MYSQL_TYPE_TIMESTAMP => {
+                    let (length, _, pos) = length_encode_int(&self.buf.as_ref()[self.start_pos..]);
                     (length, false, pos)
                 }
 
                 ColumnType::MYSQL_TYPE_TIME => {
-                    let (length, _, pos) = length_encode_int(&self.buf.as_ref()[start_pos..]);
+                    let (length, _, pos) = length_encode_int(&self.buf.as_ref()[self.start_pos..]);
                     (length, false, pos)
                 }
 
-                ColumnType::MYSQL_TYPE_NULL => {
-                    (0, false, 0)
-                }
+                ColumnType::MYSQL_TYPE_NULL => (0, false, 0),
 
-                _ => return Err(DecodeRowError::ColumnTypeNotFound(info.column_type.as_ref().to_string()).into())
+                _ => {
+                    return Err(DecodeRowError::ColumnTypeNotFound(
+                        info.column_type.as_ref().to_string(),
+                    )
+                    .into())
+                }
             };
 
             if info.column_name != name {
@@ -201,22 +232,26 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
                     return Ok(None);
                 }
 
-                let row_data = &self.buf.as_ref()[(start_pos + pos as usize) .. (start_pos + pos as usize + length as usize)];
-                return Value::from(row_data)
+                println!("rrrrr {:?} start_pos {:?} pos {:?}, len {:?}", &self.buf.as_ref()[..], start_pos, pos, length);
+                // Need to add packet header and null_map to returnd data
+                let raw_data = &self.buf.as_ref()[start_pos + pos as usize..(start_pos + pos as usize + length as usize)];
+                return Ok(Some((
+                    raw_data.into(),
+                    pos as usize,
+                    (pos + length) as usize,
+                )));
             }
         }
 
-        return Ok(None)
+        Ok(None)
     }
-
 }
-
 
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
 
-    use chrono::{Duration, naive::NaiveDateTime, NaiveDate, NaiveTime};
+    use chrono::{naive::NaiveDateTime, Duration, NaiveDate, NaiveTime};
 
     use super::RowDataBinary;
     use crate::{
@@ -259,60 +294,56 @@ mod test {
 
     fn get_test_binary_row_data() -> Vec<u8> {
         vec![
-            0x4c, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0xde,  0x00, 0x00, 0x00,   
-            0x00, 0x00, 0x00, 0x00, 0x04, 0x72, 0x6f, 0x6f,  0x74, 0x10, 0x31, 0x30, 0x2e, 0x30, 0x2e, 0x32, 
-            0x2e, 0x31, 0x30, 0x30, 0x3a, 0x35, 0x33, 0x32,  0x30, 0x38, 0x04, 0x74, 0x65, 0x73, 0x74, 0x07,   
-            0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x65, 0x00,  0x00, 0x00, 0x00, 0x08, 0x73, 0x74, 0x61, 0x72,   
-            0x74, 0x69, 0x6e, 0x67, 0x10, 0x73, 0x68, 0x6f,  0x77, 0x20, 0x70, 0x72, 0x6f, 0x63, 0x65, 0x73,   
-            0x73, 0x6c, 0x69, 0x73, 0x74
+            0x4c, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0xde, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x04, 0x72, 0x6f, 0x6f, 0x74, 0x10, 0x31, 0x30, 0x2e, 0x30, 0x2e, 0x32, 0x2e,
+            0x31, 0x30, 0x30, 0x3a, 0x35, 0x33, 0x32, 0x30, 0x38, 0x04, 0x74, 0x65, 0x73, 0x74,
+            0x07, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x65, 0x00, 0x00, 0x00, 0x00, 0x08, 0x73,
+            0x74, 0x61, 0x72, 0x74, 0x69, 0x6e, 0x67, 0x10, 0x73, 0x68, 0x6f, 0x77, 0x20, 0x70,
+            0x72, 0x6f, 0x63, 0x65, 0x73, 0x73, 0x6c, 0x69, 0x73, 0x74,
         ]
     }
 
     fn get_test_binary_row_columns_time() -> Vec<u8> {
         vec![
-            0x1a, 0x00, 0x00, 0x02, 0x03, 0x64, 0x65, 0x66, 0x00, 0x00, 0x00, 0x04, 0x74, 0x69, 0x6d, 0x65,
-            0x00, 0x0c, 0x3f, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x0b, 0x80, 0x00, 0x00, 0x00, 0x00
+            0x1a, 0x00, 0x00, 0x02, 0x03, 0x64, 0x65, 0x66, 0x00, 0x00, 0x00, 0x04, 0x74, 0x69,
+            0x6d, 0x65, 0x00, 0x0c, 0x3f, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x0b, 0x80, 0x00, 0x00,
+            0x00, 0x00,
         ]
-    } 
+    }
 
     fn get_test_binary_row_data_time() -> Vec<u8> {
         vec![
-            0x0b, 0x00, 0x00, 0x03, 0x00, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x00,
-            0x0a, 0x08, 0x15
+            0x0b, 0x00, 0x00, 0x03, 0x00, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x00, 0x0a, 0x08,
+            0x15,
         ]
-    } 
+    }
 
     fn get_test_binary_row_data_datetime() -> Vec<u8> {
-        vec![
-            0x0a, 0x00, 0x00, 0x03, 0x00, 0x00, 0x07, 0xe6,
-            0x07, 0x08, 0x1f, 0x07, 0x10, 0x10
-        ]
+        vec![0x0a, 0x00, 0x00, 0x03, 0x00, 0x00, 0x07, 0xe6, 0x07, 0x08, 0x1f, 0x07, 0x10, 0x10]
     }
 
     fn get_test_binary_row_data_datetime_micro() -> Vec<u8> {
         vec![
-            0x0e, 0x00, 0x00, 0x03, 0x00, 0x00, 0x0b, 0xd3, 0x07, 0x0c, 0x1f, 0x01, 0x02, 0x03, 0xf3, 0xe0,
-            0x01, 0x00
+            0x0e, 0x00, 0x00, 0x03, 0x00, 0x00, 0x0b, 0xd3, 0x07, 0x0c, 0x1f, 0x01, 0x02, 0x03,
+            0xf3, 0xe0, 0x01, 0x00,
         ]
     }
 
     fn get_test_binary_row_column_null() -> Vec<u8> {
         vec![
-            0x26, 0x00, 0x00, 0x02, 0x03, 0x64, 0x65, 0x66, 0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x75, 0x73,
-            0x65, 0x72, 0x04, 0x75, 0x73, 0x65, 0x72, 0x02, 0x69, 0x64, 0x02, 0x69, 0x64, 0x0c, 0x3f, 0x00,
-            0x14, 0x00, 0x00, 0x00, 0x08, 0x03, 0x42, 0x00, 0x00, 0x00,
-            0x36, 0x00, 0x00, 0x03, 0x03, 0x64, 0x65, 0x66, 0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x75, 0x73,
-            0x65, 0x72, 0x04, 0x75, 0x73, 0x65, 0x72, 0x0a, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x5f,
-            0x61, 0x74, 0x0a, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x0c, 0x3f, 0x00,
-            0x13, 0x00, 0x00, 0x00, 0x0c, 0x80, 0x00, 0x00, 0x00, 0x00
-
-        ] 
+            0x26, 0x00, 0x00, 0x02, 0x03, 0x64, 0x65, 0x66, 0x04, 0x74, 0x65, 0x73, 0x74, 0x04,
+            0x75, 0x73, 0x65, 0x72, 0x04, 0x75, 0x73, 0x65, 0x72, 0x02, 0x69, 0x64, 0x02, 0x69,
+            0x64, 0x0c, 0x3f, 0x00, 0x14, 0x00, 0x00, 0x00, 0x08, 0x03, 0x42, 0x00, 0x00, 0x00,
+            0x36, 0x00, 0x00, 0x03, 0x03, 0x64, 0x65, 0x66, 0x04, 0x74, 0x65, 0x73, 0x74, 0x04,
+            0x75, 0x73, 0x65, 0x72, 0x04, 0x75, 0x73, 0x65, 0x72, 0x0a, 0x64, 0x65, 0x6c, 0x65,
+            0x74, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x0a, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64,
+            0x5f, 0x61, 0x74, 0x0c, 0x3f, 0x00, 0x13, 0x00, 0x00, 0x00, 0x0c, 0x80, 0x00, 0x00,
+            0x00, 0x00,
+        ]
     }
 
     fn get_test_binary_row_data_null() -> Vec<u8> {
-        vec![
-            0x0a, 0x00, 0x00, 0x04, 0x00, 0x08, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ]
+        vec![0x0a, 0x00, 0x00, 0x04, 0x00, 0x08, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     }
 
     #[test]
@@ -342,7 +373,6 @@ mod test {
         let mut column_buf = &get_test_column_data()[5..];
         let columns = column_buf.decode_columns();
         let row_buf = &get_test_binary_row_data()[4..];
-
 
         let mut row = RowDataBinary::test_new(columns.into_boxed_slice().into(), row_buf);
         let res = row.decode_with_name::<String>("Command");
@@ -409,6 +439,5 @@ mod test {
         assert_eq!(res.unwrap(), None);
         let res = row.decode_with_name::<u64>("id");
         assert_eq!(res.unwrap().unwrap(), 1);
-        
     }
 }
