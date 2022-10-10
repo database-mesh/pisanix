@@ -565,14 +565,14 @@ mod test {
                 vec![],                                                 // order
                 2,                                                      // tables count
             ),
-            //(
-            //    "INSERT INTO t(`id`) VALUES (111, 112), (333)",
-            //    vec!["t"],
-            //    vec!["id"],
-            //    vec![],
-            //    vec![],
-            //    1,
-            //)
+            (
+                "INSERT INTO t(`id`) VALUES (111, 112), (333)",
+                vec!["t"],
+                vec!["id"],
+                vec![],
+                vec![],
+                1,
+            )
         ];
 
         let parser = Parser::new();
