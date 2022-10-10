@@ -136,7 +136,7 @@ metadata:
 spec:
   rules:
   - tableName: "t_order"
-    tableStrategy:
+    databaseStrategy:
       databaseShardingAlgorithmName: "mod"
       databaseShardingColumn: "id"
     actualDatanodes:
