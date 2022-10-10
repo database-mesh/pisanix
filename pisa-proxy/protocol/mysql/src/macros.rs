@@ -28,7 +28,7 @@ macro_rules! gen_row_data {
                 }
             }
 
-            fn get_row_data_with_name(&mut self, name: &str) -> value::Result<(Box<[u8]>, usize, usize)> {
+            fn get_row_data_with_name(&mut self, name: &str) -> value::Result<RowPartData> {
                 match self {
                     $($name::$var(x) => x.get_row_data_with_name(name),)*
                 }

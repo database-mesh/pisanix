@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod meta;
-mod rewrite_const;
 mod generic_meta;
+pub mod meta;
+pub mod rewrite_const;
 
 use std::vec;
 

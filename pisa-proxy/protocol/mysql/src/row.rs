@@ -25,13 +25,20 @@ use crate::{
 pub trait RowData<T: AsRef<[u8]>> {
     fn with_buf(&mut self, buf: T);
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V>;
-    fn get_row_data_with_name(&mut self, name: &str) -> value::Result<(Box<[u8]>, usize, usize)>;
+    fn get_row_data_with_name(&mut self, name: &str) -> value::Result<RowPartData>;
 }
 
 #[derive(Clone)]
 pub enum RowDataTyp<T: AsRef<[u8]>> {
     Text(RowDataText<T>),
     Binary(RowDataBinary<T>),
+}
+
+pub struct RowPartData {
+    pub data: Box<[u8]>,
+    pub start_idx: usize,
+    pub start_part_idx: usize,
+    pub end_part_idx: usize,
 }
 
 crate::gen_row_data!(RowDataTyp, Text(RowDataText), Binary(RowDataBinary));
@@ -76,13 +83,13 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
         let row_data = self.get_row_data_with_name(name)?;
         match row_data {
-            Some((data, start, end)) => Value::from(&data[start..end]),
+            Some(data) => Value::from(&data.data[data.start_part_idx..data.end_part_idx]),
 
             _ => Ok(None),
         }
     }
 
-    fn get_row_data_with_name(&mut self, name: &str) -> value::Result<(Box<[u8]>, usize, usize)> {
+    fn get_row_data_with_name(&mut self, name: &str) -> value::Result<RowPartData> {
         let name_idx = self.common.get_idx(name)?;
         let mut idx: usize = 0;
         for _ in 0..name_idx {
@@ -95,12 +102,14 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
             return Ok(None);
         }
 
-        //return Ok(Some(self.buf.as_ref()[idx + pos as usize .. idx + (pos + length) as usize].into()));
-        return Ok(Some((
-            self.buf.as_ref()[idx..idx + (pos + length) as usize].into(),
-            pos as usize,
-            (pos + length) as usize,
-        )));
+        return Ok(Some(
+            RowPartData {
+                data: self.buf.as_ref()[idx..idx + (pos + length) as usize].into(),
+                start_idx: idx,
+                start_part_idx: pos as usize,
+                end_part_idx: (pos + length) as usize,
+            }
+        ));
     }
 }
 
@@ -138,7 +147,6 @@ use bytes::Buf;
 
 impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
     fn with_buf(&mut self, buf: T) {
-        println!("raw buf {:?}", &buf.as_ref()[..]);
         let column_length = self.common.columns.len();
         // See https://dev.mysql.com/doc/internals/en/binary-protocol-resultset-row.html
         // NULL Bitmap length: (column-count + 7 + 2) / 8
@@ -149,10 +157,7 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
 
         let mut null_map = vec![0; null_map_length];
         buf.as_ref().copy_to_slice(&mut null_map);
-        println!("raw null map {:?}", null_map);
         self.null_map = null_map;
-        
-        println!("raw buf111 {:?}", &buf.as_ref()[..]);
         
         self.start_pos = 1 + null_map_length;
         self.buf = buf;
@@ -161,12 +166,12 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
         let row_data = self.get_row_data_with_name(name)?;
         match row_data {
-            Some((data, start, end)) => Value::from(&data),
+            Some(data) => Value::from(&data.data),
             None => Ok(None),
         }
     }
 
-    fn get_row_data_with_name(&mut self, name: &str) -> value::Result<(Box<[u8]>, usize, usize)> {
+    fn get_row_data_with_name(&mut self, name: &str) -> value::Result<RowPartData> {
         let mut start_pos = self.start_pos;
         for (idx, info) in self.common.columns.iter().enumerate() {
             if self.null_map[(idx + 2) / 8] & (1 << (idx + 2) as u8 % 8) > 0 {
@@ -232,14 +237,16 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
                     return Ok(None);
                 }
 
-                println!("rrrrr {:?} start_pos {:?} pos {:?}, len {:?}", &self.buf.as_ref()[..], start_pos, pos, length);
                 // Need to add packet header and null_map to returnd data
                 let raw_data = &self.buf.as_ref()[start_pos + pos as usize..(start_pos + pos as usize + length as usize)];
-                return Ok(Some((
-                    raw_data.into(),
-                    pos as usize,
-                    (pos + length) as usize,
-                )));
+                return Ok(Some(
+                    RowPartData { 
+                        data: raw_data.into(), 
+                        start_idx: start_pos, 
+                        start_part_idx: pos as usize, 
+                        end_part_idx: (pos + length) as usize,
+                    }
+                )) 
             }
         }
 
@@ -350,7 +357,6 @@ mod test {
     fn test_decode_row() {
         let mut column_buf = &get_test_column_data()[5..];
         let columns = column_buf.decode_columns();
-        println!("columns {:?}", columns);
         assert_eq!(columns[0].column_name, "Id");
         assert_eq!(columns[1].column_name, "User");
 
