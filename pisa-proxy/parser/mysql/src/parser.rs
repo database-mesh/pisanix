@@ -183,6 +183,61 @@ mod test {
             "CREATE UNDO TABLESPACE undo_003 ADD DATAFILE 'undo_003.ibu' ENGINE=INNODB;",
             "CREATE SERVER s FOREIGN DATA WRAPPER mysql OPTIONS (USER 'Remote', HOST '198.51.100.106', DATABASE 'test');",
             "CREATE TABLE t_order (id bigint, order_id bigint, user_id bigint);",
+            "CREATE TABLE new_tbl LIKE orig_tbl;",
+            "CREATE TABLE new_tbl AS SELECT * FROM orig_tbl;",
+            "CREATE TABLE t (c CHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin);",
+            "CREATE TABLE test (blob_col BLOB, INDEX(blob_col(10)));",
+            r#"CREATE TABLE t1 (c1 INT ENGINE_ATTRIBUTE='{"key":"value"}');"#,
+            "CREATE TABLE t1 ( c1 INT STORAGE DISK, c2 INT STORAGE MEMORY) TABLESPACE ts_1 ENGINE NDB;",
+            "CREATE TABLE lookup(id INT, INDEX USING BTREE (id)) ENGINE = MEMORY;",
+            r#"CREATE TABLE t1 (c1 INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c2 VARCHAR(100), c3 VARCHAR(100)) ENGINE=NDB COMMENT="NDB_TABLE=READ_BACKUP=0,PARTITION_BALANCE=FOR_RP_BY_NODE";"#,
+            r#"CREATE TABLE t1 (c1 INT) ENGINE_ATTRIBUTE='{"key":"value"}';"#,
+            "CREATE TABLE t1 (col1 INT, col2 CHAR(5)) PARTITION BY HASH(col1);",
+            "CREATE TABLE t1 (col1 INT, col2 CHAR(5), col3 DATETIME) PARTITION BY HASH (YEAR(col3));",
+            "CREATE TABLE tk (col1 INT, col2 CHAR(5), col3 DATE) PARTITION BY KEY(col3) PARTITIONS 4;",
+            "CREATE TABLE tk (col1 INT, col2 CHAR(5), col3 DATE) PARTITION BY LINEAR KEY(col3) PARTITIONS 5;",
+            // "CREATE TABLE t1 (year_col INT, some_data INT) PARTITION BY RANGE (year_col) (
+            //     PARTITION p0 VALUES LESS THAN (1991),
+            //     PARTITION p1 VALUES LESS THAN (1995),
+            //     PARTITION p2 VALUES LESS THAN (1999),
+            //     PARTITION p3 VALUES LESS THAN (2002),
+            //     PARTITION p4 VALUES LESS THAN (2006),
+            //     PARTITION p5 VALUES LESS THAN MAXVALUE
+            //  );",
+            "CREATE TABLE t1 (year_col INT, some_data INT) PARTITION BY RANGE (year_col) (
+                PARTITION p0 VALUES LESS THAN (1991),
+                PARTITION p1 VALUES LESS THAN (1995),
+                PARTITION p2 VALUES LESS THAN (1999),
+                PARTITION p3 VALUES LESS THAN (2002),
+                PARTITION p4 VALUES LESS THAN (2006),
+                PARTITION p5 VALUES LESS THAN (MAXVALUE)
+             );",
+            "CREATE TABLE rc (a INT NOT NULL, b INT NOT NULL) PARTITION BY RANGE COLUMNS(a,b) (
+                PARTITION p0 VALUES LESS THAN (10,5),
+                PARTITION p1 VALUES LESS THAN (20,10),
+                PARTITION p2 VALUES LESS THAN (50,MAXVALUE),
+                PARTITION p3 VALUES LESS THAN (65,MAXVALUE),
+                PARTITION p4 VALUES LESS THAN (MAXVALUE,MAXVALUE)
+             );",
+            "CREATE TABLE client_firms (id INT, name VARCHAR(35)) PARTITION BY LIST (id) (
+                PARTITION r0 VALUES IN (1, 5, 9, 13, 17, 21),
+                PARTITION r1 VALUES IN (2, 6, 10, 14, 18, 22),
+                PARTITION r2 VALUES IN (3, 7, 11, 15, 19, 23),
+                PARTITION r3 VALUES IN (4, 8, 12, 16, 20, 24)
+             );",
+            "CREATE TABLE lc (a INT NULL, b INT NULL) PARTITION BY LIST COLUMNS(a,b) (
+                PARTITION p0 VALUES IN( (0,0), (NULL,NULL) ),
+                PARTITION p1 VALUES IN( (0,1), (0,2), (0,3), (1,1), (1,2) ),
+                PARTITION p2 VALUES IN( (1,0), (2,0), (2,1), (3,0), (3,1) ),
+                PARTITION p3 VALUES IN( (1,3), (2,2), (2,3), (3,2), (3,3) )
+             );",
+            "CREATE TABLE th (id INT, name VARCHAR(30), adate DATE) PARTITION BY LIST(YEAR(adate)) (
+                PARTITION p1999 VALUES IN (1995, 1999, 2003) DATA DIRECTORY = '/var/appdata/95/data' INDEX DIRECTORY = '/var/appdata/95/idx',
+                PARTITION p2000 VALUES IN (1996, 2000, 2004) DATA DIRECTORY = '/var/appdata/96/data' INDEX DIRECTORY = '/var/appdata/96/idx',
+                PARTITION p2001 VALUES IN (1997, 2001, 2005) DATA DIRECTORY = '/var/appdata/97/data' INDEX DIRECTORY = '/var/appdata/97/idx',
+                PARTITION p2002 VALUES IN (1998, 2002, 2006) DATA DIRECTORY = '/var/appdata/98/data' INDEX DIRECTORY = '/var/appdata/98/idx'
+             );",
+            "CREATE TABLE t1 (s1 INT, s2 INT AS (EXP(s1)) STORED) PARTITION BY LIST (s2) (PARTITION p1 VALUES IN (1));",
         ];
 
         parser(inputs);
@@ -220,7 +275,7 @@ mod test {
                     println!("sql={:?} {:?}", input, e)
                 }
                 Ok(_stmt) => {
-                    // println!("{:#?}", _stmt)
+                    // println!("sql={:?} {:#?}", input, _stmt)
                 }
             }
         }

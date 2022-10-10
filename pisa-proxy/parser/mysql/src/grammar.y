@@ -7382,7 +7382,7 @@ field_def -> FieldDef:
                opt_column_attribute_list: $2,
            }
       }
-    | type opt_collate opt_generated_always AS '(' expr ')' opt_stored_attribute opt_column_attribute_list
+    | type opt_collate opt_generated_always 'AS' '(' expr ')' opt_stored_attribute opt_column_attribute_list
       {
            FieldDef {
                span: $span,
@@ -7390,7 +7390,7 @@ field_def -> FieldDef:
                opt_collate: $2,
                is_generated_always: $3,
                expr: Some($6),
-               opt_stored_attribute: $8,
+               opt_stored_attribute: Some($8),
                opt_column_attribute_list: $9,
            }
       }
@@ -7401,10 +7401,10 @@ opt_generated_always -> bool:
     | 'GENERATED' 'ALWAYS'  { true }
 ;
 
-opt_stored_attribute -> Option<StoredAttribute>:
-      /* empty */ { Some(StoredAttribute::Virtual) }
-    | 'VIRTUAL' { Some(StoredAttribute::Virtual) }
-    | 'STORED'  { Some(StoredAttribute::Stored) }
+opt_stored_attribute -> StoredAttribute:
+      /* empty */ { StoredAttribute::Virtual }
+    | 'VIRTUAL' { StoredAttribute::Virtual }
+    | 'STORED'  { StoredAttribute::Stored }
 ;
 
 references -> References:
@@ -7543,7 +7543,7 @@ column_attribute -> ColumnAttribute:
       {
            ColumnAttribute::OnUpdate($3)
       }
-    | 'AUTO_INC'
+    | 'AUTO_INCREMENT'
       {
             ColumnAttribute::AutoInc
       }
@@ -7908,10 +7908,10 @@ part_definition -> PartDefinition:
     }
 ;
 
-opt_part_values -> (PartitionType, Option<Vec<PartValueItem>>):
+opt_part_values -> (PartitionType, PartitionValue):
       /* empty */
       {
-            (PartitionType::Hash, None)
+            (PartitionType::Hash, PartitionValue::None)
       }
     | 'VALUES' 'LESS' 'THAN' part_func_max
       {
@@ -7919,19 +7919,19 @@ opt_part_values -> (PartitionType, Option<Vec<PartValueItem>>):
       }
     | 'VALUES' 'IN' part_value_item_list_paren
       {
-            (PartitionType::List, $3)
+            (PartitionType::List, PartitionValue::PartValueItem($3))
       }
 ;
 
-part_func_max -> Option<Vec<PartValueItem>>:
-      'MAX_VALUE'   { None }
-    | part_value_item_list_paren { $1 }
+part_func_max -> PartitionValue:
+      'MAXVALUE'   { PartitionValue::MaxValue }
+    | part_value_item_list_paren { PartitionValue::PartValueItem($1) }
 ;
 
-part_value_item_list_paren -> Option<Vec<PartValueItem>>:
+part_value_item_list_paren -> Vec<PartValueItem>:
     '(' part_value_item_list ')'
      {
-           Some($2)
+           $2
      }
 ;
 
@@ -7948,7 +7948,7 @@ part_value_item_list -> Vec<PartValueItem>:
 ;
 
 part_value_item -> PartValueItem:
-      'MAX_VALUE'   { PartValueItem::MaxValue }
+      'MAXVALUE'   { PartValueItem::MaxValue }
     | bit_expr      { PartValueItem::BitExpr($1) }
 ;
 
@@ -8230,7 +8230,7 @@ create_table_option -> CreateTableOption:
                value: $3,
            }
       }
-    | 'AUTO_INC' opt_equal ulonglong_num
+    | 'AUTO_INCREMENT' opt_equal ulonglong_num
       {
            let is_equal = match $2 {
                Some(_) => true,
