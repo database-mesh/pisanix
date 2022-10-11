@@ -71,8 +71,8 @@ int tc_egress(struct __sk_buff *skb) {
     struct endpoint ep;
 	__builtin_memset(&ep, 0, sizeof(struct endpoint));
     
-	ep.ip = iph.daddr;
-	ep.port = tcph.dest;
+	ep.ip = bpf_ntohl(iph.daddr);
+	ep.port = bpf_ntohs(tcph.dest);
 
     __u32 *class_id;
 
@@ -82,8 +82,8 @@ int tc_egress(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
 
-    ep.ip = iph.saddr;
-    ep.port = tcph.source;
+    ep.ip = bpf_ntohl(iph.saddr);
+    ep.port = bpf_ntohs(tcph.source);
 
     class_id = bpf_map_lookup_elem(&app_endpoints_classid, &ep);
     if (class_id) {
