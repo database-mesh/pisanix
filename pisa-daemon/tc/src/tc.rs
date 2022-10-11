@@ -37,6 +37,7 @@ pub fn add_root_qdisc<'a>(attr: &QdiscRootAttr<'a>) -> bool {
 
 }
 
+//pub fn delete_root_qdisc<'a>(device: &str) -> Result<(), std::io::Error> {
 pub fn delete_root_qdisc<'a>(device: &str) -> bool {
     let args = vec![
         "qdisc",
@@ -58,6 +59,7 @@ pub fn delete_root_qdisc<'a>(device: &str) -> bool {
         println!("Failed to delete root qdisc to device {}: {:?}", device, out);
         return false;
     }
+
 
     true
 }

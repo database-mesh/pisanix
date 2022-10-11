@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::{value_parser, Arg, Command};
+use clap::{Arg, Command};
 use serde::Deserialize;
-use std::{env, fs::File, io::prelude::*};
 
 use crate::env_const::*;
 
@@ -45,7 +44,7 @@ pub struct Service {
     pub qos_group: Option<QosGroup>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct Endpoint {
     pub ip: String,
     pub port: u16,
@@ -73,6 +72,8 @@ pub struct QosGroup {
 
 #[derive(Default, Clone)]
 pub struct PisaDaemonConfigBuilder {
+    pub _local: bool,
+    pub _local_config: String,
     pub _http_path: String,
 
     pub _pisa_controller_host: String,
@@ -98,14 +99,14 @@ impl PisaDaemonConfigBuilder {
     }
 
     pub fn collect_from_cmd(mut self) -> Self {
-        let mut matches = Command::new("Pisa-Daemon")
+        let matches = Command::new("Pisa-Daemon")
             .arg(
                 Arg::new("global-bridge-device")
                     .long("global-bridge-device")
                     .help("Global Bridge Device")
                     .default_value(DEFAULT_PISA_DAEMON_GLOBAL_BRIDGE_DEVICE)
                     .env(ENV_PISA_DAEMON_GLOBAL_BRIDGE_DEVICE)
-                    .takes_value(true),
+                    .num_args(1)
             )
             .arg(
                 Arg::new("global-egress-device")
@@ -113,7 +114,7 @@ impl PisaDaemonConfigBuilder {
                     .help("Global Egress Device")
                     .default_value(DEFAULT_PISA_DAEMON_GLOBAL_EGRESS_DEVICE)
                     .env(ENV_PISA_DAEMON_GLOBAL_EGRESS_DEVICE)
-                    .takes_value(true),
+                    .num_args(1)
             )
             .arg(
                 Arg::new("pisa-controller-service")
@@ -121,7 +122,7 @@ impl PisaDaemonConfigBuilder {
                     .help("Pisa Controller Service")
                     .default_value(DEFAULT_PISA_CONTROLLER_SERVICE)
                     .env(ENV_PISA_CONTROLLER_SERVICE)
-                    .takes_value(true),
+                    .num_args(1)
             )
             .arg(
                 Arg::new("pisa-controller-namespace")
@@ -129,7 +130,7 @@ impl PisaDaemonConfigBuilder {
                     .help("Pisa Controller Namespace")
                     .default_value(DEFAULT_PISA_CONTROLLER_NAMESPACE)
                     .env(ENV_PISA_CONTROLLER_NAMESPACE)
-                    .takes_value(true),
+                    .num_args(1)
             )
             .arg(
                 Arg::new("pisa-controller-host")
@@ -137,7 +138,13 @@ impl PisaDaemonConfigBuilder {
                     .help("Pisa Controller Host")
                     .default_value(DEFAULT_PISA_CONTROLLER_HOST)
                     .env(ENV_PISA_CONTROLLER_HOST)
-                    .takes_value(true),
+                    .num_args(1)
+            )
+            .arg(
+                Arg::new("config")
+                .long("config")
+                .help("local config file")
+                .num_args(1)
             )
             .get_matches();
 
@@ -162,6 +169,12 @@ impl PisaDaemonConfigBuilder {
             .get_one::<String>("pisa-controller-host")
             .unwrap()
             .to_string();
+        
+        self._local = true;
+        if matches.contains_id("config") {
+            self._local = true;
+            self._local_config = matches.get_one::<String>("config").unwrap().to_string();
+        }
 
         if self._pisa_controller_host.is_empty() {
             self._pisa_controller_host = format!(
@@ -170,15 +183,18 @@ impl PisaDaemonConfigBuilder {
             );
         }
 
+
         self
     }
 
-    pub fn build(self) -> PisaDaemonConfig {
+    pub fn build(self) -> Result<PisaDaemonConfig, Box<dyn std::error::Error>> {
         let builder = PisaDaemonConfigBuilder::new();
+        if self._local {
+            let content = std::fs::read_to_string(self._local_config)?;
+            return Ok(toml::from_str::<PisaDaemonConfig>(&content)?)
+        }
         let http_path = format!("http://{}/daemonconfigs", self._pisa_controller_host);
-        let mut config: PisaDaemonConfig = builder.build_from_http(http_path).unwrap_or_default();
-
-        config
+        Ok(builder.build_from_http(http_path).unwrap_or_default())
     }
 }
 
