@@ -88,17 +88,17 @@ SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00
 - 不支持跨库 join 查询
 
 # 配置说明
-| 属性 | 值类型 | 是否依赖 | 默认值 | 含义 |
-|-----|-------|---------|-------|-----|
-| table_name |String|是|无|分片表名|
-| actual_datanodes| array[String]|是|无|后端数据源|
-|binding_tables|arrayString]|否|无|暂不支持||
-|broadcast_tables|array[String]|否|无|暂不支持||
-|table_sharding_algorithm_name|enum|是|无|分片算法|
-|table_sharding_column|String|是|无|分片键|
-|sharding_count|u64|是|无|分片数|
-|database_sharding_algorithm_name|enum|是|无|分片算法|
-|database_sharding_column|String|是|无|分片键|
+| 属性 | CRD 字段 | 值类型 | 是否依赖 | 默认值 | 含义 |
+|-----|----------|-------|---------|-------|-----|
+| table_name |rules.tableName|String|是|无|分片表名|
+| actual_datanodes|rules.actualDatanodes.valueSource.nodes.value| array[String]|是|无|后端数据源|
+|binding_tables|N/A|arrayString]|否|无|暂不支持||
+|broadcast_tables|N/A|array[String]|否|无|暂不支持||
+|table_sharding_algorithm_name|rules.tableStrategy.tableShardingAlgorithmName|enum|是|无|分片算法|
+|table_sharding_column|rules.tableStrategy.tableShardingColumn|String|是|无|分片键|
+|sharding_count|rules.tableStrategy.shardingCount|u64|是|无|分片数|
+|database_sharding_algorithm_name|rules.databaseStrategy.databaseShardingAlgorithmName|enum|是|无|分片算法|
+|database_sharding_column|rules.databaseStrategy.databaseShardingColumn|String|是|无|分片键|
 
 ## CRD 配置示例
 
