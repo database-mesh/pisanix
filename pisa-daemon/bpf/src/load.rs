@@ -14,6 +14,7 @@
 
 use std::convert::{TryFrom, TryInto};
 use std::io::{ErrorKind, Error};
+use std::net::Ipv4Addr;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use aya::programs::{SocketFilter, tc, SchedClassifier, TcAttachType};
@@ -66,27 +67,30 @@ pub const APP_ENDPOINTS_CLASSID_PIN_PATH: &str = "/sys/fs/bpf/pisa-daemon/app-en
 pub const APP_ENDPOINTS_CLASSID_MAP_NAME: &str = "app_endpoints_classid";
 
 impl TrafficTyp {
-    fn add_clsact(&self, device: &str) -> Result<(), Box<dyn std::error::Error>> {
-        if let Err(e) = tc::qdisc_add_clsact(&device) {
-            if e.kind() != ErrorKind::AlreadyExists {
-                return Err(Box::new(e))
-            }
-        }
-        Ok(())
-    }
-
-    pub fn load<P: AsRef<Path>>(&self, path: P, device: &str) -> Result<Bpf, Box<dyn std::error::Error>> {
-        self.add_clsact(device)?;
+    pub fn load<P: AsRef<Path>>(&self, obj_path: P, devices: &[&str]) -> Result<Bpf, Box<dyn std::error::Error>> {
+        self.add_clsact(devices)?;
         match self {
             Self::App => {
-                self.app(path, device)
+                self.app(obj_path, devices)
             },
 
             Self::SQL => todo!()
         }
     }
 
-    fn app<P: AsRef<Path>>(&self, path: P, device: &str) ->  Result<Bpf, Box<dyn std::error::Error>> {
+    fn add_clsact(&self, devices: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
+        for device in devices {
+            if let Err(e) = tc::qdisc_add_clsact(device) {
+                if e.kind() != ErrorKind::AlreadyExists {
+                    return Err(Box::new(e))
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    fn app<P: AsRef<Path>>(&self, path: P, devices: &[&str]) ->  Result<Bpf, Box<dyn std::error::Error>> {
         if !Path::new(APP_ENDPOINTS_CLASSID_PIN_PATH).exists() {
             let _ = std::fs::create_dir_all(APP_ENDPOINTS_CLASSID_PIN_PATH);
         }
@@ -95,13 +99,25 @@ impl TrafficTyp {
         let prog: &mut SchedClassifier = bpf.program_mut("classifier").unwrap().try_into()?;
         
         prog.load()?;
-        prog.attach(&device, TcAttachType::Egress)?;
+        for device in devices {
+            prog.attach(device, TcAttachType::Egress)?;
+        } 
+        
         Ok(bpf)
     }
 
-    // Todo, need to add config parameter
-    pub fn load_app_config(&self, bpf: &mut Bpf) -> Result<MapRefMut, Box<(dyn std::error::Error + 'static)>> {
-        bpf.map_mut(APP_ENDPOINTS_CLASSID_MAP_NAME).map_err(|e| e.into())
+    pub fn load_app_config(&self, bpf: &mut Bpf, endpoint_classid: Vec<(config::Endpoint, u16)>) -> Result<(), Box<dyn std::error::Error>> {
+        let bpf_map = bpf.map_mut(APP_ENDPOINTS_CLASSID_MAP_NAME)?;
+        let mut bpf_map = HashMap::<_, Endpoint, u16>::try_from(bpf_map)?;
+        for (ep, id) in endpoint_classid {
+            let key = Endpoint {
+                ip: ep.ip.parse::<Ipv4Addr>().unwrap().into(),
+                port: ep.port,
+            };
+            bpf_map.insert(key, id, 0)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -117,8 +133,8 @@ mod test {
     fn test_load_app_config() {
         let _ = Command::new("clang").args("-O2 -target bpf -g -c tc/app.c -o tc/app.o -I ./".split(" ")).spawn();
         let load = TrafficTyp::App;
-        load.add_clsact("lo");
-        let try_bpf = load.app("tc/app.o", "lo");
+        load.add_clsact(&vec!["lo"]).unwrap();
+        let try_bpf = load.app("tc/app.o", &vec!["lo"]);
         assert_eq!(try_bpf.is_err(), false);
         let bpf = try_bpf.unwrap();
         let mut map = HashMap::<_, Endpoint, u32>::try_from(bpf.map_mut("app_endpoints_classid").unwrap()).unwrap();

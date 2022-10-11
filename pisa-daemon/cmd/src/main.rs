@@ -12,4 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn main() {}
+use std::io::{Error, ErrorKind};
+
+use config::PisaDaemonConfigBuilder;
+use traffic_qos::TrafficQos;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = PisaDaemonConfigBuilder::new().collect_from_cmd().build()?;
+    let qos = TrafficQos::new(config);
+
+    // Init root qdisc
+    qos.add_root_qdisc();
+
+    // Add class
+    let (endpoint_classid, is_succ) = qos.add_class();
+    if !is_succ {
+        return Err(Box::new(Error::new(ErrorKind::Other, "add class failed")));
+    }
+
+    // Load bpf
+    qos.load_bpf("./app.o", endpoint_classid)?;
+
+    Ok(())
+}
