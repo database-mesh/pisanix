@@ -263,6 +263,8 @@ mod test {
             "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' PASSWORD EXPIRE INTERVAL 10 DAY;",
             "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' ACCOUNT LOCK;",
             "CREATE USER 'root' IDENTIFIED BY 'auth_string' DEFAULT ROLE 'admin' COMMENT 'comment_string';",
+            "CREATE ROLE 'admin', 'developer';",
+            "CREATE ROLE 'webapp'@'localhost';",
         ];
 
         parser(inputs);
