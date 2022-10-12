@@ -1010,3 +1010,45 @@ pub struct SubPartDefinition {
     pub name: String,
     pub opt_part_options: Option<Vec<PartitionOption>>,
 }
+
+#[derive(Debug, Clone)]
+pub struct CreateResourceGroupStmt {
+    pub span: Span,
+    pub group_name: String,
+    pub resource_group_type: ResourceGroupType,
+    pub opt_resource_group_vcpu_list: Option<Vec<VCPUSpec>>,
+    pub opt_resource_group_priority: Option<ResourceGroupPriority>,
+    pub opt_resource_group_enable_disable: Option<ResourceGroupEnableOrDisable>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ResourceGroupType {
+    User,
+    System,
+}
+
+#[derive(Debug, Clone)]
+pub enum VCPUSpec {
+    Num(Value),
+    Range(VCPURange),
+}
+
+#[derive(Debug, Clone)]
+pub struct VCPURange {
+    pub span: Span,
+    pub left: String,
+    pub right: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum ResourceGroupEnableOrDisable {
+    Enable,
+    Disable,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResourceGroupPriority {
+    pub span: Span,
+    pub is_equal: bool,
+    pub signed_num: Value,
+}

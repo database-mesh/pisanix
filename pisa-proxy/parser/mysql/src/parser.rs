@@ -238,6 +238,9 @@ mod test {
                 PARTITION p2002 VALUES IN (1998, 2002, 2006) DATA DIRECTORY = '/var/appdata/98/data' INDEX DIRECTORY = '/var/appdata/98/idx'
              );",
             "CREATE TABLE t1 (s1 INT, s2 INT AS (EXP(s1)) STORED) PARTITION BY LIST (s2) (PARTITION p1 VALUES IN (1));",
+            "CREATE RESOURCE GROUP rg1 TYPE = USER VCPU = 0 THREAD_PRIORITY = 19;",
+            "CREATE RESOURCE GROUP rg2 TYPE = USER VCPU = 9,10,0-3 THREAD_PRIORITY = 10;",
+            "CREATE RESOURCE GROUP rg3 TYPE = SYSTEM THREAD_PRIORITY = -20 DISABLE;",
         ];
 
         parser(inputs);
