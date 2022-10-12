@@ -1052,3 +1052,32 @@ pub struct ResourceGroupPriority {
     pub is_equal: bool,
     pub signed_num: Value,
 }
+
+#[derive(Debug, Clone)]
+pub struct CreateSRSStmt {
+    pub span: Span,
+    pub is_not_exists: Option<bool>,
+    pub srid: String,
+    pub opt_srs_attributes: Option<Vec<SRSAttribute>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SRSAttribute {
+    Name {
+        span: Span,
+        srs_name: String,
+    },
+    Definition {
+        span: Span,
+        definition: String,
+    },
+    Organization {
+        span: Span,
+        org_name: String,
+        org_id: String,
+    },
+    Description {
+        span: Span,
+        description: String,
+    },
+}
