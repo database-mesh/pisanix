@@ -9,6 +9,3 @@ members = [
 ]
 
 default-members = ["cmd"]
-
-[build]
-target = "i686-pc-windows-msvc"
