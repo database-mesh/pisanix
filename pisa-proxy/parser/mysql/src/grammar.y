@@ -135,6 +135,7 @@ sql_stmt -> SqlStmt:
   | create        { SqlStmt::Create($1) }
   | create_index_stmt  { SqlStmt::CreateIndexStmt($1) }
   | create_table_stmt  { SqlStmt::CreateTableStmt($1) }
+  | create_resource_group_stmt  { SqlStmt::CreateResourceGroupStmt($1) }
   
   ;
 
@@ -7173,6 +7174,103 @@ sp_suid -> SpSuid:
 opt_comma -> bool:
       /* empty */  { false }
     | ','          { true }
+;
+
+create_resource_group_stmt -> CreateResourceGroupStmt:
+    'CREATE' 'RESOURCE' 'GROUP' ident 'TYPE' opt_equal resource_group_types opt_resource_group_vcpu_list
+        opt_resource_group_priority opt_resource_group_enable_disable
+    {
+          CreateResourceGroupStmt {
+              span: $span,
+              group_name: $4.0,
+              resource_group_type: $7,
+              opt_resource_group_vcpu_list: $8,
+              opt_resource_group_priority: $9,
+              opt_resource_group_enable_disable: $10,
+          }
+    }
+;
+
+resource_group_types -> ResourceGroupType:
+      'USER'   { ResourceGroupType::User }
+    | 'SYSTEM' { ResourceGroupType::System }
+;
+
+opt_resource_group_vcpu_list -> Option<Vec<VCPUSpec>>:
+      /* empty */ { None }
+    | 'VCPU' opt_equal vcpu_range_spec_list { Some($3) }
+;
+
+vcpu_range_spec_list -> Vec<VCPUSpec>:
+      vcpu_num_or_range
+      {
+            vec![$1]
+      }
+    | vcpu_range_spec_list opt_comma vcpu_num_or_range
+      {
+            $1.push($3);
+            $1
+      }
+;
+
+vcpu_num_or_range -> VCPUSpec:
+      'NUM'
+      {
+           VCPUSpec::Num(Value::Num {
+               span: $span,
+               value: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+               signed: false,
+           })
+      }
+    | 'NUM' '-' 'NUM'
+      {
+            VCPUSpec::Range(VCPURange {
+                span: $span,
+                left: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+                right: String::from($lexer.span_str($3.as_ref().unwrap().span())),
+            })
+      }
+;
+
+signed_num -> Value:
+      'NUM'
+      {
+          Value::Num {
+              span: $span,
+              value: String::from($lexer.span_str($1.as_ref().unwrap().span())),
+              signed: false,
+          }
+      }
+    | '-' 'NUM'
+      {
+          Value::Num {
+              span: $span,
+              value: String::from($lexer.span_str($2.as_ref().unwrap().span())),
+              signed: true,
+          }
+      }
+;
+
+opt_resource_group_priority -> Option<ResourceGroupPriority>:
+      /* empty */ { None }
+    | 'THREAD_PRIORITY' opt_equal signed_num
+      {
+            let is_equal = match $2 {
+                Some(_) => true,
+                None => false,
+            };
+            Some(ResourceGroupPriority {
+                span: $span,
+                is_equal: is_equal,
+                signed_num: $3,
+            })
+      }
+;
+
+opt_resource_group_enable_disable -> Option<ResourceGroupEnableOrDisable>:
+      /* empty */ { None }
+    | 'ENABLE'  { Some(ResourceGroupEnableOrDisable::Enable) }
+    | 'DISABLE' { Some(ResourceGroupEnableOrDisable::Disable) }
 ;
 
 create_table_stmt -> CreateTableStmt:
