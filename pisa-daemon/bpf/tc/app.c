@@ -69,7 +69,7 @@ int tc_egress(struct __sk_buff *skb) {
     bpf_skb_load_bytes(skb, ETH_HLEN + sizeof(iph), &tcph, sizeof(tcph));
 
     struct endpoint ep;
-        __builtin_memset(&ep, 0, sizeof(struct endpoint));
+    __builtin_memset(&ep, 0, sizeof(struct endpoint));
     
     ep.ip = bpf_ntohl(iph.daddr);
     ep.port = bpf_ntohs(tcph.dest);
