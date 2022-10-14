@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
-reqwest = { version = "0.11.10", features = ["blocking", "json"] }
+reqwest = { version = "0.11.10", features = ["blocking", "json", "native-tls-vendored"] }
 clap = { version = "4", features = ["env"] }

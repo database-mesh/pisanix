@@ -228,7 +228,7 @@ rate = "1MB"
 ceil = "1MB"
 
 "#;
-        let config: Config = toml::from_str(toml_str).unwrap();
+        let config: PisaDaemonConfig = toml::from_str(toml_str).unwrap();
         println!("{:?}", config);
         assert_eq!(config.app[0].name, "testapp");
         assert_eq!(
