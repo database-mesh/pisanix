@@ -8,5 +8,7 @@ name = "pisa-daemon"
 path = "src/main.rs"
 
 [dependencies]
+signal-hook = "0.3.14"
 config = { path = "../app/config" }
 traffic_qos = { path = "../app/traffic_qos" }
+

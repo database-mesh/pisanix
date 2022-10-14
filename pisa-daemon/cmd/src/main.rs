@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io::{Error, ErrorKind};
+use signal_hook::{consts::*, iterator::Signals, low_level::signal_name};
 
 use config::PisaDaemonConfigBuilder;
 use traffic_qos::TrafficQos;
@@ -32,6 +33,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load bpf
     qos.load_bpf("./app.o", endpoint_classid)?;
+
+
+    let mut signals = Signals::new(TERM_SIGNALS)?;
+
+    for signal in signals.forever() {
+        println!("received signal {:?}", signal_name(signal).unwrap());
+        // TODO: add action 
+        //match signal {
+        //    SIGQUIT | SIGTERM | SIGINT => {
+        //        break;
+        //    }
+        //}
+        break;
+    }
+
+
 
     Ok(())
 }

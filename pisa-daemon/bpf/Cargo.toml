@@ -8,6 +8,5 @@ edition = "2021"
 [dependencies]
 libc = "0.2.126"
 socket2 = { version = "0.4", features = [ "all" ] }
-#socket2 = { version = "0.4" }
 aya = "0.11.0"
 config = { path = "../app/config" }
