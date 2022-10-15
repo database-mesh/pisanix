@@ -196,14 +196,14 @@ mod test {
             "CREATE TABLE t1 (col1 INT, col2 CHAR(5), col3 DATETIME) PARTITION BY HASH (YEAR(col3));",
             "CREATE TABLE tk (col1 INT, col2 CHAR(5), col3 DATE) PARTITION BY KEY(col3) PARTITIONS 4;",
             "CREATE TABLE tk (col1 INT, col2 CHAR(5), col3 DATE) PARTITION BY LINEAR KEY(col3) PARTITIONS 5;",
-            // "CREATE TABLE t1 (year_col INT, some_data INT) PARTITION BY RANGE (year_col) (
-            //     PARTITION p0 VALUES LESS THAN (1991),
-            //     PARTITION p1 VALUES LESS THAN (1995),
-            //     PARTITION p2 VALUES LESS THAN (1999),
-            //     PARTITION p3 VALUES LESS THAN (2002),
-            //     PARTITION p4 VALUES LESS THAN (2006),
-            //     PARTITION p5 VALUES LESS THAN MAXVALUE
-            //  );",
+             "CREATE TABLE t1 (year_col INT, some_data INT) PARTITION BY RANGE (year_col) (
+                 PARTITION p0 VALUES LESS THAN (1991),
+                 PARTITION p1 VALUES LESS THAN (1995),
+                 PARTITION p2 VALUES LESS THAN (1999),
+                 PARTITION p3 VALUES LESS THAN (2002),
+                 PARTITION p4 VALUES LESS THAN (2006),
+                 PARTITION p5 VALUES LESS THAN MAXVALUE
+              );",
             "CREATE TABLE t1 (year_col INT, some_data INT) PARTITION BY RANGE (year_col) (
                 PARTITION p0 VALUES LESS THAN (1991),
                 PARTITION p1 VALUES LESS THAN (1995),

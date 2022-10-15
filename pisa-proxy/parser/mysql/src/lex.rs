@@ -713,7 +713,7 @@ impl<'a> Scanner<'a> {
 
         let kw = KEYWORD.binary_search(&ident_str);
 
-        let ident_with_size = kw.map_or((T_IDENT, length), |x| KEYWORD_SIZE[x]);
+        let ident_with_size = kw.map_or_else(|_|(T_IDENT, length), |x| KEYWORD_SIZE[x]);
 
         DefaultLexeme::new(ident_with_size.0, old_pos, ident_with_size.1 as usize)
     }
