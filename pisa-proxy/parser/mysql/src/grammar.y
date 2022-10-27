@@ -136,6 +136,7 @@ sql_stmt -> SqlStmt:
   | create_index_stmt  { SqlStmt::CreateIndexStmt($1) }
   | create_table_stmt  { SqlStmt::CreateTableStmt($1) }
   | create_resource_group_stmt  { SqlStmt::CreateResourceGroupStmt($1) }
+  | create_role_stmt  { SqlStmt::CreateRoleStmt($1) }
   
   ;
 
@@ -7174,6 +7175,17 @@ sp_suid -> SpSuid:
 opt_comma -> bool:
       /* empty */  { false }
     | ','          { true }
+;
+
+create_role_stmt -> CreateRoleStmt:
+    'CREATE' 'ROLE' opt_if_not_exists role_list
+    {
+        CreateRoleStmt {
+            span: $span,
+            is_not_exists: $3,
+            roles: $4,
+        }
+    }
 ;
 
 create_resource_group_stmt -> CreateResourceGroupStmt:
