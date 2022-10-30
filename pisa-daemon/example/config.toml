@@ -1,0 +1,17 @@
+[global]
+egress_device = "eth0"
+bridge_device = "eth0"
+
+[[app]]
+name = "test1"
+
+[[app.service]]
+name = "svc"
+[[app.service.endpoints]]
+ip = "1.1.1.1"
+port = 3306
+
+[app.service.qos_group]
+rate = "1mbps"
+ceil = "1mbps"
+

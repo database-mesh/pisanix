@@ -20,7 +20,6 @@ use std::path::Path;
 use aya::programs::{SocketFilter, tc, SchedClassifier, TcAttachType};
 use aya::maps::{ProgramArray, HashMap, MapRefMut};
 use aya::{Bpf, Pod, BpfLoader};
-
 use socket2::{Socket, Domain, Type, Protocol};
 
 pub enum LoadSockFilter {
@@ -63,7 +62,7 @@ pub enum TrafficTyp {
     SQL,
 }
 
-pub const APP_ENDPOINTS_CLASSID_PIN_PATH: &str = "/sys/fs/bpf/pisa-daemon/app-endpoints-classid";
+pub const APP_ENDPOINTS_CLASSID_PIN_PATH: &str = "/sys/fs/bpf/tc/globals";
 pub const APP_ENDPOINTS_CLASSID_MAP_NAME: &str = "app_endpoints_classid";
 
 impl TrafficTyp {
@@ -106,14 +105,15 @@ impl TrafficTyp {
         Ok(bpf)
     }
 
-    pub fn load_app_config(&self, bpf: &mut Bpf, endpoint_classid: Vec<(config::Endpoint, u16)>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_app_config(&self, bpf: &mut Bpf, endpoint_classid: Vec<(config::Endpoint, u32)>) -> Result<(), Box<dyn std::error::Error>> {
         let bpf_map = bpf.map_mut(APP_ENDPOINTS_CLASSID_MAP_NAME)?;
-        let mut bpf_map = HashMap::<_, Endpoint, u16>::try_from(bpf_map)?;
+        let mut bpf_map = HashMap::<_, Endpoint, u32>::try_from(bpf_map)?;
         for (ep, id) in endpoint_classid {
             let key = Endpoint {
                 ip: ep.ip.parse::<Ipv4Addr>().unwrap().into(),
                 port: ep.port,
             };
+
             bpf_map.insert(key, id, 0)?;
         }
 
@@ -134,13 +134,13 @@ mod test {
         let _ = Command::new("clang").args("-O2 -target bpf -g -c tc/app.c -o tc/app.o -I ./".split(" ")).spawn();
         let load = TrafficTyp::App;
         load.add_clsact(&vec!["lo"]).unwrap();
-        let try_bpf = load.app("tc/app.o", &vec!["lo"]);
+        let try_bpf = load.app("tc/app.o", &vec!["cni0"]);
         assert_eq!(try_bpf.is_err(), false);
         let bpf = try_bpf.unwrap();
         let mut map = HashMap::<_, Endpoint, u32>::try_from(bpf.map_mut("app_endpoints_classid").unwrap()).unwrap();
         
         let ep = Endpoint { ip: 11111, port: 8000 };
-        map.insert(ep, 1, 0).unwrap();
+        map.insert(ep, 1_u32, 0).unwrap();
 
         let v = map.get(&ep, 0).unwrap();
         assert_eq!(v, 1);

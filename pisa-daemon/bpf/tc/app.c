@@ -37,7 +37,7 @@ struct bpf_elf_map {
 };
 
 struct endpoint {
-	__u32 ip;
+    __u32 ip;
     __u16 port;
 };
 
@@ -45,10 +45,10 @@ struct bpf_elf_map SEC("maps") app_endpoints_classid = {
 	.type           = BPF_MAP_TYPE_HASH,
 	.size_key       = sizeof(struct endpoint),
 	.size_value     = sizeof(__u32),
-    .max_elem       = 4096,
+    	.max_elem       = 4096,
 	// Pin path default is /sys/fs/bpf/tc/globals/app-endpoints-classid
 	// Pisa-Daemon will write qos rule to my_pkt by pin path
-	.pinning        = 1,
+	.pinning        = 2,
 };
 
 // attach to eth0 || cni0 || docker0
@@ -69,16 +69,17 @@ int tc_egress(struct __sk_buff *skb) {
     bpf_skb_load_bytes(skb, ETH_HLEN + sizeof(iph), &tcph, sizeof(tcph));
 
     struct endpoint ep;
-	__builtin_memset(&ep, 0, sizeof(struct endpoint));
+    __builtin_memset(&ep, 0, sizeof(struct endpoint));
     
-	ep.ip = bpf_ntohl(iph.daddr);
-	ep.port = bpf_ntohs(tcph.dest);
+
+    ep.ip = bpf_ntohl(iph.daddr);
+    ep.port = bpf_ntohs(tcph.dest);
 
     __u32 *class_id;
-
     class_id = bpf_map_lookup_elem(&app_endpoints_classid, &ep);
+
     if (class_id) {
-        skb->tc_classid = *class_id;
+    	skb->tc_classid = *class_id;
         return TC_ACT_OK;
     }
 
@@ -86,6 +87,7 @@ int tc_egress(struct __sk_buff *skb) {
     ep.port = bpf_ntohs(tcph.source);
 
     class_id = bpf_map_lookup_elem(&app_endpoints_classid, &ep);
+
     if (class_id) {
         skb->tc_classid = *class_id;
     }

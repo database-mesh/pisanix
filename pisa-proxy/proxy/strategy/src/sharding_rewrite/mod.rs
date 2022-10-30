@@ -270,40 +270,18 @@ impl ShardingRewrite {
             return Ok(self.database_strategy_iproduct(try_tables, avgs, fields, orders, groups));
         }
 
-        let would_changes = try_tables
-            .iter()
-            .filter_map(|x| {
-                let w = wheres.iter().find(|w| w.0 == x.0);
-                if let Some(w) = w {
-                    let node = &x.1.actual_datanodes[w.1 as usize];
-                    let ep = self.endpoints.iter().find(|x| x.name.eq(node)).unwrap();
-                    let target = self.change_table(x.2, &ep.db, 0);
-                    Some((x.0, DatabaseChange {
-                        span: x.2.span,
-                        shard_idx: w.1,
-                        target,
-                        rule: x.1.clone(),
-                    }))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let node_fn = |rule: &Sharding, shard_idx: u64| {
+            let node = &rule.actual_datanodes[shard_idx as usize];
+            let ep = self.endpoints.iter().find(|x| x.name.eq(node)).unwrap();
+            Some(ep.db.as_str())
+        };
+        let would_changes = self.get_database_change_plan(&try_tables, &wheres, node_fn);
 
         let mut target_sql = self.raw_sql.to_string();
-        let mut offset = 0;
         let shard_idx = would_changes[0].1.shard_idx;
         let sharding_rule = &would_changes[0].1.rule.clone();
 
-        let changes = would_changes
-            .into_iter()
-            .map(|x| {
-                Self::change_sql(&mut target_sql, x.1.span, &x.1.target, offset);
-                offset = x.1.target.len() - x.1.span.len();
-
-                (x.0, RewriteChange::DatabaseChange(x.1))
-            })
-            .collect::<Vec<_>>();
+        let changes = Self::database_change_apply(&mut target_sql, would_changes);
 
         let ep = self
             .endpoints
@@ -391,38 +369,14 @@ impl ShardingRewrite {
             return Ok(self.table_strategy_iproduct(try_tables, avgs, fields, orders, groups));
         }
 
-        let would_changes = try_tables
-            .iter()
-            .filter_map(|x| {
-                let w = wheres.iter().find(|w| w.0 == x.0);
-                if let Some(w) = w {
-                    let target = self.change_table(x.2, "", w.1);
-                    Some((x.0, DatabaseChange {
-                        span: x.2.span,
-                        shard_idx: w.1,
-                        target,
-                        rule: x.1.clone(),
-                    }))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let node_fn = |_rule: &Sharding, _shard_idx: u64| { None };
+        let would_changes = self.get_database_change_plan(&try_tables, &wheres, node_fn);
 
         let mut target_sql = self.raw_sql.clone();
-        let mut offset = 0;
         let sharding_rule = &would_changes[0].1.rule.clone();
-        let mut shard_idx: u64 = 0;
+        let shard_idx: u64 = would_changes[0].1.shard_idx;
 
-        let changes = would_changes
-            .into_iter()
-            .map(|x| {
-                Self::change_sql(&mut target_sql, x.1.span, &x.1.target, offset);
-                offset = x.1.target.len() - x.1.span.len();
-                shard_idx = x.1.shard_idx;
-                (x.0, RewriteChange::DatabaseChange(x.1))
-            })
-            .collect::<Vec<_>>();
+        let changes = Self::database_change_apply(&mut target_sql, would_changes);
     
         let data_source = if self.has_rw {
             DataSource::NodeGroup(sharding_rule.actual_datanodes[0].clone())
@@ -462,6 +416,44 @@ impl ShardingRewrite {
                 }
             ]
         )
+    }
+
+
+    fn get_database_change_plan<'a, F>(&self, try_tables: &[(u8, Sharding, &TableIdent)], wheres: &[(u8, u64)], node_fn: F) -> Vec<(u8, DatabaseChange)>
+    where
+        F: Fn(&Sharding, u64) -> Option<&'a str>,
+    {
+        try_tables
+            .iter()
+            .filter_map(|x| {
+                let w = wheres.iter().find(|w| w.0 == x.0);
+                if let Some(w) = w {
+                    let node = node_fn(&x.1, w.1).unwrap_or_else(|| "");
+                    let target = self.change_table(x.2, node, w.1);
+                    Some((x.0, DatabaseChange {
+                        span: x.2.span,
+                        shard_idx: w.1,
+                        target,
+                        rule: x.1.clone(),
+                    }))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn database_change_apply(target_sql: &mut String, would_changes: Vec<(u8, DatabaseChange)>) -> Vec<(u8, RewriteChange)> {
+        let mut offset = 0;
+
+        would_changes
+            .into_iter()
+            .map(|x| {
+                Self::change_sql(target_sql, x.1.span, &x.1.target, offset);
+                offset = x.1.target.len() - x.1.span.len();
+                (x.0, RewriteChange::DatabaseChange(x.1))
+            })
+            .collect::<Vec<_>>()
     }
 
     fn find_table_rule<'a>(

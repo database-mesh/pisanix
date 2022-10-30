@@ -113,6 +113,33 @@ pub fn add_class<'a>(attr: &ClassAttr<'a>) -> bool {
 
 }
 
+pub struct FilterAttr<'a> {
+    pub netns: Option<&'a str>,
+    pub device: &'a str,
+    pub obj: &'a str,
+}
+
+pub fn add_filter<'a>(attr: &FilterAttr<'a>) -> bool {
+    let mut args = vec![
+        "filter",
+        "replace",
+        "dev",
+        &attr.device,
+        "protocol",
+        "ip",
+        "parent",
+        "1:0",
+        "bpf",
+        "da",
+        "obj",
+        &attr.obj,
+        "classid",
+        "1:",
+    ];
+
+    execute_tc_command!(attr, args, "add filter bpf")
+}
+
 pub fn delete_class<'a>(attr: &ClassAttr<'a>) -> bool {
     let mut args = vec![
         "class",

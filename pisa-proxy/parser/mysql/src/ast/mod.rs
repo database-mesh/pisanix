@@ -70,6 +70,7 @@ pub enum SqlStmt {
     CreateIndexStmt(CreateIndexStmt),
     CreateTableStmt(CreateTableStmt),
     CreateResourceGroupStmt(CreateResourceGroupStmt),
+    CreateRoleStmt(CreateRoleStmt),
     CreateSRSStmt(CreateSRSStmt),
     None,
 }

@@ -194,3 +194,10 @@ pub struct UserAttribute {
     pub span: Span,
     pub content: String,
 }
+
+#[derive(Debug, Clone)]
+pub struct CreateRoleStmt {
+    pub span: Span,
+    pub is_not_exists: bool,
+    pub roles: Vec<Role>,
+}
