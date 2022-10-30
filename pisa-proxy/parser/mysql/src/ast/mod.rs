@@ -71,6 +71,7 @@ pub enum SqlStmt {
     CreateTableStmt(CreateTableStmt),
     CreateResourceGroupStmt(CreateResourceGroupStmt),
     CreateRoleStmt(CreateRoleStmt),
+    CreateSRSStmt(CreateSRSStmt),
     None,
 }
 

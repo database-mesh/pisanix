@@ -137,7 +137,8 @@ sql_stmt -> SqlStmt:
   | create_table_stmt  { SqlStmt::CreateTableStmt($1) }
   | create_resource_group_stmt  { SqlStmt::CreateResourceGroupStmt($1) }
   | create_role_stmt  { SqlStmt::CreateRoleStmt($1) }
-  
+  | create_srs_stmt  { SqlStmt::CreateSRSStmt($1) }
+
   ;
 
 end_of_input -> SqlStmt:
@@ -7283,6 +7284,77 @@ opt_resource_group_enable_disable -> Option<ResourceGroupEnableOrDisable>:
       /* empty */ { None }
     | 'ENABLE'  { Some(ResourceGroupEnableOrDisable::Enable) }
     | 'DISABLE' { Some(ResourceGroupEnableOrDisable::Disable) }
+;
+
+create_srs_stmt -> CreateSRSStmt:
+      'CREATE' 'OR' 'REPLACE' 'SPATIAL' 'REFERENCE' 'SYSTEM' real_ulonglong_num opt_srs_attributes
+      {
+            CreateSRSStmt {
+                span: $span,
+                is_not_exists: None,
+                srid: $7,
+                opt_srs_attributes: $8,
+            }
+      }
+    | 'CREATE' 'SPATIAL' 'REFERENCE' 'SYSTEM' opt_if_not_exists real_ulonglong_num opt_srs_attributes
+      {
+             CreateSRSStmt {
+                span: $span,
+                is_not_exists: Some($5),
+                srid: $6,
+                opt_srs_attributes: $7,
+            }
+      }
+;
+
+opt_srs_attributes -> Option<Vec<SRSAttribute>>:
+     /* empty */ { None }
+    |
+     srs_attributes { Some($1) }
+;
+
+srs_attributes -> Vec<SRSAttribute>:
+      srs_attributes srs_attribute
+      {
+           $1.push($2);
+           $1
+      }
+    | srs_attribute
+      {
+           vec![$1]
+      }
+;
+
+srs_attribute -> SRSAttribute:
+      'NAME' TEXT_STRING_sys_nonewline
+      {
+           SRSAttribute::Name {
+               span: $span,
+               srs_name: $2,
+           }
+      }
+    | 'DEFINITION' TEXT_STRING_sys_nonewline
+      {
+           SRSAttribute::Definition {
+               span: $span,
+               definition: $2,
+           }
+      }
+    | 'ORGANIZATION' TEXT_STRING_sys_nonewline 'IDENTIFIED' 'BY' real_ulonglong_num
+      {
+           SRSAttribute::Organization {
+               span: $span,
+               org_name: $2,
+               org_id: $5,
+           }
+      }
+    | 'DESCRIPTION' TEXT_STRING_sys_nonewline
+      {
+            SRSAttribute::Description {
+               span: $span,
+               description: $2,
+           }
+      }
 ;
 
 create_table_stmt -> CreateTableStmt:
