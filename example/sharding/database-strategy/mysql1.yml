@@ -18,8 +18,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: mysql
-  name: mysql
+    app: mysql1
+  name: mysql1
   namespace: default
 spec:
   progressDeadlineSeconds: 600
@@ -27,13 +27,13 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      app: mysql
+      app: mysql1
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: mysql
+        app: mysql1
     spec:
       containers:
       - env:
@@ -57,7 +57,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mysql
+  name: mysql1
   namespace: default
 spec:
   ports:
@@ -65,6 +65,6 @@ spec:
     protocol: TCP
     targetPort: 3306
   selector:
-    app: mysql
+    app: mysql1
   sessionAffinity: None
   type: ClusterIP
