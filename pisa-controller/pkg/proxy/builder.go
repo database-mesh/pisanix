@@ -291,14 +291,20 @@ func (b *ProxyBuilder) Build() *Proxy {
 				for _, r := range b.DataShard.Spec.Rules {
 					s := Sharding{
 						TableName: r.TableName,
-						TableStrategy: &TableStrategy{
+					}
+
+					if r.TableStrategy != nil {
+						s.TableStrategy = &TableStrategy {
 							TableShardingAlgorithmName: r.TableStrategy.TableShardingAlgorithmName,
 							TableShardingColumn:        r.TableStrategy.TableShardingColumn,
 							ShardingCount:              r.TableStrategy.ShardingCount,
 						},
-						DatabaseStrategy: (*DatabaseStrategy)(r.DatabaseStrategy),
-						// DatabaseTableStrategy: r.DatabaseTableStrategy,
 					}
+
+					if r.DatabaseStrategy != nil {
+						s.DatabaseStrategy = (*DatabaseStrategy)(r.DatabaseStrategy) 
+					}
+
 					actualNodes := []string{}
 					if r.ActualDatanodes.ValueSource != nil {
 						// if r.ActualDatanodes.ValueSource.ActualDatanodesExpressionValue != nil {					}
