@@ -293,16 +293,17 @@ func (b *ProxyBuilder) Build() *Proxy {
 						TableName: r.TableName,
 					}
 
-					if r.TableStrategy != nil {
+					switch {
+					case r.TableStrategy != nil:
 						s.TableStrategy = &TableStrategy {
 							TableShardingAlgorithmName: r.TableStrategy.TableShardingAlgorithmName,
 							TableShardingColumn:        r.TableStrategy.TableShardingColumn,
 							ShardingCount:              r.TableStrategy.ShardingCount,
-						},
-					}
-
-					if r.DatabaseStrategy != nil {
+						}
+					case r.DatabaseStrategy != nil:
 						s.DatabaseStrategy = (*DatabaseStrategy)(r.DatabaseStrategy) 
+
+					// TODO: add DatabaseTableStrategy
 					}
 
 					actualNodes := []string{}
