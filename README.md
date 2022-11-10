@@ -37,14 +37,14 @@ Pisanix now supports `TrafficStrategy` of [Database Mesh Specificiation](https:/
   - Sharding
     - [x] Sharding with keys  
        - [x] Single Database Sharding Tables  
-       - [ ] Sharding Databases
+       - [x] Sharding Databases
        - [ ] Sharding Databases with Sharding Tables
 - AuditRequest
   - [ ] Audit with AWS    
 - AccessControl
   - [ ] Fine-Grained Access Control   
 - QoSClaim  
-  - [ ] TrafficQoS
+  - [x] TrafficQoS
  
 
 # Getting Started
