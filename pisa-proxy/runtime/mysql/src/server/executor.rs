@@ -277,7 +277,7 @@ where
                     return Ok(());
                 }
                 
-                let new_col_info: Arc<[ColumnInfo]> = col_info.iter().filter(|x| x.column_name != count_field || x.column_name != sum_field).collect::<Vec<ColumnInfo>>().into_boxed_slice().into();
+                let new_col_info: Arc<[ColumnInfo]> = col_info.into_iter().filter(|x| &x.column_name != count_field || &x.column_name != sum_field).map(|x| x.clone()).collect::<Vec<ColumnInfo>>().into();
                 row_data = match is_binary {
                     false => {
                         let row_data_text = RowDataText::new(new_col_info, &[][..]);
