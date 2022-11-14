@@ -149,6 +149,7 @@ pub struct ShardingRewriteOutput {
     pub data_source: DataSource,
     pub sharding_column: Option<String>,
     pub min_max_fields: Vec<FieldMetaIdent>,
+    pub count_field: Option<FieldMetaIdent>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -322,6 +323,7 @@ impl ShardingRewrite {
                     data_source,
                     sharding_column: Some(sharding_column),
                     min_max_fields,
+                    count_field: Self::get_count_field(fields),
                 }
             ]
         )
@@ -413,6 +415,7 @@ impl ShardingRewrite {
                     data_source,
                     sharding_column: Some(sharding_column.to_string()),
                     min_max_fields,
+                    count_field: Self::get_count_field(fields),
                 }
             ]
         )
@@ -817,6 +820,7 @@ impl ShardingRewrite {
                 sharding_column,
                 algo,
                 sharding_count,
+                Self::get_count_field(fields),
             )
         }).collect::<Result<Vec<_>, _>>()?.into_iter().flatten().collect::<Vec<_>>();
         Ok(outputs)
@@ -831,6 +835,7 @@ impl ShardingRewrite {
         sharding_column: &str,
         algo: &ShardingAlgorithmName,
         sharding_count: u64,
+        count_field: Option<FieldMetaIdent>,
     ) -> Result<Vec<ShardingRewriteOutput>, ShardingRewriteError> {
         let changes = Self::change_insert(inserts, fields, sharding_column, algo, sharding_count)?;
         let row_start_idx = changes[0].1.start();
@@ -872,6 +877,7 @@ impl ShardingRewrite {
                 data_source: data_source.clone(),
                 sharding_column: Some(sharding_column.to_string()),
                 min_max_fields: vec![],
+                count_field: count_field.clone(),
             }
 
         }).collect::<Vec<ShardingRewriteOutput>>();
@@ -1003,6 +1009,7 @@ impl ShardingRewrite {
                 data_source: DataSource::Endpoint(ep),
                 sharding_column: sharding_column.clone(),
                 min_max_fields,
+                count_field: Self::get_count_field(fields),
             })
         }
         output
@@ -1078,12 +1085,14 @@ impl ShardingRewrite {
                 rewrite_changes.push(RewriteChange::AvgChange(AvgChange{target}));
             }
 
+
             output.push(ShardingRewriteOutput {
                 changes: rewrite_changes, 
                 target_sql: target_sql.to_string(),
                 data_source: data_source.as_ref().unwrap().clone(),
                 sharding_column: sharding_column.clone(),
                 min_max_fields,
+                count_field: Self::get_count_field(fields),
             })
         }
 
@@ -1163,6 +1172,19 @@ impl ShardingRewrite {
 
             None => vec![]
         }
+    }
+
+    fn get_count_field(fields: &IndexMap<u8, Vec<FieldMeta>>) -> Option<FieldMetaIdent> {
+        fields.values().find_map(|f| {
+            f.iter().find_map(|x| {
+                if let FieldMeta::Ident(meta) = x {
+                    if meta.wrap_func == FieldWrapFunc::Count {
+                        return Some(meta.clone())
+                    }
+                }
+                None
+            })
+        })
     }
 }
 
@@ -1309,6 +1331,23 @@ mod test {
                 "SELECT idx from db1.tshard where idx = 3 and idx = (SELECT idx from db1.tshard where idx = 4)", 
             ],
         );
+
+        let raw_sql = "SELECT count(*) from db.tshard ";
+        let ast = parser.parse(raw_sql).unwrap();
+        let input = ShardingRewriteInput {
+            raw_sql: raw_sql.to_string(),
+            ast: ast[0].clone(),
+            default_db: None,
+        };
+        let res = sr.rewrite(input).unwrap();
+        println!("res {:?}", res);
+        //assert_eq!(
+        //    res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
+        //    vec![
+        //        "SELECT idx from db0.tshard where idx = 3 and idx = (SELECT idx from db0.tshard where idx = 4)", 
+        //        "SELECT idx from db1.tshard where idx = 3 and idx = (SELECT idx from db1.tshard where idx = 4)", 
+        //    ],
+        //);
     }
 
     #[test]

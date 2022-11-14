@@ -35,10 +35,11 @@ enum ScanState {
 
 type TableMeta = TableIdent;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldWrapFunc {
     Min,
     Max,
+    Count,
     None, 
 }
 
@@ -47,6 +48,7 @@ impl AsRef<str> for FieldWrapFunc {
         match self {
             Self::Max => "max",
             Self::Min => "min",
+            Self::Count => "count",
             Self::None => "none",
         }
    } 
@@ -200,6 +202,14 @@ impl RewriteMetaData {
             input,
         }
     }
+
+    fn get_field_name(input: &str, span: &mysql_parser::Span, alias_name: &Option<String>) -> String {
+        match alias_name {
+            Some(name) =>  name.clone(),
+            None => input[span.start()..span.end()].to_string(),
+        }
+    }
+
 }
 
 macro_rules! gen_push_func {
@@ -271,8 +281,10 @@ impl Transformer for RewriteMetaData {
                         for i in t {
                             match i {
                                 Item::TableWild(val) => {
+                                    println!("11 {:?}", 333);
                                     self.push_field(FieldMeta::TableWild(val.clone()))
                                 }
+
                                 _ => {}
                             }
                         }
@@ -305,6 +317,11 @@ impl Transformer for RewriteMetaData {
 
                                     AggFuncName::Min => {
                                         self.state = ScanState::FieldWrapFunc(item.span, FieldWrapFunc::Min, item.alias_name.clone());
+                                    }
+
+                                    AggFuncName::Count => {
+                                        println!("e {:?}", e);
+                                        self.state = ScanState::FieldWrapFunc(item.span, FieldWrapFunc::Count, item.alias_name.clone());
                                     }
 
                                     _ => {}
@@ -361,6 +378,17 @@ impl Transformer for RewriteMetaData {
             },
 
             Node::Expr(e) => match e {
+                Expr::Ori(_val) => match &self.state {
+                    ScanState::FieldWrapFunc(span, wrap_func, alias_name) => {
+                        let wrap_func = wrap_func.clone();
+                        let span = span.clone();
+                        
+                        let name = Self::get_field_name(&self.input, &span, alias_name);
+                        self.push_field(FieldMeta::Ident( FieldMetaIdent { span, name, wrap_func }));
+                    }
+                    _ => {}
+                }
+
                 Expr::SimpleIdentExpr(Value::Ident { span, value, .. }) => match &mut self.state {
                     ScanState::Field(alias_name) => {
                         let name = match alias_name {
@@ -370,13 +398,11 @@ impl Transformer for RewriteMetaData {
                         self.push_field(FieldMeta::Ident(FieldMetaIdent { span: *span, name, wrap_func: FieldWrapFunc::None }))
                     }
                     ScanState::FieldWrapFunc(span, wrap_func, alias_name) => {
-                        let name = match alias_name {
-                            Some(name) =>  name.clone(),
-                            None => self.input[span.start()..span.end()].to_string(),
-                        };
                         let wrap_func = wrap_func.clone();
                         let span = span.clone();
-                        self.push_field(FieldMeta::Ident( FieldMetaIdent { span, name, wrap_func }))
+                        
+                        let name = Self::get_field_name(&self.input, &span, alias_name);
+                        self.push_field(FieldMeta::Ident( FieldMetaIdent { span, name, wrap_func }));
                     }
                     ScanState::Order(direction) => {
                         let direction = direction.clone();
@@ -491,6 +517,7 @@ impl Transformer for RewriteMetaData {
         false
     }
 
+
     fn complete(&mut self, node: &mut Node) {
         if let ScanState::InsertRowValue(args) = &mut self.state {
             let values = args.clone();
@@ -508,8 +535,25 @@ mod test {
 
     use mysql_parser::{ast::Visitor, parser::Parser};
 
+    use crate::sharding_rewrite::meta::FieldMeta;
+
     use super::RewriteMetaData;
     
+    #[test]
+    fn test_count() {
+        let parser = Parser::new();
+        let input = "select count(*) from t";
+        let mut ast = parser.parse(input).unwrap();
+        let mut meta = RewriteMetaData::new(input.to_string());
+        let _ = ast[0].visit(&mut meta);
+        let meta = meta.get_fields();
+        if let FieldMeta::Ident(meta) = &meta[0][0] {
+            assert_eq!(meta.wrap_func.as_ref(), "count")
+        } else {
+            assert!(false)
+        }
+    }
+
     #[test]
     fn test_get_alias_name() {
         let parser = Parser::new();

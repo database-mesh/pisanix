@@ -36,6 +36,7 @@ use mysql_protocol::{
 };
 use pisa_error::error::{Error, ErrorKind};
 use rayon::prelude::*;
+use serde::de::IntoDeserializer;
 use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput, RewriteChange, meta::FieldWrapFunc, rewrite_const::{AVG_COUNT, AVG_SUM, AVG_FIELD}};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
@@ -274,6 +275,41 @@ where
                     return Ok(());
                 }
             }
+
+            if let Some(count_field) = &ro.count_field {
+                let count_sum = chunk.par_iter().map(|x| {
+                    let mut row_data = row_data.clone();
+                    row_data.with_buf(&x[4..]);
+                    if is_binary {
+                        let count = row_data.decode_with_name::<u64>(&count_field.name).unwrap().unwrap();
+                        count
+                    } else {
+                        let count = row_data.decode_with_name::<String>(&count_field.name).unwrap().unwrap();
+                        let count = count.parse::<u64>().unwrap();
+                        count
+                    }
+                }).sum::<u64>();
+
+                let mut count_row_buf = vec![];
+                
+                if is_binary {
+                    count_row_buf.put_u8(0);
+                    for _ in 0..(col_info.len() + 7 + 2) >> 3 {
+                        count_row_buf.put_u8(0)
+                    }
+                    count_row_buf.extend_from_slice(&count_sum.to_le_bytes()[..])
+                } else {
+                    let count_sum_str = count_sum.to_string();
+                    count_row_buf.put_lenc_int(count_sum_str.len() as u64, false);
+                    count_row_buf.extend_from_slice(count_sum_str.as_bytes());
+                }
+
+                let _ = req
+                    .framed
+                    .codec_mut()
+                    .encode(PacketSend::EncodeOffset(count_row_buf[..].into(), buf.len()), buf);
+                return Ok(());
+            }
             
             if col_info.len() == ro.min_max_fields.len() {
                 if is_binary {
@@ -365,7 +401,7 @@ where
                     });
 
                 }
-                FieldWrapFunc::None => break
+                _ => break
             }
 
             let mut row_data = row_data.clone();
