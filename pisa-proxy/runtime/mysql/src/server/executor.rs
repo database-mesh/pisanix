@@ -27,7 +27,7 @@ use mysql_protocol::{
         conn::{ClientConn, SessionAttr},
         stmt::Stmt,
     },
-    column::{Column, ColumnInfo, decode_column},
+    column::{Column, ColumnInfo, decode_column, self},
     err::ProtocolError,
     mysql_const::*,
     row::{RowData, RowDataBinary, RowDataText, RowDataTyp},
@@ -56,6 +56,11 @@ pub enum ExecuteError {
 
 pub struct Executor<T, C> {
     _phant: PhantomData<(T, C)>,
+}
+
+struct ColumnUpdate {
+    ori_column: Arc<[ColumnInfo]>,
+    new_column: Arc<[ColumnInfo]>,
 }
 
 impl<T, C> Executor<T, C>
@@ -158,7 +163,7 @@ where
             .codec_mut()
             .encode(PacketSend::EncodeOffset(header[4..].into(), 0), &mut buf);
 
-        let col_info = Self::get_columns(req, merge_stream, cols, &mut buf).await?;
+        let column_update = Self::get_columns(req, merge_stream, cols, &mut buf).await?;
 
         // read eof
         let _ = merge_stream.next().await;
@@ -170,7 +175,7 @@ where
 
         merge_stream.set_state(MergeResultsetState::Row);
         // get rows
-        Self::get_rows(req, merge_stream, &mut buf, sharding_column, col_info, is_binary).await?;
+        Self::get_rows(req, merge_stream, &mut buf, sharding_column, column_update, is_binary).await?;
 
         let _ = req
             .framed
@@ -186,16 +191,16 @@ where
         stream: &mut MergeStream<ResultsetStream<'a>>,
         buf: &mut BytesMut,
         sharding_column: Option<String>,
-        col_info: Arc<[ColumnInfo]>,
+        column_update: ColumnUpdate,
         is_binary: bool,
     ) -> Result<(), Error> {
         let mut row_data = match is_binary {
             false => {
-                let row_data_text = RowDataText::new(col_info.clone(), &[][..]);
+                let row_data_text = RowDataText::new(column_update.ori_column.clone(), &[][..]);
                 RowDataTyp::Text(row_data_text)
             }
             true => {
-                let row_data_binary = RowDataBinary::new(col_info.clone(), &[][..]);
+                let row_data_binary = RowDataBinary::new(column_update.ori_column.clone(), &[][..]);
                 RowDataTyp::Binary(row_data_binary)
             }
         };
@@ -250,6 +255,7 @@ where
                     let mut data = x.split_off(4);
                     row_data.with_buf(&data[..]);
 
+
                     let count_data = row_data.get_row_data_with_name(count_field).unwrap().unwrap();
                     let sum_data = row_data.get_row_data_with_name(sum_field).unwrap().unwrap();
 
@@ -259,17 +265,16 @@ where
                         data.get_u8();
                     }
 
-                    x.extend_from_slice(&data[..]);
-
                     let mut buf = Vec::with_capacity(32);
                     let avg = format!("{:.4}", (sum as f64 / count as f64));
                     buf.put_lenc_int(avg.len() as u64, true);
                     buf.put_slice(avg.as_bytes());
                     x.put_slice(&buf);
+                    x.extend_from_slice(&data[..]);
                 }).collect::<Vec<_>>();
 
                 // When columns has count and sum field only, return directly.
-                if col_info.len() == 2 {
+                if column_update.ori_column.len() == 2 {
                     let _ = req
                         .framed
                         .codec_mut()
@@ -277,17 +282,17 @@ where
                     return Ok(());
                 }
                 
-                let new_col_info: Arc<[ColumnInfo]> = col_info.into_iter().filter(|x| &x.column_name != count_field || &x.column_name != sum_field).map(|x| x.clone()).collect::<Vec<ColumnInfo>>().into();
                 row_data = match is_binary {
                     false => {
-                        let row_data_text = RowDataText::new(new_col_info, &[][..]);
+                        let row_data_text = RowDataText::new(column_update.new_column.clone(), &[][..]);
                         RowDataTyp::Text(row_data_text)
                     }
                     true => {
-                        let row_data_binary = RowDataBinary::new(new_col_info, &[][..]);
+                        let row_data_binary = RowDataBinary::new(column_update.new_column.clone(), &[][..]);
                         RowDataTyp::Binary(row_data_binary)
                     }
                 };
+                println!("chunk {:?}", chunk);
             }
 
             if let Some(count_field) = &ro.count_field {
@@ -308,7 +313,7 @@ where
                 
                 if is_binary {
                     count_row_buf.put_u8(0);
-                    for _ in 0..(col_info.len() + 7 + 2) >> 3 {
+                    for _ in 0..(column_update.ori_column.len() + 7 + 2) >> 3 {
                         count_row_buf.put_u8(0)
                     }
                     count_row_buf.extend_from_slice(&count_sum.to_le_bytes()[..])
@@ -325,10 +330,10 @@ where
                 return Ok(());
             }
             
-            if col_info.len() == ro.min_max_fields.len() {
+            if column_update.ori_column.len() == ro.min_max_fields.len() {
                 if is_binary {
                     agg_buf.insert(0, 0);
-                    for  _ in 0..(col_info.len() + 7 + 2) >> 3 {
+                    for  _ in 0..(column_update.new_column.len() + 7 + 2) >> 3 {
                         agg_buf.insert(1, 0);
                     }
                 }
@@ -340,7 +345,7 @@ where
             }
 
             if let Some(name) = &sharding_column {
-                if let Some(_) = col_info.iter().find(|col_info| col_info.column_name.eq(name)) {
+                if let Some(_) = column_update.ori_column.iter().find(|col_info| col_info.column_name.eq(name)) {
                     chunk.par_sort_by_cached_key(|x| {
                         let mut row_data = row_data.clone();
                         row_data.with_buf(&x[4..]);
@@ -434,7 +439,8 @@ where
         stream: &mut MergeStream<ResultsetStream<'a>>,
         column_length: u64,
         buf: &mut BytesMut,
-    ) -> Result<Arc<[ColumnInfo]>, Error> {
+    ) -> Result<ColumnUpdate, Error> {
+        let mut ori_col_buf = Vec::with_capacity(100);
         let mut col_buf = Vec::with_capacity(100);
         let mut idx: Option<usize> = None;
 
@@ -491,8 +497,9 @@ where
                 }
             };
 
-            col_buf.extend_from_slice(&data[..]);
+            ori_col_buf.extend_from_slice(&data[..]);
             let column_info = decode_column(&data[4..]);
+
             if let Some(change) = avg_change {
                 let avg_count = change.target.get(AVG_COUNT).unwrap();
                 let avg_sum = change.target.get(AVG_SUM).unwrap();
@@ -502,12 +509,15 @@ where
                             .framed
                             .codec_mut()
                             .encode(PacketSend::EncodeOffset(avg_column_buf[..].into(), buf.len()), buf);
+                        is_add_avg_column = true;
+                        col_buf.extend_from_slice(&avg_column_buf);
                     }
 
-                    is_add_avg_column = true;
                     continue;
                 }
             }
+
+            col_buf.extend_from_slice(&data[..]);
 
             let _ = req
                 .framed
@@ -515,10 +525,15 @@ where
                 .encode(PacketSend::EncodeOffset(data[4..].into(), buf.len()), buf);
         }
 
-        let col_info = col_buf.as_slice().decode_columns();
-        let arc_col_info: Arc<[ColumnInfo]> = col_info.into_boxed_slice().into();
+        let ori_col_info = ori_col_buf.as_slice().decode_columns();
+        let ori_column: Arc<[ColumnInfo]> = ori_col_info.into_boxed_slice().into();
+        let col_info: Vec<ColumnInfo> = col_buf.as_slice().decode_columns();
+        let new_column: Arc<[ColumnInfo]> = col_info.into_boxed_slice().into();
 
-        Ok(arc_col_info)
+        Ok(ColumnUpdate {
+            ori_column,
+            new_column,
+        })
     }
 
     fn get_shard_one_data(
