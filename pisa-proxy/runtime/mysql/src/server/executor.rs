@@ -253,7 +253,9 @@ where
                     let count_data = row_data.get_row_data_with_name(count_field).unwrap().unwrap();
                     let sum_data = row_data.get_row_data_with_name(sum_field).unwrap().unwrap();
 
-                    for _ in count_data.start_idx .. sum_data.end_part_idx + 2 {
+                    let count_sum_data_length = count_data.part_data_length + sum_data.part_data_length;
+                    let count_sum_length= count_data.part_encode_length + sum_data.part_encode_length + count_sum_data_length;
+                    for _ in count_data.start_idx .. count_data.start_idx + count_sum_length {
                         data.get_u8();
                     }
 

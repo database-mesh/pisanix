@@ -37,8 +37,8 @@ pub enum RowDataTyp<T: AsRef<[u8]>> {
 pub struct RowPartData {
     pub data: Box<[u8]>,
     pub start_idx: usize,
-    pub start_part_idx: usize,
-    pub end_part_idx: usize,
+    pub part_encode_length: usize,
+    pub part_data_length: usize,
 }
 
 crate::gen_row_data!(RowDataTyp, Text(RowDataText), Binary(RowDataBinary));
@@ -83,7 +83,7 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V> {
         let row_data = self.get_row_data_with_name(name)?;
         match row_data {
-            Some(data) => Value::from(&data.data[data.start_part_idx..data.end_part_idx]),
+            Some(data) => Value::from(&data.data),
 
             _ => Ok(None),
         }
@@ -104,10 +104,10 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
 
         return Ok(Some(
             RowPartData {
-                data: self.buf.as_ref()[idx..idx + (pos + length) as usize].into(),
+                data: self.buf.as_ref()[idx + pos as usize .. idx + (pos + length) as usize].into(),
                 start_idx: idx,
-                start_part_idx: pos as usize,
-                end_part_idx: (pos + length) as usize,
+                part_encode_length: pos as usize,
+                part_data_length: length,
             }
         ));
     }
@@ -243,8 +243,8 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
                     RowPartData { 
                         data: raw_data.into(), 
                         start_idx: start_pos, 
-                        start_part_idx: pos as usize, 
-                        end_part_idx: (pos + length) as usize,
+                        part_encode_length: pos as usize, 
+                        part_data_length: length,
                     }
                 )) 
             }
