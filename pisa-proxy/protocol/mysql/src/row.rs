@@ -107,7 +107,7 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
                 data: self.buf.as_ref()[idx + pos as usize .. idx + (pos + length) as usize].into(),
                 start_idx: idx,
                 part_encode_length: pos as usize,
-                part_data_length: length,
+                part_data_length: length as usize,
             }
         ));
     }
@@ -244,7 +244,7 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
                         data: raw_data.into(), 
                         start_idx: start_pos, 
                         part_encode_length: pos as usize, 
-                        part_data_length: length,
+                        part_data_length: length as usize,
                     }
                 )) 
             }

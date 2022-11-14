@@ -189,7 +189,7 @@ where
         col_info: Arc<[ColumnInfo]>,
         is_binary: bool,
     ) -> Result<(), Error> {
-        let row_data = match is_binary {
+        let mut row_data = match is_binary {
             false => {
                 let row_data_text = RowDataText::new(col_info.clone(), &[][..]);
                 RowDataTyp::Text(row_data_text)
@@ -276,6 +276,18 @@ where
                         .encode(PacketSend::EncodeOffset(chunk[0][4..].into(), buf.len()), buf);
                     return Ok(());
                 }
+                
+                let new_col_info: Arc<[ColumnInfo]> = col_info.iter().filter(|x| x.column_name != count_field || x.column_name != sum_field).collect::<Vec<ColumnInfo>>().into_boxed_slice().into();
+                row_data = match is_binary {
+                    false => {
+                        let row_data_text = RowDataText::new(new_col_info, &[][..]);
+                        RowDataTyp::Text(row_data_text)
+                    }
+                    true => {
+                        let row_data_binary = RowDataBinary::new(new_col_info, &[][..]);
+                        RowDataTyp::Binary(row_data_binary)
+                    }
+                };
             }
 
             if let Some(count_field) = &ro.count_field {
