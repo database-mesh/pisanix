@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, str::FromStr};
 
 use crate::{
     column::ColumnInfo,
@@ -84,7 +84,6 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
         let row_data = self.get_row_data_with_name(name)?;
         match row_data {
             Some(data) => Value::from(&data.data),
-
             _ => Ok(None),
         }
     }
@@ -239,6 +238,7 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
 
                 // Need to add packet header and null_map to returnd data
                 let raw_data = &self.buf.as_ref()[start_pos + pos as usize..(start_pos + pos as usize + length as usize)];
+                println!("eeeeeeeeeeeee {:?}", &raw_data[..]);
                 return Ok(Some(
                     RowPartData { 
                         data: raw_data.into(), 
@@ -251,6 +251,27 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
         }
 
         Ok(None)
+    }
+}
+
+
+// Box has default 'static bound, use `'e` lifetime relax bound.
+pub fn decode_with_name<'e, T: AsRef<[u8]>, V: Value + std::str::FromStr>(row_data: &mut RowDataTyp<T>, name: &str, is_binary: bool) -> Result<Option<V>,  Box<dyn std::error::Error + Send + Sync + 'e> > 
+where 
+    T: AsRef<[u8]>,
+    V: Value + std::str::FromStr,
+    <V as FromStr>::Err: std::error::Error + Sync + Send + 'e
+{
+    if is_binary {
+        row_data.decode_with_name::<V>(name)
+    } else {
+        let new_value = row_data.decode_with_name::<String>(name)?;
+        if let Some(new_value) = new_value {
+            let new_value = new_value.parse::<V>()?;
+            Ok(Some(new_value))
+        } else {
+            Ok(None)
+        }
     }
 }
 
