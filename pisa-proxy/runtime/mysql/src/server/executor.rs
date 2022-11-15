@@ -231,27 +231,32 @@ where
             if let Some(avg) = avg_change {
                 let count_field = avg.target.get(AVG_COUNT).unwrap();
                 let sum_field = avg.target.get(AVG_SUM).unwrap();
-                let avg_chunk = chunk.par_iter().map(|x| {
+
+                let (count_data, sum_data): (Vec<_>, Vec<_>) = chunk.par_iter().map(|x| -> Result<(u64, u64), Error> {
                     println!("xxx {:?}", &x[..]);
                     let mut row_data = row_data.clone();
                     row_data.with_buf(&x[4..]);
-                    let count = decode_with_name::<&[u8], u64>(&mut row_data, &count_field, is_binary).unwrap().unwrap();
+                    let count = decode_with_name::<&[u8], u64>(&mut row_data, &count_field, is_binary).map_err(|e| ErrorKind::Runtime(e))?.unwrap_or_else(|| 0);
                     // Sum type is `MYSQL_TYPE_NEWDECIMAL` in binary, so need to convet to `String` type.
                     let sum = if is_binary {
-                        let sum = decode_with_name::<&[u8], String>(&mut row_data, &sum_field, is_binary).unwrap().unwrap();
-                        sum.parse::<u64>().unwrap()
+                        let sum = decode_with_name::<&[u8], String>(&mut row_data, &sum_field, is_binary).map_err(|e| ErrorKind::from(e))?;
+                        if let Some(sum) = sum {
+                            sum.parse::<u64>().map_err(|e| ErrorKind::Runtime(e.into()))?
+                        } else {
+                            0
+                        }
                     } else {
-                        decode_with_name::<&[u8], u64>(&mut row_data, &sum_field, is_binary).unwrap().unwrap()
+                        decode_with_name::<&[u8], u64>(&mut row_data, &sum_field, is_binary).map_err(|e| ErrorKind::Runtime(e))?.unwrap_or_else(|| 0)
                     };
                     
-                    (count, sum)
-                }).collect::<Vec<_>>();
+                    Ok((count, sum))
+                }).collect::<Result<Vec<_>, _>>()?.par_iter().cloned().unzip();
 
-                let count: u64 = avg_chunk.par_iter().map(|x| x.0).sum();
-                let sum: u64 = avg_chunk.par_iter().map(|x| x.1).sum();
+                let count: u64 = count_data.par_iter().sum();
+                let sum: u64 = sum_data.par_iter().sum();
                 println!("count {:?}, sum {:?}", count, sum);
 
-                let _ = chunk.par_iter_mut().map(|x| {
+                chunk.par_iter_mut().for_each(|x| {
                     let mut row_data = row_data.clone();
                     row_data.with_buf(&x[4..]);
                     let count_data = row_data.get_row_data_with_name(count_field).unwrap().unwrap();
@@ -269,7 +274,7 @@ where
                         data.put_lenc_int(avg.len() as u64, false);
                         data.extend_from_slice(avg.as_bytes());
                     });
-                }).collect::<Vec<_>>();
+                });
 
                 // When columns has count and sum field only, return directly.
                 if column_update.ori_columns.len() == 2 {
@@ -387,7 +392,7 @@ where
                         data.put_lenc_int(row_part_data.part_data_length as u64, false);
                         data.extend_from_slice(&row_part_data.data);
                     }
-                });
+                })
             });
         }
 
