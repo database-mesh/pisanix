@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use endpoint::endpoint::Endpoint;
+
 use crate::config::{StrategyType, Sharding, ShardingAlgorithmName};
 
 pub trait ShardingMeta {
     fn get_sharding_column(&self) -> (Option<&str>, Option<&str>);
     fn get_algo(&self) -> (Option<&ShardingAlgorithmName>, Option<&ShardingAlgorithmName>);
     fn get_sharding_count(&self) -> (Option<u64>, Option<u64>);
+    fn get_actual_schema<'a>(&'a self, endpoints: &'a [Endpoint], idx: Option<usize>) -> Option<&'a str>;
+    fn get_endpoint<'a>(&'a self, endpoints: &'a [Endpoint], idx: Option<usize>) -> Option<Endpoint>;
 }
 
 /// Todo: use macro generate
@@ -68,6 +72,23 @@ impl ShardingMeta for Sharding {
         }
 
         (None, None)
+    }
+
+    fn get_actual_schema<'a>(&self, endpoints: &'a [Endpoint], idx: Option<usize>) -> Option<&'a str> {
+        if self.database_strategy.is_some() || self.database_table_strategy.is_some() {
+            let ep = endpoints.iter().find(|ep| ep.name == self.actual_datanodes[idx.unwrap()]);
+            return ep.map(|x| x.db.as_str())
+        }
+
+        None
+    }
+
+    fn get_endpoint(&self, endpoints: &[Endpoint], idx: Option<usize>) -> Option<Endpoint> {
+        if self.database_strategy.is_some() || self.database_table_strategy.is_some() {
+            return endpoints.iter().find(|ep| ep.name == self.actual_datanodes[idx.unwrap()]).map(|x| x.clone())
+        }
+
+        None
     }
 }
 
@@ -124,5 +145,13 @@ impl ShardingMeta for StrategyType {
 
             _ => (None, None)
         }
+    }
+
+    fn get_actual_schema<'a>(&'a self, _endpoints: &'a [Endpoint], _idx: Option<usize>) -> Option<&'a str> {
+        None
+    }
+
+    fn get_endpoint(&self, _endpoints: &[Endpoint], _idx: Option<usize>) -> Option<Endpoint> {
+        None
     }
 }

@@ -36,7 +36,7 @@ use mysql_protocol::{
 };
 use pisa_error::error::{Error, ErrorKind};
 use rayon::prelude::*;
-use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput, RewriteChange, meta::FieldWrapFunc, rewrite_const::{AVG_COUNT, AVG_SUM, AVG_FIELD}};
+use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput, RewriteChange, meta::FieldWrapFunc, rewrite_const::{AVG_COUNT, AVG_SUM}};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
