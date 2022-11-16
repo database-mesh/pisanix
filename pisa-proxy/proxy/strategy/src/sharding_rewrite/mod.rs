@@ -14,6 +14,7 @@
 
 mod generic_meta;
 mod macros;
+mod rewrite;
 pub mod meta;
 pub mod rewrite_const;
 
