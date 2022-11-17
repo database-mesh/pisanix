@@ -45,7 +45,7 @@ SELECT order_id FROM order.t_order_00001 WHERE order_id = 1;
 ![](/img/sharding-select.png)
 
 以数据插入为例，数据写入过程如下图:
-![](/img/sharding-select.png)
+![](/img/sharding-insert.png)
 
 **特别说明: SQL rewrite 在修改标识符计算实际表名时会自动根据分片规则添加表索引，索引规则位 表名_索引，索引位为5位表示。例如：`t_order` 表改写后为 `t_order_00000`。因此用户需要根据实际业务场景先创建好对应的表名**
 
