@@ -49,9 +49,8 @@ macro_rules! calc_shard_by_wheres {
     ($self: ident, $where_shards: ident, $strategy_typ:path, $strategy:ident, $try_tables:ident, $wheres:ident, $avgs:ident, $fields:ident, $orders:ident, $groups:ident) => {
         let $where_shards = Self::find_try_where($strategy_typ, &$try_tables, $wheres)?
             .into_iter()
-            .filter_map(|x| match x {
-                Some((idx, num, _)) => Some((idx, num)),
-                None => None,
+            .filter_map(|x| {
+                (!x.1.is_empty()).then(|| x)
             })
             .collect::<Vec<_>>();
 
@@ -59,13 +58,13 @@ macro_rules! calc_shard_by_wheres {
             return Ok($self.$strategy($try_tables, $avgs, $fields, $orders, $groups));
         }
 
-        let expect_sum = $where_shards[0].1 as usize * $where_shards.len();
-        let sum: usize = $where_shards.iter().map(|x| x.1).sum::<u64>() as usize;
+        let expect_sum = $where_shards[0].1[0] as usize * $where_shards.len();
+        let sum: usize = $where_shards.iter().map(|x| x.1[0]).sum::<u64>() as usize;
 
         if expect_sum != sum {
             return Ok($self.$strategy($try_tables, $avgs, $fields, $orders, $groups));
         }
-    };
+    }
 }
 
 #[macro_export]

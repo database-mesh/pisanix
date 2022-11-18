@@ -16,6 +16,7 @@ use endpoint::endpoint::Endpoint;
 
 use crate::config::{Sharding, ShardingAlgorithmName, StrategyType};
 
+#[derive(Debug)]
 pub(crate) struct ShardingMetaBaseInfo<'a> {
     pub column: (Option<&'a str>, Option<&'a str>),
     pub count:  (Option<u32>, Option<u32>),
