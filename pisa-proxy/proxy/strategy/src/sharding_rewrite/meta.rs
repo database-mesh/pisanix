@@ -281,7 +281,6 @@ impl Transformer for RewriteMetaData {
                         for i in t {
                             match i {
                                 Item::TableWild(val) => {
-                                    println!("11 {:?}", 333);
                                     self.push_field(FieldMeta::TableWild(val.clone()))
                                 }
 
@@ -625,6 +624,7 @@ mod test {
             let mut ast = parser.parse(input.0).unwrap();
             let mut meta = RewriteMetaData::new(input.0.to_string());
             let _ = ast[0].visit(&mut meta);
+            println!("meta {:#?}", meta.get_inserts());
 
             assert_eq!(
                 meta.tables

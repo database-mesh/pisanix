@@ -178,8 +178,8 @@ pub struct ShardingRewrite {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ShardingRewriteError {
-    #[error("sharding column not found {0:?}")]
-    ShardingColumnNotFound(String),
+    #[error("sharding column not found")]
+    ShardingColumnNotFound,
 
     #[error("parse str to u64 error {0:?}")]
     ParseIntError(#[from] std::num::ParseIntError),
@@ -201,8 +201,13 @@ pub enum ShardingRewriteError {
 }
 
 struct ChangeInsertMeta {
-    row_sharding_value: String,
-    row_value_span: mysql_parser::Span,
+    sharding_value: InsertShardingValue,
+    value_span: mysql_parser::Span,
+}
+
+struct InsertShardingValue {
+    database: Option<String>,
+    table: Option<String>,
 }
 
 enum StrategyTyp {
@@ -977,54 +982,55 @@ impl ShardingRewrite {
         meta_base_info: ShardingMetaBaseInfo<'b>,
         count_field: Option<FieldMetaIdent>,
     ) -> Result<Vec<ShardingRewriteOutput>, ShardingRewriteError> {
-        let changes = Self::change_insert(inserts, fields, meta_base_info)?;
-        let row_start_idx = changes[0].1.start();
-        let row_prefix_text = &self.raw_sql[0..row_start_idx];
-        let mut change_rows = IndexMap::<u64, String>::new();
+        Ok(vec![])
+        //let changes = Self::change_insert(inserts, fields, meta_base_info)?;
+        //let row_start_idx = changes[0].1.start();
+        //let row_prefix_text = &self.raw_sql[0..row_start_idx];
+        //let mut change_rows = IndexMap::<u64, String>::new();
 
-        for change in changes.iter() {
-            let actual_schema = rule
-                .get_actual_schema(&self.endpoints, Some(change.0 as usize))
-                .unwrap_or_else(|| "");
+        //for change in changes.iter() {
+        //    let actual_schema = rule
+        //        .get_actual_schema(&self.endpoints, Some(change.0 as usize))
+        //        .unwrap_or_else(|| "");
 
-            let target_table = self.change_table(table, actual_schema, change.0);
-            let mut target_row_prefix_text = row_prefix_text.to_string();
-            Self::change_sql(&mut target_row_prefix_text, table.span, &target_table, 0);
-            let mut row_text = self.raw_sql[change.1.start()..change.1.end()].to_string();
-            row_text.push_str(", ");
-            change_rows.entry(change.0).or_insert(target_row_prefix_text).push_str(&row_text);
-        }
+        //    let target_table = self.change_table(table, actual_schema, change.0);
+        //    let mut target_row_prefix_text = row_prefix_text.to_string();
+        //    Self::change_sql(&mut target_row_prefix_text, table.span, &target_table, 0);
+        //    let mut row_text = self.raw_sql[change.1.start()..change.1.end()].to_string();
+        //    row_text.push_str(", ");
+        //    change_rows.entry(change.0).or_insert(target_row_prefix_text).push_str(&row_text);
+        //}
 
-        //let ep = self
-        //    .endpoints
-        //    .iter()
-        //    .find(|e| e.name == rule.actual_datanodes[0])
-        //    .ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+        ////let ep = self
+        ////    .endpoints
+        ////    .iter()
+        ////    .find(|e| e.name == rule.actual_datanodes[0])
+        ////    .ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
 
-        let outputs = change_rows
-            .into_iter()
-            .map(|(i, v)| -> Result<ShardingRewriteOutput, ShardingRewriteError> {
-                let data_source = if self.has_rw {
-                    DataSource::NodeGroup(rule.actual_datanodes[0].clone())
-                } else {
-                    let ep = rule
-                        .get_endpoint(&self.endpoints, Some(i as usize))
-                        .ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
-                    DataSource::Endpoint(ep)
-                };
+        //let outputs = change_rows
+        //    .into_iter()
+        //    .map(|(i, v)| -> Result<ShardingRewriteOutput, ShardingRewriteError> {
+        //        let data_source = if self.has_rw {
+        //            DataSource::NodeGroup(rule.actual_datanodes[0].clone())
+        //        } else {
+        //            let ep = rule
+        //                .get_endpoint(&self.endpoints, Some(i as usize))
+        //                .ok_or_else(|| ShardingRewriteError::EndpointNotFound)?;
+        //            DataSource::Endpoint(ep)
+        //        };
 
-                Ok(ShardingRewriteOutput {
-                    changes: vec![],
-                    target_sql: v.trim_end_matches(", ").to_string(),
-                    data_source: data_source.clone(),
-                    sharding_column: Some(sharding_column.to_string()),
-                    min_max_fields: vec![],
-                    count_field: count_field.clone(),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        //        Ok(ShardingRewriteOutput {
+        //            changes: vec![],
+        //            target_sql: v.trim_end_matches(", ").to_string(),
+        //            data_source: data_source.clone(),
+        //            sharding_column: Some(sharding_column.to_string()),
+        //            min_max_fields: vec![],
+        //            count_field: count_field.clone(),
+        //        })
+        //    })
+        //    .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(outputs)
+        //Ok(outputs)
     }
 
     fn change_insert<'b>(
@@ -1032,64 +1038,97 @@ impl ShardingRewrite {
         fields: &[FieldMeta],
         meta_base_info: ShardingMetaBaseInfo<'b>
     ) -> Result<Vec<(u64, mysql_parser::Span)>, ShardingRewriteError> {
-        let insert_values = Self::find_inserts(inserts, fields, meta_base_info.column)?;
+        Ok(vec![])
+        //let insert_values = Self::find_inserts(inserts, fields, meta_base_info.column)?;
 
-        let mut changes = vec![];
-        for value in insert_values.iter() {
-            let shard_value =
-                value.row_sharding_value.parse::<u64>().map_err(ShardingRewriteError::from)?;
-            let shard_value = shard_value
-                .calc(algo, sharding_count)
-                .ok_or_else(|| ShardingRewriteError::CalcModError)?;
+        //let mut changes = vec![];
+        //for value in insert_values.iter() {
+        //    let shard_value =
+        //        value.row_sharding_value.parse::<u64>().map_err(ShardingRewriteError::from)?;
+        //    let shard_value = shard_value
+        //        .calc(algo, sharding_count)
+        //        .ok_or_else(|| ShardingRewriteError::CalcModError)?;
 
-            changes.push((shard_value, value.row_value_span))
-        }
+        //    changes.push((shard_value, value.row_value_span))
+        //}
 
-        Ok(changes)
+        //Ok(changes)
     }
 
-    fn find_inserts(
+    fn find_inserts<'b>(
         strategy_typ: StrategyTyp,
         inserts: &[InsertValsMeta],
         fields: &[FieldMeta],
-        sharding_column: &str,
-    ) -> Result<Vec<ChangeInsertMeta>, ShardingRewriteError> {
-        match strategy_typ {
+        meta_base_info: ShardingMetaBaseInfo<'b>
+    ) -> Result<Vec<Vec<ChangeInsertMeta>>, ShardingRewriteError> {
+        let (db_idx, table_idx) = match strategy_typ {
             StrategyTyp::Database => {
-
+                let idx = Self::find_insert_field_idx(fields, |idx, field| {
+                    (field.name == meta_base_info.column.0.unwrap()).then(|| idx)
+                })?;
+                (Some(idx), None)
             },
             StrategyTyp::Table => {
-
+                let idx = Self::find_insert_field_idx(fields, |idx, field| {
+                    (field.name == meta_base_info.column.0.unwrap()).then(|| idx)
+                })?;
+                (None, Some(idx))
             },
             StrategyTyp::DatabaseTable => {
-
+                let db_idx = Self::find_insert_field_idx(fields, |idx, field| {
+                    (field.name == meta_base_info.column.0.unwrap()).then(|| idx)
+                })?;
+                
+                let table_idx = Self::find_insert_field_idx(fields, |idx, field| {
+                    (field.name == meta_base_info.column.1.unwrap()).then(|| idx)
+                })?;
+                (Some(db_idx), Some(table_idx))
             }
         };
-        
-        let field = fields
-            .iter()
-            .enumerate()
-            .find_map(|x| {
-                if let FieldMeta::Ident(field) = x.1 {
-                    if field.name == sharding_column {
-                        return Some((x.0, field.span, field.name.clone()));
-                    }
+
+        let mut change_inserts = vec![];
+
+        if let Some(db_idx) = db_idx {
+            let db_changes = inserts.iter().map(|x| {
+                ChangeInsertMeta {
+                    sharding_value: InsertShardingValue { 
+                        database: Some(x.values[db_idx].value.clone()), 
+                        table: None 
+                    },
+                    value_span: x.span,
                 }
+            }).collect::<Vec<ChangeInsertMeta>>();
 
+            change_inserts.push(db_changes);
+        }
+
+        if let Some(table_idx) = table_idx {
+            let table_changes = inserts.iter().map(|x| {
+                ChangeInsertMeta {
+                    sharding_value: InsertShardingValue { 
+                        database: None,
+                        table: Some(x.values[table_idx].value.clone()), 
+                    },
+                    value_span: x.span,
+                }
+            }).collect::<Vec<ChangeInsertMeta>>();
+
+            change_inserts.push(table_changes);
+        }
+
+        Ok(change_inserts) 
+    }
+
+    fn find_insert_field_idx<F>(fields: &[FieldMeta], find_f: F)  -> Result<usize, ShardingRewriteError>
+    where F: Fn(usize, &FieldMetaIdent) -> Option<usize>
+    {
+        fields.iter().enumerate().find_map(|x| {
+            if let FieldMeta::Ident(field) = x.1 {
+                find_f(x.0, field)
+            } else {
                 None
-            })
-            .ok_or_else(|| {
-                ShardingRewriteError::ShardingColumnNotFound(sharding_column.to_string())
-            })?;
-
-        Ok(inserts
-            .iter()
-            .enumerate()
-            .map(|(_, insert)| ChangeInsertMeta {
-                row_sharding_value: insert.values[field.0].value.clone(),
-                row_value_span: insert.span.clone(),
-            })
-            .collect::<Vec<ChangeInsertMeta>>())
+            }
+        }).ok_or_else(|| ShardingRewriteError::ShardingColumnNotFound)
     }
 
     fn database_strategy_iproduct(
