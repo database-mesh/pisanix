@@ -32,7 +32,7 @@ use mysql_protocol::{
     util::{is_eof, length_encode_int}, column::{Column, ColumnInfo},
 };
 use pisa_error::error::{Error, ErrorKind};
-use strategy::{route::RouteInputTyp, sharding_rewrite::{ShardingRewriteOutput, RewriteChange, rewrite_const::{AVG_COUNT, AVG_SUM, AVG_FIELD}}};
+use strategy::{route::RouteInputTyp, sharding_rewrite::{ShardingRewriteOutput, RewriteChange}};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, error};
@@ -613,7 +613,7 @@ where
         Ok(())
     }
 
-    async fn sharding_command_not_support(
+    async fn _sharding_command_not_support(
         cx: &mut ReqContext<T, C>,
         command: &str,
     ) -> Result<(), Error> {

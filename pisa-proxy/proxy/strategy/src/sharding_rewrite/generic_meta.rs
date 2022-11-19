@@ -19,7 +19,7 @@ use crate::config::{Sharding, ShardingAlgorithmName, StrategyType};
 #[derive(Debug)]
 pub(crate) struct ShardingMetaBaseInfo<'a> {
     pub column: (Option<&'a str>, Option<&'a str>),
-    pub count:  (Option<u32>, Option<u32>),
+    pub count: (Option<u32>, Option<u32>),
     pub algo: (Option<&'a ShardingAlgorithmName>, Option<&'a ShardingAlgorithmName>),
 }
 
@@ -37,6 +37,7 @@ pub trait ShardingMeta {
         endpoints: &'a [Endpoint],
         idx: Option<usize>,
     ) -> Option<Endpoint>;
+    fn get_strategy_typ(&self) -> super::StrategyTyp;
 }
 
 /// Todo: use macro generate
@@ -106,6 +107,16 @@ impl ShardingMeta for Sharding {
         let idx = if self.table_strategy.is_some() { 0 } else { idx.unwrap() };
         endpoints.iter().find(|ep| ep.name == self.actual_datanodes[idx]).map(|x| x.clone())
     }
+
+    fn get_strategy_typ(&self) -> super::StrategyTyp {
+       if self.database_strategy.is_some() {
+            super::StrategyTyp::Database
+       } else if self.table_strategy.is_some() {
+            super::StrategyTyp::Table 
+       } else {
+            super::StrategyTyp::DatabaseTable
+       }
+    }
 }
 
 impl ShardingMeta for StrategyType {
@@ -166,5 +177,9 @@ impl ShardingMeta for StrategyType {
 
     fn get_endpoint(&self, _endpoints: &[Endpoint], _idx: Option<usize>) -> Option<Endpoint> {
         None
+    }
+
+    fn get_strategy_typ(&self) -> super::StrategyTyp {
+        unimplemented!()
     }
 }

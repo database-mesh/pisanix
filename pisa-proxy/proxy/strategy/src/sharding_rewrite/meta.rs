@@ -24,7 +24,6 @@ enum ScanState {
     Field(Option<String>),
     Order(OrderDirection),
     Group,
-    Where(Vec<String>),
     OnCond(Vec<OnCond>),
     // Option<String> means whethe has `alias_name`
     Avg(mysql_parser::Span, Option<String>, bool),
@@ -40,18 +39,18 @@ pub enum FieldWrapFunc {
     Min,
     Max,
     Count,
-    None, 
+    None,
 }
 
 impl AsRef<str> for FieldWrapFunc {
-   fn as_ref(&self) -> &str {
+    fn as_ref(&self) -> &str {
         match self {
             Self::Max => "max",
             Self::Min => "min",
             Self::Count => "count",
             Self::None => "none",
         }
-   } 
+    }
 }
 
 #[derive(Debug)]
@@ -135,7 +134,7 @@ pub struct AvgMeta {
     pub span: mysql_parser::Span,
     // IS avg(t)
     pub avg_field_name: String,
-    // IS `t` of avg(t) 
+    // IS `t` of avg(t)
     pub field_name: String,
     pub distinct: bool,
 }
@@ -203,13 +202,16 @@ impl RewriteMetaData {
         }
     }
 
-    fn get_field_name(input: &str, span: &mysql_parser::Span, alias_name: &Option<String>) -> String {
+    fn get_field_name(
+        input: &str,
+        span: &mysql_parser::Span,
+        alias_name: &Option<String>,
+    ) -> String {
         match alias_name {
-            Some(name) =>  name.clone(),
+            Some(name) => name.clone(),
             None => input[span.start()..span.end()].to_string(),
         }
     }
-
 }
 
 macro_rules! gen_push_func {
@@ -266,10 +268,6 @@ impl Transformer for RewriteMetaData {
                 self.state = ScanState::TableName;
             }
 
-            Node::WhereClause(_) => {
-                self.state = ScanState::Where(vec![]);
-            }
-
             Node::TableRef(..) => {
                 self.state = ScanState::OnCond(vec![]);
             }
@@ -297,44 +295,60 @@ impl Transformer for RewriteMetaData {
                 match &item.expr {
                     Expr::SimpleIdentExpr(Value::Ident { .. }) => {
                         let name = match &item.alias_name {
-                            Some(name) =>  name.clone(),
+                            Some(name) => name.clone(),
                             None => self.input[item.span.start()..item.span.end()].to_string(),
                         };
-                        self.push_field(FieldMeta::Ident(FieldMetaIdent { span: item.span.clone(), name, wrap_func: FieldWrapFunc::None }))
+                        self.push_field(FieldMeta::Ident(FieldMetaIdent {
+                            span: item.span.clone(),
+                            name,
+                            wrap_func: FieldWrapFunc::None,
+                        }))
                     }
-                    Expr::SetFuncSpecExpr(e) => {
-                        match e.as_ref() {
-                            Expr::AggExpr(e) => {
-                                match e.name {
-                                    AggFuncName::Avg => {
-                                        self.state = ScanState::Avg(item.span, item.alias_name.clone(), e.distinct);
-                                    },
-
-                                    AggFuncName::Max => {
-                                        self.state = ScanState::FieldWrapFunc(item.span, FieldWrapFunc::Max, item.alias_name.clone());
-                                    }
-
-                                    AggFuncName::Min => {
-                                        self.state = ScanState::FieldWrapFunc(item.span, FieldWrapFunc::Min, item.alias_name.clone());
-                                    }
-
-                                    AggFuncName::Count => {
-                                        println!("e {:?}", e);
-                                        self.state = ScanState::FieldWrapFunc(item.span, FieldWrapFunc::Count, item.alias_name.clone());
-                                    }
-
-                                    _ => {}
+                    Expr::SetFuncSpecExpr(e) => match e.as_ref() {
+                        Expr::AggExpr(e) => {
+                            match e.name {
+                                AggFuncName::Avg => {
+                                    self.state = ScanState::Avg(
+                                        item.span,
+                                        item.alias_name.clone(),
+                                        e.distinct,
+                                    );
                                 }
-                                return false;
+
+                                AggFuncName::Max => {
+                                    self.state = ScanState::FieldWrapFunc(
+                                        item.span,
+                                        FieldWrapFunc::Max,
+                                        item.alias_name.clone(),
+                                    );
+                                }
+
+                                AggFuncName::Min => {
+                                    self.state = ScanState::FieldWrapFunc(
+                                        item.span,
+                                        FieldWrapFunc::Min,
+                                        item.alias_name.clone(),
+                                    );
+                                }
+
+                                AggFuncName::Count => {
+                                    self.state = ScanState::FieldWrapFunc(
+                                        item.span,
+                                        FieldWrapFunc::Count,
+                                        item.alias_name.clone(),
+                                    );
+                                }
+
+                                _ => {}
                             }
-                            _ => {}
-                            
+                            return false;
                         }
-                    }
+                        _ => {}
+                    },
 
                     _ => {}
                 }
-                
+
                 return true;
             }
 
@@ -370,7 +384,11 @@ impl Transformer for RewriteMetaData {
                     if let Value::Ident { span, value, quoted } = val {
                         let name =
                             if *quoted { self.ac.replace_all(value, &[""]) } else { value.clone() };
-                        self.push_field(FieldMeta::Ident(FieldMetaIdent { span: *span, name, wrap_func: FieldWrapFunc::None }))
+                        self.push_field(FieldMeta::Ident(FieldMetaIdent {
+                            span: *span,
+                            name,
+                            wrap_func: FieldWrapFunc::None,
+                        }))
                     }
                 }
                 InsertIdent::TableWild(val) => self.push_field(FieldMeta::TableWild(val.clone())),
@@ -381,46 +399,56 @@ impl Transformer for RewriteMetaData {
                     ScanState::FieldWrapFunc(span, wrap_func, alias_name) => {
                         let wrap_func = wrap_func.clone();
                         let span = span.clone();
-                        
+
                         let name = Self::get_field_name(&self.input, &span, alias_name);
-                        self.push_field(FieldMeta::Ident( FieldMetaIdent { span, name, wrap_func }));
+                        self.push_field(FieldMeta::Ident(FieldMetaIdent { span, name, wrap_func }));
                     }
                     _ => {}
-                }
+                },
 
                 Expr::SimpleIdentExpr(Value::Ident { span, value, .. }) => match &mut self.state {
                     ScanState::Field(alias_name) => {
                         let name = match alias_name {
-                            Some(name) =>  name.clone(),
+                            Some(name) => name.clone(),
                             None => value.to_string(),
                         };
-                        self.push_field(FieldMeta::Ident(FieldMetaIdent { span: *span, name, wrap_func: FieldWrapFunc::None }))
+                        self.push_field(FieldMeta::Ident(FieldMetaIdent {
+                            span: *span,
+                            name,
+                            wrap_func: FieldWrapFunc::None,
+                        }))
                     }
                     ScanState::FieldWrapFunc(span, wrap_func, alias_name) => {
                         let wrap_func = wrap_func.clone();
                         let span = span.clone();
-                        
+
                         let name = Self::get_field_name(&self.input, &span, alias_name);
-                        self.push_field(FieldMeta::Ident( FieldMetaIdent { span, name, wrap_func }));
+                        self.push_field(FieldMeta::Ident(FieldMetaIdent { span, name, wrap_func }));
                     }
                     ScanState::Order(direction) => {
                         let direction = direction.clone();
-                        self.push_order(OrderMeta { span: *span, name: value.to_string(), direction })
+                        self.push_order(OrderMeta {
+                            span: *span,
+                            name: value.to_string(),
+                            direction,
+                        })
                     }
                     ScanState::Group => {
                         self.push_group(GroupMeta { span: *span, name: value.to_string() })
                     }
-                    ScanState::Where(args) => {
-                        args.push(value.to_string());
-                    }
                     ScanState::Avg(arg, alias_name, distinct) => {
                         let avg_field_name = match alias_name {
                             Some(name) => name.clone(),
-                            None =>  self.input.as_str()[arg.start()..arg.end()].to_string(),
+                            None => self.input.as_str()[arg.start()..arg.end()].to_string(),
                         };
                         let arg = arg.clone();
                         let distinct = *distinct;
-                        let meta = AvgMeta { span: arg, avg_field_name, field_name: value.to_string(), distinct };
+                        let meta = AvgMeta {
+                            span: arg,
+                            avg_field_name,
+                            field_name: value.to_string(),
+                            distinct,
+                        };
                         self.push_avg(meta);
                         self.state = ScanState::Empty;
                     }
@@ -451,22 +479,33 @@ impl Transformer for RewriteMetaData {
                     }
                 }
 
-                Expr::BinaryOperationExpr { span: _, operator, left: _, right } => {
-                    match &mut self.state {
-                        ScanState::Where(args) => {
-                            if let Expr::LiteralExpr(_) = **right {
-                                let op = operator.format();
-                                if op.as_str() == "=" {
-                                    args.push(op);
-                                }
-                            }
-                        }
+                Expr::BinaryOperationExpr { span: _, operator, left, right } => {
+                    if  operator.format() != "=" {
+                        return false;
+                    }
 
-                        _ => {}
+                    let where_left = if let Expr::SimpleIdentExpr(Value::Ident { value, .. }) = &**left {
+                        Some(value.to_string())
+                    } else {
+                        None
+                    };
+
+                    let where_right = if let Expr::LiteralExpr(Value::Num { value, signed, .. }) = &**right {
+                        if *signed {
+                            Some(WhereMetaRightDataType::SignedNum(value.to_string()))
+                        } else {
+                            Some(WhereMetaRightDataType::Num(value.to_string()))
+                        }
+                    } else {
+                        None
+                    };
+
+                    if where_left.is_some() && where_right.is_some() {
+                        let where_meta =
+                            WhereMeta::BinaryExpr { left: where_left.unwrap(), right: where_right.unwrap() };
+                        self.push_where(where_meta);
                     }
                 }
-
-
 
                 Expr::InExpr { .. } => {
                     self.prev_expr_type = Some("In".to_string());
@@ -482,31 +521,12 @@ impl Transformer for RewriteMetaData {
                     self.prev_expr_type = None
                 }
 
-                Expr::LiteralExpr(Value::Num { span, value, signed }) => {
-                    match &mut self.state {
-                        ScanState::Where(args) => {
-                            if args.len() > 1 && args[0] == "=" {
-                                let right_value = if *signed {
-                                    WhereMetaRightDataType::SignedNum(value.to_string())
-                                } else {
-                                    WhereMetaRightDataType::Num(value.to_string())
-                                };
-
-                                let where_meta = WhereMeta::BinaryExpr {
-                                    left: args[1].clone(),
-                                    right: right_value,
-                                };
-                                self.push_where(where_meta);
-                            }
-                            self.state = ScanState::Empty;
-                        }
-
-                        ScanState::InsertRowValue(args) => {
-                            args.push(InsertValue { span: *span, value: value.clone() });
-                        }
-                        _ => {}
+                Expr::LiteralExpr(Value::Num { span, value, .. }) => match &mut self.state {
+                    ScanState::InsertRowValue(args) => {
+                        args.push(InsertValue { span: *span, value: value.clone() });
                     }
-                }
+                    _ => {}
+                },
 
                 _ => {}
             },
@@ -515,7 +535,6 @@ impl Transformer for RewriteMetaData {
 
         false
     }
-
 
     fn complete(&mut self, node: &mut Node) {
         if let ScanState::InsertRowValue(args) = &mut self.state {
@@ -534,10 +553,9 @@ mod test {
 
     use mysql_parser::{ast::Visitor, parser::Parser};
 
+    use super::RewriteMetaData;
     use crate::sharding_rewrite::meta::FieldMeta;
 
-    use super::RewriteMetaData;
-    
     #[test]
     fn test_count() {
         let parser = Parser::new();
@@ -563,14 +581,12 @@ mod test {
         let avg_meta = meta.get_avgs();
         assert_eq!(avg_meta[0][0].avg_field_name, "tt");
 
-
         let input = "select avg(ss) from t";
         let mut ast = parser.parse(input).unwrap();
         let mut meta = RewriteMetaData::new(input.to_string());
         let _ = ast[0].visit(&mut meta);
         let avg_meta = meta.get_avgs();
         assert_eq!(avg_meta[0][0].avg_field_name, "avg(ss)");
-
     }
 
     #[test]
@@ -624,7 +640,6 @@ mod test {
             let mut ast = parser.parse(input.0).unwrap();
             let mut meta = RewriteMetaData::new(input.0.to_string());
             let _ = ast[0].visit(&mut meta);
-            println!("meta {:#?}", meta.get_inserts());
 
             assert_eq!(
                 meta.tables

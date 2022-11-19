@@ -15,7 +15,7 @@
 use std::{
     marker::PhantomData,
     sync::{atomic::Ordering, Arc},
-    vec, ops::Div,
+    vec,
 };
 
 use bytes::{BytesMut, BufMut, Buf};
