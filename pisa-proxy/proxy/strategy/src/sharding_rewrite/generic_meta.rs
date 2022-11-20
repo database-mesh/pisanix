@@ -109,13 +109,13 @@ impl ShardingMeta for Sharding {
     }
 
     fn get_strategy_typ(&self) -> super::StrategyTyp {
-       if self.database_strategy.is_some() {
+        if self.database_strategy.is_some() {
             super::StrategyTyp::Database
-       } else if self.table_strategy.is_some() {
-            super::StrategyTyp::Table 
-       } else {
+        } else if self.table_strategy.is_some() {
+            super::StrategyTyp::Table
+        } else {
             super::StrategyTyp::DatabaseTable
-       }
+        }
     }
 }
 

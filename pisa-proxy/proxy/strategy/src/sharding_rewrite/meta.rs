@@ -480,29 +480,33 @@ impl Transformer for RewriteMetaData {
                 }
 
                 Expr::BinaryOperationExpr { span: _, operator, left, right } => {
-                    if  operator.format() != "=" {
+                    if operator.format() != "=" {
                         return false;
                     }
 
-                    let where_left = if let Expr::SimpleIdentExpr(Value::Ident { value, .. }) = &**left {
-                        Some(value.to_string())
-                    } else {
-                        None
-                    };
-
-                    let where_right = if let Expr::LiteralExpr(Value::Num { value, signed, .. }) = &**right {
-                        if *signed {
-                            Some(WhereMetaRightDataType::SignedNum(value.to_string()))
+                    let where_left =
+                        if let Expr::SimpleIdentExpr(Value::Ident { value, .. }) = &**left {
+                            Some(value.to_string())
                         } else {
-                            Some(WhereMetaRightDataType::Num(value.to_string()))
-                        }
-                    } else {
-                        None
-                    };
+                            None
+                        };
+
+                    let where_right =
+                        if let Expr::LiteralExpr(Value::Num { value, signed, .. }) = &**right {
+                            if *signed {
+                                Some(WhereMetaRightDataType::SignedNum(value.to_string()))
+                            } else {
+                                Some(WhereMetaRightDataType::Num(value.to_string()))
+                            }
+                        } else {
+                            None
+                        };
 
                     if where_left.is_some() && where_right.is_some() {
-                        let where_meta =
-                            WhereMeta::BinaryExpr { left: where_left.unwrap(), right: where_right.unwrap() };
+                        let where_meta = WhereMeta::BinaryExpr {
+                            left: where_left.unwrap(),
+                            right: where_right.unwrap(),
+                        };
                         self.push_where(where_meta);
                     }
                 }
