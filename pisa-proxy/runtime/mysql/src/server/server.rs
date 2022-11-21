@@ -229,31 +229,6 @@ where
                         is_added_avg_column = true;
                         continue;
                     }
-                    //let avg_count = change.target.get(AVG_COUNT).unwrap();
-                    //let avg_sum = change.target.get(AVG_SUM).unwrap();
-                    //if &column_info.column_name == avg_count || &column_info.column_name == avg_sum {
-                    //    if !is_add_avg_column {
-                    //        let avg_field = change.target.get(AVG_FIELD).unwrap();
-                    //        let avg_column = ColumnInfo {
-                    //            schema: None,
-                    //            table_name: None,
-                    //            column_name: avg_field.to_string(),
-                    //            charset: 0x3f,
-                    //            column_length: 0x46,
-                    //            column_type: ColumnType::MYSQL_TYPE_NEWDECIMAL,
-                    //            column_flag: 0x0080,
-                    //            decimals: 4,
-                    //        };
-                    //        let mut avg_column_buf = Vec::with_capacity(128);
-                    //        avg_column.encode(&mut avg_column_buf);
-                    //        let _ = req
-                    //            .framed
-                    //            .codec_mut()
-                    //            .encode(PacketSend::EncodeOffset(avg_column_buf.into(), buf.len()), &mut buf);
-                    //    }
-                    //    is_add_avg_column = true;
-                    //    continue;
-                    //}
                 }
 
                 let _ = req
