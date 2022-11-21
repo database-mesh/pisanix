@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 pub const ORDER_BY_DERIVED: &str = "ORDER_BY_DERIVED";
 pub const GROUP_BY_DERIVED: &str = "GROUP_BY_DERIVED";
 pub const AVG_DERIVED_COUNT: &str = "AVG_DERIVED_COUNT";

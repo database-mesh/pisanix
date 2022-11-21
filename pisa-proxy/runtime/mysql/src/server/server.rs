@@ -29,10 +29,10 @@ use mysql_protocol::{
         err::MySQLError,
     },
     session::{SessionMut, Session},
-    util::{is_eof, length_encode_int},
+    util::{is_eof, length_encode_int}, column::{Column, ColumnInfo},
 };
 use pisa_error::error::{Error, ErrorKind};
-use strategy::{route::RouteInputTyp, sharding_rewrite::ShardingRewriteOutput};
+use strategy::{route::RouteInputTyp, sharding_rewrite::{ShardingRewriteOutput, RewriteChange}};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, error};
@@ -47,7 +47,7 @@ use crate::{
 
 use std::sync::atomic::Ordering;
 
-use super::executor::Executor;
+use super::{executor::Executor, util::filter_avg_column};
 
 pub struct PisaMySQLService<T, C> {
     _phat: PhantomData<(T, C)>,
@@ -176,7 +176,21 @@ where
         let mut buf = BytesMut::with_capacity(128);
         let mut data = vec![0];
         data.extend_from_slice(&u32::to_le_bytes(stmt.stmt_id));
-        data.extend_from_slice(&u16::to_le_bytes(stmt.cols_count));
+        let avg_change = req.rewrite_outputs[0].changes.iter().find_map(|x| {
+            if let RewriteChange::AvgChange(change) = x {
+                Some(change)
+            } else {
+                None
+            }
+        });
+        
+        if avg_change.is_some() {
+            data.extend_from_slice(&u16::to_le_bytes(stmt.cols_count - 1));
+        } else {
+            data.extend_from_slice(&u16::to_le_bytes(stmt.cols_count));
+        }
+
+
         data.extend_from_slice(&u16::to_le_bytes(stmt.params_count));
 
         data.extend_from_slice(&[0, 0, 0]);
@@ -199,7 +213,24 @@ where
         }
 
         if !stmt.cols_data.is_empty() {
+            let mut is_added_avg_column = false;
             for col_data in stmt.cols_data {
+                let column_info = (&col_data[4..]).decode_column();
+                if let Some(change) = avg_change {
+                    let filter_res = filter_avg_column(change, &column_info, is_added_avg_column);
+                    if filter_res.1.is_some() {
+                        if !filter_res.0.is_empty() {
+                            let _ = req
+                                .framed
+                                .codec_mut()
+                                .encode(PacketSend::EncodeOffset(filter_res.0.into(), buf.len()), &mut buf);
+                        }
+                        
+                        is_added_avg_column = true;
+                        continue;
+                    }
+                }
+
                 let _ = req
                     .framed
                     .codec_mut()
@@ -557,7 +588,7 @@ where
         Ok(())
     }
 
-    async fn sharding_command_not_support(
+    async fn _sharding_command_not_support(
         cx: &mut ReqContext<T, C>,
         command: &str,
     ) -> Result<(), Error> {

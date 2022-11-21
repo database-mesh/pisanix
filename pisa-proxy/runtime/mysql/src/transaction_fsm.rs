@@ -113,6 +113,7 @@ pub fn query_rewrite(
             data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
             sharding_column: None,
             min_max_fields: vec![],
+            count_field: None,
         })
         .collect::<Vec<_>>();
 

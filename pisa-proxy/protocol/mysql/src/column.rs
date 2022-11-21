@@ -16,7 +16,7 @@ use bytes::{Buf, BufMut, BytesMut};
 
 use crate::{mysql_const::ColumnType, util::{ BufExt, BufMutExt, get_length }};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ColumnInfo {
     pub schema: Option<String>,
     pub table_name: Option<String>,

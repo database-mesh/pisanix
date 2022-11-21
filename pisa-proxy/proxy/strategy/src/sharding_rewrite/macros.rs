@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-pub mod metrics;
-pub mod server;
-pub use server::*;
+#[macro_export]
+macro_rules! get_meta_detail {
+    ($meta:ident, $($meta_typ:ident),*) => {
+        paste! {
+            $(let $meta_typ = $meta.[<get_ $meta_typ>]();)*
+        }
 
-mod executor;
-pub mod stmt_cache;
-mod util;
+    }
+}
