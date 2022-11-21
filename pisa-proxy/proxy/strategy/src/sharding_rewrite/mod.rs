@@ -202,6 +202,8 @@ pub enum ChangeTargetMeta {
     Avg { count_field: String, sum_field: String },
     OrderGroup { order_fields: Vec<String>, group_fields: Vec<String> },
 }
+// The key is shading index.
+type QueryChangePlan = IndexMap<u8, Vec<ChangePlan>>;
 
 #[derive(Debug, Clone)]
 pub struct ShardingRewrite {
@@ -224,7 +226,11 @@ pub struct ShardingRewrite {
     field_block_metas: IndexMap<u8, FieldBlockMeta>,
 
     // The key is a tuple means that database index, table index.
+<<<<<<< HEAD
     change_plans: IndexMap<ShardingIdx, Vec<ChangePlan>>,
+=======
+    change_plans: IndexMap<(Option<u64>, Option<u64>), Vec<ChangePlan>>,
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -1076,10 +1082,17 @@ impl ShardingRewrite {
         orders: Option<&Vec<OrderMeta>>,
         groups: Option<&Vec<GroupMeta>>,
         fields: Option<&Vec<FieldMeta>>,
+<<<<<<< HEAD
         shard_idx: &ShardingIdx,
     ) -> Result<usize, ()> {
         if orders.is_none() && groups.is_none() {
             return Ok(0);
+=======
+        shard_idx: (Option<u64>, Option<u64>),
+    ) -> Result<usize, ()> {
+        if orders.is_none() && groups.is_none() {
+            return Ok(0)
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
         }
 
         let default_fields = Vec::<FieldMeta>::new();
@@ -1130,6 +1143,7 @@ impl ShardingRewrite {
 
         let mut target_fields = vec![];
 
+<<<<<<< HEAD
         let (mut added_order_fields, mut added_group_fields) = (vec![], vec![]);
 
         for field in not_exist_order_fields {
@@ -1137,6 +1151,18 @@ impl ShardingRewrite {
             let order_as_name =
                 format!("{}_{}_{:05}", order_as_name, ORDER_BY_DERIVED, shard_idx.table.unwrap());
             let target_field = format!("{} {} {}", field.name, AS, &order_as_name,);
+=======
+        for field in not_exist_order_fields {
+            let order_as_name = field.name.replace("`", "");
+            let target_field = format!(
+                "{} {} {}_{}_{:05}",
+                field.name,
+                AS,
+                order_as_name.to_ascii_uppercase(),
+                ORDER_BY_DERIVED,
+                shard_idx.1.unwrap()
+            );
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
             target_fields.push(target_field.clone());
 
             let mut change_target = IndexMap::new();
@@ -1144,6 +1170,7 @@ impl ShardingRewrite {
             change_target.insert(ORDER_FIELD.to_string(), field.name.clone());
             let order_change =
                 OrderChange { target: change_target, direction: field.direction.clone() };
+<<<<<<< HEAD
             added_order_fields.push(order_as_name);
         }
 
@@ -1152,13 +1179,30 @@ impl ShardingRewrite {
             let group_as_name =
                 format!("{}_{}_{:05}", group_as_name, GROUP_BY_DERIVED, shard_idx.table.unwrap());
             let target_field = format!("{} {} {}", field.name, AS, &group_as_name,);
+=======
+        }
+
+        for field in not_exist_group_fields {
+            let group_as_name = field.name.replace("`", "");
+            let target_field = format!(
+                "{} {} {}_{}_{:05}",
+                field.name,
+                AS,
+                group_as_name.to_ascii_uppercase(),
+                GROUP_BY_DERIVED,
+                shard_idx.1.unwrap()
+            );
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
             target_fields.push(target_field.clone());
 
             let mut change_target = IndexMap::new();
             change_target.insert(GROUP_TARGET.to_string(), target_field);
             change_target.insert(GROUP_FIELD.to_string(), field.name.clone());
             let group_change = GroupChange { target: change_target };
+<<<<<<< HEAD
             added_group_fields.push(group_as_name);
+=======
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
         }
 
         if target_fields.is_empty() {
@@ -1173,6 +1217,7 @@ impl ShardingRewrite {
             span: field_block_span,
             action: ChangePlanAction::Add,
             typ: ChangePlanTyp::Field,
+<<<<<<< HEAD
             query_id,
             target_meta: ChangeTargetMeta::OrderGroup {
                 order_fields: added_order_fields,
@@ -1181,6 +1226,12 @@ impl ShardingRewrite {
         };
 
         self.change_plans.entry(shard_idx.clone()).or_insert(vec![]).push(change_plan);
+=======
+            query_id: 1,
+        };
+
+        self.change_plans.entry(shard_idx).or_insert(vec![]).push(change_plan);
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
 
         return Ok(length);
     }
@@ -1189,7 +1240,11 @@ impl ShardingRewrite {
         &mut self,
         query_id: u8,
         avgs: Option<&Vec<AvgMeta>>,
+<<<<<<< HEAD
         shard_idx: &ShardingIdx,
+=======
+        shard_idx: (Option<u64>, Option<u64>),
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
         offset: usize,
     ) {
         if avgs.is_none() {
@@ -1207,6 +1262,7 @@ impl ShardingRewrite {
 
         for avg_meta in avgs {
             res.insert(AVG_FIELD.to_string(), avg_meta.avg_field_name.clone());
+<<<<<<< HEAD
             let target_count = format!("{}({}) {} ", COUNT, avg_meta.field_name, AS);
             let target_count_as = format!(
                 "{}_{}_{:05}",
@@ -1227,6 +1283,30 @@ impl ShardingRewrite {
 
             let target =
                 format!("{}{}, {}{}", target_count, &target_count_as, target_sum, &target_sum_as);
+=======
+            let target_count = &format!("{}({}) {} ", COUNT, avg_meta.field_name, AS);
+            let target_count_as = &format!(
+                "{}_{}_{:05}",
+                avg_meta.field_name.to_ascii_uppercase(),
+                AVG_DERIVED_COUNT,
+                shard_idx.1.unwrap(),
+            );
+            res.insert(AVG_COUNT.to_string(), target_count_as.to_string());
+
+            let target_sum = &format!("{}({}) {} ", SUM, avg_meta.field_name, AS);
+            let target_sum_as = &format!(
+                "{}_{}_{:05}",
+                avg_meta.field_name.to_ascii_uppercase(),
+                AVG_DERIVED_SUM,
+                shard_idx.1.unwrap(),
+            );
+            res.insert(AVG_SUM.to_string(), target_sum_as.to_string());
+
+            let target = format!(
+                "{}{}, {}{}",
+                target_count, target_count_as, target_sum, target_sum_as
+            );
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
 
             let change_plan = ChangePlan {
                 query_id,
@@ -1234,6 +1314,7 @@ impl ShardingRewrite {
                 span: avg_meta.span,
                 action: ChangePlanAction::Replace,
                 typ: ChangePlanTyp::Field,
+<<<<<<< HEAD
                 target_meta: ChangeTargetMeta::Avg {
                     count_field: target_count_as,
                     sum_field: target_sum_as,
@@ -1241,6 +1322,11 @@ impl ShardingRewrite {
             };
 
             self.change_plans.entry(shard_idx.clone()).or_insert(vec![]).push(change_plan);
+=======
+            };
+
+            self.change_plans.entry(shard_idx).or_insert(vec![]).push(change_plan);
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
         }
     }
 
@@ -1635,8 +1721,12 @@ impl ShardingRewrite {
                         target: target.clone(),
                         span: t.2.span,
                         action: ChangePlanAction::Replace,
+<<<<<<< HEAD
                         typ: ChangePlanTyp::Table,
                         target_meta: ChangeTargetMeta::Table(target.clone()),
+=======
+                        typ: ChangePlanTyp::Table
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
                     };
 
                     let change = TableChange {
@@ -1647,6 +1737,7 @@ impl ShardingRewrite {
                     };
                     group_changes.entry(idx as usize).or_insert((t.0, vec![])).1.push(change);
 
+<<<<<<< HEAD
                     let sharding_idx =
                         ShardingIdx { database: Some(node_idx as u64), table: Some(idx as u64) };
 
@@ -1663,6 +1754,12 @@ impl ShardingRewrite {
                         &sharding_idx,
                     );
                     self.change_avg1(t.0, avgs.get(&t.0), &sharding_idx, 0);
+=======
+                    self.change_plans.entry((Some(node_idx as u64), Some(idx as u64))).or_insert(vec![]).push(change_plan);
+                    //self.change_plans.entry(idx as u64).or_insert(vec![]).push(change_plan);
+                    let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), (Some(node_idx as u64), Some(idx as u64)));
+                    self.change_avg1(t.0, avgs.get(&t.0), (Some(node_idx as u64), Some(idx as u64)), 0);
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
                     change_idx += 1;
                 } else {
                     for table_idx in 0..sharding_count {
@@ -1673,7 +1770,10 @@ impl ShardingRewrite {
                             span: t.2.span,
                             action: ChangePlanAction::Replace,
                             typ: ChangePlanTyp::Table,
+<<<<<<< HEAD
                             target_meta: ChangeTargetMeta::Table(target.clone()),
+=======
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
                         };
                         let change = TableChange {
                             span: t.2.span,
@@ -1686,6 +1786,7 @@ impl ShardingRewrite {
                             .or_insert((t.0, vec![]))
                             .1
                             .push(change);
+<<<<<<< HEAD
 
                         let sharding_idx =
                             ShardingIdx { database: Some(node_idx as u64), table: Some(table_idx) };
@@ -1703,64 +1804,16 @@ impl ShardingRewrite {
                         );
 
                         self.change_avg1(t.0, avgs.get(&t.0), &sharding_idx, 0);
+                        self.change_plans.entry((Some(node_idx as u64), Some(table_idx))).or_insert(vec![]).push(change_plan);
+                        let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), (Some(node_idx as u64), Some(table_idx)));
 
-                        change_idx += 1;
+                        self.change_avg1(t.0, avgs.get(&t.0), (Some(node_idx as u64), Some(table_idx)), 0);
+
                     }
-                }
-
-                for (_group, changes) in group_changes.into_iter() {
-                    let mut offset = 0;
-                    let mut target_sql = self.raw_sql.to_string();
-
-                    for change in changes.1.iter() {
-                        Self::change_sql(
-                            &mut target_sql,
-                            change.span,
-                            &change.table.as_ref().unwrap().target,
-                            offset,
-                        );
-                        offset = change.table.as_ref().unwrap().target.len() - change.span.len();
-                    }
-
-                    let min_max_fields = self.find_min_max_fields(&changes.0, fields);
-                    let mut rewrite_changes: Vec<RewriteChange> =
-                        changes.1.iter().map(|x| RewriteChange::TableChange(x.clone())).collect();
-
-                    let _ = self.change_order_group(
-                        &mut target_sql,
-                        &mut rewrite_changes,
-                        orders,
-                        groups,
-                        fields,
-                        changes.1[0].table.as_ref().unwrap().shard_idx,
-                    );
-
-                    if !avgs.is_empty() {
-                        if changes.1[0].span.start() > avgs[0][0].span.start() {
-                            offset = 0;
-                        }
-                        self.change_avg(
-                            &mut target_sql,
-                            &mut rewrite_changes,
-                            avgs,
-                            changes.1[0].table.as_ref().unwrap().shard_idx,
-                            offset,
-                        );
-                    }
-
-                    outputs.push(ShardingRewriteOutput {
-                        changes: rewrite_changes,
-                        target_sql,
-                        data_source: data_source.clone(),
-                        sharding_column: db_sharding_column.clone(),
-                        min_max_fields,
-                        count_field: Self::get_count_field(fields),
-                    })
                 }
             }
         }
-        let target_sqls = self.change_plan_apply(fields);
-        outputs
+        self.change_plan_apply()
     }
 
     fn database_strategy_iproduct(
@@ -2081,6 +2134,7 @@ impl ShardingRewrite {
         }
     }
 
+<<<<<<< HEAD
     fn change_plan_apply(
         &mut self,
         fields: &IndexMap<u8, Vec<FieldMeta>>,
@@ -2104,6 +2158,24 @@ impl ShardingRewrite {
                     })
                     .collect::<Vec<_>>();
                 replace_plans.sort_by_cached_key(|x| x.span.start());
+=======
+    fn change_plan_apply(&mut self) {
+        println!("{:?}", "==========================");
+        let query_length = self.query_metas.len() as u8;
+        println!("lll {:?}", query_length);
+
+        println!("111 {:#?}", self.change_plans);
+
+        for (idx, plans) in self.change_plans.iter_mut() {
+            
+            let mut target_sql = self.raw_sql.to_string();
+            
+            for query_id in (1..query_length+1).rev() {
+                println!("query_id {:?}", query_id);
+                let mut replace_plans = plans.iter().filter(|x| x.query_id == query_id && x.action == ChangePlanAction::Replace && x.typ == ChangePlanTyp::Field).collect::<Vec<_>>();
+                replace_plans.sort_by_cached_key(|x| x.span.start());
+                println!("replace {:#?}", replace_plans);
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
                 let mut offset = 0;
                 for plan in replace_plans.iter() {
                     for _ in 0..plan.span.len() {
@@ -2111,6 +2183,7 @@ impl ShardingRewrite {
                     }
                     target_sql.insert_str(plan.span.start() + offset, &plan.target);
                     offset += plan.target.len() - plan.span.len();
+<<<<<<< HEAD
                     rewrite_changes
                         .entry(query_id)
                         .or_insert(vec![])
@@ -2180,6 +2253,36 @@ impl ShardingRewrite {
     }
 
 
+=======
+                }
+
+                let mut add_plans = plans.iter().filter(|x| x.query_id == query_id && x.action == ChangePlanAction::Add && x.typ == ChangePlanTyp::Field).collect::<Vec<_>>();
+                add_plans.sort_by_cached_key(|x| x.span.start());
+                for plan in add_plans.iter() {
+                    println!("plan end {:?}", plan.span.end());
+                    target_sql.insert_str(plan.span.end() + offset, &plan.target);
+                    offset += plan.target.len();
+                }
+
+            }
+            
+
+
+            //let mut replace_plans = plans.iter().filter(|x| x.action == ChangePlanAction::Replace && x.typ == ChangePlanTyp::Table).collect::<Vec<_>>();
+            //replace_plans.sort_by_cached_key(|x| x.span.start());
+
+            //for plan in replace_plans.iter() {
+            //    for _ in 0..plan.span.len() {
+            //        target_sql.remove(plan.span.start() + offset);
+            //    }
+            //    target_sql.insert_str(plan.span.start() + offset, &plan.target);
+            //    offset += plan.target.len() - plan.span.len();
+            //}
+
+            println!("target_sql {:?}", target_sql);
+        }
+    }
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
 }
 
 impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
@@ -2189,7 +2292,11 @@ impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
         self.set_default_db(input.default_db);
 
         let meta = self.get_meta(&mut input.ast);
+<<<<<<< HEAD
         println!("meta {:#?}", meta);
+=======
+
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
         self.query_metas = meta.get_queries().clone();
         self.field_block_metas = meta.get_field_blocks().clone();
 
@@ -2338,9 +2445,14 @@ mod test {
     #[test]
     fn test_database_table_sharding_strategy() {
         let config = get_database_table_sharding_config();
+<<<<<<< HEAD
         //let raw_sql = "SELECT user_id,avg(tt) FROM db.tshard where idx > 3 group by idx order by idx";
         let raw_sql = "SELECT count(user_id) as c, avg(tt), avg(oid),user_id FROM db.tshard where idx = (SELECT user_id, avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
         //let raw_sql = "UPDATE db.tshard set a=1 where idx=3";
+=======
+        //let raw_sql = "SELECT avg(tt), user_id FROM db.tshard where idx > 3 group by idx order by idx";
+        let raw_sql = "SELECT avg(tt), user_id FROM db.tshard where idx = (SELECT avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
         //let raw_sql = "SELECT idx from db.`tshard` where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
@@ -2351,6 +2463,10 @@ mod test {
             default_db: Some("db".to_string()),
         };
         let res = sr.rewrite(input).unwrap();
+<<<<<<< HEAD
+=======
+        println!("plans {:#?}", sr.change_plans);
+>>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
         //let sqls = res.iter().map(|x| x.target_sql.clone()).collect::<Vec<_>>();
         //assert_eq!(sqls[0], "SELECT * FROM `db0`.tshard_00000 where idx > 3");
         //assert_eq!(sqls[1], "SELECT * FROM `db0`.tshard_00001 where idx > 3");

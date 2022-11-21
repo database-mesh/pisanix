@@ -278,8 +278,10 @@ impl Transformer for RewriteMetaData {
         match node {
             Node::Query(q) => {
                 self.query_id += 1;
-
-                self.push_query(QueryMeta { query_id: self.query_id, span: q.span })
+                self.push_query(QueryMeta {
+                    query_id: self.query_id,
+                    span: q.span,
+                })
             }
 
             Node::SubQuery(q) => {
@@ -316,10 +318,13 @@ impl Transformer for RewriteMetaData {
                 self.state = ScanState::Field(None);
                 for item in t.items.iter() {
                     match item {
-                        Item::TableWild(val) => self.push_field(FieldMeta::TableWild(val.clone())),
+                        Item::TableWild(val) => {
+                            self.push_field(FieldMeta::TableWild(val.clone()))
+                        }
                         _ => {}
                     }
                 }
+                
             }
 
             Node::ItemExpr(item) => {
