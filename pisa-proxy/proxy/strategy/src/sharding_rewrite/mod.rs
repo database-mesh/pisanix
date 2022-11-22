@@ -242,10 +242,15 @@ struct InsertShardingValue {
 }
 
 #[derive(Debug)]
+struct InsertRowValueIdx {
+    sharding_idx: ShardingIdx,
+    span: mysql_parser::Span,
+}
+
+#[derive(Debug)]
 struct ShardingIdx {
     database: Option<u64>,
     table: Option<u64>,
-    span: mysql_parser::Span,
 }
 
 #[derive(Debug)]
@@ -1274,7 +1279,7 @@ impl ShardingRewrite {
         match strategy_typ {
             StrategyTyp::Database => {
                 for change in changes.iter() {
-                    let db_idx = change.database.unwrap();
+                    let db_idx = change.sharding_idx.database.unwrap();
                     let actual_db = rule
                         .get_actual_schema(&self.endpoints, Some(db_idx as usize))
                         .unwrap_or_else(|| "");
@@ -1294,7 +1299,7 @@ impl ShardingRewrite {
 
             StrategyTyp::Table => {
                 for change in changes.iter() {
-                    let db_idx = change.table.unwrap();
+                    let db_idx = change.sharding_idx.table.unwrap();
                     let target = self.change_table(table, "", db_idx);
                     let mut target_sql_prefix_text = sql_prefix_text.to_string();
                     let row_value_text = self.get_change_insert_row(
@@ -1311,7 +1316,7 @@ impl ShardingRewrite {
 
             StrategyTyp::DatabaseTable => {
                 for change in changes.iter() {
-                    let db_idx = change.database.unwrap();
+                    let db_idx = change.sharding_idx.database.unwrap();
                     let actual_db = rule
                         .get_actual_schema(&self.endpoints, Some(db_idx as usize))
                         .unwrap_or_else(|| "");
@@ -1322,7 +1327,7 @@ impl ShardingRewrite {
                         name: table.name.clone(),
                     };
 
-                    let table_idx = change.table.unwrap();
+                    let table_idx = change.sharding_idx.table.unwrap();
                     let target = self.change_table(&table, "", table_idx);
 
                     let mut target_sql_prefix_text = sql_prefix_text.to_string();
@@ -1362,11 +1367,11 @@ impl ShardingRewrite {
         prefix_text: &mut String,
         target: &str,
         span: mysql_parser::Span,
-        sharding_idx: &ShardingIdx,
+        row_value_idx: &InsertRowValueIdx,
     ) -> String {
         Self::change_sql(prefix_text, span, target, 0);
         let mut row_value_text =
-            self.raw_sql[sharding_idx.span.start()..sharding_idx.span.end()].to_string();
+            self.raw_sql[row_value_idx.span.start()..row_value_idx.span.end()].to_string();
         row_value_text.push_str(", ");
         row_value_text
     }
@@ -1376,7 +1381,7 @@ impl ShardingRewrite {
         inserts: &[InsertValsMeta],
         fields: &[FieldMeta],
         meta_base_info: ShardingMetaBaseInfo<'b>,
-    ) -> Result<Vec<ShardingIdx>, ShardingRewriteError> {
+    ) -> Result<Vec<InsertRowValueIdx>, ShardingRewriteError> {
         let insert_values = Self::find_inserts(&strategy_typ, inserts, fields, &meta_base_info)?;
         let mut changes = vec![];
 
@@ -1387,9 +1392,8 @@ impl ShardingRewrite {
                         value.sharding_value.database.as_ref(),
                         &meta_base_info,
                     )?;
-                    changes.push(ShardingIdx {
-                        database: Some(idx),
-                        table: None,
+                    changes.push(InsertRowValueIdx { 
+                        sharding_idx: ShardingIdx { database: Some(idx), table: None },
                         span: value.value_span,
                     })
                 }
@@ -1402,9 +1406,8 @@ impl ShardingRewrite {
                         &meta_base_info,
                     )?;
 
-                    changes.push(ShardingIdx {
-                        database: None,
-                        table: Some(idx),
+                    changes.push(InsertRowValueIdx {
+                        sharding_idx: ShardingIdx { database: None, table: Some(idx) },
                         span: value.value_span,
                     })
                 }
@@ -1418,9 +1421,8 @@ impl ShardingRewrite {
                         &meta_base_info,
                     )?;
 
-                    changes.push(ShardingIdx {
-                        database: Some(db_idx),
-                        table: Some(table_idx),
+                    changes.push(InsertRowValueIdx {
+                        sharding_idx: ShardingIdx { database: Some(db_idx), table: Some(table_idx) },
                         span: value.value_span,
                     })
                 }
@@ -2177,8 +2179,8 @@ mod test {
     #[test]
     fn test_database_table_sharding_strategy() {
         let config = get_database_table_sharding_config();
-        //let raw_sql = "SELECT user_id,avg(tt) FROM db.tshard where idx > 3 group by idx order by idx";
-        let raw_sql = "SELECT user_id, avg(tt), oid,user_id FROM db.tshard where idx = (SELECT user_id, avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
+        let raw_sql = "SELECT user_id,avg(tt) FROM db.tshard where idx > 3 group by idx order by idx";
+        //let raw_sql = "SELECT user_id, avg(tt), oid,user_id FROM db.tshard where idx = (SELECT user_id, avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
         //let raw_sql = "SELECT idx from db.`tshard` where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
