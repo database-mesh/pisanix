@@ -155,14 +155,18 @@ pub struct Sharding {
     pub database_table_strategy: Option<StrategyType>,
 }
 
+// There is no explicit tag identifying which variant the data contains. 
+// Serde will try to match the data against each variant in order and the first one that deserializes successfully is the one returned.
+// Refrence Link: https://serde.rs/enum-representations.html
+// DatabaseTableStrategyConfig struct must be guaranteed to be matched firstly
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum StrategyType {
-    DatabaseStrategyConfig(DatabaseStrategyConfig),
-    DatabaseStrategyInline(StrategyInline),
-    TableStrategyConfig(TableStrategyConfig),
-    TableStrategyInline(StrategyInline),
     DatabaseTableStrategyConfig(DatabaseTableStrategyConfig),
+    DatabaseStrategyConfig(DatabaseStrategyConfig),
+    TableStrategyConfig(TableStrategyConfig),
+    DatabaseStrategyInline(StrategyInline),
+    TableStrategyInline(StrategyInline),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -194,10 +198,10 @@ pub struct TableStrategyConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DatabaseTableStrategyConfig {
     pub database_sharding_algorithm_name: ShardingAlgorithmName,
-    pub table_sharding_algorithm_name: ShardingAlgorithmName,
     pub database_sharding_column: String,
+    pub table_sharding_algorithm_name: ShardingAlgorithmName,
     pub table_sharding_column: String,
-    pub shading_count: u32,
+    pub sharding_count: u32,
 }
 
 fn default_monitor_period() -> u64 {
