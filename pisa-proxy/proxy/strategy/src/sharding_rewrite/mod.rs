@@ -204,7 +204,7 @@ pub struct ShardingRewrite {
     field_block_metas: IndexMap<u8, FieldBlockMeta>,
 
     // The key is a tuple means that database index, table index.
-    change_plans: IndexMap<(Option<u64>, Option<u64>), Vec<ChangePlan>>,
+    change_plans: IndexMap<ShardingIdx, Vec<ChangePlan>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -247,7 +247,7 @@ struct InsertRowValueIdx {
     span: mysql_parser::Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct ShardingIdx {
     database: Option<u64>,
     table: Option<u64>,
@@ -1048,7 +1048,7 @@ impl ShardingRewrite {
         orders: Option<&Vec<OrderMeta>>,
         groups: Option<&Vec<GroupMeta>>,
         fields: Option<&Vec<FieldMeta>>,
-        shard_idx: (Option<u64>, Option<u64>),
+        shard_idx: &ShardingIdx,
     ) -> Result<usize, ()> {
         if orders.is_none() && groups.is_none() {
             return Ok(0)
@@ -1110,7 +1110,7 @@ impl ShardingRewrite {
                 AS,
                 order_as_name.to_ascii_uppercase(),
                 ORDER_BY_DERIVED,
-                shard_idx.1.unwrap()
+                shard_idx.table.unwrap()
             );
             target_fields.push(target_field.clone());
 
@@ -1129,7 +1129,7 @@ impl ShardingRewrite {
                 AS,
                 group_as_name.to_ascii_uppercase(),
                 GROUP_BY_DERIVED,
-                shard_idx.1.unwrap()
+                shard_idx.table.unwrap()
             );
             target_fields.push(target_field.clone());
 
@@ -1154,7 +1154,7 @@ impl ShardingRewrite {
             query_id,
         };
 
-        self.change_plans.entry(shard_idx).or_insert(vec![]).push(change_plan);
+        self.change_plans.entry(shard_idx.clone()).or_insert(vec![]).push(change_plan);
 
         return Ok(length);
     }
@@ -1163,7 +1163,7 @@ impl ShardingRewrite {
         &mut self,
         query_id: u8,
         avgs: Option<&Vec<AvgMeta>>,
-        shard_idx: (Option<u64>, Option<u64>),
+        shard_idx: &ShardingIdx,
         offset: usize,
     ) {
         if avgs.is_none() {
@@ -1186,7 +1186,7 @@ impl ShardingRewrite {
                 "{}_{}_{:05}",
                 avg_meta.field_name.to_ascii_uppercase(),
                 AVG_DERIVED_COUNT,
-                shard_idx.1.unwrap(),
+                shard_idx.table.as_ref().unwrap(),
             );
             res.insert(AVG_COUNT.to_string(), target_count_as.to_string());
 
@@ -1195,7 +1195,7 @@ impl ShardingRewrite {
                 "{}_{}_{:05}",
                 avg_meta.field_name.to_ascii_uppercase(),
                 AVG_DERIVED_SUM,
-                shard_idx.1.unwrap(),
+                shard_idx.table.as_ref().unwrap(),
             );
             res.insert(AVG_SUM.to_string(), target_sum_as.to_string());
 
@@ -1212,7 +1212,7 @@ impl ShardingRewrite {
                 typ: ChangePlanTyp::Field,
             };
 
-            self.change_plans.entry(shard_idx).or_insert(vec![]).push(change_plan);
+            self.change_plans.entry(shard_idx.clone()).or_insert(vec![]).push(change_plan);
         }
     }
 
@@ -1615,10 +1615,15 @@ impl ShardingRewrite {
                     };
                     group_changes.entry(idx as usize).or_insert((t.0, vec![])).1.push(change);
 
-                    self.change_plans.entry((Some(node_idx as u64), Some(idx as u64))).or_insert(vec![]).push(change_plan);
+                    let sharding_idx = ShardingIdx {
+                        database: Some(node_idx as u64),
+                        table: Some(idx as u64),
+                    };
+
+                    self.change_plans.entry(sharding_idx.clone()).or_insert(vec![]).push(change_plan);
                     //self.change_plans.entry(idx as u64).or_insert(vec![]).push(change_plan);
-                    let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), (Some(node_idx as u64), Some(idx as u64)));
-                    self.change_avg1(t.0, avgs.get(&t.0), (Some(node_idx as u64), Some(idx as u64)), 0);
+                    let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), &sharding_idx);
+                    self.change_avg1(t.0, avgs.get(&t.0), &sharding_idx, 0);
                     change_idx += 1;
                 } else {
                     for table_idx in 0..sharding_count {
@@ -1641,10 +1646,16 @@ impl ShardingRewrite {
                             .or_insert((t.0, vec![]))
                             .1
                             .push(change);
-                        self.change_plans.entry((Some(node_idx as u64), Some(table_idx))).or_insert(vec![]).push(change_plan);
-                        let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), (Some(node_idx as u64), Some(table_idx)));
+                        
+                        let sharding_idx = ShardingIdx {
+                            database: Some(node_idx as u64),
+                            table: Some(table_idx),
+                        };
 
-                        self.change_avg1(t.0, avgs.get(&t.0), (Some(node_idx as u64), Some(table_idx)), 0);
+                        self.change_plans.entry(sharding_idx.clone()).or_insert(vec![]).push(change_plan);
+                        let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), &sharding_idx);
+
+                        self.change_avg1(t.0, avgs.get(&t.0), &sharding_idx, 0);
 
                         change_idx += 1;
                     }
@@ -1976,7 +1987,7 @@ impl ShardingRewrite {
         }
     }
 
-    fn change_plan_apply(&mut self) -> IndexMap::<(Option<u64>, Option<u64>), String> {
+    fn change_plan_apply(&mut self) -> IndexMap::<ShardingIdx, String> {
         let query_length = self.query_metas.len() as u8;
         
         let mut target_sqls = IndexMap::<_, _>::new();
@@ -2016,7 +2027,7 @@ impl ShardingRewrite {
                 }
             }
 
-            target_sqls.insert(*idx, target_sql);
+            target_sqls.insert(idx.clone(), target_sql);
         }
 
         target_sqls
