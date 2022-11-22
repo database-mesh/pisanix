@@ -269,8 +269,13 @@ struct InsertRowValueIdx {
     span: mysql_parser::Span,
 }
 
+<<<<<<< HEAD
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ShardingIdx {
+=======
+#[derive(Debug)]
+struct ShardingIdx {
+>>>>>>> f58bff6 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
     database: Option<u64>,
     table: Option<u64>,
 }
@@ -1506,7 +1511,11 @@ impl ShardingRewrite {
                         value.sharding_value.database.as_ref(),
                         &meta_base_info,
                     )?;
+<<<<<<< HEAD
                     changes.push(InsertRowValueIdx {
+=======
+                    changes.push(InsertRowValueIdx { 
+>>>>>>> f58bff6 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
                         sharding_idx: ShardingIdx { database: Some(idx), table: None },
                         span: value.value_span,
                     })
@@ -1536,10 +1545,14 @@ impl ShardingRewrite {
                     )?;
 
                     changes.push(InsertRowValueIdx {
+<<<<<<< HEAD
                         sharding_idx: ShardingIdx {
                             database: Some(db_idx),
                             table: Some(table_idx),
                         },
+=======
+                        sharding_idx: ShardingIdx { database: Some(db_idx), table: Some(table_idx) },
+>>>>>>> f58bff6 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
                         span: value.value_span,
                     })
                 }
@@ -2509,6 +2522,7 @@ mod test {
         let config = get_database_table_sharding_config();
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
         //let raw_sql = "SELECT user_id,avg(tt) FROM db.tshard where idx > 3 group by idx order by idx";
         let raw_sql = "SELECT count(user_id) as c, avg(tt), avg(oid),user_id FROM db.tshard where idx = (SELECT user_id, avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
         //let raw_sql = "UPDATE db.tshard set a=1 where idx=3";
@@ -2520,6 +2534,10 @@ mod test {
         //let raw_sql = "SELECT user_id,avg(tt) FROM db.tshard where idx > 3 group by idx order by idx";
         let raw_sql = "SELECT user_id, avg(tt), oid,user_id FROM db.tshard where idx = (SELECT user_id, avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
 >>>>>>> 6ce61c0 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
+=======
+        let raw_sql = "SELECT user_id,avg(tt) FROM db.tshard where idx > 3 group by idx order by idx";
+        //let raw_sql = "SELECT user_id, avg(tt), oid,user_id FROM db.tshard where idx = (SELECT user_id, avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
+>>>>>>> f58bff6 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
         //let raw_sql = "SELECT idx from db.`tshard` where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
