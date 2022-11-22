@@ -270,10 +270,14 @@ struct InsertRowValueIdx {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ShardingIdx {
 =======
 #[derive(Debug)]
+=======
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+>>>>>>> efa6147 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
 struct ShardingIdx {
 >>>>>>> f58bff6 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
     database: Option<u64>,
@@ -1084,12 +1088,16 @@ impl ShardingRewrite {
         groups: Option<&Vec<GroupMeta>>,
         fields: Option<&Vec<FieldMeta>>,
 <<<<<<< HEAD
+<<<<<<< HEAD
         shard_idx: &ShardingIdx,
     ) -> Result<usize, ()> {
         if orders.is_none() && groups.is_none() {
             return Ok(0);
 =======
         shard_idx: (Option<u64>, Option<u64>),
+=======
+        shard_idx: &ShardingIdx,
+>>>>>>> efa6147 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
     ) -> Result<usize, ()> {
         if orders.is_none() && groups.is_none() {
             return Ok(0)
@@ -1161,7 +1169,7 @@ impl ShardingRewrite {
                 AS,
                 order_as_name.to_ascii_uppercase(),
                 ORDER_BY_DERIVED,
-                shard_idx.1.unwrap()
+                shard_idx.table.unwrap()
             );
 >>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
             target_fields.push(target_field.clone());
@@ -1191,7 +1199,7 @@ impl ShardingRewrite {
                 AS,
                 group_as_name.to_ascii_uppercase(),
                 GROUP_BY_DERIVED,
-                shard_idx.1.unwrap()
+                shard_idx.table.unwrap()
             );
 >>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
             target_fields.push(target_field.clone());
@@ -1235,8 +1243,12 @@ impl ShardingRewrite {
 >>>>>>> 6ce61c0 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
         };
 
+<<<<<<< HEAD
         self.change_plans.entry(shard_idx).or_insert(vec![]).push(change_plan);
 >>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
+=======
+        self.change_plans.entry(shard_idx.clone()).or_insert(vec![]).push(change_plan);
+>>>>>>> efa6147 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
 
         return Ok(length);
     }
@@ -1246,10 +1258,14 @@ impl ShardingRewrite {
         query_id: u8,
         avgs: Option<&Vec<AvgMeta>>,
 <<<<<<< HEAD
+<<<<<<< HEAD
         shard_idx: &ShardingIdx,
 =======
         shard_idx: (Option<u64>, Option<u64>),
 >>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
+=======
+        shard_idx: &ShardingIdx,
+>>>>>>> efa6147 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
         offset: usize,
     ) {
         if avgs.is_none() {
@@ -1294,7 +1310,7 @@ impl ShardingRewrite {
                 "{}_{}_{:05}",
                 avg_meta.field_name.to_ascii_uppercase(),
                 AVG_DERIVED_COUNT,
-                shard_idx.1.unwrap(),
+                shard_idx.table.as_ref().unwrap(),
             );
             res.insert(AVG_COUNT.to_string(), target_count_as.to_string());
 
@@ -1303,7 +1319,7 @@ impl ShardingRewrite {
                 "{}_{}_{:05}",
                 avg_meta.field_name.to_ascii_uppercase(),
                 AVG_DERIVED_SUM,
-                shard_idx.1.unwrap(),
+                shard_idx.table.as_ref().unwrap(),
             );
             res.insert(AVG_SUM.to_string(), target_sum_as.to_string());
 
@@ -1330,8 +1346,12 @@ impl ShardingRewrite {
 =======
             };
 
+<<<<<<< HEAD
             self.change_plans.entry(shard_idx).or_insert(vec![]).push(change_plan);
 >>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
+=======
+            self.change_plans.entry(shard_idx.clone()).or_insert(vec![]).push(change_plan);
+>>>>>>> efa6147 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
         }
     }
 
@@ -1751,6 +1771,7 @@ impl ShardingRewrite {
                     group_changes.entry(idx as usize).or_insert((t.0, vec![])).1.push(change);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
                     let sharding_idx =
                         ShardingIdx { database: Some(node_idx as u64), table: Some(idx as u64) };
 
@@ -1773,6 +1794,17 @@ impl ShardingRewrite {
                     let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), (Some(node_idx as u64), Some(idx as u64)));
                     self.change_avg1(t.0, avgs.get(&t.0), (Some(node_idx as u64), Some(idx as u64)), 0);
 >>>>>>> c496ddb (optimize(pisa-proxy, sharding): optimize rewrite sql)
+=======
+                    let sharding_idx = ShardingIdx {
+                        database: Some(node_idx as u64),
+                        table: Some(idx as u64),
+                    };
+
+                    self.change_plans.entry(sharding_idx.clone()).or_insert(vec![]).push(change_plan);
+                    //self.change_plans.entry(idx as u64).or_insert(vec![]).push(change_plan);
+                    let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), &sharding_idx);
+                    self.change_avg1(t.0, avgs.get(&t.0), &sharding_idx, 0);
+>>>>>>> efa6147 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
                     change_idx += 1;
                 } else {
                     for table_idx in 0..sharding_count {
@@ -1801,6 +1833,7 @@ impl ShardingRewrite {
                             .push(change);
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 
                         let sharding_idx =
                             ShardingIdx { database: Some(node_idx as u64), table: Some(table_idx) };
@@ -1822,8 +1855,18 @@ impl ShardingRewrite {
 >>>>>>> 6ce61c0 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
                         self.change_plans.entry((Some(node_idx as u64), Some(table_idx))).or_insert(vec![]).push(change_plan);
                         let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), (Some(node_idx as u64), Some(table_idx)));
+=======
+                        
+                        let sharding_idx = ShardingIdx {
+                            database: Some(node_idx as u64),
+                            table: Some(table_idx),
+                        };
+>>>>>>> efa6147 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
 
-                        self.change_avg1(t.0, avgs.get(&t.0), (Some(node_idx as u64), Some(table_idx)), 0);
+                        self.change_plans.entry(sharding_idx.clone()).or_insert(vec![]).push(change_plan);
+                        let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), &sharding_idx);
+
+                        self.change_avg1(t.0, avgs.get(&t.0), &sharding_idx, 0);
 
                     }
                 }
@@ -2208,6 +2251,7 @@ impl ShardingRewrite {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     fn change_plan_apply(
         &mut self,
         fields: &IndexMap<u8, Vec<FieldMeta>>,
@@ -2237,6 +2281,9 @@ impl ShardingRewrite {
 =======
     fn change_plan_apply(&mut self) -> IndexMap::<(Option<u64>, Option<u64>), String> {
 >>>>>>> 6ce61c0 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
+=======
+    fn change_plan_apply(&mut self) -> IndexMap::<ShardingIdx, String> {
+>>>>>>> efa6147 (Signed-off-by: xuanyuan300 <xuanyuan300@gmail.com>)
         let query_length = self.query_metas.len() as u8;
         
         let mut target_sqls = IndexMap::<_, _>::new();
@@ -2352,7 +2399,7 @@ impl ShardingRewrite {
                 }
             }
 
-            target_sqls.insert(*idx, target_sql);
+            target_sqls.insert(idx.clone(), target_sql);
         }
 
         target_sqls
