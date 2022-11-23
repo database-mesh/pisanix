@@ -159,7 +159,7 @@ impl ShardingMeta for StrategyType {
                 unimplemented!()
             }
 
-            Self::DatabaseTableStrategyConfig(config) => (None, Some(config.shading_count.into())),
+            Self::DatabaseTableStrategyConfig(config) => (None, Some(config.sharding_count.into())),
 
             Self::TableStrategyConfig(config) => (None, Some(config.sharding_count.into())),
 
