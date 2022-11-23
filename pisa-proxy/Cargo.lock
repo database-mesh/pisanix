@@ -2369,6 +2369,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "paste"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1de2e551fb905ac83f73f7aedf2f0cb4a0da7e35efa24a202a936269f1f18e1"
+
+[[package]]
 name = "pear"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3671,6 +3677,7 @@ dependencies = [
  "mysql_parser",
  "mysql_protocol",
  "parking_lot 0.12.0",
+ "paste",
  "regex",
  "serde",
  "serde_derive",
