@@ -525,12 +525,19 @@ impl Transformer for RewriteMetaData {
                     self.prev_expr_type = None
                 }
 
-                Expr::LiteralExpr(Value::Num { span, value, .. }) => match &mut self.state {
-                    ScanState::InsertRowValue(args) => {
-                        args.push(InsertValue { span: *span, value: value.clone() });
-                    }
-                    _ => {}
-                },
+                Expr::LiteralExpr(e) => {
+                    if let ScanState::InsertRowValue(args) = &mut self.state {
+                        match e {
+                            Value::Num { span, value, .. } => {
+                                args.push(InsertValue { span: *span, value: value.clone() });
+                            },
+                            Value::Text {span, value, ..} => {
+                                args.push(InsertValue { span: *span, value: value.clone() });
+                            },
+                            _ => {}
+                        }
+                    };
+                }
 
                 _ => {}
             },
