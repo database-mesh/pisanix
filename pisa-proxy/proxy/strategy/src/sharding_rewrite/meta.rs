@@ -537,11 +537,6 @@ impl Transformer for RewriteMetaData {
                             _ => {}
                         }
                     };
-                    // match &mut self.state {
-                    // ScanState::InsertRowValue(args) => {
-                    //     args.push(InsertValue { span: *span, value: value.clone() });
-                    // }
-                    // _ => {}
                 }
 
                 _ => {}
