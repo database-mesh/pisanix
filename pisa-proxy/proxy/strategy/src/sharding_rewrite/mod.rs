@@ -17,7 +17,7 @@ mod macros;
 pub mod meta;
 pub mod rewrite_const;
 
-use std::vec;
+use std::{ops::Index, vec};
 
 use crc32fast::Hasher;
 use endpoint::endpoint::Endpoint;
@@ -151,8 +151,8 @@ pub struct ShardingRewriteOutput {
 pub struct ShardingRewriteOutput1 {
     pub results: Vec<ShardingRewriteResult>,
     pub sharding_column: Option<String>,
-    pub min_max_fields: Vec<FieldMetaIdent>,
-    pub count_field: Option<FieldMetaIdent>,
+    pub min_max_fields: IndexMap<u8, Vec<FieldMetaIdent>>,
+    pub count_field: IndexMap<u8, Vec<FieldMetaIdent>>,
 }
 
 #[derive(Debug, Clone)]
@@ -185,7 +185,7 @@ enum ChangePlanAction {
     // The Add means that add field, The Span.end() should be used.
     Add,
     // The Replace means that replace field, eg, avg function, The Span.start() should be used.
-    Replace
+    Replace,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -203,7 +203,6 @@ pub enum ChangeTargetMeta {
     Avg { count_field: String, sum_field: String },
     OrderGroup { order_fields: Vec<String>, group_fields: Vec<String> },
 }
-
 
 #[derive(Debug, Clone)]
 pub struct ShardingRewrite {
@@ -905,7 +904,13 @@ impl ShardingRewrite {
         Ok(None)
     }
 
-    fn change_order_group(&self, target_sql: &mut String, changes: &mut Vec<RewriteChange>, orders: &IndexMap<u8, Vec<OrderMeta>>, groups: &IndexMap<u8, Vec<GroupMeta>>, fields: &IndexMap<u8, Vec<FieldMeta>>,
+    fn change_order_group(
+        &self,
+        target_sql: &mut String,
+        changes: &mut Vec<RewriteChange>,
+        orders: &IndexMap<u8, Vec<OrderMeta>>,
+        groups: &IndexMap<u8, Vec<GroupMeta>>,
+        fields: &IndexMap<u8, Vec<FieldMeta>>,
         idx: u64,
     ) -> Result<usize, ()> {
         // Currently, we don't consider the case that query_id not equal 1.
@@ -915,39 +920,45 @@ impl ShardingRewrite {
             Some(FieldMeta::Ident(field)) => field.span,
             _ => return Ok(0),
         };
-        
+
         let default_orders = Vec::<OrderMeta>::new();
         let orders = orders.get(&1).map_or_else(|| &default_orders, |v| v);
         // Get the order field that does not exist in the fields.
-        let not_exist_order_fields = orders.iter().filter_map(|x| {
-            let exist_field = fields.iter().find(|field| {
-                if let FieldMeta::Ident(field_ident) = field {
-                    if field_ident.name.replace("`", "") == x.name.replace("`", "") {
-                        return true;
+        let not_exist_order_fields = orders
+            .iter()
+            .filter_map(|x| {
+                let exist_field = fields.iter().find(|field| {
+                    if let FieldMeta::Ident(field_ident) = field {
+                        if field_ident.name.replace("`", "") == x.name.replace("`", "") {
+                            return true;
+                        }
                     }
-                }
-                false
-            });
+                    false
+                });
 
-            exist_field.is_none().then(|| x)
-        }).collect::<Vec<_>>();
+                exist_field.is_none().then(|| x)
+            })
+            .collect::<Vec<_>>();
 
         let default_groups = Vec::<GroupMeta>::new();
         let groups = groups.get(&1).map_or_else(|| &default_groups, |v| v);
 
         // Get the group field that does not exist in the fields.
-        let not_exist_group_fields = groups.iter().filter_map(|x| {
-            let exist_field = fields.iter().find(|field| {
-                if let FieldMeta::Ident(field_ident) = field {
-                    if field_ident.name.replace("`", "") == x.name.replace("`", "") {
-                        return true;
+        let not_exist_group_fields = groups
+            .iter()
+            .filter_map(|x| {
+                let exist_field = fields.iter().find(|field| {
+                    if let FieldMeta::Ident(field_ident) = field {
+                        if field_ident.name.replace("`", "") == x.name.replace("`", "") {
+                            return true;
+                        }
                     }
-                }
-                false
-            });
+                    false
+                });
 
-            exist_field.is_none().then(|| x)
-        }).collect::<Vec<_>>();
+                exist_field.is_none().then(|| x)
+            })
+            .collect::<Vec<_>>();
 
         let mut target_fields = vec![];
 
@@ -961,15 +972,13 @@ impl ShardingRewrite {
                 ORDER_BY_DERIVED,
                 idx
             );
-            target_fields.push(target_field.clone());   
+            target_fields.push(target_field.clone());
 
             let mut change_target = IndexMap::new();
             change_target.insert(ORDER_TARGET.to_string(), target_field);
             change_target.insert(ORDER_FIELD.to_string(), field.name.clone());
-            let order_change = OrderChange {
-                target: change_target,
-                direction: field.direction.clone(),
-            };
+            let order_change =
+                OrderChange { target: change_target, direction: field.direction.clone() };
             changes.push(RewriteChange::OrderChange(order_change));
         }
 
@@ -984,13 +993,11 @@ impl ShardingRewrite {
                 idx
             );
             target_fields.push(target_field.clone());
-            
+
             let mut change_target = IndexMap::new();
             change_target.insert(GROUP_TARGET.to_string(), target_field);
             change_target.insert(GROUP_FIELD.to_string(), field.name.clone());
-            let group_change = GroupChange {
-                target: change_target,
-            };
+            let group_change = GroupChange { target: change_target };
             changes.push(RewriteChange::GroupChange(group_change));
         }
 
@@ -1073,7 +1080,7 @@ impl ShardingRewrite {
         shard_idx: &ShardingIdx,
     ) -> Result<usize, ()> {
         if orders.is_none() && groups.is_none() {
-            return Ok(0)
+            return Ok(0);
         }
 
         let default_fields = Vec::<FieldMeta>::new();
@@ -1128,13 +1135,9 @@ impl ShardingRewrite {
 
         for field in not_exist_order_fields {
             let order_as_name = field.name.replace("`", "").to_ascii_uppercase();
-            let order_as_name = format!("{}_{}_{:05}", order_as_name, ORDER_BY_DERIVED, shard_idx.table.unwrap());
-            let target_field = format!(
-                "{} {} {}",
-                field.name,
-                AS,
-                &order_as_name,
-            );
+            let order_as_name =
+                format!("{}_{}_{:05}", order_as_name, ORDER_BY_DERIVED, shard_idx.table.unwrap());
+            let target_field = format!("{} {} {}", field.name, AS, &order_as_name,);
             target_fields.push(target_field.clone());
 
             let mut change_target = IndexMap::new();
@@ -1147,13 +1150,9 @@ impl ShardingRewrite {
 
         for field in not_exist_group_fields {
             let group_as_name = field.name.replace("`", "").to_ascii_uppercase();
-            let group_as_name = format!("{}_{}_{:05}", group_as_name, GROUP_BY_DERIVED, shard_idx.table.unwrap());
-            let target_field = format!(
-                "{} {} {}",
-                field.name,
-                AS,
-                &group_as_name,
-            );
+            let group_as_name =
+                format!("{}_{}_{:05}", group_as_name, GROUP_BY_DERIVED, shard_idx.table.unwrap());
+            let target_field = format!("{} {} {}", field.name, AS, &group_as_name,);
             target_fields.push(target_field.clone());
 
             let mut change_target = IndexMap::new();
@@ -1176,7 +1175,10 @@ impl ShardingRewrite {
             action: ChangePlanAction::Add,
             typ: ChangePlanTyp::Field,
             query_id,
-            target_meta: ChangeTargetMeta::OrderGroup { order_fields: added_order_fields, group_fields: added_group_fields }
+            target_meta: ChangeTargetMeta::OrderGroup {
+                order_fields: added_order_fields,
+                group_fields: added_group_fields,
+            },
         };
 
         self.change_plans.entry(shard_idx.clone()).or_insert(vec![]).push(change_plan);
@@ -1224,10 +1226,8 @@ impl ShardingRewrite {
             );
             res.insert(AVG_SUM.to_string(), target_sum_as.to_string());
 
-            let target = format!(
-                "{}{}, {}{}",
-                target_count, &target_count_as, target_sum, &target_sum_as
-            );
+            let target =
+                format!("{}{}, {}{}", target_count, &target_count_as, target_sum, &target_sum_as);
 
             let change_plan = ChangePlan {
                 query_id,
@@ -1235,7 +1235,10 @@ impl ShardingRewrite {
                 span: avg_meta.span,
                 action: ChangePlanAction::Replace,
                 typ: ChangePlanTyp::Field,
-                target_meta: ChangeTargetMeta::Avg{ count_field: target_count_as, sum_field: target_sum_as }
+                target_meta: ChangeTargetMeta::Avg {
+                    count_field: target_count_as,
+                    sum_field: target_sum_as,
+                },
             };
 
             self.change_plans.entry(shard_idx.clone()).or_insert(vec![]).push(change_plan);
@@ -1418,7 +1421,7 @@ impl ShardingRewrite {
                         value.sharding_value.database.as_ref(),
                         &meta_base_info,
                     )?;
-                    changes.push(InsertRowValueIdx { 
+                    changes.push(InsertRowValueIdx {
                         sharding_idx: ShardingIdx { database: Some(idx), table: None },
                         span: value.value_span,
                     })
@@ -1448,7 +1451,10 @@ impl ShardingRewrite {
                     )?;
 
                     changes.push(InsertRowValueIdx {
-                        sharding_idx: ShardingIdx { database: Some(db_idx), table: Some(table_idx) },
+                        sharding_idx: ShardingIdx {
+                            database: Some(db_idx),
+                            table: Some(table_idx),
+                        },
                         span: value.value_span,
                     })
                 }
@@ -1631,7 +1637,7 @@ impl ShardingRewrite {
                         span: t.2.span,
                         action: ChangePlanAction::Replace,
                         typ: ChangePlanTyp::Table,
-                        target_meta: ChangeTargetMeta::Table(target.clone())
+                        target_meta: ChangeTargetMeta::Table(target.clone()),
                     };
 
                     let change = TableChange {
@@ -1642,14 +1648,21 @@ impl ShardingRewrite {
                     };
                     group_changes.entry(idx as usize).or_insert((t.0, vec![])).1.push(change);
 
-                    let sharding_idx = ShardingIdx {
-                        database: Some(node_idx as u64),
-                        table: Some(idx as u64),
-                    };
+                    let sharding_idx =
+                        ShardingIdx { database: Some(node_idx as u64), table: Some(idx as u64) };
 
-                    self.change_plans.entry(sharding_idx.clone()).or_insert(vec![]).push(change_plan);
+                    self.change_plans
+                        .entry(sharding_idx.clone())
+                        .or_insert(vec![])
+                        .push(change_plan);
                     //self.change_plans.entry(idx as u64).or_insert(vec![]).push(change_plan);
-                    let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), &sharding_idx);
+                    let _ = self.change_order_group1(
+                        t.0,
+                        orders.get(&t.0),
+                        groups.get(&t.0),
+                        fields.get(&t.0),
+                        &sharding_idx,
+                    );
                     self.change_avg1(t.0, avgs.get(&t.0), &sharding_idx, 0);
                     change_idx += 1;
                 } else {
@@ -1674,14 +1687,21 @@ impl ShardingRewrite {
                             .or_insert((t.0, vec![]))
                             .1
                             .push(change);
-                        
-                        let sharding_idx = ShardingIdx {
-                            database: Some(node_idx as u64),
-                            table: Some(table_idx),
-                        };
 
-                        self.change_plans.entry(sharding_idx.clone()).or_insert(vec![]).push(change_plan);
-                        let _ = self.change_order_group1(t.0, orders.get(&t.0), groups.get(&t.0), fields.get(&t.0), &sharding_idx);
+                        let sharding_idx =
+                            ShardingIdx { database: Some(node_idx as u64), table: Some(table_idx) };
+
+                        self.change_plans
+                            .entry(sharding_idx.clone())
+                            .or_insert(vec![])
+                            .push(change_plan);
+                        let _ = self.change_order_group1(
+                            t.0,
+                            orders.get(&t.0),
+                            groups.get(&t.0),
+                            fields.get(&t.0),
+                            &sharding_idx,
+                        );
 
                         self.change_avg1(t.0, avgs.get(&t.0), &sharding_idx, 0);
 
@@ -1740,7 +1760,7 @@ impl ShardingRewrite {
                 }
             }
         }
-        let target_sqls = self.change_plan_apply();
+        let target_sqls = self.change_plan_apply(fields);
         println!("{:#?}", target_sqls);
         outputs
     }
@@ -2000,6 +2020,24 @@ impl ShardingRewrite {
         })
     }
 
+    fn get_count_field1(
+        fields: &IndexMap<u8, Vec<FieldMeta>>,
+    ) -> IndexMap<u8, Vec<FieldMetaIdent>> {
+        IndexMap::from_iter(fields.iter().filter_map(|(query_id, values)| {
+            let counts = values
+                .iter()
+                .filter_map(|f| {
+                    if let FieldMeta::Ident(meta) = f {
+                        (meta.wrap_func == FieldWrapFunc::Count).then(|| meta.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            (counts.len() > 0).then(|| (*query_id, counts))
+        }))
+    }
+
     fn gen_data_source(
         &self,
         rule: &Sharding,
@@ -2015,19 +2053,28 @@ impl ShardingRewrite {
         }
     }
 
-    fn change_plan_apply(&mut self) -> IndexMap::<ShardingIdx, String> {
+    fn change_plan_apply(
+        &mut self,
+        fields: &IndexMap<u8, Vec<FieldMeta>>,
+    ) -> IndexMap<ShardingIdx, String> {
         let query_length = self.query_metas.len() as u8;
-        
+
         let mut target_sqls = IndexMap::<_, _>::new();
         let mut rewrite_outputs = vec![];
 
         for (idx, plans) in self.change_plans.iter_mut() {
             let mut rewrite_changes = IndexMap::<u8, Vec<ChangeTargetMeta>>::new();
             let mut target_sql = self.raw_sql.to_string();
-            
-            for query_id in (1..query_length+1).rev() {
-                
-                let mut replace_plans = plans.iter().filter(|x| x.query_id == query_id && x.action == ChangePlanAction::Replace && x.typ == ChangePlanTyp::Field).collect::<Vec<_>>();
+
+            for query_id in (1..query_length + 1).rev() {
+                let mut replace_plans = plans
+                    .iter()
+                    .filter(|x| {
+                        x.query_id == query_id
+                            && x.action == ChangePlanAction::Replace
+                            && x.typ == ChangePlanTyp::Field
+                    })
+                    .collect::<Vec<_>>();
                 replace_plans.sort_by_cached_key(|x| x.span.start());
                 let mut offset = 0;
                 for plan in replace_plans.iter() {
@@ -2036,18 +2083,38 @@ impl ShardingRewrite {
                     }
                     target_sql.insert_str(plan.span.start() + offset, &plan.target);
                     offset += plan.target.len() - plan.span.len();
-                    rewrite_changes.entry(query_id).or_insert(vec![]).push(plan.target_meta.clone());
+                    rewrite_changes
+                        .entry(query_id)
+                        .or_insert(vec![])
+                        .push(plan.target_meta.clone());
                 }
 
-                let mut add_plans = plans.iter().filter(|x| x.query_id == query_id && x.action == ChangePlanAction::Add && x.typ == ChangePlanTyp::Field).collect::<Vec<_>>();
+                let mut add_plans = plans
+                    .iter()
+                    .filter(|x| {
+                        x.query_id == query_id
+                            && x.action == ChangePlanAction::Add
+                            && x.typ == ChangePlanTyp::Field
+                    })
+                    .collect::<Vec<_>>();
                 add_plans.sort_by_cached_key(|x| x.span.start());
                 for plan in add_plans.iter() {
                     target_sql.insert_str(plan.span.end() + offset, &plan.target);
                     offset += plan.target.len();
-                    rewrite_changes.entry(query_id).or_insert(vec![]).push(plan.target_meta.clone());
+                    rewrite_changes
+                        .entry(query_id)
+                        .or_insert(vec![])
+                        .push(plan.target_meta.clone());
                 }
 
-                let mut replace_plans = plans.iter().filter(|x| x.query_id == query_id && x.action == ChangePlanAction::Replace && x.typ == ChangePlanTyp::Table).collect::<Vec<_>>();
+                let mut replace_plans = plans
+                    .iter()
+                    .filter(|x| {
+                        x.query_id == query_id
+                            && x.action == ChangePlanAction::Replace
+                            && x.typ == ChangePlanTyp::Table
+                    })
+                    .collect::<Vec<_>>();
                 replace_plans.sort_by_cached_key(|x| x.span.start());
 
                 for plan in replace_plans.iter() {
@@ -2056,7 +2123,10 @@ impl ShardingRewrite {
                     }
                     target_sql.insert_str(plan.span.start() + offset, &plan.target);
                     offset += plan.target.len() - plan.span.len();
-                    rewrite_changes.entry(query_id).or_insert(vec![]).push(plan.target_meta.clone());
+                    rewrite_changes
+                        .entry(query_id)
+                        .or_insert(vec![])
+                        .push(plan.target_meta.clone());
                 }
             }
 
@@ -2075,8 +2145,8 @@ impl ShardingRewrite {
         let output = ShardingRewriteOutput1 {
             results: rewrite_outputs,
             sharding_column: None,
-            min_max_fields: vec![],
-            count_field: None,
+            min_max_fields: IndexMap::new(),
+            count_field: Self::get_count_field1(fields),
         };
 
         println!("sharding columns {:#?}", output);
@@ -2242,7 +2312,7 @@ mod test {
     fn test_database_table_sharding_strategy() {
         let config = get_database_table_sharding_config();
         //let raw_sql = "SELECT user_id,avg(tt) FROM db.tshard where idx > 3 group by idx order by idx";
-        let raw_sql = "SELECT user_id, avg(tt), avg(oid),user_id FROM db.tshard where idx = (SELECT user_id, avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
+        let raw_sql = "SELECT count(user_id) as c, avg(tt), avg(oid),user_id FROM db.tshard where idx = (SELECT user_id, avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
         //let raw_sql = "SELECT idx from db.`tshard` where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
@@ -2382,7 +2452,7 @@ mod test {
         assert_eq!(
             res.into_iter().map(|x| x.target_sql).collect::<Vec<_>>(),
             vec![
-                "INSERT INTO db0.tshard(idx, tt) VALUES (12, 22), (16, 77)", 
+                "INSERT INTO db0.tshard(idx, tt) VALUES (12, 22), (16, 77)",
                 "INSERT INTO db1.tshard(idx, tt) VALUES (13, 55)"
             ]
         );
