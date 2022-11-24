@@ -273,7 +273,6 @@ impl ShardingRewrite {
             if fields.is_empty() {
                 return Err(ShardingRewriteError::FieldsIsEmpty);
             }
-
             return self.change_insert_sql(try_tables, fields, inserts);
         }
 
@@ -1063,7 +1062,6 @@ impl ShardingRewrite {
         let sql_prefix_text = &self.raw_sql[0..row_start_idx];
 
         let mut sqls = IndexMap::<(Option<u64>, Option<u64>), String>::new();
-
         match strategy_typ {
             StrategyTyp::Database => {
                 for change in changes.iter() {
@@ -1131,7 +1129,6 @@ impl ShardingRewrite {
                 }
             }
         }
-
         let outputs = sqls
             .into_iter()
             .map(|((idx, _), v)| -> Result<ShardingRewriteOutput, ShardingRewriteError> {
@@ -1148,7 +1145,6 @@ impl ShardingRewrite {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
-
         Ok(outputs)
     }
 
@@ -1173,7 +1169,6 @@ impl ShardingRewrite {
         meta_base_info: ShardingMetaBaseInfo<'b>,
     ) -> Result<Vec<ShardingIdx>, ShardingRewriteError> {
         let insert_values = Self::find_inserts(&strategy_typ, inserts, fields, &meta_base_info)?;
-
         let mut changes = vec![];
 
         match strategy_typ {
@@ -1244,15 +1239,17 @@ impl ShardingRewrite {
         table_value: Option<&String>,
         meta_base_info: &ShardingMetaBaseInfo<'b>,
     ) -> Result<(u64, u64), ShardingRewriteError> {
-        let algo = meta_base_info.algo.0.unwrap();
-        let sharding_count = meta_base_info.count.0.unwrap() as u64;
-
+        let database_sharding_algo = meta_base_info.algo.0.unwrap();
+        let table_sharding_algo = meta_base_info.algo.1.unwrap();
+        let database_sharding_count = meta_base_info.count.0.unwrap() as u64;
+        let table_sharding_count = meta_base_info.count.1.unwrap() as u64;
+        
         let db_value = db_value
             .ok_or_else(|| ShardingRewriteError::CalcShardingIdxError)?
             .parse::<u64>()
             .map_err(ShardingRewriteError::from)?;
         let db_idx = db_value
-            .calc(algo, sharding_count)
+            .calc(database_sharding_algo, database_sharding_count)
             .ok_or_else(|| ShardingRewriteError::CalcShardingIdxError)?;
 
         let table_value = table_value
@@ -1260,7 +1257,7 @@ impl ShardingRewrite {
             .parse::<u64>()
             .map_err(ShardingRewriteError::from)?;
         let table_idx = table_value
-            .calc(algo, sharding_count)
+            .calc(table_sharding_algo, table_sharding_count)
             .ok_or_else(|| ShardingRewriteError::CalcShardingIdxError)?;
 
         Ok((db_idx, table_idx))
@@ -1640,7 +1637,6 @@ impl ShardingRewrite {
         let db = table.schema.as_ref().unwrap_or_else(|| self.default_db.as_ref().unwrap());
 
         let mut target = String::with_capacity(db.len());
-
         if actual_db.is_empty() {
             target.push('`');
             target.push_str(db);
