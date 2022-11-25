@@ -109,7 +109,7 @@ SELECT COUNT(price) AS AVG_DERIVED_COUNT_00000, SUM(price) AS AVG_DERIVED_SUM_00
 
 - 在分库场景中，分片由 Pisa-Proxy 根据所配置 `actual_datanodes` 参数自动计算分片路由，分片数为 `actual_datanodes` 节点个数。
 - 在分表中，分片数由 `sharding_count` 参数决定，表示在单库中对应表的数量，Pisa-Proxy 会根据分片算法和指定的分片键计算出数据最终路由到哪个分片中。
-- 在分库分表中，需要分别配置分库策略和分表策略的分片键、分片算法。`sharding_count` 在此场景中对应在每个库中都需要创建表的数量，且表索引都要符合上述改写规则中的表索引规则。
+- 在分库分表中，需要分别配置分库策略和分表策略的分片键、分片算法。`sharding_count` 在此场景中对应在每个库中都需要创建表的数量。
 
 ## CRD 配置示例
 
