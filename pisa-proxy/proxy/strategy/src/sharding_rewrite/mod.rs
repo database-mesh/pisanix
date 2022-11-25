@@ -151,8 +151,7 @@ pub struct ShardingRewriteOutput {
 pub struct ShardingRewriteOutput1 {
     pub results: Vec<ShardingRewriteResult>,
     pub sharding_column: Option<String>,
-    pub min_max_fields: IndexMap<u8, Vec<FieldMetaIdent>>,
-    pub count_field: IndexMap<u8, Vec<FieldMetaIdent>>,
+    pub agg_fields: IndexMap<u8, Vec<FieldMetaIdent>>,
 }
 
 #[derive(Debug, Clone)]
@@ -1761,7 +1760,6 @@ impl ShardingRewrite {
             }
         }
         let target_sqls = self.change_plan_apply(fields);
-        println!("{:#?}", target_sqls);
         outputs
     }
 
@@ -2007,6 +2005,35 @@ impl ShardingRewrite {
         }
     }
 
+    fn find_min_max_fields1(
+        &self,
+        idx: &u8,
+        fields: &IndexMap<u8, Vec<FieldMeta>>,
+    ) -> Vec<FieldMetaIdent> {
+        match fields.get(idx) {
+            Some(fields) => {
+                let mut min_max_fields = vec![];
+                for f in fields.into_iter() {
+                    match f {
+                        FieldMeta::Ident(field) => match field.wrap_func {
+                            FieldWrapFunc::Min | FieldWrapFunc::Max => {
+                                min_max_fields.push(FieldMetaIdent {
+                                    span: field.span,
+                                    name: field.name.clone(),
+                                    wrap_func: field.wrap_func.clone(),
+                                })
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                }
+                min_max_fields
+            }
+
+            None => vec![],
+        }
+    }
     fn get_count_field(fields: &IndexMap<u8, Vec<FieldMeta>>) -> Option<FieldMetaIdent> {
         fields.values().find_map(|f| {
             f.iter().find_map(|x| {
@@ -2020,7 +2047,7 @@ impl ShardingRewrite {
         })
     }
 
-    fn get_count_field1(
+    fn get_agg_field1(
         fields: &IndexMap<u8, Vec<FieldMeta>>,
     ) -> IndexMap<u8, Vec<FieldMetaIdent>> {
         IndexMap::from_iter(fields.iter().filter_map(|(query_id, values)| {
@@ -2028,7 +2055,8 @@ impl ShardingRewrite {
                 .iter()
                 .filter_map(|f| {
                     if let FieldMeta::Ident(meta) = f {
-                        (meta.wrap_func == FieldWrapFunc::Count).then(|| meta.clone())
+                        let is_match = matches!(meta.wrap_func,  FieldWrapFunc::Max| FieldWrapFunc::Min |FieldWrapFunc::Count);
+                        return is_match.then(|| meta.clone())
                     } else {
                         None
                     }
@@ -2130,29 +2158,28 @@ impl ShardingRewrite {
                 }
             }
 
-            println!("{:#?}", rewrite_changes);
-            let output = ShardingRewriteResult {
+            let result = ShardingRewriteResult {
                 sharding_idx: idx.clone(),
                 changes: rewrite_changes,
                 target_sql: target_sql.clone(),
                 data_source: DataSource::None,
             };
 
-            rewrite_outputs.push(output);
+            rewrite_outputs.push(result);
             target_sqls.insert(idx.clone(), target_sql);
         }
 
         let output = ShardingRewriteOutput1 {
             results: rewrite_outputs,
             sharding_column: None,
-            min_max_fields: IndexMap::new(),
-            count_field: Self::get_count_field1(fields),
+            agg_fields: Self::get_agg_field1(fields)
         };
 
-        println!("sharding columns {:#?}", output);
-
+        println!("output => {:#?}", output);
         target_sqls
     }
+
+
 }
 
 impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
@@ -2162,7 +2189,7 @@ impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
         self.set_default_db(input.default_db);
 
         let meta = self.get_meta(&mut input.ast);
-
+        println!("meta {:#?}", meta);
         self.query_metas = meta.get_queries().clone();
         self.field_block_metas = meta.get_field_blocks().clone();
 
@@ -2218,7 +2245,7 @@ mod test {
                         database_sharding_column: "didx".to_string(),
                         table_sharding_algorithm_name: ShardingAlgorithmName::Mod,
                         table_sharding_column: "idx".to_string(),
-                        shading_count: 4,
+                        sharding_count: 4,
                     },
                 )),
             }],
@@ -2313,6 +2340,7 @@ mod test {
         let config = get_database_table_sharding_config();
         //let raw_sql = "SELECT user_id,avg(tt) FROM db.tshard where idx > 3 group by idx order by idx";
         let raw_sql = "SELECT count(user_id) as c, avg(tt), avg(oid),user_id FROM db.tshard where idx = (SELECT user_id, avg(ss) from db.tshard where idx = 3 order by idx) group by idx order by idx";
+        //let raw_sql = "UPDATE db.tshard set a=1 where idx=3";
         //let raw_sql = "SELECT idx from db.`tshard` where idx = 3 and idx = (SELECT idx from db.tshard where idx = 3)";
         let parser = Parser::new();
         let ast = parser.parse(raw_sql).unwrap();
@@ -2323,7 +2351,6 @@ mod test {
             default_db: Some("db".to_string()),
         };
         let res = sr.rewrite(input).unwrap();
-        println!("plans {:#?}", sr.change_plans);
         //let sqls = res.iter().map(|x| x.target_sql.clone()).collect::<Vec<_>>();
         //assert_eq!(sqls[0], "SELECT * FROM `db0`.tshard_00000 where idx > 3");
         //assert_eq!(sqls[1], "SELECT * FROM `db0`.tshard_00001 where idx > 3");

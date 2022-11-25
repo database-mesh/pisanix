@@ -182,7 +182,7 @@ pub struct RewriteMetaData {
     on_conds: IndexMap<u8, Vec<JoinOnCond>>,
     avgs: IndexMap<u8, Vec<AvgMeta>>,
     inserts: IndexMap<u8, Vec<InsertValsMeta>>,
-    queries: IndexMap<u8, QueryMeta>, 
+    queries: IndexMap<u8, QueryMeta>,
     field_blocks: IndexMap<u8, FieldBlockMeta>,
     query_id: u8,
     state: ScanState,
@@ -278,17 +278,19 @@ impl Transformer for RewriteMetaData {
         match node {
             Node::Query(q) => {
                 self.query_id += 1;
-                
-                self.push_query(QueryMeta {
-                    query_id: self.query_id,
-                    span: q.span,
-                })
+
+                self.push_query(QueryMeta { query_id: self.query_id, span: q.span })
             }
 
             Node::SubQuery(q) => {
                 q.visit(self);
                 self.query_id -= 1;
                 return true;
+            }
+
+            Node::UpdateStmt(stmt) => {
+                self.query_id += 1;
+                self.push_query(QueryMeta { query_id: self.query_id, span: stmt.span })
             }
 
             Node::SingleTable(t) => {
@@ -314,13 +316,10 @@ impl Transformer for RewriteMetaData {
                 self.state = ScanState::Field(None);
                 for item in t.items.iter() {
                     match item {
-                        Item::TableWild(val) => {
-                            self.push_field(FieldMeta::TableWild(val.clone()))
-                        }
+                        Item::TableWild(val) => self.push_field(FieldMeta::TableWild(val.clone())),
                         _ => {}
                     }
                 }
-                
             }
 
             Node::ItemExpr(item) => {
