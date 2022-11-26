@@ -1215,12 +1215,6 @@ impl ShardingRewrite {
             let db_sharding_column = t.1.get_sharding_column().0.map(|x| x.to_string());
             let sharding_count = t.1.get_sharding_count().1.unwrap() as u64;
 
-            //let actual_nodes = if let DatabaseTableStrategyPart::Database(idx) = part {
-            //    vec![t.1.actual_datanodes[idx].clone()]
-            //} else {
-            //    t.1.actual_datanodes.clone()
-            //};
-
             let (actual_nodes, db_idx) = match part {
                 DatabaseTableStrategyPart::Database(idx) | DatabaseTableStrategyPart::DatabaseTable(idx, _) => {
                     (vec![t.1.actual_datanodes[idx].clone()], Some(idx))
@@ -1233,18 +1227,20 @@ impl ShardingRewrite {
                 let _ = self.change_table(t.2, &ep.db, 0);
                 let table =
                     TableIdent { span: t.2.span, schema: Some(ep.db), name: t.2.name.clone() };
-                let data_source = self.gen_data_source(&t.1, db_idx.unwrap_or_else(|| node_idx)).unwrap();
+                
+                let db_idx = db_idx.unwrap_or_else(|| node_idx);
+                let data_source = self.gen_data_source(&t.1, db_idx).unwrap();
 
-                let table_idx = match part {
+                let sharding_range = match part {
                     DatabaseTableStrategyPart::Table(idx) | DatabaseTableStrategyPart::DatabaseTable(_, idx) => {
-                        Some(idx)
+                        idx .. idx + 1
                     },
 
-                    _ => { None }
+                    _ => { 0 .. sharding_count as usize }
                 };
 
-                if let Some(idx) = table_idx {
-                    let target = self.change_table(&table, "", idx as u64);
+                for table_idx in sharding_range {
+                    let target = self.change_table(&table, "", table_idx as u64);
                     let change_plan = ChangePlan {
                         query_id: t.0,
                         target: target.clone(),
@@ -1254,17 +1250,15 @@ impl ShardingRewrite {
                         target_meta: ChangeTargetMeta::Table(target.clone()),
                     };
 
-                    let ds_sharding_idx =
-                        DataSourceShardingIdx { 
-                            idx: ShardingIdx { database: Some(node_idx as u64), table: Some(idx as u64) },
-                            ds: data_source.clone()
-                        };
+                    let ds_sharding_idx = DataSourceShardingIdx {
+                        idx: ShardingIdx { database: Some(db_idx as u64), table: Some(table_idx as u64) },
+                        ds: data_source.clone()
+                    };
 
                     self.change_plans
                         .entry(ds_sharding_idx.clone())
                         .or_insert(vec![])
                         .push(change_plan);
-                    //self.change_plans.entry(idx as u64).or_insert(vec![]).push(change_plan);
                     let _ = self.change_order_group1(
                         t.0,
                         orders.get(&t.0),
@@ -1272,38 +1266,8 @@ impl ShardingRewrite {
                         fields.get(&t.0),
                         &ds_sharding_idx,
                     );
+
                     self.change_avg1(t.0, avgs.get(&t.0), &ds_sharding_idx, 0);
-                } else {
-                    for table_idx in 0..sharding_count {
-                        let target = self.change_table(&table, "", table_idx);
-                        let change_plan = ChangePlan {
-                            query_id: t.0,
-                            target: target.clone(),
-                            span: t.2.span,
-                            action: ChangePlanAction::Replace,
-                            typ: ChangePlanTyp::Table,
-                            target_meta: ChangeTargetMeta::Table(target.clone()),
-                        };
-
-                        let ds_sharding_idx = DataSourceShardingIdx {
-                            idx: ShardingIdx { database: Some(node_idx as u64), table: Some(table_idx) },
-                            ds: data_source.clone()
-                        };
-
-                        self.change_plans
-                            .entry(ds_sharding_idx.clone())
-                            .or_insert(vec![])
-                            .push(change_plan);
-                        let _ = self.change_order_group1(
-                            t.0,
-                            orders.get(&t.0),
-                            groups.get(&t.0),
-                            fields.get(&t.0),
-                            &ds_sharding_idx,
-                        );
-
-                        self.change_avg1(t.0, avgs.get(&t.0), &ds_sharding_idx, 0);
-                    }
                 }
             }
         }
