@@ -295,15 +295,18 @@ impl Transformer for RewriteMetaData {
                 self.push_query(QueryMeta { query_id: self.query_id, span: stmt.span })
             }
 
+            Node::DeleteStmt(stmt) => {
+                self.query_id += 1;
+                self.push_query(QueryMeta { query_id: self.query_id, span: stmt.span });
+                if let Some(table) = &stmt.table_name {
+                    self.push_table(table.clone());
+                }
+            }
+            
             Node::SingleTable(t) => {
                 self.push_table(t.table_name.clone());
             }
 
-            Node::DeleteStmt(t) => {
-                if let Some(table) = &t.table_name {
-                    self.push_table(table.clone());
-                }
-            }
 
             Node::FromClause(_) => {
                 self.state = ScanState::TableName;
