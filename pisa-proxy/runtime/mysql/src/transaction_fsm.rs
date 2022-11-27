@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use conn_pool::{Pool, PoolConn};
 use endpoint::endpoint::Endpoint;
+use indexmap::IndexMap;
 use mysql_parser::ast::SqlStmt;
 use mysql_protocol::{
     client::conn::{ClientConn, SessionAttr},
@@ -26,7 +27,7 @@ use pisa_error::error::{Error, ErrorKind};
 use strategy::{
     rewrite::{ShardingRewriteInput, ShardingRewriter},
     route::{BoxError, Route, RouteInput, RouteStrategy, RouteInputTyp},
-    sharding_rewrite::{DataSource, ShardingRewriteOutput},
+    sharding_rewrite::{DataSource, ShardingRewriteOutput, ShardingRewriteResult, DataSourceShardingIdx, ShardingIdx, ShardingColumn},
 };
 use tracing::debug;
 
@@ -89,7 +90,7 @@ pub fn query_rewrite(
     ast: SqlStmt,
     default_db: Option<String>,
     can_rewrite: bool,
-) -> Result<Vec<ShardingRewriteOutput>, BoxError> {
+) -> Result<ShardingRewriteOutput, BoxError> {
     if can_rewrite{
         let outputs = rewriter.rewrite(
         ShardingRewriteInput { 
@@ -98,26 +99,30 @@ pub fn query_rewrite(
             default_db,
         })?;
 
-        if !outputs.is_empty() {
+        if !outputs.results.is_empty() {
             return Ok(outputs)
         }
     }
 
-
     let endpoints = rewriter.get_endpoints();
-    let outputs = endpoints
-        .iter()
-        .map(|x| ShardingRewriteOutput {
-            changes: vec![],
-            target_sql: raw_sql.clone(),
-            data_source: strategy::sharding_rewrite::DataSource::Endpoint(x.clone()),
-            sharding_column: None,
-            min_max_fields: vec![],
-            count_field: None,
-        })
-        .collect::<Vec<_>>();
-
-    Ok(outputs)
+    let results = endpoints.iter().map(|ep| {
+        ShardingRewriteResult {
+            ds_idx: DataSourceShardingIdx {
+                ds: DataSource::Endpoint(ep.clone()),
+                idx: ShardingIdx::default(),
+                column: ShardingColumn::default(),
+            },
+            changes: IndexMap::new(),
+            target_sql: raw_sql.to_string(),
+        }
+    }).collect::<Vec<_>>();
+    
+    Ok(
+        ShardingRewriteOutput {
+            results,
+            agg_fields: IndexMap::new(),
+        }
+    )
 }
 
 
@@ -143,11 +148,11 @@ pub fn route_sharding(
     input_typ: RouteInputTyp,
     raw_sql: &str,
     strategy: Arc<parking_lot::Mutex<RouteStrategy>>,
-    rewrite_outputs: &mut Vec<ShardingRewriteOutput>,
+    rewrite_outputs: &mut ShardingRewriteOutput,
 ) {
     let mut strategy = strategy.lock();
-    for o in rewrite_outputs.iter_mut() {
-        match &o.data_source {
+    for o in rewrite_outputs.results.iter_mut() {
+        match &o.ds_idx.ds {
             // sharding only
             DataSource::Endpoint(ep) => {
                 let _input = match input_typ {
@@ -171,7 +176,7 @@ pub fn route_sharding(
                 let dispatch_res = strategy.dispatch(&input).unwrap();
                 debug!("route_strategy rw + sharding to {:?} for input typ: {:?}, sql: {:?}", dispatch_res, input_typ, raw_sql);
                 // reassign data_source, type should is DataSource::Endpoint
-                o.data_source = DataSource::Endpoint(dispatch_res.0.unwrap());
+                o.ds_idx.ds = DataSource::Endpoint(dispatch_res.0.unwrap());
             }
             _ => unreachable!(),
         }

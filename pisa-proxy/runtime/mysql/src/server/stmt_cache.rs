@@ -15,6 +15,7 @@
 use conn_pool::PoolConn;
 use indexmap::IndexMap;
 use mysql_protocol::client::conn::ClientConn;
+use strategy::sharding_rewrite::ShardingColumn;
 
 #[derive(Debug)]
 struct Entry {
@@ -26,7 +27,7 @@ struct Entry {
 pub struct StmtCache {
     // key is generated id by pisa, value is returnd stmt id from client
     cache: IndexMap<u32, Vec<Entry>>,
-    sharding_column_cache: IndexMap<u32, Option<String>>
+    sharding_column_cache: IndexMap<u32, ShardingColumn>
 }
 
 impl StmtCache {
@@ -94,16 +95,16 @@ impl StmtCache {
         self.cache.remove(&server_stmt_id);
     }
 
-    pub fn put_sharding_column(&mut self, server_stmt_id: u32, sharding_column: Option<String>) {
+    pub fn put_sharding_column(&mut self, server_stmt_id: u32, sharding_column: ShardingColumn) {
         let _ = self.sharding_column_cache.insert(server_stmt_id, sharding_column);
     }
 
-    pub fn get_sharding_column(&mut self, server_stmt_id: u32) -> Option<String> {
+    pub fn get_sharding_column(&mut self, server_stmt_id: u32) -> ShardingColumn  {
         let name = self.sharding_column_cache.get(&server_stmt_id);
         if let Some(name) = name {
             name.clone()
         } else {
-            None
+            ShardingColumn::default()
         }
     }
 }

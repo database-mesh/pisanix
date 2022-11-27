@@ -86,7 +86,7 @@ impl CalcShardingIdx<f64> for f64 {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct ShardingRewriteOutput1 {
+pub struct ShardingRewriteOutput {
     pub results: Vec<ShardingRewriteResult>,
     pub agg_fields: IndexMap<u8, Vec<FieldMetaIdent>>,
 }
@@ -135,14 +135,21 @@ enum ChangePlanTyp {
 #[derive(Debug, Clone)]
 pub enum ChangeTargetMeta {
     Table(String),
-    Avg { count_field: String, sum_field: String },
+    Avg(AvgChange),
     OrderGroup { order_fields: Vec<String>, group_fields: Vec<String> },
+}
+
+#[derive(Debug, Clone)]
+pub struct AvgChange {
+    pub count_field: String,
+    pub sum_field: String,
+    pub ori_field: String,
 }
 
 #[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
 pub struct ShardingColumn {
-    database: Option<String>,
-    table: Option<String>,
+    pub database: Option<String>,
+    pub table: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -209,17 +216,17 @@ struct InsertRowValueIdx {
     span: mysql_parser::Span,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
 pub struct ShardingIdx {
-    database: Option<u64>,
-    table: Option<u64>,
+    pub database: Option<u64>,
+    pub table: Option<u64>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct DataSourceShardingIdx {
-    ds: DataSource,
-    idx: ShardingIdx,
-    column: ShardingColumn,
+    pub ds: DataSource,
+    pub idx: ShardingIdx,
+    pub column: ShardingColumn,
 }
 
 #[derive(Debug)]
@@ -235,11 +242,6 @@ enum DatabaseTableStrategyPart {
     Table(usize),
     DatabaseTable(usize, usize),
     All,
-}
-
-pub enum OrderGroupChange {
-    Order(OrderMeta),
-    Group(GroupMeta),
 }
 
 impl ShardingRewrite {
@@ -278,7 +280,7 @@ impl ShardingRewrite {
         &mut self,
         meta: RewriteMetaData,
         try_tables: Vec<(u8, Sharding, &TableIdent)>,
-    ) -> Result<ShardingRewriteOutput1, ShardingRewriteError> {
+    ) -> Result<ShardingRewriteOutput, ShardingRewriteError> {
         get_meta_detail!(meta, wheres, inserts, fields, avgs, orders, groups);
         if !inserts.is_empty() {
             if fields.is_empty() {
@@ -349,7 +351,7 @@ impl ShardingRewrite {
         &mut self,
         meta: RewriteMetaData,
         try_tables: Vec<(u8, Sharding, &TableIdent)>,
-    ) -> Result<ShardingRewriteOutput1, ShardingRewriteError> {
+    ) -> Result<ShardingRewriteOutput, ShardingRewriteError> {
         get_meta_detail!(meta, wheres, inserts, fields, avgs, orders, groups);
         if !inserts.is_empty() {
             if fields.is_empty() {
@@ -383,7 +385,7 @@ impl ShardingRewrite {
         &mut self,
         meta: RewriteMetaData,
         try_tables: Vec<(u8, Sharding, &TableIdent)>,
-    ) -> Result<ShardingRewriteOutput1, ShardingRewriteError> {
+    ) -> Result<ShardingRewriteOutput, ShardingRewriteError> {
         get_meta_detail!(meta, wheres, inserts, fields, avgs, orders, groups);
 
         if !inserts.is_empty() {
@@ -766,10 +768,11 @@ impl ShardingRewrite {
                 span: avg_meta.span,
                 action: ChangePlanAction::Replace,
                 typ: ChangePlanTyp::Field,
-                target_meta: ChangeTargetMeta::Avg {
+                target_meta: ChangeTargetMeta::Avg( AvgChange {
                     count_field: target_count_as,
                     sum_field: target_sum_as,
-                },
+                    ori_field: avg_meta.avg_field_name.clone(),
+                }),
             };
 
             self.change_plans.entry(ds_sharding_idx.clone()).or_insert(vec![]).push(change_plan);
@@ -781,7 +784,7 @@ impl ShardingRewrite {
         try_tables: Vec<(u8, Sharding, &TableIdent)>,
         fields: &IndexMap<u8, Vec<FieldMeta>>,
         inserts: &IndexMap<u8, Vec<InsertValsMeta>>,
-    ) -> Result<ShardingRewriteOutput1, ShardingRewriteError> {
+    ) -> Result<ShardingRewriteOutput, ShardingRewriteError> {
         let results = try_tables
             .into_iter()
             .map(|(query_id, rule, table)| {
@@ -818,7 +821,7 @@ impl ShardingRewrite {
             .flatten()
             .collect::<Vec<_>>();
         
-        Ok(ShardingRewriteOutput1 { results, agg_fields: IndexMap::new() })
+        Ok(ShardingRewriteOutput { results, agg_fields: IndexMap::new() })
 
     }
 
@@ -1142,7 +1145,7 @@ impl ShardingRewrite {
         fields: &IndexMap<u8, Vec<FieldMeta>>,
         orders: &IndexMap<u8, Vec<OrderMeta>>,
         groups: &IndexMap<u8, Vec<GroupMeta>>,
-    ) -> ShardingRewriteOutput1 {
+    ) -> ShardingRewriteOutput {
         for t in tables.iter() {
             let sharding_column = t.1.get_sharding_column();
             let sharding_count = t.1.get_sharding_count().1.unwrap() as u64;
@@ -1215,7 +1218,7 @@ impl ShardingRewrite {
         fields: &IndexMap<u8, Vec<FieldMeta>>,
         orders: &IndexMap<u8, Vec<OrderMeta>>,
         groups: &IndexMap<u8, Vec<GroupMeta>>,
-    ) -> ShardingRewriteOutput1  {
+    ) -> ShardingRewriteOutput  {
         for t in tables.iter() {
             let sharding_column = Some(t.1.get_sharding_column().0.unwrap().to_string());
 
@@ -1273,7 +1276,7 @@ impl ShardingRewrite {
         fields: &IndexMap<u8, Vec<FieldMeta>>,
         orders: &IndexMap<u8, Vec<OrderMeta>>,
         groups: &IndexMap<u8, Vec<GroupMeta>>,
-    ) -> ShardingRewriteOutput1 {
+    ) -> ShardingRewriteOutput {
         for t in tables.iter() {
             let data_source = self.gen_data_source(&t.1, 0).unwrap();
             let sharding_column = Some(t.1.get_sharding_column().1.unwrap().to_string());
@@ -1404,7 +1407,7 @@ impl ShardingRewrite {
     fn change_plan_apply(
         &mut self,
         fields: &IndexMap<u8, Vec<FieldMeta>>,
-    ) -> ShardingRewriteOutput1 {
+    ) -> ShardingRewriteOutput {
         let query_length = self.query_metas.len() as u8;
 
         let mut target_sqls = IndexMap::<_, _>::new();
@@ -1489,7 +1492,7 @@ impl ShardingRewrite {
             target_sqls.insert(ds_idx.idx.clone(), target_sql);
         }
 
-        let output = ShardingRewriteOutput1 {
+        let output = ShardingRewriteOutput {
             results: rewrite_outputs,
             agg_fields: Self::get_agg_field1(fields)
         };
@@ -1501,7 +1504,7 @@ impl ShardingRewrite {
 }
 
 impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
-    type Output = Result<ShardingRewriteOutput1, ShardingRewriteError>;
+    type Output = Result<ShardingRewriteOutput, ShardingRewriteError>;
     fn rewrite(&mut self, mut input: ShardingRewriteInput) -> Self::Output {
         self.set_raw_sql(input.raw_sql);
         self.set_default_db(input.default_db);
@@ -1514,7 +1517,7 @@ impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
         let try_tables = self.find_table_rule(&tables);
 
         if try_tables.is_empty() {
-            return Ok(ShardingRewriteOutput1::default());
+            return Ok(ShardingRewriteOutput::default());
         }
 
         self.change_plans.clear();
@@ -1529,7 +1532,7 @@ impl ShardingRewriter<ShardingRewriteInput> for ShardingRewrite {
             return self.database_table_strategy(meta, try_tables);
         }
 
-        return Ok(ShardingRewriteOutput1::default());
+        return Ok(ShardingRewriteOutput::default());
     }
 }
 

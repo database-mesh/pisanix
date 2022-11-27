@@ -18,7 +18,8 @@ use std::{
     vec,
 };
 
-use bytes::{BytesMut, BufMut, Buf};
+use byteorder::{ByteOrder, LittleEndian};
+use bytes::BytesMut;
 use conn_pool::{Pool, PoolConn};
 use futures::{stream::FuturesOrdered, SinkExt, StreamExt};
 use mysql_protocol::{
@@ -27,27 +28,23 @@ use mysql_protocol::{
         conn::{ClientConn, SessionAttr},
         stmt::Stmt,
     },
-    column::{ColumnInfo, decode_column},
+    column::{decode_column, ColumnInfo},
     err::ProtocolError,
     mysql_const::*,
-    row::{RowData, RowDataBinary, RowDataText, RowDataTyp, decode_with_name, RowPartData},
+    row::{decode_with_name, RowData, RowDataBinary, RowDataText, RowDataTyp, RowPartData},
     server::codec::{make_eof_packet, CommonPacket, PacketSend},
     util::{length_encode_int, BufMutExt},
 };
 use pisa_error::error::{Error, ErrorKind};
 use rayon::prelude::*;
-use strategy::sharding_rewrite::{DataSource, ShardingRewriteOutput, RewriteChange, meta::FieldWrapFunc, rewrite_const::{AVG_COUNT, AVG_SUM}};
+use strategy::sharding_rewrite::{
+    meta::FieldWrapFunc, ChangeTargetMeta, DataSource, ShardingColumn, ShardingRewriteOutput,
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{
-    mysql::ReqContext,
-    transaction_fsm::check_get_conn,
-};
-
-use byteorder::{ByteOrder, LittleEndian};
-
 use super::util::filter_avg_column;
+use crate::{mysql::ReqContext, transaction_fsm::check_get_conn};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecuteError {
@@ -106,7 +103,7 @@ where
 
         let mut merge_stream = MergeStream::new(shard_streams, shards_length);
 
-        let sharding_column = req.rewrite_outputs[0].sharding_column.clone();
+        let sharding_column = req.rewrite_outputs.results[0].ds_idx.column.clone();
         Self::handle_shard_resultset(req, &mut merge_stream, sharding_column, false).await?;
 
         if let Some(id) = curr_server_stmt_id {
@@ -122,7 +119,7 @@ where
     async fn handle_shard_resultset<'a>(
         req: &mut ReqContext<T, C>,
         merge_stream: &mut MergeStream<ResultsetStream<'a>>,
-        sharding_column: Option<String>,
+        sharding_column: ShardingColumn,
         is_binary: bool,
     ) -> Result<(), Error> {
         let header = merge_stream.next().await;
@@ -146,19 +143,21 @@ where
 
         let mut buf = BytesMut::with_capacity(1 << 16);
 
-        let ro = &req.rewrite_outputs[0];
+        let ro = &req.rewrite_outputs.results[0];
         let avg_change = ro.changes.iter().find_map(|x| {
-            if let RewriteChange::AvgChange(change) = x {
-                Some(change)
-            } else {
-                None
-            }
+            x.1.iter().find_map(|meta| {
+                if let ChangeTargetMeta::Avg { .. } = meta {
+                    Some(meta.clone())
+                } else {
+                    None
+                }
+            })
         });
 
         if let Some(_) = avg_change {
             header[4] = header[4] - 1;
         }
-        
+
         let _ = req
             .framed
             .codec_mut()
@@ -176,7 +175,8 @@ where
 
         merge_stream.set_state(MergeResultsetState::Row);
         // get rows
-        Self::get_rows(req, merge_stream, &mut buf, sharding_column, column_update, is_binary).await?;
+        Self::get_rows(req, merge_stream, &mut buf, sharding_column, column_update, is_binary)
+            .await?;
 
         let _ = req
             .framed
@@ -191,7 +191,7 @@ where
         req: &mut ReqContext<T, C>,
         stream: &mut MergeStream<ResultsetStream<'a>>,
         buf: &mut BytesMut,
-        sharding_column: Option<String>,
+        sharding_column: ShardingColumn,
         column_update: ColumnUpdate,
         is_binary: bool,
     ) -> Result<(), Error> {
@@ -201,61 +201,94 @@ where
                 RowDataTyp::Text(row_data_text)
             }
             true => {
-                let row_data_binary = RowDataBinary::new(column_update.ori_columns.clone(), &[][..]);
+                let row_data_binary =
+                    RowDataBinary::new(column_update.ori_columns.clone(), &[][..]);
                 RowDataTyp::Binary(row_data_binary)
             }
         };
 
         while let Some(chunk) = stream.next().await {
             let mut chunk = chunk
-                .into_par_iter().map(|x| x.unwrap()).collect::<Result<Vec<_>, _>>().map_err(ErrorKind::from)?;
-            
-            let ro = &req.rewrite_outputs[0];
-            Self::handle_min_max(ro, &mut chunk, row_data.clone(), is_binary)?;
+                .into_par_iter()
+                .map(|x| x.unwrap())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(ErrorKind::from)?;
 
-            let avg_change = ro.changes.iter().find_map(|x| {
-                if let RewriteChange::AvgChange(change) = x {
-                    Some(change)
-                } else {
-                    None
-                }
+            for i in chunk.iter() {
+                println!("or min_max {:?}", &i[..]);
+            }
+
+            let ro = &req.rewrite_outputs;
+            Self::handle_min_max(ro, &mut chunk, row_data.clone(), is_binary)?;
+            for i in chunk.iter() {
+                println!("min_max {:?}", &i[..]);
+            }
+
+            let avg_change = ro.results[0].changes.iter().find_map(|x| {
+                x.1.iter().find_map(|meta| {
+                    if let ChangeTargetMeta::Avg(change) = meta {
+                        Some(change)
+                    } else {
+                        None
+                    }
+                })
             });
 
             if let Some(avg) = avg_change {
-                let count_field = avg.target.get(AVG_COUNT).unwrap();
-                let sum_field = avg.target.get(AVG_SUM).unwrap();
-
-                let (count_data, sum_data): (Vec<_>, Vec<_>) = chunk.par_iter().map(|x| -> Result<(u64, u64), Error> {
-                    let mut row_data = row_data.clone();
-                    row_data.with_buf(&x[4..]);
-                    let count = decode_with_name::<&[u8], u64>(&mut row_data, &count_field, is_binary).map_err(|e| ErrorKind::Runtime(e))?.unwrap_or_else(|| 0);
-                    // Sum type is `MYSQL_TYPE_NEWDECIMAL` in binary, so need to convet to `String` type.
-                    let sum = if is_binary {
-                        let sum = decode_with_name::<&[u8], String>(&mut row_data, &sum_field, is_binary).map_err(|e| ErrorKind::from(e))?;
-                        if let Some(sum) = sum {
-                            sum.parse::<u64>().map_err(|e| ErrorKind::Runtime(e.into()))?
+                let (count_data, sum_data): (Vec<_>, Vec<_>) = chunk
+                    .par_iter()
+                    .map(|x| -> Result<(u64, u64), Error> {
+                        let mut row_data = row_data.clone();
+                        row_data.with_buf(&x[4..]);
+                        let count = decode_with_name::<&[u8], u64>(
+                            &mut row_data,
+                            &avg.count_field,
+                            is_binary,
+                        )
+                        .map_err(|e| ErrorKind::Runtime(e))?
+                        .unwrap_or_else(|| 0);
+                        // Sum type is `MYSQL_TYPE_NEWDECIMAL` in binary, so need to convet to `String` type.
+                        let sum = if is_binary {
+                            let sum = decode_with_name::<&[u8], String>(
+                                &mut row_data,
+                                &avg.sum_field,
+                                is_binary,
+                            )
+                            .map_err(|e| ErrorKind::from(e))?;
+                            if let Some(sum) = sum {
+                                sum.parse::<u64>().map_err(|e| ErrorKind::Runtime(e.into()))?
+                            } else {
+                                0
+                            }
                         } else {
-                            0
-                        }
-                    } else {
-                        decode_with_name::<&[u8], u64>(&mut row_data, &sum_field, is_binary).map_err(|e| ErrorKind::Runtime(e))?.unwrap_or_else(|| 0)
-                    };
-                    
-                    Ok((count, sum))
-                }).collect::<Result<Vec<_>, _>>()?.par_iter().cloned().unzip();
+                            decode_with_name::<&[u8], u64>(&mut row_data, &avg.sum_field, is_binary)
+                                .map_err(|e| ErrorKind::Runtime(e))?
+                                .unwrap_or_else(|| 0)
+                        };
+
+                        Ok((count, sum))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .par_iter()
+                    .cloned()
+                    .unzip();
 
                 let count: u64 = count_data.par_iter().sum();
                 let sum: u64 = sum_data.par_iter().sum();
+                println!("count {:?}, sum {:?}", count, sum);
 
                 chunk.par_iter_mut().for_each(|x| {
                     let mut row_data = row_data.clone();
                     row_data.with_buf(&x[4..]);
-                    let count_data = row_data.get_row_data_with_name(count_field).unwrap().unwrap();
-                    let sum_data = row_data.get_row_data_with_name(sum_field).unwrap().unwrap();
+                    let count_data =
+                        row_data.get_row_data_with_name(&avg.count_field).unwrap().unwrap();
+                    let sum_data =
+                        row_data.get_row_data_with_name(&avg.sum_field).unwrap().unwrap();
                     let part_data = RowPartData {
                         data: vec![].into(),
                         start_idx: count_data.start_idx,
-                        part_encode_length: count_data.part_encode_length + sum_data.part_encode_length,
+                        part_encode_length: count_data.part_encode_length
+                            + sum_data.part_encode_length,
                         part_data_length: count_data.part_data_length + sum_data.part_data_length,
                     };
 
@@ -275,30 +308,52 @@ where
                         .encode(PacketSend::EncodeOffset(chunk[0][4..].into(), buf.len()), buf);
                     return Ok(());
                 }
-                
+
                 row_data = match is_binary {
                     false => {
-                        let row_data_text = RowDataText::new(column_update.new_columns.clone(), &[][..]);
+                        let row_data_text =
+                            RowDataText::new(column_update.new_columns.clone(), &[][..]);
                         RowDataTyp::Text(row_data_text)
                     }
                     true => {
-                        let row_data_binary = RowDataBinary::new(column_update.new_columns.clone(), &[][..]);
+                        let row_data_binary =
+                            RowDataBinary::new(column_update.new_columns.clone(), &[][..]);
                         RowDataTyp::Binary(row_data_binary)
                     }
                 };
             }
 
-            if let Some(count_field) = &ro.count_field {
-                let count_sum = chunk.par_iter().map(|x| {
-                    let mut row_data = row_data.clone();
-                    row_data.with_buf(&x[4..]);
-                    decode_with_name::<&[u8], u64>(&mut row_data, &count_field.name, is_binary).unwrap().unwrap()
-                }).sum::<u64>();
+            let count_field = ro.agg_fields.iter().find_map(|x| {
+                x.1.iter().find_map(|meta| {
+                    if meta.wrap_func == FieldWrapFunc::Count {
+                        Some(meta)
+                    } else {
+                        None
+                    }
+                })
+            });
+
+            if let Some(count_field) = count_field {
+                let count_sum = chunk
+                    .par_iter()
+                    .map(|x| {
+                        let mut row_data = row_data.clone();
+                        row_data.with_buf(&x[4..]);
+                        println!("count x {:?}", &x[4..]);
+                        decode_with_name::<&[u8], u64>(&mut row_data, &count_field.name, is_binary)
+                            .unwrap()
+                            .unwrap()
+                    })
+                    .sum::<u64>();
+                println!("count_sun {:?}", count_sum);
 
                 let chunk_data = &chunk[0];
                 let mut row_data = row_data.clone();
                 row_data.with_buf(&chunk_data[4..]);
-                let row_part_data = row_data.get_row_data_with_name(&count_field.name).map_err(|e| ErrorKind::Runtime(e))?.unwrap();
+                let row_part_data = row_data
+                    .get_row_data_with_name(&count_field.name)
+                    .map_err(|e| ErrorKind::Runtime(e))?
+                    .unwrap();
                 chunk.par_iter_mut().for_each(|x| {
                     row_data_cut_merge(x, &row_part_data, |data: &mut BytesMut| {
                         if is_binary {
@@ -312,30 +367,34 @@ where
                 });
             }
 
-            if let Some(name) = &sharding_column {
-                if let Some(_) = column_update.ori_columns.iter().find(|col_info| col_info.column_name.eq(name)) {
+            if let Some(name) = &sharding_column.table {
+                if let Some(_) =
+                    column_update.ori_columns.iter().find(|col_info| col_info.column_name.eq(name))
+                {
                     chunk.par_sort_by_cached_key(|x| {
                         let mut row_data = row_data.clone();
                         row_data.with_buf(&x[4..]);
                         if is_binary {
                             row_data.decode_with_name::<u64>(&name).unwrap().unwrap()
                         } else {
-                            let value = row_data.decode_with_name::<String>(&name).unwrap().unwrap();
+                            let value =
+                                row_data.decode_with_name::<String>(&name).unwrap().unwrap();
                             value.parse::<u64>().unwrap()
                         }
                     })
                 }
             }
 
-            if chunk.par_iter().map(|x| &x[4..]).min() == chunk.par_iter().map(|x| &x[4..]).max() {
+            if chunk.par_iter().min() == chunk.par_iter().max() {
                 let _ = req
                     .framed
                     .codec_mut()
                     .encode(PacketSend::EncodeOffset(chunk[0][4..].into(), buf.len()), buf);
-                return Ok(())
+                return Ok(());
             }
 
             for row in chunk.iter() {
+                println!("end row {:?}", &row[..]);
                 let _ = req
                     .framed
                     .codec_mut()
@@ -345,39 +404,43 @@ where
 
         Ok(())
     }
-    
-    fn handle_min_max(ro: &ShardingRewriteOutput, chunk: &mut [BytesMut], row_data: RowDataTyp<&[u8]>, is_binary: bool) -> Result<(), Error> {
-        for (_, mmf) in ro.min_max_fields.iter().enumerate() {
-            match mmf.wrap_func {
+
+    fn handle_min_max(
+        ro: &ShardingRewriteOutput,
+        chunk: &mut [BytesMut],
+        row_data: RowDataTyp<&[u8]>,
+        is_binary: bool,
+    ) -> Result<(), Error> {
+        let default_agg_fields = vec![];
+        let agg_fields = ro.agg_fields.get(&1).unwrap_or_else(|| &default_agg_fields);
+        for agg in agg_fields.iter() {
+            match agg.wrap_func {
                 FieldWrapFunc::Max => {
                     chunk.par_sort_unstable_by(|a, b| {
                         let mut row_data = row_data.clone();
-                        let (a, b) = get_min_max_value(&mut row_data, is_binary, &mmf.name, a, b);       
+                        let (a, b) = get_min_max_value(&mut row_data, is_binary, &agg.name, a, b);
                         b.cmp(&a)
                     });
                 }
                 FieldWrapFunc::Min => {
                     chunk.par_sort_unstable_by(|a, b| {
                         let mut row_data = row_data.clone();
-                        let (a, b) = get_min_max_value(&mut row_data, is_binary, &mmf.name, a, b);       
+                        let (a, b) = get_min_max_value(&mut row_data, is_binary, &agg.name, a, b);
                         a.cmp(&b)
                     });
-
                 }
-                _ => break
+                _ => {}
             }
 
             let chunk_data = &chunk[0];
-            let ori_row_data = row_data.clone();
             let mut row_data = row_data.clone();
             row_data.with_buf(&chunk_data[4..]);
-            let row_part_data = row_data.get_row_data_with_name(&mmf.name).map_err(|e| ErrorKind::Runtime(e))?.unwrap();
+            let row_part_data = row_data
+                .get_row_data_with_name(&agg.name)
+                .map_err(|e| ErrorKind::Runtime(e))?
+                .unwrap();
             chunk.par_iter_mut().for_each(|x| {
-                let mut row_data = ori_row_data.clone();
-                row_data.with_buf(&x[4..]);
-                let ori_row_part_data = row_data.get_row_data_with_name(&mmf.name).unwrap().unwrap();
-
-                row_data_cut_merge(x, &ori_row_part_data, |data: &mut BytesMut| {
+                row_data_cut_merge(x, &row_part_data, |data: &mut BytesMut| {
                     if is_binary {
                         data.extend_from_slice(&row_part_data.data);
                     } else {
@@ -401,17 +464,19 @@ where
         let mut new_columns = Vec::with_capacity(32);
         let mut idx: Option<usize> = None;
 
-        let ro = &req.rewrite_outputs[0];
+        let ro = &req.rewrite_outputs.results[0];
         let avg_change = ro.changes.iter().find_map(|x| {
-            if let RewriteChange::AvgChange(change) = x {
-                Some(change)
-            } else {
-                None
-            }
+            x.1.iter().find_map(|meta| {
+                if let ChangeTargetMeta::Avg(change) = meta {
+                    Some(change)
+                } else {
+                    None
+                }
+            })
         });
 
         //let mut avg_column_buf = Vec::with_capacity(128);
-        let mut is_added_avg_column  = false;
+        let mut is_added_avg_column = false;
 
         for _ in 0..column_length {
             let data = stream.next().await;
@@ -450,7 +515,7 @@ where
                             .encode(PacketSend::EncodeOffset(filter_res.0.into(), buf.len()), buf);
                         new_columns.push(avg_column)
                     }
-                    
+
                     is_added_avg_column = true;
                     continue;
                 }
@@ -464,10 +529,7 @@ where
                 .encode(PacketSend::EncodeOffset(data[4..].into(), buf.len()), buf);
         }
 
-        Ok(ColumnUpdate {
-            ori_columns: ori_columns.into(),
-            new_columns: new_columns.into(),
-        })
+        Ok(ColumnUpdate { ori_columns: ori_columns.into(), new_columns: new_columns.into() })
     }
 
     fn get_shard_one_data(
@@ -494,12 +556,12 @@ where
 
     async fn shard_send_query(
         conns: Vec<PoolConn<ClientConn>>,
-        rewrite_outputs: &[ShardingRewriteOutput],
+        rewrite_outputs: &ShardingRewriteOutput,
     ) -> Result<Vec<PoolConn<ClientConn>>, Error> {
         let mut send_futs = FuturesOrdered::new();
         let mut sended_conns = Vec::with_capacity(conns.len());
 
-        for (mut conn, ro) in conns.into_iter().zip(rewrite_outputs.iter()) {
+        for (mut conn, ro) in conns.into_iter().zip(rewrite_outputs.results.iter()) {
             let sql = ro.target_sql.clone();
             let f = tokio::spawn(async move {
                 let res = conn.send_query_without_stream(sql.as_bytes()).await;
@@ -518,13 +580,14 @@ where
     }
 
     pub async fn get_shard_conns(
-        rewrite_outputs: &[ShardingRewriteOutput],
+        rewrite_outputs: &ShardingRewriteOutput,
         pool: Pool<ClientConn>,
         attrs: Vec<SessionAttr>,
     ) -> Result<Vec<PoolConn<ClientConn>>, Error> {
         let endpoints = rewrite_outputs
+            .results
             .iter()
-            .map(|x| match &x.data_source {
+            .map(|x| match &x.ds_idx.ds {
                 DataSource::Endpoint(ep) => Ok(ep.clone()),
                 _ => Err(ExecuteError::DataSourceNotFound(x.target_sql.clone())),
             })
@@ -562,7 +625,7 @@ where
         let mut send_futs = FuturesOrdered::new();
         let mut sended_conns = Vec::with_capacity(conns.len());
 
-        for (mut conn, ro) in conns.into_iter().zip(req.rewrite_outputs.iter()) {
+        for (mut conn, ro) in conns.into_iter().zip(req.rewrite_outputs.results.iter()) {
             let sql = ro.target_sql.clone();
             let f = tokio::spawn(async move {
                 let res = conn.send_prepare(sql.as_bytes()).await;
@@ -637,11 +700,13 @@ where
     }
 }
 
-fn row_data_cut_merge<F>(ori_data: &mut BytesMut, row_part_data: &RowPartData, f: F) 
-where F: FnOnce(&mut BytesMut)
+fn row_data_cut_merge<F>(ori_data: &mut BytesMut, row_part_data: &RowPartData, f: F)
+where
+    F: FnOnce(&mut BytesMut),
 {
     let mut data = ori_data.split_off(4);
     let mut data_remain = data.split_off(row_part_data.start_idx);
+
     f(&mut data);
 
     let _ = data_remain.split_to(row_part_data.part_encode_length + row_part_data.part_data_length);
@@ -649,11 +714,17 @@ where F: FnOnce(&mut BytesMut)
     ori_data.extend_from_slice(&data);
 }
 
-fn get_min_max_value<'a>(row_data: &mut RowDataTyp<&'a [u8]>, is_binary: bool, name: &'a str, a: &'a BytesMut, b: &'a BytesMut) -> (u64, u64) {
+fn get_min_max_value<'a>(
+    row_data: &mut RowDataTyp<&'a [u8]>,
+    is_binary: bool,
+    name: &'a str,
+    a: &'a BytesMut,
+    b: &'a BytesMut,
+) -> (u64, u64) {
     row_data.with_buf(&a[4..]);
-    let a = decode_with_name::<&[u8],u64>(row_data, name, is_binary).unwrap().unwrap();
+    let a = decode_with_name::<&[u8], u64>(row_data, name, is_binary).unwrap().unwrap();
 
     row_data.with_buf(&b[4..]);
-    let b = decode_with_name::<&[u8],u64>(row_data, name, is_binary).unwrap().unwrap();
+    let b = decode_with_name::<&[u8], u64>(row_data, name, is_binary).unwrap().unwrap();
     (a, b)
 }
