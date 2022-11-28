@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{marker::PhantomData, time::Instant};
+use std::{marker::PhantomData, sync::atomic::Ordering, time::Instant};
 
 use async_trait::async_trait;
 use byteorder::{ByteOrder, LittleEndian};
@@ -21,33 +21,37 @@ use conn_pool::PoolConn;
 use futures::{SinkExt, StreamExt};
 use mysql_parser::ast::*;
 use mysql_protocol::{
-    client::{codec::ResultsetStream, conn::{ClientConn, SessionAttr}},
+    client::{
+        codec::ResultsetStream,
+        conn::{ClientConn, SessionAttr},
+        stmt::Stmt,
+    },
+    column::Column,
     err::ProtocolError,
     mysql_const::*,
     server::{
         codec::{make_eof_packet, make_err_packet, ok_packet, CommonPacket, PacketSend},
         err::MySQLError,
     },
-    session::{SessionMut, Session},
-    util::{is_eof, length_encode_int}, column::{Column, ColumnInfo},
+    session::{Session, SessionMut},
+    util::{is_eof, length_encode_int},
 };
 use pisa_error::error::{Error, ErrorKind};
-use strategy::{route::RouteInputTyp, sharding_rewrite::{ShardingRewriteOutput, RewriteChange}};
+use strategy::{
+    route::RouteInputTyp,
+    sharding_rewrite::ShardingRewriteOutput,
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, error};
-use mysql_protocol::client::stmt::Stmt;
 
+use super::{executor::Executor, util::{filter_avg_column, get_avg_change}};
 use crate::{
     mysql::{MySQLService, ReqContext, RespContext},
     transaction_fsm::{
         build_conn_attrs, check_get_conn, query_rewrite, route, route_sharding, TransEventName,
     },
 };
-
-use std::sync::atomic::Ordering;
-
-use super::{executor::Executor, util::filter_avg_column};
 
 pub struct PisaMySQLService<T, C> {
     _phat: PhantomData<(T, C)>,
@@ -75,14 +79,19 @@ where
         let attrs = build_conn_attrs(sess);
         let is_get_conn = req.fsm.trigger(state_name);
         if is_get_conn {
-            return Self::fsm_get_new_conn(req, raw_sql, input_typ, &attrs).await
+            return Self::fsm_get_new_conn(req, raw_sql, input_typ, &attrs).await;
         }
 
         let endpoint = route(input_typ, raw_sql, req.route_strategy.clone());
         req.fsm.get_conn_with_endpoint(endpoint, &attrs).await
     }
 
-    async fn fsm_get_new_conn(req: &mut ReqContext<T, C>, raw_sql: &str, input_typ: RouteInputTyp, attrs: &[SessionAttr]) -> Result<PoolConn<ClientConn>, Error> {
+    async fn fsm_get_new_conn(
+        req: &mut ReqContext<T, C>,
+        raw_sql: &str,
+        input_typ: RouteInputTyp,
+        attrs: &[SessionAttr],
+    ) -> Result<PoolConn<ClientConn>, Error> {
         let endpoint = route(input_typ, raw_sql, req.route_strategy.clone());
         let factory =
             ClientConn::with_opts(endpoint.user, endpoint.password, endpoint.addr.clone());
@@ -129,14 +138,20 @@ where
         let sess = req.framed.codec_mut().get_session();
         let attrs = build_conn_attrs(sess);
         let raw_sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
-        let (_, input_typ, rewrite_outputs)  = Self::query_rewrite(req, raw_sql)?;
+        let (_, input_typ, rewrite_outputs) = Self::query_rewrite(req, raw_sql)?;
         req.rewrite_outputs = rewrite_outputs;
 
         // PrepareEvent trigger
         let is_get_conn = req.fsm.trigger(TransEventName::PrepareEvent);
 
-        if req.rewrite_outputs.is_empty() {
-            let mut client_conn = Self::fsm_trigger(req, TransEventName::PrepareEvent, RouteInputTyp::Statement, raw_sql).await?;
+        if req.rewrite_outputs.results.is_empty() {
+            let mut client_conn = Self::fsm_trigger(
+                req,
+                TransEventName::PrepareEvent,
+                RouteInputTyp::Statement,
+                raw_sql,
+            )
+            .await?;
             let res = Self::prepare_normal_inner(req, &mut client_conn, payload).await;
 
             req.fsm.put_conn(client_conn);
@@ -144,10 +159,16 @@ where
         }
 
         route_sharding(input_typ, raw_sql, req.route_strategy.clone(), &mut req.rewrite_outputs);
-        let sharding_column = req.rewrite_outputs[0].sharding_column.clone();
-        debug!("prepare rewrite outputs {:?} {:?} {:?}", req.rewrite_outputs, req.rewrite_outputs.len(), is_get_conn);
+        let sharding_column = req.rewrite_outputs.results[0].ds_idx.column.clone();
+        debug!(
+            "prepare rewrite outputs {:?} {:?} {:?}",
+            req.rewrite_outputs,
+            req.rewrite_outputs.results.len(),
+            is_get_conn
+        );
 
-        let (mut stmts, shard_conns) = Executor::shard_prepare_executor(req, attrs, is_get_conn).await?;
+        let (mut stmts, shard_conns) =
+            Executor::shard_prepare_executor(req, attrs, is_get_conn).await?;
         for i in stmts.iter().zip(shard_conns.into_iter()) {
             req.stmt_cache.put(stmt_id, i.0.stmt_id, i.1)
         }
@@ -172,24 +193,18 @@ where
         Ok(())
     }
 
-    async fn prepare_stmt(req: &mut ReqContext<T,C>, stmt: Stmt) -> Result<(), Error> {
+    async fn prepare_stmt(req: &mut ReqContext<T, C>, stmt: Stmt) -> Result<(), Error> {
         let mut buf = BytesMut::with_capacity(128);
         let mut data = vec![0];
         data.extend_from_slice(&u32::to_le_bytes(stmt.stmt_id));
-        let avg_change = req.rewrite_outputs[0].changes.iter().find_map(|x| {
-            if let RewriteChange::AvgChange(change) = x {
-                Some(change)
-            } else {
-                None
-            }
-        });
-        
+
+        let avg_change = get_avg_change(&req.rewrite_outputs.results[0].changes);
+
         if avg_change.is_some() {
             data.extend_from_slice(&u16::to_le_bytes(stmt.cols_count - 1));
         } else {
             data.extend_from_slice(&u16::to_le_bytes(stmt.cols_count));
         }
-
 
         data.extend_from_slice(&u16::to_le_bytes(stmt.params_count));
 
@@ -220,12 +235,12 @@ where
                     let filter_res = filter_avg_column(change, &column_info, is_added_avg_column);
                     if filter_res.1.is_some() {
                         if !filter_res.0.is_empty() {
-                            let _ = req
-                                .framed
-                                .codec_mut()
-                                .encode(PacketSend::EncodeOffset(filter_res.0.into(), buf.len()), &mut buf);
+                            let _ = req.framed.codec_mut().encode(
+                                PacketSend::EncodeOffset(filter_res.0.into(), buf.len()),
+                                &mut buf,
+                            );
                         }
-                        
+
                         is_added_avg_column = true;
                         continue;
                     }
@@ -247,10 +262,9 @@ where
         req.framed.send(PacketSend::Origin(buf[..].into())).await.map_err(ErrorKind::from)?;
 
         Ok(())
-
     }
 
-    async fn execute_shard_inner(req: &mut ReqContext<T, C>, payload: &[u8] ) -> Result<(), Error>{
+    async fn execute_shard_inner(req: &mut ReqContext<T, C>, payload: &[u8]) -> Result<(), Error> {
         Executor::shard_execute_executor(req, payload).await
     }
 
@@ -273,10 +287,10 @@ where
         let (is_get_conn, input_typ, rewrite_outputs) = Self::query_rewrite(req, raw_sql)?;
         req.rewrite_outputs = rewrite_outputs;
 
-        if req.rewrite_outputs.is_empty() {
+        if req.rewrite_outputs.results.is_empty() {
             let mut client_conn = Self::query_inner_get_conn(req, payload).await?;
             let res = Self::query_inner(req, &mut client_conn, payload).await;
-            
+
             req.fsm.put_conn(client_conn);
             return res;
         }
@@ -308,7 +322,7 @@ where
         let sess = req.framed.codec_mut().get_session();
         let attrs = build_conn_attrs(sess);
         let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
-        let (is_get_conn, input_typ, _rewrite_outputs) =  Self::query_rewrite(req, sql)?;
+        let (is_get_conn, input_typ, _rewrite_outputs) = Self::query_rewrite(req, sql)?;
         if is_get_conn {
             let endpoint = route(input_typ, sql, req.route_strategy.clone());
             let factory =
@@ -323,7 +337,7 @@ where
     fn query_rewrite<'a>(
         req: &'a mut ReqContext<T, C>,
         sql: &'a str,
-    ) -> Result<(bool, RouteInputTyp, Vec<ShardingRewriteOutput>), Error> {
+    ) -> Result<(bool, RouteInputTyp, ShardingRewriteOutput), Error> {
         let ast = Self::get_ast(req, sql);
         let ast = match ast {
             Err(err) => {
@@ -332,7 +346,11 @@ where
                     return Err(err);
                 }
                 let is_get_conn = req.fsm.trigger(TransEventName::QueryEvent);
-                return Ok((is_get_conn, RouteInputTyp::Statement, vec![]));
+                return Ok((
+                    is_get_conn,
+                    RouteInputTyp::Statement,
+                    ShardingRewriteOutput::default(),
+                ));
             }
 
             Ok(ast) => ast[0].clone(),
@@ -352,36 +370,35 @@ where
                 (req.fsm.trigger(TransEventName::StartEvent), RouteInputTyp::Transaction, false)
             }
 
-            SqlStmt::Commit(_stmt) => {
-                (
-                    req.fsm.trigger(TransEventName::CommitRollBackEvent),
-                    RouteInputTyp::Transaction,
-                    false,
-                )
-            }
+            SqlStmt::Commit(_stmt) => (
+                req.fsm.trigger(TransEventName::CommitRollBackEvent),
+                RouteInputTyp::Transaction,
+                false,
+            ),
 
-            SqlStmt::Rollback(_stmt) => {
-                (
-                    req.fsm.trigger(TransEventName::CommitRollBackEvent),
-                    RouteInputTyp::Transaction,
-                    false,
-                )
-            }
-            _ => {
-                (req.fsm.trigger(TransEventName::QueryEvent), RouteInputTyp::Statement, true)
-            }
+            SqlStmt::Rollback(_stmt) => (
+                req.fsm.trigger(TransEventName::CommitRollBackEvent),
+                RouteInputTyp::Transaction,
+                false,
+            ),
+            _ => (req.fsm.trigger(TransEventName::QueryEvent), RouteInputTyp::Statement, true),
         };
 
         if req.rewriter.is_some() {
             let default_db = req.framed.codec_mut().get_session().get_db();
-            let outputs =
-                query_rewrite(req.rewriter.as_mut().unwrap(), sql.to_string(), ast, default_db, can_rewrite)
-                    .map_err(|e| ErrorKind::Runtime(e.into()))?;
+            let outputs = query_rewrite(
+                req.rewriter.as_mut().unwrap(),
+                sql.to_string(),
+                ast,
+                default_db,
+                can_rewrite,
+            )
+            .map_err(|e| ErrorKind::Runtime(e.into()))?;
             debug!("rewrite outputs {:?}", outputs);
             return Ok((is_get_conn, input, outputs));
         }
 
-        return Ok((is_get_conn, input, vec![]));
+        return Ok((is_get_conn, input, ShardingRewriteOutput::default()));
     }
 
     // Set charset name
@@ -413,7 +430,7 @@ where
                                         //    )
                                         //    .await
                                         //    .unwrap();
-                                        
+
                                         let is_get_conn =
                                             req.fsm.trigger(TransEventName::SetSessionEvent);
                                         return (is_get_conn, RouteInputTyp::Transaction);
@@ -617,10 +634,12 @@ where
         cx.framed.codec_mut().get_session().set_db(db.to_string());
 
         if cx.rewriter.is_some() {
-            cx.framed.send(PacketSend::Encode(ok_packet()[4..].into())).await.map_err(ErrorKind::from)?;
+            cx.framed
+                .send(PacketSend::Encode(ok_packet()[4..].into()))
+                .await
+                .map_err(ErrorKind::from)?;
             return Ok(RespContext { ep: None, duration: now.elapsed() });
         }
-
 
         let mut client_conn =
             Self::fsm_trigger(cx, TransEventName::UseEvent, RouteInputTyp::Statement, db).await?;
@@ -644,10 +663,7 @@ where
 
         if cx.rewriter.is_some() {
             Self::shard_query_inner(cx, payload).await?;
-            return Ok(RespContext {
-                ep: None,
-                duration: now.elapsed(),
-            })
+            return Ok(RespContext { ep: None, duration: now.elapsed() });
         }
 
         let mut client_conn = Self::query_inner_get_conn(cx, payload).await?;
@@ -682,15 +698,13 @@ where
                 }
             }
 
-            return Ok(RespContext {
-                ep: None,
-                duration: now.elapsed(),
-            })
+            return Ok(RespContext { ep: None, duration: now.elapsed() });
         }
 
         let sql = std::str::from_utf8(payload).unwrap().trim_matches(char::from(0));
-        
-        let mut client_conn = Self::fsm_trigger(cx, TransEventName::PrepareEvent, RouteInputTyp::Statement, sql)
+
+        let mut client_conn =
+            Self::fsm_trigger(cx, TransEventName::PrepareEvent, RouteInputTyp::Statement, sql)
                 .await?;
         let ep = client_conn.get_endpoint();
 
@@ -720,10 +734,7 @@ where
 
         if cx.rewriter.is_some() {
             Self::execute_shard_inner(cx, payload).await?;
-            return Ok(RespContext {
-                ep: None,
-                duration: now.elapsed(),
-            })
+            return Ok(RespContext { ep: None, duration: now.elapsed() });
         }
 
         let sess = cx.framed.codec_mut().get_session();
@@ -760,7 +771,10 @@ where
         let now = Instant::now();
 
         if cx.rewriter.is_some() {
-            cx.framed.send(PacketSend::Encode(ok_packet()[4..].into())).await.map_err(ErrorKind::from)?;
+            cx.framed
+                .send(PacketSend::Encode(ok_packet()[4..].into()))
+                .await
+                .map_err(ErrorKind::from)?;
             return Ok(RespContext { ep: None, duration: now.elapsed() });
         }
 
