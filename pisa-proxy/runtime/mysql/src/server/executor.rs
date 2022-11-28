@@ -323,13 +323,11 @@ where
                     .map(|x| {
                         let mut row_data = row_data.clone();
                         row_data.with_buf(&x[4..]);
-                        println!("count x {:?}", &x[4..]);
                         decode_with_name::<&[u8], u64>(&mut row_data, &count_field.name, is_binary)
                             .unwrap()
                             .unwrap()
                     })
                     .sum::<u64>();
-                println!("count_sun {:?}", count_sum);
 
                 let chunk_data = &chunk[0];
                 let mut row_data = row_data.clone();
