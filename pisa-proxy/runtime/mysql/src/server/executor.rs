@@ -369,7 +369,7 @@ where
                 }
             }
 
-            if chunk.par_iter().min() == chunk.par_iter().max() {
+            if chunk.par_iter().map(|x| &x[4..]).min() == chunk.par_iter().map(|x| &x[4..]).max() {
                 let _ = req
                     .framed
                     .codec_mut()
