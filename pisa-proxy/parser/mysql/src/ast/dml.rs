@@ -362,20 +362,14 @@ impl UnionOpt {
 }
 
 #[derive(Debug, Clone)]
-pub enum Items {
-    Wild(ItemWild),
-    Items(Vec<Item>),
-    None,
+pub struct Items {
+    pub span: Span,
+    pub items: Vec<Item>
 }
-
 
 impl Items {
     pub fn format(&self) -> String {
-        match self {
-            Self::Wild(_) => "*".to_string(),
-            Self::None => "".to_string(),
-            Self::Items(val) => val.iter().map(|x| x.format()).collect::<Vec<String>>().join(","),
-        }
+        self.items.iter().map(|x| x.format()).collect::<Vec<_>>().join(",")
     }
 }
 
@@ -384,37 +378,31 @@ impl Visitor for Items {
     where
         T: Transformer,
     {
-        match self {
-            Self::Items(items) => {
-                let mut new_items = Vec::with_capacity(items.len());
-                for v in items {
-                    let mut node = Node::Item(v);
-                    let is_skip = tf.trans(&mut node);
-                    let new_node = node.into_item().unwrap();
 
-                    if is_skip {
-                        tf.complete(&mut Node::Item(new_node));
-                        new_items.push(new_node.clone());
-                        continue;
-                    }
-                    
-                    new_items.push(new_node.visit(tf));
-                }
+        let mut new_items = Vec::with_capacity(self.items.len());
+        for v in self.items.iter_mut() {
+            let mut node = Node::Item(v);
+            let is_skip = tf.trans(&mut node);
+            let new_node = node.into_item().unwrap();
 
-                Items::Items(new_items)
+            if is_skip {
+                tf.complete(&mut Node::Item(new_node));
+                new_items.push(new_node.clone());
+                continue;
             }
-            x => x.clone(),
+            
+            new_items.push(new_node.visit(tf));
         }
+
+        self.items = new_items;
+
+        self.clone()
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct ItemWild {
-    pub span: Span
-}
-
-#[derive(Debug, Clone)]
 pub enum Item {
+    Wild(Span),
     TableWild(TableWild),
 
     //clippy::large_enum_variant
@@ -424,6 +412,7 @@ pub enum Item {
 impl Item {
     pub fn format(&self) -> String {
         match self {
+            Self::Wild(_) => String::from("*"),
             Self::TableWild(val) => val.format(),
 
             Self::ItemExpr(val) => val.format(),
@@ -434,6 +423,7 @@ impl Item {
 impl Visitor for Item {
     fn visit<T: Transformer>(&mut self, tf: &mut T) -> Self {
         match self {
+            Self::Wild(val) => Item::Wild(*val),
             Self::TableWild(wild) => {
                 let mut node = Node::TableWild(wild);
                 tf.trans(&mut node);

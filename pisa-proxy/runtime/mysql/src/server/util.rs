@@ -12,17 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use indexmap::IndexMap;
 use mysql_protocol::{column::ColumnInfo, mysql_const::ColumnType};
-use strategy::sharding_rewrite::{AvgChange, rewrite_const::{AVG_COUNT, AVG_SUM, AVG_FIELD}};
+use strategy::sharding_rewrite::{AvgChange, ChangeTargetMeta};
 
 pub fn filter_avg_column(change: &AvgChange, column_info: &ColumnInfo, is_added: bool) -> (Vec<u8>, Option<ColumnInfo>) {
-    let avg_count = change.target.get(AVG_COUNT).unwrap();
-    let avg_sum = change.target.get(AVG_SUM).unwrap();
-    let avg_field = change.target.get(AVG_FIELD).unwrap();
     let avg_column = ColumnInfo {
          schema: None,
          table_name: None,
-         column_name: avg_field.to_string(),
+         column_name: change.ori_field.to_string(),
          charset: 0x3f,
          column_length: 0x46,
          column_type: ColumnType::MYSQL_TYPE_NEWDECIMAL,
@@ -30,7 +28,7 @@ pub fn filter_avg_column(change: &AvgChange, column_info: &ColumnInfo, is_added:
          decimals: 4,
     };
 
-    if &column_info.column_name == avg_count || &column_info.column_name == avg_sum {
+    if &column_info.column_name == &change.count_field || &column_info.column_name == &change.sum_field {
         if !is_added {
             let mut avg_column_buf = Vec::with_capacity(128);
             avg_column.encode(&mut avg_column_buf);
@@ -41,4 +39,20 @@ pub fn filter_avg_column(change: &AvgChange, column_info: &ColumnInfo, is_added:
     }
 
     (vec![], None)
+}
+
+// We don't consider the `avg change` of the subquery for now.
+pub fn get_avg_change(changes: &IndexMap<u8, Vec<ChangeTargetMeta>>) -> Option<&AvgChange> {
+    match changes.get(&1) {
+        Some(changes) => {
+            changes.iter().find_map(|meta| {
+                if let ChangeTargetMeta::Avg(change) = meta {
+                    Some(change)
+                } else {
+                    None
+                }
+            })
+        },
+        None => None
+    }
 }

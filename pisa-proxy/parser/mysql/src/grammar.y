@@ -669,20 +669,23 @@ locked_row_action -> LockedRowAction:
 select_items -> Items:
     select_items ',' select_item
     {
-      if let Items::Items(mut items) = $1 {
-        items.push($3);
-        Items::Items(items)
-      } else {
-        $1
-      }
+      $1.span = $span;
+      $1.items.push($3);
+      $1
     }
   | select_item
     {
-      Items::Items(vec![$1])
+      Items {
+        span: $span,
+        items: vec![$1],
+      }
     }
   | '*'
     {
-      Items::Wild( ItemWild { span: $span } )
+      Items {
+        span: $span,
+        items: vec![Item::Wild($span)],
+      }
     }
   ;
 

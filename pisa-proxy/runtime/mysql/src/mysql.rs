@@ -24,6 +24,7 @@ use common::ast_cache::ParserAstCache;
 use conn_pool::Pool;
 use endpoint::endpoint::Endpoint;
 use futures::{SinkExt, StreamExt};
+use indexmap::IndexMap;
 use loadbalance::balance::{Balance, LoadBalance};
 use mysql_parser::parser::Parser;
 use mysql_protocol::{
@@ -247,7 +248,7 @@ impl proxy::factory::Proxy for MySQLProxy {
                     name: proxy_name,
                     mysql_parser: parser,
                     rewriter,
-                    rewrite_outputs: vec![],
+                    rewrite_outputs: ShardingRewriteOutput { results: vec![], agg_fields: IndexMap::new() },
                     has_readwritesplitting: has_rw,
                     stmt_cache: StmtCache::new(),
                     stmt_id: AtomicU32::new(0),
@@ -278,7 +279,7 @@ pub struct ReqContext<T, C> {
     // The codc for MySQL Protocol
     pub framed: Framed<T, C>,
     pub rewriter: Option<ShardingRewrite>,
-    pub rewrite_outputs: Vec<ShardingRewriteOutput>,
+    pub rewrite_outputs: ShardingRewriteOutput,
     pub has_readwritesplitting: bool,
     pub stmt_cache: StmtCache,
     pub stmt_id: AtomicU32,
