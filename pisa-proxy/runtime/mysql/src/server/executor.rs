@@ -209,17 +209,10 @@ where
         while let Some(chunk) = stream.next().await {
             let mut chunk = chunk
                 .into_par_iter().map(|x| x.unwrap()).collect::<Result<Vec<_>, _>>().map_err(ErrorKind::from)?;
-
-            for i in chunk.iter() {
-                println!("or min_max {:?}", &i[..]);
-            }
             
             let ro = &req.rewrite_outputs[0];
             Self::handle_min_max(ro, &mut chunk, row_data.clone(), is_binary)?;
-            for i in chunk.iter() {
-                println!("min_max {:?}", &i[..]);
-            }
-            
+
             let avg_change = ro.changes.iter().find_map(|x| {
                 if let RewriteChange::AvgChange(change) = x {
                     Some(change)
@@ -233,7 +226,6 @@ where
                 let sum_field = avg.target.get(AVG_SUM).unwrap();
 
                 let (count_data, sum_data): (Vec<_>, Vec<_>) = chunk.par_iter().map(|x| -> Result<(u64, u64), Error> {
-                    println!("xxx {:?}", &x[..]);
                     let mut row_data = row_data.clone();
                     row_data.with_buf(&x[4..]);
                     let count = decode_with_name::<&[u8], u64>(&mut row_data, &count_field, is_binary).map_err(|e| ErrorKind::Runtime(e))?.unwrap_or_else(|| 0);
@@ -254,7 +246,6 @@ where
 
                 let count: u64 = count_data.par_iter().sum();
                 let sum: u64 = sum_data.par_iter().sum();
-                println!("count {:?}, sum {:?}", count, sum);
 
                 chunk.par_iter_mut().for_each(|x| {
                     let mut row_data = row_data.clone();
@@ -301,10 +292,8 @@ where
                 let count_sum = chunk.par_iter().map(|x| {
                     let mut row_data = row_data.clone();
                     row_data.with_buf(&x[4..]);
-                    println!("count x {:?}", &x[4..]);
                     decode_with_name::<&[u8], u64>(&mut row_data, &count_field.name, is_binary).unwrap().unwrap()
                 }).sum::<u64>();
-                println!("count_sun {:?}", count_sum);
 
                 let chunk_data = &chunk[0];
                 let mut row_data = row_data.clone();
@@ -338,7 +327,7 @@ where
                 }
             }
 
-            if chunk.par_iter().min() == chunk.par_iter().max() {
+            if chunk.par_iter().map(|x| &x[4..]).min() == chunk.par_iter().map(|x| &x[4..]).max() {
                 let _ = req
                     .framed
                     .codec_mut()
@@ -347,7 +336,6 @@ where
             }
 
             for row in chunk.iter() {
-                println!("end row {:?}", &row[..]);
                 let _ = req
                     .framed
                     .codec_mut()
@@ -367,7 +355,6 @@ where
                         let (a, b) = get_min_max_value(&mut row_data, is_binary, &mmf.name, a, b);       
                         b.cmp(&a)
                     });
-
                 }
                 FieldWrapFunc::Min => {
                     chunk.par_sort_unstable_by(|a, b| {
@@ -381,11 +368,16 @@ where
             }
 
             let chunk_data = &chunk[0];
+            let ori_row_data = row_data.clone();
             let mut row_data = row_data.clone();
             row_data.with_buf(&chunk_data[4..]);
             let row_part_data = row_data.get_row_data_with_name(&mmf.name).map_err(|e| ErrorKind::Runtime(e))?.unwrap();
             chunk.par_iter_mut().for_each(|x| {
-                row_data_cut_merge(x, &row_part_data, |data: &mut BytesMut| {
+                let mut row_data = ori_row_data.clone();
+                row_data.with_buf(&x[4..]);
+                let ori_row_part_data = row_data.get_row_data_with_name(&mmf.name).unwrap().unwrap();
+
+                row_data_cut_merge(x, &ori_row_part_data, |data: &mut BytesMut| {
                     if is_binary {
                         data.extend_from_slice(&row_part_data.data);
                     } else {
@@ -650,9 +642,8 @@ where F: FnOnce(&mut BytesMut)
 {
     let mut data = ori_data.split_off(4);
     let mut data_remain = data.split_off(row_part_data.start_idx);
-
     f(&mut data);
-    
+
     let _ = data_remain.split_to(row_part_data.part_encode_length + row_part_data.part_data_length);
     data.extend_from_slice(&data_remain);
     ori_data.extend_from_slice(&data);

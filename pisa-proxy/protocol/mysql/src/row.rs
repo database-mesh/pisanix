@@ -34,6 +34,7 @@ pub enum RowDataTyp<T: AsRef<[u8]>> {
     Binary(RowDataBinary<T>),
 }
 
+#[derive(Clone, Debug)]
 pub struct RowPartData {
     pub data: Box<[u8]>,
     pub start_idx: usize,
