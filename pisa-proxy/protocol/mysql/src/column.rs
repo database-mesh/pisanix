@@ -58,7 +58,6 @@ pub fn remove_column_by_idx(columns: &mut BytesMut, chunk: &[usize]) {
     // get column idx length
     pos = 0;
     for _ in chunk.iter() {
-        println!("{:?} {:?}", remain_part.len(), pos);
         if remain_part.len() <= pos {
             continue;
         }
