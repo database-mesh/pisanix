@@ -44,30 +44,44 @@ pub fn decode_column<T: AsRef<[u8]>>(buf: T) -> ColumnInfo {
     buf.decode_column()
 }
 
-pub fn remove_column_by_idx(columns: &mut BytesMut, idx: usize) {
+//Remove the column of consecutive indexes in the chunk
+pub fn remove_column_by_idx(columns: &mut BytesMut, chunk: &[usize]) {
     let mut pos = 0;
-    for _ in 0..idx {
-        let length = get_length(columns.as_ref());
+    let start_idx = chunk.first().unwrap_or_else(|| &0);
+
+    for _ in 0..*start_idx {
+        let length = get_length(&columns[pos..]);
         pos += length + 4;
     }
 
-    let mut first_part = columns.split_off(pos);
+    let mut remain_part = columns.split_off(pos);
     // get column idx length
-    let idx_length = get_length(columns);
-    let _ = first_part.split_to(idx_length + 4);
-    columns.unsplit(first_part);
+    pos = 0;
+    for _ in chunk.iter() {
+        println!("{:?} {:?}", remain_part.len(), pos);
+        if remain_part.len() <= pos {
+            continue;
+        }
+
+        let length = get_length(&remain_part[pos..]);
+        pos += length + 4
+    }
+
+
+    remain_part.advance(pos);
+    columns.unsplit(remain_part);
 }
 
 pub fn add_column_by_idx<T: AsRef<[u8]>>(columns: &mut BytesMut, idx: usize, add: T) {
     let mut pos = 0;
     for _ in 0..idx {
-        let length = get_length(columns.as_ref());
+        let length = get_length(&columns[pos..]);
         pos += length + 4;
     }
 
-    let first_part = columns.split_off(pos);
+    let remain_part = columns.split_off(pos);
     columns.put_slice(add.as_ref());
-    columns.unsplit(first_part);
+    columns.put_slice(&remain_part);
 }
 
 /// ColumnBuf trait， Inherit BufExt
@@ -240,16 +254,16 @@ mod test {
     fn test_remove_column_by_idx() {
         let data = [
             1, 0, 0, 0, 1,
-            1, 0, 0, 0, 2,
+            2, 0, 0, 0, 2, 3,
             1, 0, 0, 0, 3,
         ];
 
         let expect_data = [
             1, 0, 0, 0, 1,
-            1, 0, 0, 0, 2,
+            2, 0, 0, 0, 2, 3
         ];
         let mut buf = BytesMut::from(&data[..]);
-        remove_column_by_idx(&mut buf, 2);
+        remove_column_by_idx(&mut buf, &[2]);
         assert_eq!(&buf[..], expect_data);
     }
 
@@ -257,12 +271,12 @@ mod test {
     fn test_add_column_by_idx() {
         let data = [
             1, 0, 0, 0, 1,
-            1, 0, 0, 0, 2,
+            2, 0, 0, 0, 2, 3,
         ];
 
         let expect_data = [
             1, 0, 0, 0, 1,
-            1, 0, 0, 0, 2,
+            2, 0, 0, 0, 2, 3,
             1, 0, 0, 0, 3,
         ];
         let mut buf = BytesMut::from(&data[..]);

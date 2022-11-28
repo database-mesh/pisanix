@@ -45,7 +45,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, error};
 
-use super::{executor::Executor, util::filter_avg_column};
+use super::{executor::Executor, util::{filter_avg_column, get_avg_change}};
 use crate::{
     mysql::{MySQLService, ReqContext, RespContext},
     transaction_fsm::{
@@ -197,15 +197,8 @@ where
         let mut buf = BytesMut::with_capacity(128);
         let mut data = vec![0];
         data.extend_from_slice(&u32::to_le_bytes(stmt.stmt_id));
-        let avg_change = req.rewrite_outputs.results[0].changes.iter().find_map(|x| {
-            x.1.iter().find_map(|meta| {
-                if let ChangeTargetMeta::Avg(change) = meta {
-                    Some(change)
-                } else {
-                    None
-                }
-            })
-        });
+
+        let avg_change = get_avg_change(&req.rewrite_outputs.results[0].changes);
 
         if avg_change.is_some() {
             data.extend_from_slice(&u16::to_le_bytes(stmt.cols_count - 1));

@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use indexmap::IndexMap;
 use mysql_protocol::{column::ColumnInfo, mysql_const::ColumnType};
-use strategy::sharding_rewrite::AvgChange;
+use strategy::sharding_rewrite::{AvgChange, ChangeTargetMeta};
 
 pub fn filter_avg_column(change: &AvgChange, column_info: &ColumnInfo, is_added: bool) -> (Vec<u8>, Option<ColumnInfo>) {
     let avg_column = ColumnInfo {
@@ -38,4 +39,20 @@ pub fn filter_avg_column(change: &AvgChange, column_info: &ColumnInfo, is_added:
     }
 
     (vec![], None)
+}
+
+// We don't consider the `avg change` of the subquery for now.
+pub fn get_avg_change(changes: &IndexMap<u8, Vec<ChangeTargetMeta>>) -> Option<&AvgChange> {
+    match changes.get(&1) {
+        Some(changes) => {
+            changes.iter().find_map(|meta| {
+                if let ChangeTargetMeta::Avg(change) = meta {
+                    Some(change)
+                } else {
+                    None
+                }
+            })
+        },
+        None => None
+    }
 }

@@ -43,7 +43,7 @@ use strategy::sharding_rewrite::{
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
 
-use super::util::filter_avg_column;
+use super::util::{filter_avg_column, get_avg_change};
 use crate::{mysql::ReqContext, transaction_fsm::check_get_conn};
 
 #[derive(Debug, thiserror::Error)]
@@ -214,25 +214,10 @@ where
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(ErrorKind::from)?;
 
-            for i in chunk.iter() {
-                println!("or min_max {:?}", &i[..]);
-            }
-
             let ro = &req.rewrite_outputs;
             Self::handle_min_max(ro, &mut chunk, row_data.clone(), is_binary)?;
-            for i in chunk.iter() {
-                println!("min_max {:?}", &i[..]);
-            }
 
-            let avg_change = ro.results[0].changes.iter().find_map(|x| {
-                x.1.iter().find_map(|meta| {
-                    if let ChangeTargetMeta::Avg(change) = meta {
-                        Some(change)
-                    } else {
-                        None
-                    }
-                })
-            });
+            let avg_change = get_avg_change(&ro.results[0].changes);
 
             if let Some(avg) = avg_change {
                 let (count_data, sum_data): (Vec<_>, Vec<_>) = chunk
@@ -275,7 +260,6 @@ where
 
                 let count: u64 = count_data.par_iter().sum();
                 let sum: u64 = sum_data.par_iter().sum();
-                println!("count {:?}, sum {:?}", count, sum);
 
                 chunk.par_iter_mut().for_each(|x| {
                     let mut row_data = row_data.clone();
@@ -394,7 +378,6 @@ where
             }
 
             for row in chunk.iter() {
-                println!("end row {:?}", &row[..]);
                 let _ = req
                     .framed
                     .codec_mut()
