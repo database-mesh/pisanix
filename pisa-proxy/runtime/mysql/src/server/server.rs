@@ -39,7 +39,7 @@ use mysql_protocol::{
 use pisa_error::error::{Error, ErrorKind};
 use strategy::{
     route::RouteInputTyp,
-    sharding_rewrite::{ChangeTargetMeta, ShardingRewriteOutput},
+    sharding_rewrite::ShardingRewriteOutput,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};

@@ -416,14 +416,16 @@ where
             }
 
             let chunk_data = &chunk[0];
+            let ori_row_data = row_data.clone();
             let mut row_data = row_data.clone();
             row_data.with_buf(&chunk_data[4..]);
-            let row_part_data = row_data
-                .get_row_data_with_name(&agg.name)
-                .map_err(|e| ErrorKind::Runtime(e))?
-                .unwrap();
+            let row_part_data = row_data.get_row_data_with_name(&agg.name).map_err(|e| ErrorKind::Runtime(e))?.unwrap();
             chunk.par_iter_mut().for_each(|x| {
-                row_data_cut_merge(x, &row_part_data, |data: &mut BytesMut| {
+                let mut row_data = ori_row_data.clone();
+                row_data.with_buf(&x[4..]);
+                let ori_row_part_data = row_data.get_row_data_with_name(&agg.name).unwrap().unwrap();
+
+                row_data_cut_merge(x, &ori_row_part_data, |data: &mut BytesMut| {
                     if is_binary {
                         data.extend_from_slice(&row_part_data.data);
                     } else {
