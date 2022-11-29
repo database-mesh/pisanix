@@ -39,6 +39,7 @@ pub enum FieldWrapFunc {
     Min,
     Max,
     Count,
+    Sum,
     None,
 }
 
@@ -48,6 +49,7 @@ impl AsRef<str> for FieldWrapFunc {
             Self::Max => "max",
             Self::Min => "min",
             Self::Count => "count",
+            Self::Sum => "sum",
             Self::None => "none",
         }
     }
@@ -374,6 +376,14 @@ impl Transformer for RewriteMetaData {
                                     self.state = ScanState::FieldWrapFunc(
                                         item.span,
                                         FieldWrapFunc::Count,
+                                        item.alias_name.clone(),
+                                    );
+                                }
+
+                                AggFuncName::Sum => {
+                                    self.state = ScanState::FieldWrapFunc(
+                                        item.span,
+                                        FieldWrapFunc::Sum,
                                         item.alias_name.clone(),
                                     );
                                 }

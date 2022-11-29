@@ -28,7 +28,7 @@ pub trait RowData<T: AsRef<[u8]>> {
     fn get_row_data_with_name(&mut self, name: &str) -> value::Result<RowPartData>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum RowDataTyp<T: AsRef<[u8]>> {
     Text(RowDataText<T>),
     Binary(RowDataBinary<T>),
@@ -239,7 +239,6 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
 
                 // Need to add packet header and null_map to returnd data
                 let raw_data = &self.buf.as_ref()[start_pos + pos as usize..(start_pos + pos as usize + length as usize)];
-                println!("eeeeeeeeeeeee {:?}", &raw_data[..]);
                 return Ok(Some(
                     RowPartData { 
                         data: raw_data.into(), 

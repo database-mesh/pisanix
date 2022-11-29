@@ -215,7 +215,8 @@ where
                 .map_err(ErrorKind::from)?;
 
             let ro = &req.rewrite_outputs;
-            Self::handle_min_max(ro, &mut chunk, row_data.clone(), is_binary)?;
+
+            Self::handle_agg(ro, &mut chunk, row_data.clone(), is_binary)?;
 
             let avg_change = get_avg_change(&ro.results[0].changes);
 
@@ -260,7 +261,6 @@ where
 
                 let count: u64 = count_data.par_iter().sum();
                 let sum: u64 = sum_data.par_iter().sum();
-
                 chunk.par_iter_mut().for_each(|x| {
                     let mut row_data = row_data.clone();
                     row_data.with_buf(&x[4..]);
@@ -386,7 +386,7 @@ where
         Ok(())
     }
 
-    fn handle_min_max(
+    fn handle_agg(
         ro: &ShardingRewriteOutput,
         chunk: &mut [BytesMut],
         row_data: RowDataTyp<&[u8]>,
@@ -408,6 +408,54 @@ where
                         let mut row_data = row_data.clone();
                         let (a, b) = get_min_max_value(&mut row_data, is_binary, &agg.name, a, b);
                         a.cmp(&b)
+                    });
+                }
+                FieldWrapFunc::Sum => {
+                    let sum_data: Vec<_> = chunk
+                    .par_iter()
+                    .map(|x| -> Result<u64, Error> {
+                        let mut row_data = row_data.clone();
+                        row_data.with_buf(&x[4..]);
+                        let sum = if is_binary {
+                            let sum = decode_with_name::<&[u8], String>(
+                                &mut row_data,
+                                &agg.name,
+                                is_binary,
+                            ).unwrap();
+                            if let Some(sum) = sum {
+                                sum.parse::<u64>().map_err(|e| ErrorKind::Runtime(e.into()))?
+                            } else {
+                                0
+                            }
+                        } else {
+                            decode_with_name::<&[u8], u64>(&mut row_data, &agg.name, is_binary)
+                                .map_err(|e| ErrorKind::Runtime(e))?
+                                .unwrap_or_else(|| 0)
+                        };
+
+                        Ok(sum)
+                    })
+                    .collect::<Result<Vec<_>, _>>().unwrap();
+               
+                    let sum: u64 = sum_data.par_iter().sum();
+                    chunk.par_iter_mut().for_each(|x| {
+                        let mut row_data = row_data.clone();
+                        row_data.with_buf(&x[4..]);
+                        let sum_data =
+                            row_data.get_row_data_with_name(&agg.name).unwrap().unwrap();
+                        let part_data = RowPartData {
+                            data: vec![].into(),
+                            start_idx: sum_data.start_idx,
+                            part_encode_length: sum_data.part_encode_length,
+                            part_data_length: sum_data.part_data_length,
+                        };
+    
+                        let sum = format!("{:.4}", sum as u64);
+    
+                        row_data_cut_merge(x, &part_data, |data: &mut BytesMut| {
+                            data.put_lenc_int(sum.len() as u64, false);
+                            data.extend_from_slice(sum.as_bytes());
+                        });
                     });
                 }
                 _ => {}
@@ -709,5 +757,6 @@ fn get_min_max_value<'a>(
 
     row_data.with_buf(&b[4..]);
     let b = decode_with_name::<&[u8], u64>(row_data, name, is_binary).unwrap().unwrap();
+
     (a, b)
 }
