@@ -1378,7 +1378,7 @@ impl ShardingRewrite {
                 .iter()
                 .filter_map(|f| {
                     if let FieldMeta::Ident(meta) = f {
-                        let is_match = matches!(meta.wrap_func,  FieldWrapFunc::Max| FieldWrapFunc::Min |FieldWrapFunc::Count);
+                        let is_match = matches!(meta.wrap_func,  FieldWrapFunc::Max| FieldWrapFunc::Min |FieldWrapFunc::Count| FieldWrapFunc::Sum);
                         return is_match.then(|| meta.clone())
                     } else {
                         None
