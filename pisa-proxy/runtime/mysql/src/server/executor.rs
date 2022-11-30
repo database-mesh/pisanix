@@ -461,6 +461,10 @@ where
                 _ => {}
             }
 
+            if chunk.par_iter().map(|x| &x[4..]).min() == chunk.par_iter().map(|x| &x[4..]).max() {
+                return Ok(())
+            }
+
             let chunk_data = &chunk[0];
             let ori_row_data = row_data.clone();
             let mut row_data = row_data.clone();
