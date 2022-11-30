@@ -216,7 +216,7 @@ where
 
             let ro = &req.rewrite_outputs;
 
-            Self::handle_min_max(ro, &mut chunk, row_data.clone(), is_binary)?;
+            Self::handle_agg(ro, &mut chunk, row_data.clone(), is_binary)?;
 
             let avg_change = get_avg_change(&ro.results[0].changes);
 
@@ -386,7 +386,7 @@ where
         Ok(())
     }
 
-    fn handle_min_max(
+    fn handle_agg(
         ro: &ShardingRewriteOutput,
         chunk: &mut [BytesMut],
         row_data: RowDataTyp<&[u8]>,
