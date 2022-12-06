@@ -258,7 +258,7 @@ where
                     .par_iter()
                     .cloned()
                     .unzip();
- 
+
                 let count: u64 = count_data.par_iter().sum();
                 let sum: u64 = sum_data.par_iter().sum();
                 chunk.par_iter_mut().for_each(|x| {
