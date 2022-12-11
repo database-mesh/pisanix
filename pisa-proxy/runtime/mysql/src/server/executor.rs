@@ -78,9 +78,19 @@ where
         let mut curr_cached_stmt_id = vec![];
 
         let conns = if is_get_conn {
-            Self::get_shard_conns(&req.rewrite_outputs, req.pool.clone(), attrs).await?
+            let conns = req.fsm.get_shard_conns();
+            if conns.is_empty() || conns.len() < req.rewrite_outputs.results.len() {
+                // The FSM Cached shard conns length less then the length of sharding results,
+                // We need to force drop FSM cached conns to put back to ConnPool.
+                for i in conns {
+                    drop(i)
+                }
+                Self::get_shard_conns(&req.rewrite_outputs, req.pool.clone(), attrs).await?
+            } else {
+                conns
+            }
         } else {
-            let mut cached_conn = req.fsm.get_shard_conn();
+            let mut cached_conn = req.fsm.get_shard_conns();
             if cached_conn.is_empty() {
                 let server_stmt_id = req.stmt_id.load(Ordering::Relaxed);
                 let cached_stmt_conn = req.stmt_cache.get_all(server_stmt_id);
@@ -111,7 +121,7 @@ where
             req.stmt_cache.put_all(id, stmt_conns)
         } else {
             // Put shard conn to fsm
-            req.fsm.put_shard_conn(conns);
+            req.fsm.put_shard_conns(conns);
         }
         Ok(())
     }
@@ -307,47 +317,6 @@ where
                 };
             }
 
-            let count_field = ro.agg_fields.iter().find_map(|x| {
-                x.1.iter().find_map(|meta| {
-                    if meta.wrap_func == FieldWrapFunc::Count {
-                        Some(meta)
-                    } else {
-                        None
-                    }
-                })
-            });
-
-            if let Some(count_field) = count_field {
-                let count_sum = chunk
-                    .par_iter()
-                    .map(|x| {
-                        let mut row_data = row_data.clone();
-                        row_data.with_buf(&x[4..]);
-                        decode_with_name::<&[u8], u64>(&mut row_data, &count_field.name, is_binary)
-                            .unwrap()
-                            .unwrap()
-                    })
-                    .sum::<u64>();
-
-                let chunk_data = &chunk[0];
-                let mut row_data = row_data.clone();
-                row_data.with_buf(&chunk_data[4..]);
-                let row_part_data = row_data
-                    .get_row_data_with_name(&count_field.name)
-                    .map_err(|e| ErrorKind::Runtime(e))?
-                    .unwrap();
-                chunk.par_iter_mut().for_each(|x| {
-                    row_data_cut_merge(x, &row_part_data, |data: &mut BytesMut| {
-                        if is_binary {
-                            data.extend_from_slice(&count_sum.to_le_bytes()[..])
-                        } else {
-                            let count_sum_str = count_sum.to_string();
-                            data.put_lenc_int(count_sum_str.len() as u64, false);
-                            data.extend_from_slice(count_sum_str.as_bytes());
-                        }
-                    });
-                });
-            }
 
             if let Some(name) = &sharding_column.table {
                 if let Some(_) =
@@ -395,19 +364,76 @@ where
         let default_agg_fields = vec![];
         let agg_fields = ro.agg_fields.get(&1).unwrap_or_else(|| &default_agg_fields);
         for agg in agg_fields.iter() {
-            match agg.wrap_func {
-                FieldWrapFunc::Max => {
-                    chunk.par_sort_unstable_by(|a, b| {
-                        let mut row_data = row_data.clone();
-                        let (a, b) = get_min_max_value(&mut row_data, is_binary, &agg.name, a, b);
-                        b.cmp(&a)
+            match &agg.wrap_func {
+                x @FieldWrapFunc::Min | x @FieldWrapFunc::Max => {
+                    if let FieldWrapFunc::Max = x {
+                        chunk.par_sort_unstable_by(|a, b| {
+                            let mut row_data = row_data.clone();
+                            let (a, b) = get_min_max_value(&mut row_data, is_binary, &agg.name, a, b);
+                            b.cmp(&a)
+                        });
+                    }
+
+                    if let FieldWrapFunc::Min = x {
+                        chunk.par_sort_unstable_by(|a, b| {
+                            let mut row_data = row_data.clone();
+                            let (a, b) = get_min_max_value(&mut row_data, is_binary, &agg.name, a, b);
+                            a.cmp(&b)
+                        });
+                    };
+                    let chunk_data = &chunk[0];
+                    let ori_row_data = row_data.clone();
+                    let mut row_data = row_data.clone();
+                    row_data.with_buf(&chunk_data[4..]);
+                    let row_part_data = row_data.get_row_data_with_name(&agg.name).map_err(|e| ErrorKind::Runtime(e))?.unwrap();
+                    chunk.par_iter_mut().for_each(|x| {
+                        let mut row_data = ori_row_data.clone();
+                        row_data.with_buf(&x[4..]);
+                        let ori_row_part_data = row_data.get_row_data_with_name(&agg.name).unwrap().unwrap();
+
+                        row_data_cut_merge(x, &ori_row_part_data, |data: &mut BytesMut| {
+                            if is_binary {
+                                data.extend_from_slice(&row_part_data.data);
+                            } else {
+                                data.put_lenc_int(row_part_data.part_data_length as u64, false);
+                                data.extend_from_slice(&row_part_data.data);
+                            }
+                        })
                     });
                 }
-                FieldWrapFunc::Min => {
-                    chunk.par_sort_unstable_by(|a, b| {
+                FieldWrapFunc::Count => {
+                    let count_sum = chunk
+                        .par_iter()
+                        .map(|x| {
+                            let mut row_data = row_data.clone();
+                            row_data.with_buf(&x[4..]);
+                            decode_with_name::<&[u8], u64>(&mut row_data, &agg.name, is_binary)
+                                .unwrap()
+                                .unwrap()
+                        })
+                        .sum::<u64>();
+
+                    chunk.par_iter_mut().for_each(|x| {
                         let mut row_data = row_data.clone();
-                        let (a, b) = get_min_max_value(&mut row_data, is_binary, &agg.name, a, b);
-                        a.cmp(&b)
+                        row_data.with_buf(&x[4..]);
+                        let count_data =
+                            row_data.get_row_data_with_name(&agg.name).unwrap().unwrap();
+                        let part_data = RowPartData {
+                            data: vec![].into(),
+                            start_idx: count_data.start_idx,
+                            part_encode_length: count_data.part_encode_length,
+                            part_data_length: count_data.part_data_length,
+                        };
+    
+                        row_data_cut_merge(x, &part_data, |data: &mut BytesMut| {
+                            if is_binary {
+                                data.extend_from_slice(&count_sum.to_le_bytes()[..])
+                            } else {
+                                let count_sum_str = count_sum.to_string();
+                                data.put_lenc_int(count_sum_str.len() as u64, false);
+                                data.extend_from_slice(count_sum_str.as_bytes());
+                            }
+                        });
                     });
                 }
                 FieldWrapFunc::Sum => {
@@ -460,30 +486,6 @@ where
                 }
                 _ => {}
             }
-
-            if chunk.par_iter().map(|x| &x[4..]).min() == chunk.par_iter().map(|x| &x[4..]).max() {
-                return Ok(())
-            }
-
-            let chunk_data = &chunk[0];
-            let ori_row_data = row_data.clone();
-            let mut row_data = row_data.clone();
-            row_data.with_buf(&chunk_data[4..]);
-            let row_part_data = row_data.get_row_data_with_name(&agg.name).map_err(|e| ErrorKind::Runtime(e))?.unwrap();
-            chunk.par_iter_mut().for_each(|x| {
-                let mut row_data = ori_row_data.clone();
-                row_data.with_buf(&x[4..]);
-                let ori_row_part_data = row_data.get_row_data_with_name(&agg.name).unwrap().unwrap();
-
-                row_data_cut_merge(x, &ori_row_part_data, |data: &mut BytesMut| {
-                    if is_binary {
-                        data.extend_from_slice(&row_part_data.data);
-                    } else {
-                        data.put_lenc_int(row_part_data.part_data_length as u64, false);
-                        data.extend_from_slice(&row_part_data.data);
-                    }
-                })
-            });
         }
 
         Ok(())
@@ -623,21 +625,24 @@ where
             .results
             .iter()
             .map(|x| match &x.ds_idx.ds {
-                DataSource::Endpoint(ep) => Ok(ep.clone()),
+                DataSource::Endpoint(ep) => Ok(ep),
                 _ => Err(ExecuteError::DataSourceNotFound(x.target_sql.clone())),
             })
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| ErrorKind::Runtime(e.into()))?;
-
+        
         let mut conn_futs = FuturesOrdered::new();
-        for e in endpoints.iter() {
-            let ep = e.clone();
+        for ep in endpoints {
+            let addr = ep.addr.clone();
+            let user = ep.user.clone();
+            let password = ep.password.clone();
             let mut pool = pool.clone();
             let attrs = attrs.clone();
+            
             let f = tokio::spawn(async move {
-                let factory = ClientConn::with_opts(ep.user, ep.password, ep.addr.clone());
+                let factory = ClientConn::with_opts(user, password, addr.clone());
                 pool.set_factory(factory);
-                check_get_conn(pool, &ep.addr, &attrs).await
+                check_get_conn(pool, &addr, &attrs).await
             });
             conn_futs.push(f);
         }
