@@ -445,11 +445,11 @@ impl TransFsm {
         self.client_conn = Some(conn)
     }
 
-    pub fn get_shard_conn(&mut self) -> Vec<PoolConn<ClientConn>> {
+    pub fn get_shard_conns(&mut self) -> Vec<PoolConn<ClientConn>> {
         std::mem::replace(&mut self.shard_cache_conn, Vec::new())
     }
 
-    pub fn put_shard_conn(&mut self, conns: Vec<PoolConn<ClientConn>>) {
+    pub fn put_shard_conns(&mut self, conns: Vec<PoolConn<ClientConn>>) {
         self.shard_cache_conn = conns;
     }
 

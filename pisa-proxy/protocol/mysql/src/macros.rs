@@ -15,7 +15,7 @@
 #[macro_export]
 macro_rules! gen_row_data {
     ($name:ident, $($var:ident($ty:ty)),*) => {
-        impl<T: AsRef<[u8]>> RowData<T> for RowDataTyp<T> {
+        impl<T: AsRef<[u8]> + Default> RowData<T> for RowDataTyp<T> {
             fn with_buf(&mut self, buf: T)  {
                 match self {
                     $($name::$var(x) => x.with_buf(buf),)*

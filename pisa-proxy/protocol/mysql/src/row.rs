@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, str::FromStr};
-
+use std::{sync::Arc, str::FromStr, default::Default};
+use bytes::Buf;
 use crate::{
     column::ColumnInfo,
     err::DecodeRowError,
@@ -29,7 +29,7 @@ pub trait RowData<T: AsRef<[u8]>> {
 }
 
 #[derive(Clone, Debug)]
-pub enum RowDataTyp<T: AsRef<[u8]>> {
+pub enum RowDataTyp<T: AsRef<[u8]> + Default> {
     Text(RowDataText<T>),
     Binary(RowDataBinary<T>),
 }
@@ -63,10 +63,19 @@ impl RowDataCommon {
 }
 
 // For ProtocolText::ResultsetRow
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RowDataText<T: AsRef<[u8]>> {
     common: RowDataCommon,
     buf: T,
+}
+
+impl<T: AsRef<[u8]> + Default> Clone for RowDataText<T> {
+    fn clone(&self) -> Self {
+        RowDataText {
+            common: self.common.clone(),
+            buf: T::default(),
+        }
+    }
 }
 
 impl<T: AsRef<[u8]>> RowDataText<T> {
@@ -113,13 +122,25 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RowDataBinary<T: AsRef<[u8]>> {
     common: RowDataCommon,
     null_map: Vec<u8>,
     buf: T,
     start_pos: usize,
 }
+
+impl<T: AsRef<[u8]> + Default> Clone for RowDataBinary<T> {
+    fn clone(&self) -> Self {
+        Self {
+            common: self.common.clone(),
+            null_map: self.null_map.clone(),
+            start_pos: self.start_pos,
+            buf: T::default(),
+        }
+    }
+}
+
 
 impl<T: BufExt + AsRef<[u8]>> RowDataBinary<T> {
     pub fn new(columns: Arc<[ColumnInfo]>, buf: T) -> RowDataBinary<T> {
@@ -142,8 +163,6 @@ impl<T: BufExt + AsRef<[u8]>> RowDataBinary<T> {
         RowDataBinary { common, null_map, buf, start_pos: 0, }
     }
 }
-
-use bytes::Buf;
 
 impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
     fn with_buf(&mut self, buf: T) {
@@ -256,9 +275,9 @@ impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
 
 
 // Box has default 'static bound, use `'e` lifetime relax bound.
-pub fn decode_with_name<'e, T: AsRef<[u8]>, V: Value + std::str::FromStr>(row_data: &mut RowDataTyp<T>, name: &str, is_binary: bool) -> Result<Option<V>,  Box<dyn std::error::Error + Send + Sync + 'e> > 
+pub fn decode_with_name<'e, T, V>(row_data: &mut RowDataTyp<T>, name: &str, is_binary: bool) -> Result<Option<V>,  Box<dyn std::error::Error + Send + Sync + 'e> > 
 where 
-    T: AsRef<[u8]>,
+    T: AsRef<[u8]> + Default,
     V: Value + std::str::FromStr,
     <V as FromStr>::Err: std::error::Error + Sync + Send + 'e
 {
