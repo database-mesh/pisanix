@@ -17,7 +17,7 @@ package kubernetes
 import (
 	"context"
 
-	"github.com/database-mesh/golang-sdk/client"
+	"github.com/database-mesh/golang-sdk/kubernetes/client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -53,6 +53,12 @@ var (
 		Group:    "core.database-mesh.io",
 		Version:  "v1alpha1",
 		Resource: "qosclaims",
+	}
+
+	DatabaseClassSchema = schema.GroupVersionResource{
+		Group:    "core.database-mesh.io",
+		Version:  "v1alpha1",
+		Resource: "databaseclasses",
 	}
 )
 

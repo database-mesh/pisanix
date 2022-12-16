@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,7 +16,7 @@ package proxy
 import (
 	"fmt"
 
-	"github.com/database-mesh/golang-sdk/client"
+	"github.com/database-mesh/golang-sdk/kubernetes/client"
 )
 
 type PisaProxyConfig struct {
@@ -295,26 +295,25 @@ func (b *ProxyBuilder) Build() *Proxy {
 
 					switch {
 					case r.TableStrategy != nil:
-						s.TableStrategy = &TableStrategy {
+						s.TableStrategy = &TableStrategy{
 							TableShardingAlgorithmName: r.TableStrategy.TableShardingAlgorithmName,
 							TableShardingColumn:        r.TableStrategy.TableShardingColumn,
 							ShardingCount:              r.TableStrategy.ShardingCount,
 						}
 					case r.DatabaseStrategy != nil:
-						s.DatabaseStrategy = (*DatabaseStrategy)(r.DatabaseStrategy) 
+						s.DatabaseStrategy = (*DatabaseStrategy)(r.DatabaseStrategy)
 					case r.DatabaseTableStrategy != nil:
-						s.DatabaseTableStrategy = &DatabaseTableStrategy {
-							TableStrategy {
+						s.DatabaseTableStrategy = &DatabaseTableStrategy{
+							TableStrategy{
 								TableShardingAlgorithmName: r.DatabaseTableStrategy.TableShardingAlgorithmName,
-								TableShardingColumn: r.DatabaseTableStrategy.TableShardingColumn,
-								ShardingCount: r.DatabaseTableStrategy.ShardingCount,
+								TableShardingColumn:        r.DatabaseTableStrategy.TableShardingColumn,
+								ShardingCount:              r.DatabaseTableStrategy.ShardingCount,
 							},
-							DatabaseStrategy {
+							DatabaseStrategy{
 								DatabaseShardingAlgorithmName: r.DatabaseTableStrategy.DatabaseShardingAlgorithmName,
-								DatabaseShardingColumn: r.DatabaseTableStrategy.DatabaseShardingColumn,
-							
+								DatabaseShardingColumn:        r.DatabaseTableStrategy.DatabaseShardingColumn,
 							},
-						} 
+						}
 					}
 
 					actualNodes := []string{}
