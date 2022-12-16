@@ -14,10 +14,11 @@
 
 package main
 
+/*
 import (
 	"flag"
 
-	"github.com/database-mesh/golang-sdk/client"
+	"github.com/database-mesh/golang-sdk/kubernetes/client"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
@@ -55,3 +56,4 @@ func setVersion() {
 		branch = version
 	}
 }
+*/
