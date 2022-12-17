@@ -16,12 +16,15 @@ package controllers
 
 import (
 	"context"
+	"os"
+	"strings"
 
+	"github.com/database-mesh/golang-sdk/aws"
+	"github.com/database-mesh/golang-sdk/aws/client/rds"
 	v1alpha1 "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 
-	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -50,8 +53,6 @@ func (r *VirtualDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	log.Info("namespace: %s, name: %s", rt.Namespace, rt.Name)
-
 	return r.reconcile(ctx, req, rt)
 }
 
@@ -62,11 +63,67 @@ func (r *VirtualDatabaseReconciler) getRuntimeVirtualDatabase(ctx context.Contex
 }
 
 func (r *VirtualDatabaseReconciler) reconcile(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
-	// log := logger.FromContext(ctx)
-	// if res, err := r.reconcileVirtualDatabase(ctx, req.NamespacedName, rt); err != nil {
-	// 	log.Error(err, "Error reconcile Deployment")
-	// 	return res, err
-	// }
+	if rt.Spec.DatabaseClassName != "" {
+		class := &v1alpha1.DatabaseClass{}
+		err := r.Get(ctx, types.NamespacedName{
+			Namespace: rt.Namespace,
+			Name:      rt.Spec.DatabaseClassName,
+		}, class)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		subnetGroupName := class.Annotations[v1alpha1.AnnotationsSubnetGroupName]
+		vpcSecurityGroupIds := class.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
+
+		if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
+			//TODO: first check AWS RDS Instance
+			region := os.Getenv("AWS_REGION")
+			accessKey := os.Getenv("AWS_ACCESS_KEY")
+			secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+			sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
+			if err := rds.NewService(sess[region]).Instance().
+				SetEngine(class.Spec.Engine.Name).
+				SetEngineVersion(class.Spec.Engine.Version).
+				//FIXME: should be random name
+				SetDBInstanceIdentifier(class.Name).
+				//NOTE: if DefaultMasterUsername
+				//FIXME: should be a default value or a specific one
+				SetMasterUsername("admin").
+				//FIXME: should be a randompass
+				SetMasterUserPassword("randompass").
+				SetDBInstanceClass(class.Spec.Instance.Class).
+				SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
+				//FIXME: checkout different service
+				SetDBName(rt.Spec.Services[0].DatabaseMySQL.DB).
+				SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
+				SetDBSubnetGroup(subnetGroupName).
+				Create(context.TODO()); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			dbep := &v1alpha1.DatabaseEndpoint{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      class.Name,
+					Namespace: rt.Namespace,
+				},
+				Spec: v1alpha1.DatabaseEndpointSpec{
+					Database: v1alpha1.Database{
+						MySQL: &v1alpha1.MySQL{
+							Host:     "thisshouldbe",
+							Port:     3306,
+							User:     "admin",
+							Password: "randompass",
+							DB:       rt.Spec.Services[0].DatabaseMySQL.DB,
+						},
+					},
+				},
+			}
+			if err := r.Create(ctx, dbep); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -79,8 +136,5 @@ func (r *VirtualDatabaseReconciler) reconcileVirtualDatabase(ctx context.Context
 func (r *VirtualDatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.VirtualDatabase{}).
-		Owns(&appsv1.Deployment{}).
-		Owns(&v1.Service{}).
-		Owns(&v1.Pod{}).
 		Complete(r)
 }
