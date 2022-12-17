@@ -49,3 +49,6 @@ docs/.docusaurus/*
 
 # Helm Charts Compressed File
 .tgz
+
+# Local Test File
+certs
