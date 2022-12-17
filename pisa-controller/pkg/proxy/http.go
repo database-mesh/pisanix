@@ -18,6 +18,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 	"github.com/database-mesh/golang-sdk/kubernetes/client"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/kubernetes"
 
@@ -63,14 +64,14 @@ func getProxyConfig(ctx context.Context, c dynamic.Interface, namespace, appname
 
 }
 
-func proxyConfigBuild(vdb *client.VirtualDatabase, tslist *client.TrafficStrategyList, dslist *client.DataShardList, dbeplist *client.DatabaseEndpointList) (*PisaProxyConfig, error) {
+func proxyConfigBuild(vdb *v1alpha1.VirtualDatabase, tslist *v1alpha1.TrafficStrategyList, dslist *v1alpha1.DataShardList, dbeplist *v1alpha1.DatabaseEndpointList) (*PisaProxyConfig, error) {
 	builder := NewPisaProxyConfigBuilder()
 	builders := []*ProxyBuilder{}
 	nodeGroupConfigBuilder := NewNodeGroupConfigBuilder()
 	for _, service := range vdb.Spec.Services {
 		builder := NewProxyBuilder().SetVirtualDatabaseService(service)
 
-		var tsobj client.TrafficStrategy
+		var tsobj v1alpha1.TrafficStrategy
 		for _, ts := range tslist.Items {
 			if ts.Name == service.TrafficStrategy {
 				tsobj = ts
@@ -86,7 +87,7 @@ func proxyConfigBuild(vdb *client.VirtualDatabase, tslist *client.TrafficStrateg
 		}
 
 		//FIXME
-		dbeps := &client.DatabaseEndpointList{Items: []client.DatabaseEndpoint{}}
+		dbeps := &v1alpha1.DatabaseEndpointList{Items: []v1alpha1.DatabaseEndpoint{}}
 		for _, dbep := range dbeplist.Items {
 			for k, v := range tsobj.Spec.Selector.MatchLabels {
 				if dbep.Labels[k] == v {
@@ -153,7 +154,7 @@ func getDaemonConfig(ctx context.Context, c dynamic.Interface) (interface{}, err
 	return daemonConfigBuild(vdblist, tslist, qclist, dbeplist)
 }
 
-func daemonConfigBuild(vdblist *client.VirtualDatabaseList, tslist *client.TrafficStrategyList, qclist *client.QoSClaimList, dbeplist *client.DatabaseEndpointList) (interface{}, error) {
+func daemonConfigBuild(vdblist *v1alpha1.VirtualDatabaseList, tslist *v1alpha1.TrafficStrategyList, qclist *v1alpha1.QoSClaimList, dbeplist *v1alpha1.DatabaseEndpointList) (interface{}, error) {
 	appbuilders := []*AppBuilder{}
 	for _, vdb := range vdblist.Items {
 		var targetVdb bool
