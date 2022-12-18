@@ -89,7 +89,7 @@ func (r *VirtualDatabaseReconciler) reconcile(ctx context.Context, req ctrl.Requ
 				SetDBInstanceIdentifier(class.Name).
 				//NOTE: if DefaultMasterUsername
 				//FIXME: should be a default value or a specific one
-				SetMasterUsername("admin").
+				SetMasterUsername(class.Spec.DefaultMasterUsername).
 				//FIXME: should be a randompass
 				SetMasterUserPassword("randompass").
 				SetDBInstanceClass(class.Spec.Instance.Class).
@@ -112,7 +112,7 @@ func (r *VirtualDatabaseReconciler) reconcile(ctx context.Context, req ctrl.Requ
 						MySQL: &v1alpha1.MySQL{
 							Host:     "thisshouldbe",
 							Port:     3306,
-							User:     "admin",
+							User:     class.Spec.DefaultMasterUsername,
 							Password: "randompass",
 							DB:       rt.Spec.Services[0].DatabaseMySQL.DB,
 						},
