@@ -52,6 +52,8 @@ spec:
             type: object
           spec:
             properties:
+              databaseClassName:
+                type: string
               services:
                 items:
                   description: Service Defines the content of a VirtualDatabase
