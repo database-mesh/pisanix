@@ -16,22 +16,48 @@ package main
 
 import (
 	"flag"
+	"os"
 
-	"github.com/database-mesh/golang-sdk/client"
+	"github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
+	"github.com/database-mesh/golang-sdk/kubernetes/client"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/proxy"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/webhook"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/controllers"
+
+	"go.uber.org/zap/zapcore"
+
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// to ensure that exec-entrypoint and run can make use of them.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	//+kubebuilder:scaffold:imports
 
 	log "github.com/sirupsen/logrus"
 )
 
 var (
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
+
 	version   string
 	gitcommit string
 	branch    string
 )
 
 func init() {
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+
+	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	//+kubebuilder:scaffold:scheme
+
 	setVersion()
 	log.Infof("version: %s, gitcommit: %s, branch: %s", version, gitcommit, branch)
 	flag.Parse()
@@ -39,12 +65,71 @@ func init() {
 }
 
 func main() {
-	mgr := task.TaskManager{}
+	var metricsAddr string
+	var enableLeaderElection bool
+	var probeAddr string
+	var webhookPort int
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8082", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
+	flag.IntVar(&webhookPort, "webhook-port", 9443, "The port the webhook binds to")
+	opts := zap.Options{
+		Development: true,
+		TimeEncoder: zapcore.RFC3339TimeEncoder,
+	}
+	opts.BindFlags(flag.CommandLine)
+	flag.Parse()
+
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		Port:                   webhookPort,
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "0e5175ce.database-mesh.io",
+		CertDir:                "/etc/pisa-controller/certs",
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+	if err = (&controllers.VirtualDatabaseReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "VirtualDatabase")
+		os.Exit(1)
+	}
+	//TODO: Add other workload reconciler
+
+	//TODO: Add SetupWebhookWithManager
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
+	tmgr := task.TaskManager{}
 
 	p := proxy.NewTask()
 	w := webhook.NewTask()
 
-	mgr.Register(p).Register(w).Run()
+	go tmgr.Register(p).Register(w).Run()
+
+	setupLog.Info("starting operator")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		setupLog.Error(err, "problem running operator")
+		os.Exit(1)
+	}
 }
 
 func setVersion() {

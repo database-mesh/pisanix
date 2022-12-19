@@ -17,7 +17,7 @@ package proxy
 import (
 	"testing"
 
-	"github.com/database-mesh/golang-sdk/client"
+	"github.com/database-mesh/golang-sdk/kubernetes/client"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -17,7 +17,7 @@ package kubernetes
 import (
 	"context"
 
-	"github.com/database-mesh/golang-sdk/client"
+	"github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -54,15 +54,21 @@ var (
 		Version:  "v1alpha1",
 		Resource: "qosclaims",
 	}
+
+	DatabaseClassSchema = schema.GroupVersionResource{
+		Group:    "core.database-mesh.io",
+		Version:  "v1alpha1",
+		Resource: "databaseclasses",
+	}
 )
 
-func GetVirtualDatabaseWithContext(ctx context.Context, c dynamic.Interface, namespace, name string) (*client.VirtualDatabase, error) {
+func GetVirtualDatabaseWithContext(ctx context.Context, c dynamic.Interface, namespace, name string) (*v1alpha1.VirtualDatabase, error) {
 	raw, err := c.Resource(VirtualDatabaseSchema).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	vdb := &client.VirtualDatabase{}
+	vdb := &v1alpha1.VirtualDatabase{}
 	data, err := raw.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -75,8 +81,8 @@ func GetVirtualDatabaseWithContext(ctx context.Context, c dynamic.Interface, nam
 	return vdb, nil
 }
 
-func GetVirtualDatabaseListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.VirtualDatabaseList, error) {
-	vdblist := &client.VirtualDatabaseList{}
+func GetVirtualDatabaseListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*v1alpha1.VirtualDatabaseList, error) {
+	vdblist := &v1alpha1.VirtualDatabaseList{}
 	raw, err := c.Resource(VirtualDatabaseSchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -95,8 +101,8 @@ func GetVirtualDatabaseListWithContext(ctx context.Context, c dynamic.Interface,
 	return vdblist, nil
 }
 
-func GetTrafficStrategyListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.TrafficStrategyList, error) {
-	tslist := &client.TrafficStrategyList{}
+func GetTrafficStrategyListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*v1alpha1.TrafficStrategyList, error) {
+	tslist := &v1alpha1.TrafficStrategyList{}
 	raw, err := c.Resource(TrafficStrategySchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -115,8 +121,8 @@ func GetTrafficStrategyListWithContext(ctx context.Context, c dynamic.Interface,
 	return tslist, nil
 }
 
-func GetDataShardListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.DataShardList, error) {
-	dslist := &client.DataShardList{}
+func GetDataShardListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*v1alpha1.DataShardList, error) {
+	dslist := &v1alpha1.DataShardList{}
 	raw, err := c.Resource(DataShardSchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -135,8 +141,8 @@ func GetDataShardListWithContext(ctx context.Context, c dynamic.Interface, names
 	return dslist, nil
 }
 
-func GetDatabaseEndpointListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.DatabaseEndpointList, error) {
-	dbeplist := &client.DatabaseEndpointList{}
+func GetDatabaseEndpointListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*v1alpha1.DatabaseEndpointList, error) {
+	dbeplist := &v1alpha1.DatabaseEndpointList{}
 	raw, err := c.Resource(DatabaseEndpointSchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -155,8 +161,8 @@ func GetDatabaseEndpointListWithContext(ctx context.Context, c dynamic.Interface
 	return dbeplist, nil
 }
 
-func GetQoSClaimListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*client.QoSClaimList, error) {
-	qclist := &client.QoSClaimList{}
+func GetQoSClaimListWithContext(ctx context.Context, c dynamic.Interface, namespace string) (*v1alpha1.QoSClaimList, error) {
+	qclist := &v1alpha1.QoSClaimList{}
 	raw, err := c.Resource(QoSClaimSchema).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err

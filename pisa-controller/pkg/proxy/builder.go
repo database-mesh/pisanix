@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,7 +16,7 @@ package proxy
 import (
 	"fmt"
 
-	"github.com/database-mesh/golang-sdk/client"
+	"github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 )
 
 type PisaProxyConfig struct {
@@ -163,32 +163,32 @@ func (b *ProxyConfigBuilder) Build() *ProxyConfig {
 }
 
 type ProxyBuilder struct {
-	VirtualDatabaseService client.VirtualDatabaseService
-	TrafficStrategy        client.TrafficStrategy
-	DatabaseEndpoints      []client.DatabaseEndpoint
-	DataShard              client.DataShard
+	VirtualDatabaseService v1alpha1.VirtualDatabaseService
+	TrafficStrategy        v1alpha1.TrafficStrategy
+	DatabaseEndpoints      []v1alpha1.DatabaseEndpoint
+	DataShard              v1alpha1.DataShard
 }
 
 func NewProxyBuilder() *ProxyBuilder {
 	return &ProxyBuilder{}
 }
 
-func (b *ProxyBuilder) SetVirtualDatabaseService(svc client.VirtualDatabaseService) *ProxyBuilder {
+func (b *ProxyBuilder) SetVirtualDatabaseService(svc v1alpha1.VirtualDatabaseService) *ProxyBuilder {
 	b.VirtualDatabaseService = svc
 	return b
 }
 
-func (b *ProxyBuilder) SetTrafficStrategy(ts client.TrafficStrategy) *ProxyBuilder {
+func (b *ProxyBuilder) SetTrafficStrategy(ts v1alpha1.TrafficStrategy) *ProxyBuilder {
 	b.TrafficStrategy = ts
 	return b
 }
 
-func (b *ProxyBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *ProxyBuilder {
+func (b *ProxyBuilder) SetDatabaseEndpoints(dbeps []v1alpha1.DatabaseEndpoint) *ProxyBuilder {
 	b.DatabaseEndpoints = dbeps
 	return b
 }
 
-func (b *ProxyBuilder) SetDataShards(shard client.DataShard) *ProxyBuilder {
+func (b *ProxyBuilder) SetDataShards(shard v1alpha1.DataShard) *ProxyBuilder {
 	b.DataShard = shard
 	return b
 }
@@ -295,26 +295,25 @@ func (b *ProxyBuilder) Build() *Proxy {
 
 					switch {
 					case r.TableStrategy != nil:
-						s.TableStrategy = &TableStrategy {
+						s.TableStrategy = &TableStrategy{
 							TableShardingAlgorithmName: r.TableStrategy.TableShardingAlgorithmName,
 							TableShardingColumn:        r.TableStrategy.TableShardingColumn,
 							ShardingCount:              r.TableStrategy.ShardingCount,
 						}
 					case r.DatabaseStrategy != nil:
-						s.DatabaseStrategy = (*DatabaseStrategy)(r.DatabaseStrategy) 
+						s.DatabaseStrategy = (*DatabaseStrategy)(r.DatabaseStrategy)
 					case r.DatabaseTableStrategy != nil:
-						s.DatabaseTableStrategy = &DatabaseTableStrategy {
-							TableStrategy {
+						s.DatabaseTableStrategy = &DatabaseTableStrategy{
+							TableStrategy{
 								TableShardingAlgorithmName: r.DatabaseTableStrategy.TableShardingAlgorithmName,
-								TableShardingColumn: r.DatabaseTableStrategy.TableShardingColumn,
-								ShardingCount: r.DatabaseTableStrategy.ShardingCount,
+								TableShardingColumn:        r.DatabaseTableStrategy.TableShardingColumn,
+								ShardingCount:              r.DatabaseTableStrategy.ShardingCount,
 							},
-							DatabaseStrategy {
+							DatabaseStrategy{
 								DatabaseShardingAlgorithmName: r.DatabaseTableStrategy.DatabaseShardingAlgorithmName,
-								DatabaseShardingColumn: r.DatabaseTableStrategy.DatabaseShardingColumn,
-							
+								DatabaseShardingColumn:        r.DatabaseTableStrategy.DatabaseShardingColumn,
 							},
-						} 
+						}
 					}
 
 					actualNodes := []string{}
@@ -365,7 +364,7 @@ func (b *ProxyBuilder) Build() *Proxy {
 	return proxy
 }
 
-func BuildMySQLNodesFromDatabaseEndpoints(dbeps []client.DatabaseEndpoint) []MySQLNode {
+func BuildMySQLNodesFromDatabaseEndpoints(dbeps []v1alpha1.DatabaseEndpoint) []MySQLNode {
 	nodes := []MySQLNode{}
 	for _, dbep := range dbeps {
 		if dbep.Spec.Database.MySQL != nil {
@@ -403,16 +402,16 @@ func getDbEpRole(annotations map[string]string) (role string) {
 }
 
 type MySQLConfigBuilder struct {
-	VirtualDatabaseService client.VirtualDatabaseService
-	TrafficStrategy        client.TrafficStrategy
-	DatabaseEndpoints      []client.DatabaseEndpoint
+	VirtualDatabaseService v1alpha1.VirtualDatabaseService
+	TrafficStrategy        v1alpha1.TrafficStrategy
+	DatabaseEndpoints      []v1alpha1.DatabaseEndpoint
 }
 
 func NewMySQLConfigBuilder() *MySQLConfigBuilder {
 	return &MySQLConfigBuilder{}
 }
 
-func (b *MySQLConfigBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *MySQLConfigBuilder {
+func (b *MySQLConfigBuilder) SetDatabaseEndpoints(dbeps []v1alpha1.DatabaseEndpoint) *MySQLConfigBuilder {
 	b.DatabaseEndpoints = dbeps
 	return b
 }
@@ -428,22 +427,22 @@ func (b *MySQLConfigBuilder) Build() *MySQLConfig {
 }
 
 type NodeGroupConfigBuilder struct {
-	DataShards        client.DataShard
-	DatabaseEndpoints []client.DatabaseEndpoint
+	DataShards        v1alpha1.DataShard
+	DatabaseEndpoints []v1alpha1.DatabaseEndpoint
 }
 
 func NewNodeGroupConfigBuilder() *NodeGroupConfigBuilder {
 	return &NodeGroupConfigBuilder{
-		DataShards: client.DataShard{},
+		DataShards: v1alpha1.DataShard{},
 	}
 }
 
-func (b *NodeGroupConfigBuilder) SetDataShards(ds client.DataShard) *NodeGroupConfigBuilder {
+func (b *NodeGroupConfigBuilder) SetDataShards(ds v1alpha1.DataShard) *NodeGroupConfigBuilder {
 	b.DataShards = ds
 	return b
 }
 
-func (b *NodeGroupConfigBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *NodeGroupConfigBuilder {
+func (b *NodeGroupConfigBuilder) SetDatabaseEndpoints(dbeps []v1alpha1.DatabaseEndpoint) *NodeGroupConfigBuilder {
 	b.DatabaseEndpoints = dbeps
 	return b
 }
@@ -551,33 +550,33 @@ func (b *PisaDaemonConfigBuilder) Build() *PisaDaemonConfig {
 }
 
 type AppBuilder struct {
-	VirtualDatabase   client.VirtualDatabase
-	TrafficStrategies []client.TrafficStrategy
-	DatabaseEndpoints []client.DatabaseEndpoint
-	QoSClaims         []client.QoSClaim
-	// DataShard         client.DataShard
+	VirtualDatabase   v1alpha1.VirtualDatabase
+	TrafficStrategies []v1alpha1.TrafficStrategy
+	DatabaseEndpoints []v1alpha1.DatabaseEndpoint
+	QoSClaims         []v1alpha1.QoSClaim
+	// DataShard         v1alpha1.DataShard
 }
 
 func NewAppBuilder() *AppBuilder {
 	return &AppBuilder{}
 }
 
-func (b *AppBuilder) SetVirtualDatabase(vdb client.VirtualDatabase) *AppBuilder {
+func (b *AppBuilder) SetVirtualDatabase(vdb v1alpha1.VirtualDatabase) *AppBuilder {
 	b.VirtualDatabase = vdb
 	return b
 }
 
-func (b *AppBuilder) SetTrafficStrategies(tses []client.TrafficStrategy) *AppBuilder {
+func (b *AppBuilder) SetTrafficStrategies(tses []v1alpha1.TrafficStrategy) *AppBuilder {
 	b.TrafficStrategies = tses
 	return b
 }
 
-func (b *AppBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *AppBuilder {
+func (b *AppBuilder) SetDatabaseEndpoints(dbeps []v1alpha1.DatabaseEndpoint) *AppBuilder {
 	b.DatabaseEndpoints = dbeps
 	return b
 }
 
-func (b *AppBuilder) SetQoSClaims(qcs []client.QoSClaim) *AppBuilder {
+func (b *AppBuilder) SetQoSClaims(qcs []v1alpha1.QoSClaim) *AppBuilder {
 	b.QoSClaims = qcs
 	return b
 }
@@ -595,7 +594,7 @@ func (b *AppBuilder) Build() App {
 			if ts.Name == vsvc.TrafficStrategy {
 				svcbuilder.SetTrafficStrategy(ts)
 
-				dbeps := []client.DatabaseEndpoint{}
+				dbeps := []v1alpha1.DatabaseEndpoint{}
 				for _, dbep := range b.DatabaseEndpoints {
 					for k, v := range ts.Spec.Selector.MatchLabels {
 						if dbep.Labels[k] == v {
@@ -625,32 +624,32 @@ func (b *AppBuilder) Build() App {
 }
 
 type ServiceBuilder struct {
-	VirtualDatabaseService client.VirtualDatabaseService
-	TrafficStrategy        client.TrafficStrategy
-	QoSClaim               client.QoSClaim
-	DatabaseEndpoints      []client.DatabaseEndpoint
+	VirtualDatabaseService v1alpha1.VirtualDatabaseService
+	TrafficStrategy        v1alpha1.TrafficStrategy
+	QoSClaim               v1alpha1.QoSClaim
+	DatabaseEndpoints      []v1alpha1.DatabaseEndpoint
 }
 
 func NewServiceBuilder() *ServiceBuilder {
 	return &ServiceBuilder{}
 }
 
-func (b *ServiceBuilder) SetVirtualDatabaseService(vsvc client.VirtualDatabaseService) *ServiceBuilder {
+func (b *ServiceBuilder) SetVirtualDatabaseService(vsvc v1alpha1.VirtualDatabaseService) *ServiceBuilder {
 	b.VirtualDatabaseService = vsvc
 	return b
 }
 
-func (b *ServiceBuilder) SetTrafficStrategy(ts client.TrafficStrategy) *ServiceBuilder {
+func (b *ServiceBuilder) SetTrafficStrategy(ts v1alpha1.TrafficStrategy) *ServiceBuilder {
 	b.TrafficStrategy = ts
 	return b
 }
 
-func (b *ServiceBuilder) SetQoSClaim(qc client.QoSClaim) *ServiceBuilder {
+func (b *ServiceBuilder) SetQoSClaim(qc v1alpha1.QoSClaim) *ServiceBuilder {
 	b.QoSClaim = qc
 	return b
 }
 
-func (b *ServiceBuilder) SetDatabaseEndpoints(dbeps []client.DatabaseEndpoint) *ServiceBuilder {
+func (b *ServiceBuilder) SetDatabaseEndpoints(dbeps []v1alpha1.DatabaseEndpoint) *ServiceBuilder {
 	b.DatabaseEndpoints = dbeps
 	return b
 }
