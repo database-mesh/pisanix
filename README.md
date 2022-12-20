@@ -16,7 +16,7 @@
 3. *Multi Protocol Support*: Pisanix has a bunch of different plugins to help build a **Glue Layer** for any database protocols. 
 4. *Cloud Native Architecture*: Pisanix takes advantage of the classic control plane and data plane pattern, using Infrastructure as Code to make it a versioned database access behavior.
 
- <img src="static/dbmesh-layer.jpg" width="600" length="600"/>
+ <img src="static/dbmesh-layer.png" width="600" length="600"/>
 
 # Current Status 
 
@@ -45,6 +45,8 @@ Pisanix now supports `TrafficStrategy` of [Database Mesh Specificiation](https:/
   - [ ] Fine-Grained Access Control   
 - QoSClaim  
   - [x] TrafficQoS
+- DatabaseClass
+  - [x] AWSRdsInstance 
  
 
 # Getting Started
