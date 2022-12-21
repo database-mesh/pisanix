@@ -17,25 +17,25 @@ package proxy
 import (
 	"testing"
 
-	"github.com/database-mesh/golang-sdk/kubernetes/client"
+	"github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_build(t *testing.T) {
-	tslist := &client.TrafficStrategyList{
-		Items: []client.TrafficStrategy{
+	tslist := &v1alpha1.TrafficStrategyList{
+		Items: []v1alpha1.TrafficStrategy{
 			tsReadWriteSplttingDynamic,
 		},
 	}
 
-	dslist := &client.DataShardList{
-		Items: []client.DataShard{
+	dslist := &v1alpha1.DataShardList{
+		Items: []v1alpha1.DataShard{
 			generalshard,
 		},
 	}
 
-	dbeplist := &client.DatabaseEndpointList{
-		Items: []client.DatabaseEndpoint{
+	dbeplist := &v1alpha1.DatabaseEndpointList{
+		Items: []v1alpha1.DatabaseEndpoint{
 			dbep,
 		},
 	}

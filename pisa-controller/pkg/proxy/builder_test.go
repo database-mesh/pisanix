@@ -19,20 +19,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/database-mesh/golang-sdk/kubernetes/client"
+	"github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var vdb = client.VirtualDatabase{
+var vdb = v1alpha1.VirtualDatabase{
 	ObjectMeta: metav1.ObjectMeta{
 		Name: "catalogue",
 	},
-	Spec: client.VirtualDatabaseSpec{
-		Services: []client.VirtualDatabaseService{
+	Spec: v1alpha1.VirtualDatabaseSpec{
+		Services: []v1alpha1.VirtualDatabaseService{
 			{
-				DatabaseService: client.DatabaseService{
-					DatabaseMySQL: &client.DatabaseMySQL{
+				DatabaseService: v1alpha1.DatabaseService{
+					DatabaseMySQL: &v1alpha1.DatabaseMySQL{
 						Host:          "127.0.0.1",
 						Port:          3306,
 						DB:            "socksdb",
@@ -50,7 +50,7 @@ var vdb = client.VirtualDatabase{
 	},
 }
 
-var dbep = client.DatabaseEndpoint{
+var dbep = v1alpha1.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
@@ -61,9 +61,9 @@ var dbep = client.DatabaseEndpoint{
 			"source": "catalogue",
 		},
 	},
-	Spec: client.DatabaseEndpointSpec{
-		Database: client.Database{
-			MySQL: &client.MySQL{
+	Spec: v1alpha1.DatabaseEndpointSpec{
+		Database: v1alpha1.Database{
+			MySQL: &v1alpha1.MySQL{
 				DB:       "socksdb",
 				Host:     "catalogue-db.demotest",
 				Password: "fake_password",
@@ -74,7 +74,7 @@ var dbep = client.DatabaseEndpoint{
 	},
 }
 
-var cbs = []client.CircuitBreak{
+var cbs = []v1alpha1.CircuitBreak{
 	{
 		Regex: []string{
 			"^select",
@@ -82,7 +82,7 @@ var cbs = []client.CircuitBreak{
 	},
 }
 
-var ccs = []client.ConcurrencyControl{
+var ccs = []v1alpha1.ConcurrencyControl{
 	{
 		Regex: []string{
 			"^insert",
@@ -92,12 +92,12 @@ var ccs = []client.ConcurrencyControl{
 	},
 }
 
-var tsSimpleLoadBalance = client.TrafficStrategy{
+var tsSimpleLoadBalance = v1alpha1.TrafficStrategy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
 	},
-	Spec: client.TrafficStrategySpec{
+	Spec: v1alpha1.TrafficStrategySpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"source": "catalogue",
@@ -105,19 +105,19 @@ var tsSimpleLoadBalance = client.TrafficStrategy{
 		},
 		CircuitBreaks:       cbs,
 		ConcurrencyControls: ccs,
-		LoadBalance: &client.LoadBalance{
-			SimpleLoadBalance: &client.SimpleLoadBalance{
-				Kind: client.LoadBalanceAlgorithmRoundRobin,
+		LoadBalance: &v1alpha1.LoadBalance{
+			SimpleLoadBalance: &v1alpha1.SimpleLoadBalance{
+				Kind: v1alpha1.LoadBalanceAlgorithmRoundRobin,
 			},
 		},
 	},
 }
-var tsReadWriteSplittingStatic = client.TrafficStrategy{
+var tsReadWriteSplittingStatic = v1alpha1.TrafficStrategy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
 	},
-	Spec: client.TrafficStrategySpec{
+	Spec: v1alpha1.TrafficStrategySpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"source": "catalogue",
@@ -125,11 +125,11 @@ var tsReadWriteSplittingStatic = client.TrafficStrategy{
 		},
 		CircuitBreaks:       cbs,
 		ConcurrencyControls: ccs,
-		LoadBalance: &client.LoadBalance{
-			ReadWriteSplitting: &client.ReadWriteSplitting{
-				Static: &client.ReadWriteSplittingStatic{
+		LoadBalance: &v1alpha1.LoadBalance{
+			ReadWriteSplitting: &v1alpha1.ReadWriteSplitting{
+				Static: &v1alpha1.ReadWriteSplittingStatic{
 					DefaultTarget: "readwrite",
-					Rules: []client.ReadWriteSplittingRule{
+					Rules: []v1alpha1.ReadWriteSplittingRule{
 						{
 							Name:          "write-rule",
 							Regex:         []string{"^insert"},
@@ -150,12 +150,12 @@ var tsReadWriteSplittingStatic = client.TrafficStrategy{
 		},
 	},
 }
-var tsReadWriteSplttingDynamic = client.TrafficStrategy{
+var tsReadWriteSplttingDynamic = v1alpha1.TrafficStrategy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
 	},
-	Spec: client.TrafficStrategySpec{
+	Spec: v1alpha1.TrafficStrategySpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"source": "catalogue",
@@ -163,11 +163,11 @@ var tsReadWriteSplttingDynamic = client.TrafficStrategy{
 		},
 		CircuitBreaks:       cbs,
 		ConcurrencyControls: ccs,
-		LoadBalance: &client.LoadBalance{
-			ReadWriteSplitting: &client.ReadWriteSplitting{
-				Dynamic: &client.ReadWriteSplittingDynamic{
+		LoadBalance: &v1alpha1.LoadBalance{
+			ReadWriteSplitting: &v1alpha1.ReadWriteSplitting{
+				Dynamic: &v1alpha1.ReadWriteSplittingDynamic{
 					DefaultTarget: "readwrite",
-					Rules: []client.ReadWriteSplittingRule{
+					Rules: []v1alpha1.ReadWriteSplittingRule{
 						{
 							Name:          "write-rule",
 							Regex:         []string{"^insert"},
@@ -183,35 +183,35 @@ var tsReadWriteSplttingDynamic = client.TrafficStrategy{
 							AlgorithmName: "roundrobin",
 						},
 					},
-					Discovery: client.ReadWriteDiscovery{
-						MasterHighAvailability: &client.MasterHighAvailability{
+					Discovery: v1alpha1.ReadWriteDiscovery{
+						MasterHighAvailability: &v1alpha1.MasterHighAvailability{
 							User:            "monitor",
 							Password:        "monitor",
 							MonitorInterval: 1000,
-							ConnectionProbe: &client.ConnectionProbe{
-								Probe: &client.Probe{
+							ConnectionProbe: &v1alpha1.ConnectionProbe{
+								Probe: &v1alpha1.Probe{
 									PeriodMilliseconds:  2000,
 									FailureThreshold:    3,
 									TimeoutMilliseconds: 200,
 								},
 							},
-							PingProbe: &client.PingProbe{
-								Probe: &client.Probe{
+							PingProbe: &v1alpha1.PingProbe{
+								Probe: &v1alpha1.Probe{
 									PeriodMilliseconds:  1000,
 									TimeoutMilliseconds: 100,
 									FailureThreshold:    3,
 								},
 							},
-							ReplicationLagProbe: &client.ReplicationLagProbe{
-								Probe: &client.Probe{
+							ReplicationLagProbe: &v1alpha1.ReplicationLagProbe{
+								Probe: &v1alpha1.Probe{
 									PeriodMilliseconds:  1000,
 									TimeoutMilliseconds: 3,
 									FailureThreshold:    3,
 								},
 								MaxReplicationLag: 3,
 							},
-							ReadOnlyProbe: &client.ReadOnlyProbe{
-								Probe: &client.Probe{
+							ReadOnlyProbe: &v1alpha1.ReadOnlyProbe{
+								Probe: &v1alpha1.Probe{
 									PeriodMilliseconds:  1000,
 									TimeoutMilliseconds: 3,
 									FailureThreshold:    3,
@@ -394,17 +394,17 @@ func Test_ProxyBuilder(t *testing.T) {
 		{
 			VirtualDatabaseService: vdb.Spec.Services[0],
 			TrafficStrategy:        tsSimpleLoadBalance,
-			DatabaseEndpoints:      []client.DatabaseEndpoint{dbep},
+			DatabaseEndpoints:      []v1alpha1.DatabaseEndpoint{dbep},
 		},
 		{
 			VirtualDatabaseService: vdb.Spec.Services[0],
 			TrafficStrategy:        tsReadWriteSplittingStatic,
-			DatabaseEndpoints:      []client.DatabaseEndpoint{dbep},
+			DatabaseEndpoints:      []v1alpha1.DatabaseEndpoint{dbep},
 		},
 		{
 			VirtualDatabaseService: vdb.Spec.Services[0],
 			TrafficStrategy:        tsReadWriteSplttingDynamic,
-			DatabaseEndpoints:      []client.DatabaseEndpoint{dbep},
+			DatabaseEndpoints:      []v1alpha1.DatabaseEndpoint{dbep},
 		},
 	}
 
@@ -444,13 +444,13 @@ func Test_ShardedProxyBuilder(t *testing.T) {
 			VirtualDatabaseService: vdb.Spec.Services[0],
 			// TODO: temp
 			DataShard:         rwshard,
-			DatabaseEndpoints: []client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
+			DatabaseEndpoints: []v1alpha1.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
 		},
 		{
 			VirtualDatabaseService: vdb.Spec.Services[0],
 			// TODO: temp
 			DataShard:         generalshard,
-			DatabaseEndpoints: []client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
+			DatabaseEndpoints: []v1alpha1.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2},
 		},
 	}
 
@@ -554,9 +554,9 @@ func assertConcurrencyControls(t *testing.T, exp, act []ConcurrencyControl, msg 
 }
 func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 	builder := &ProxyBuilder{
-		VirtualDatabaseService: client.VirtualDatabaseService{
-			DatabaseService: client.DatabaseService{
-				DatabaseMySQL: &client.DatabaseMySQL{
+		VirtualDatabaseService: v1alpha1.VirtualDatabaseService{
+			DatabaseService: v1alpha1.DatabaseService{
+				DatabaseMySQL: &v1alpha1.DatabaseMySQL{
 					Host:          "127.0.0.1",
 					Port:          3306,
 					DB:            "socksdb",
@@ -569,17 +569,17 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 			Name:            "catalogue",
 			TrafficStrategy: "catalogue",
 		},
-		TrafficStrategy: client.TrafficStrategy{
+		TrafficStrategy: v1alpha1.TrafficStrategy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "catalogue",
 				Namespace: "demotest",
 			},
-			Spec: client.TrafficStrategySpec{
-				LoadBalance: &client.LoadBalance{
-					ReadWriteSplitting: &client.ReadWriteSplitting{
-						Dynamic: &client.ReadWriteSplittingDynamic{
+			Spec: v1alpha1.TrafficStrategySpec{
+				LoadBalance: &v1alpha1.LoadBalance{
+					ReadWriteSplitting: &v1alpha1.ReadWriteSplitting{
+						Dynamic: &v1alpha1.ReadWriteSplittingDynamic{
 							DefaultTarget: "",
-							Rules: []client.ReadWriteSplittingRule{
+							Rules: []v1alpha1.ReadWriteSplittingRule{
 								{
 									Name:          "write-rule",
 									Regex:         []string{"^insert"},
@@ -595,35 +595,35 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 									AlgorithmName: "roundrobin",
 								},
 							},
-							Discovery: client.ReadWriteDiscovery{
-								MasterHighAvailability: &client.MasterHighAvailability{
+							Discovery: v1alpha1.ReadWriteDiscovery{
+								MasterHighAvailability: &v1alpha1.MasterHighAvailability{
 									User:            "monitor",
 									Password:        "monitor",
 									MonitorInterval: 1000,
-									ConnectionProbe: &client.ConnectionProbe{
-										Probe: &client.Probe{
+									ConnectionProbe: &v1alpha1.ConnectionProbe{
+										Probe: &v1alpha1.Probe{
 											PeriodMilliseconds:  2000,
 											FailureThreshold:    3,
 											TimeoutMilliseconds: 200,
 										},
 									},
-									PingProbe: &client.PingProbe{
-										Probe: &client.Probe{
+									PingProbe: &v1alpha1.PingProbe{
+										Probe: &v1alpha1.Probe{
 											PeriodMilliseconds:  1000,
 											TimeoutMilliseconds: 100,
 											FailureThreshold:    3,
 										},
 									},
-									ReplicationLagProbe: &client.ReplicationLagProbe{
-										Probe: &client.Probe{
+									ReplicationLagProbe: &v1alpha1.ReplicationLagProbe{
+										Probe: &v1alpha1.Probe{
 											PeriodMilliseconds:  1000,
 											TimeoutMilliseconds: 3,
 											FailureThreshold:    3,
 										},
 										MaxReplicationLag: 3,
 									},
-									ReadOnlyProbe: &client.ReadOnlyProbe{
-										Probe: &client.Probe{
+									ReadOnlyProbe: &v1alpha1.ReadOnlyProbe{
+										Probe: &v1alpha1.Probe{
 											PeriodMilliseconds:  1000,
 											TimeoutMilliseconds: 3,
 											FailureThreshold:    3,
@@ -636,7 +636,7 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 				},
 			},
 		},
-		DatabaseEndpoints: []client.DatabaseEndpoint{
+		DatabaseEndpoints: []v1alpha1.DatabaseEndpoint{
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "catalogue",
@@ -645,9 +645,9 @@ func Test_ReadWriteSplittingDynamicConversion(t *testing.T) {
 						"source": "catalogue",
 					},
 				},
-				Spec: client.DatabaseEndpointSpec{
-					Database: client.Database{
-						MySQL: &client.MySQL{
+				Spec: v1alpha1.DatabaseEndpointSpec{
+					Database: v1alpha1.Database{
+						MySQL: &v1alpha1.MySQL{
 							DB:       "socksdb",
 							Host:     "catalogue-db.demotest",
 							Password: "fake_password",
@@ -758,7 +758,7 @@ func Test_ShardingConfig(t *testing.T) {
 	// data, _ := json.Marshal(config)
 }
 
-var dbepreadwrite = client.DatabaseEndpoint{
+var dbepreadwrite = v1alpha1.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "ds000",
 		Namespace: "demotest",
@@ -769,9 +769,9 @@ var dbepreadwrite = client.DatabaseEndpoint{
 			"source": "catalogue",
 		},
 	},
-	Spec: client.DatabaseEndpointSpec{
-		Database: client.Database{
-			MySQL: &client.MySQL{
+	Spec: v1alpha1.DatabaseEndpointSpec{
+		Database: v1alpha1.Database{
+			MySQL: &v1alpha1.MySQL{
 				DB:       "socksdb",
 				Host:     "catalogue-db.demotest",
 				Password: "fake_password",
@@ -782,7 +782,7 @@ var dbepreadwrite = client.DatabaseEndpoint{
 	},
 }
 
-var dbepread1 = client.DatabaseEndpoint{
+var dbepread1 = v1alpha1.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "ds001",
 		Namespace: "demotest",
@@ -793,9 +793,9 @@ var dbepread1 = client.DatabaseEndpoint{
 			"source": "catalogue",
 		},
 	},
-	Spec: client.DatabaseEndpointSpec{
-		Database: client.Database{
-			MySQL: &client.MySQL{
+	Spec: v1alpha1.DatabaseEndpointSpec{
+		Database: v1alpha1.Database{
+			MySQL: &v1alpha1.MySQL{
 				DB:       "socksdb",
 				Host:     "catalogue-db.demotest",
 				Password: "fake_password",
@@ -806,7 +806,7 @@ var dbepread1 = client.DatabaseEndpoint{
 	},
 }
 
-var dbepread2 = client.DatabaseEndpoint{
+var dbepread2 = v1alpha1.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "ds002",
 		Namespace: "demotest",
@@ -817,9 +817,9 @@ var dbepread2 = client.DatabaseEndpoint{
 			"source": "catalogue",
 		},
 	},
-	Spec: client.DatabaseEndpointSpec{
-		Database: client.Database{
-			MySQL: &client.MySQL{
+	Spec: v1alpha1.DatabaseEndpointSpec{
+		Database: v1alpha1.Database{
+			MySQL: &v1alpha1.MySQL{
 				DB:       "socksdb",
 				Host:     "catalogue-db.demotest",
 				Password: "fake_password",
@@ -830,7 +830,7 @@ var dbepread2 = client.DatabaseEndpoint{
 	},
 }
 
-var generalshard = client.DataShard{
+var generalshard = v1alpha1.DataShard{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
@@ -838,19 +838,19 @@ var generalshard = client.DataShard{
 			"source": "catalogue",
 		},
 	},
-	Spec: client.DataShardSpec{
-		Rules: []client.ShardingRule{
+	Spec: v1alpha1.DataShardSpec{
+		Rules: []v1alpha1.ShardingRule{
 			{
 				TableName: "testshard",
-				TableStrategy: &client.TableStrategy{
+				TableStrategy: &v1alpha1.TableStrategy{
 					TableShardingAlgorithmName: "crc32mod",
 					TableShardingColumn:        "order_id",
 					ShardingCount:              4,
 				},
-				ActualDatanodes: client.ActualDatanodesValue{
-					ValueSource: &client.ValueSourceType{
-						ActualDatanodesNodeValue: &client.ActualDatanodesNodeValue{
-							Nodes: []client.ValueFrom{
+				ActualDatanodes: v1alpha1.ActualDatanodesValue{
+					ValueSource: &v1alpha1.ValueSourceType{
+						ActualDatanodesNodeValue: &v1alpha1.ActualDatanodesNodeValue{
+							Nodes: []v1alpha1.ValueFrom{
 								{
 									Value: "ds001",
 								},
@@ -861,10 +861,10 @@ var generalshard = client.DataShard{
 						},
 					},
 				},
-				ReadWriteSplittingGroup: []client.ReadWriteSplittingGroup{
+				ReadWriteSplittingGroup: []v1alpha1.ReadWriteSplittingGroup{
 					{
 						Name: "ms001",
-						Rules: []client.ReadWriteSplittingRule{
+						Rules: []v1alpha1.ReadWriteSplittingRule{
 							{
 								Name:   "read",
 								Target: "read",
@@ -881,7 +881,7 @@ var generalshard = client.DataShard{
 	},
 }
 
-var rwshard = client.DataShard{
+var rwshard = v1alpha1.DataShard{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "catalogue",
 		Namespace: "demotest",
@@ -889,21 +889,21 @@ var rwshard = client.DataShard{
 			"source": "catalogue",
 		},
 	},
-	Spec: client.DataShardSpec{
-		Rules: []client.ShardingRule{
+	Spec: v1alpha1.DataShardSpec{
+		Rules: []v1alpha1.ShardingRule{
 			{
 				TableName: "testshard",
-				TableStrategy: &client.TableStrategy{
+				TableStrategy: &v1alpha1.TableStrategy{
 					TableShardingAlgorithmName: "crc32mod",
 					TableShardingColumn:        "order_id",
 					ShardingCount:              4,
 				},
-				ActualDatanodes: client.ActualDatanodesValue{
-					ValueSource: &client.ValueSourceType{
-						ActualDatanodesNodeValue: &client.ActualDatanodesNodeValue{
-							Nodes: []client.ValueFrom{
+				ActualDatanodes: v1alpha1.ActualDatanodesValue{
+					ValueSource: &v1alpha1.ValueSourceType{
+						ActualDatanodesNodeValue: &v1alpha1.ActualDatanodesNodeValue{
+							Nodes: []v1alpha1.ValueFrom{
 								{
-									ValueFromReadWriteSplitting: &client.ValueFromReadWriteSplitting{
+									ValueFromReadWriteSplitting: &v1alpha1.ValueFromReadWriteSplitting{
 										Name: "ms001",
 									},
 								},
@@ -911,10 +911,10 @@ var rwshard = client.DataShard{
 						},
 					},
 				},
-				ReadWriteSplittingGroup: []client.ReadWriteSplittingGroup{
+				ReadWriteSplittingGroup: []v1alpha1.ReadWriteSplittingGroup{
 					{
 						Name: "ms001",
-						Rules: []client.ReadWriteSplittingRule{
+						Rules: []v1alpha1.ReadWriteSplittingRule{
 							{
 								Name:   "read",
 								Target: "read",
@@ -945,7 +945,7 @@ var expectedNodeGroup = NodeGroupConfig{
 }
 
 func Test_NodeGroupConfigBuilder(t *testing.T) {
-	builder := NewNodeGroupConfigBuilder().SetDataShards(rwshard).SetDatabaseEndpoints([]client.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2})
+	builder := NewNodeGroupConfigBuilder().SetDataShards(rwshard).SetDatabaseEndpoints([]v1alpha1.DatabaseEndpoint{dbepreadwrite, dbepread1, dbepread2})
 	cfg := builder.Build()
 	assert.Equal(t, len(expectedNodeGroup.Members), len(cfg.Members), "members in total should be equal")
 	for _, cfgm := range cfg.Members {
@@ -958,19 +958,19 @@ func Test_NodeGroupConfigBuilder(t *testing.T) {
 	}
 }
 
-var vdb1 = client.VirtualDatabase{
+var vdb1 = v1alpha1.VirtualDatabase{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "vdb1",
 		Namespace: "test",
 	},
-	Spec: client.VirtualDatabaseSpec{
-		Services: []client.VirtualDatabaseService{
+	Spec: v1alpha1.VirtualDatabaseSpec{
+		Services: []v1alpha1.VirtualDatabaseService{
 			{
 				Name:            "svc1",
 				TrafficStrategy: "ts1",
 				QoSClaim:        "qc1",
-				DatabaseService: client.DatabaseService{
-					DatabaseMySQL: &client.DatabaseMySQL{
+				DatabaseService: v1alpha1.DatabaseService{
+					DatabaseMySQL: &v1alpha1.DatabaseMySQL{
 						Host:     "127.0.0.1",
 						Port:     3306,
 						User:     "root",
@@ -982,8 +982,8 @@ var vdb1 = client.VirtualDatabase{
 				Name:            "svc2",
 				TrafficStrategy: "ts2",
 				QoSClaim:        "qc2",
-				DatabaseService: client.DatabaseService{
-					DatabaseMySQL: &client.DatabaseMySQL{
+				DatabaseService: v1alpha1.DatabaseService{
+					DatabaseMySQL: &v1alpha1.DatabaseMySQL{
 						Host:     "127.0.0.1",
 						Port:     3307,
 						User:     "root",
@@ -995,15 +995,15 @@ var vdb1 = client.VirtualDatabase{
 	},
 }
 
-var qc1 = client.QoSClaim{
+var qc1 = v1alpha1.QoSClaim{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "qc1",
 		Namespace: "test",
 	},
-	Spec: client.QoSClaimSpec{
-		TrafficQoS: client.TrafficQoS{
+	Spec: v1alpha1.QoSClaimSpec{
+		TrafficQoS: v1alpha1.TrafficQoS{
 			Name: "svc1",
-			QoSGroup: client.QoSGroup{
+			QoSGroup: v1alpha1.QoSGroup{
 				Rate: "1MB",
 				Ceil: "1MB",
 			},
@@ -1011,12 +1011,12 @@ var qc1 = client.QoSClaim{
 	},
 }
 
-var ts1 = client.TrafficStrategy{
+var ts1 = v1alpha1.TrafficStrategy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "ts1",
 		Namespace: "test",
 	},
-	Spec: client.TrafficStrategySpec{
+	Spec: v1alpha1.TrafficStrategySpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"source": "ts1",
@@ -1025,7 +1025,7 @@ var ts1 = client.TrafficStrategy{
 	},
 }
 
-var dbep1a = client.DatabaseEndpoint{
+var dbep1a = v1alpha1.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "dbep-1a",
 		Namespace: "test",
@@ -1033,9 +1033,9 @@ var dbep1a = client.DatabaseEndpoint{
 			"source": "ts1",
 		},
 	},
-	Spec: client.DatabaseEndpointSpec{
-		Database: client.Database{
-			MySQL: &client.MySQL{
+	Spec: v1alpha1.DatabaseEndpointSpec{
+		Database: v1alpha1.Database{
+			MySQL: &v1alpha1.MySQL{
 				Host:     "1.1.1.1",
 				Port:     3306,
 				User:     "root",
@@ -1045,7 +1045,7 @@ var dbep1a = client.DatabaseEndpoint{
 	},
 }
 
-var dbep1b = client.DatabaseEndpoint{
+var dbep1b = v1alpha1.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "dbep-1b",
 		Namespace: "test",
@@ -1053,9 +1053,9 @@ var dbep1b = client.DatabaseEndpoint{
 			"source": "ts1",
 		},
 	},
-	Spec: client.DatabaseEndpointSpec{
-		Database: client.Database{
-			MySQL: &client.MySQL{
+	Spec: v1alpha1.DatabaseEndpointSpec{
+		Database: v1alpha1.Database{
+			MySQL: &v1alpha1.MySQL{
 				Host:     "1.1.1.1",
 				Port:     3307,
 				User:     "root",
@@ -1065,15 +1065,15 @@ var dbep1b = client.DatabaseEndpoint{
 	},
 }
 
-var qc2 = client.QoSClaim{
+var qc2 = v1alpha1.QoSClaim{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "qc2",
 		Namespace: "test",
 	},
-	Spec: client.QoSClaimSpec{
-		TrafficQoS: client.TrafficQoS{
+	Spec: v1alpha1.QoSClaimSpec{
+		TrafficQoS: v1alpha1.TrafficQoS{
 			Name: "svc2",
-			QoSGroup: client.QoSGroup{
+			QoSGroup: v1alpha1.QoSGroup{
 				Rate: "2MB",
 				Ceil: "2MB",
 			},
@@ -1081,12 +1081,12 @@ var qc2 = client.QoSClaim{
 	},
 }
 
-var ts2 = client.TrafficStrategy{
+var ts2 = v1alpha1.TrafficStrategy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "ts2",
 		Namespace: "test",
 	},
-	Spec: client.TrafficStrategySpec{
+	Spec: v1alpha1.TrafficStrategySpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"source": "ts2",
@@ -1095,7 +1095,7 @@ var ts2 = client.TrafficStrategy{
 	},
 }
 
-var dbep2a = client.DatabaseEndpoint{
+var dbep2a = v1alpha1.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "dbep-2a",
 		Namespace: "test",
@@ -1103,9 +1103,9 @@ var dbep2a = client.DatabaseEndpoint{
 			"source": "ts2",
 		},
 	},
-	Spec: client.DatabaseEndpointSpec{
-		Database: client.Database{
-			MySQL: &client.MySQL{
+	Spec: v1alpha1.DatabaseEndpointSpec{
+		Database: v1alpha1.Database{
+			MySQL: &v1alpha1.MySQL{
 				Host:     "1.1.1.2",
 				Port:     3306,
 				User:     "root",
@@ -1115,7 +1115,7 @@ var dbep2a = client.DatabaseEndpoint{
 	},
 }
 
-var dbep2b = client.DatabaseEndpoint{
+var dbep2b = v1alpha1.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "dbep-2b",
 		Namespace: "test",
@@ -1123,9 +1123,9 @@ var dbep2b = client.DatabaseEndpoint{
 			"source": "ts2",
 		},
 	},
-	Spec: client.DatabaseEndpointSpec{
-		Database: client.Database{
-			MySQL: &client.MySQL{
+	Spec: v1alpha1.DatabaseEndpointSpec{
+		Database: v1alpha1.Database{
+			MySQL: &v1alpha1.MySQL{
 				Host:     "1.1.1.2",
 				Port:     3307,
 				User:     "root",
@@ -1135,18 +1135,18 @@ var dbep2b = client.DatabaseEndpoint{
 	},
 }
 
-var vdb2 = client.VirtualDatabase{
+var vdb2 = v1alpha1.VirtualDatabase{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "vdb3",
 		Namespace: "test",
 	},
-	Spec: client.VirtualDatabaseSpec{
-		Services: []client.VirtualDatabaseService{
+	Spec: v1alpha1.VirtualDatabaseSpec{
+		Services: []v1alpha1.VirtualDatabaseService{
 			{
 				Name:            "svc3",
 				TrafficStrategy: "ts3",
-				DatabaseService: client.DatabaseService{
-					DatabaseMySQL: &client.DatabaseMySQL{
+				DatabaseService: v1alpha1.DatabaseService{
+					DatabaseMySQL: &v1alpha1.DatabaseMySQL{
 						Host:     "127.0.0.3",
 						Port:     3306,
 						User:     "root",
@@ -1158,19 +1158,19 @@ var vdb2 = client.VirtualDatabase{
 	},
 }
 
-var vdb3 = client.VirtualDatabase{
+var vdb3 = v1alpha1.VirtualDatabase{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "vdb3",
 		Namespace: "test",
 	},
-	Spec: client.VirtualDatabaseSpec{
-		Services: []client.VirtualDatabaseService{
+	Spec: v1alpha1.VirtualDatabaseSpec{
+		Services: []v1alpha1.VirtualDatabaseService{
 			{
 				Name:            "svc3",
 				TrafficStrategy: "ts3",
 				QoSClaim:        "qc3",
-				DatabaseService: client.DatabaseService{
-					DatabaseMySQL: &client.DatabaseMySQL{
+				DatabaseService: v1alpha1.DatabaseService{
+					DatabaseMySQL: &v1alpha1.DatabaseMySQL{
 						Host:     "127.0.0.3",
 						Port:     3306,
 						User:     "root",
@@ -1182,15 +1182,15 @@ var vdb3 = client.VirtualDatabase{
 	},
 }
 
-var qc3 = client.QoSClaim{
+var qc3 = v1alpha1.QoSClaim{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "qc3",
 		Namespace: "test",
 	},
-	Spec: client.QoSClaimSpec{
-		TrafficQoS: client.TrafficQoS{
+	Spec: v1alpha1.QoSClaimSpec{
+		TrafficQoS: v1alpha1.TrafficQoS{
 			Name: "svc3",
-			QoSGroup: client.QoSGroup{
+			QoSGroup: v1alpha1.QoSGroup{
 				Rate: "3MB",
 				Ceil: "3MB",
 			},
@@ -1198,12 +1198,12 @@ var qc3 = client.QoSClaim{
 	},
 }
 
-var ts3 = client.TrafficStrategy{
+var ts3 = v1alpha1.TrafficStrategy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "ts3",
 		Namespace: "test",
 	},
-	Spec: client.TrafficStrategySpec{
+	Spec: v1alpha1.TrafficStrategySpec{
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"source": "ts3",
@@ -1212,7 +1212,7 @@ var ts3 = client.TrafficStrategy{
 	},
 }
 
-var dbep3 = client.DatabaseEndpoint{
+var dbep3 = v1alpha1.DatabaseEndpoint{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "dbep-3",
 		Namespace: "test",
@@ -1220,9 +1220,9 @@ var dbep3 = client.DatabaseEndpoint{
 			"source": "ts3",
 		},
 	},
-	Spec: client.DatabaseEndpointSpec{
-		Database: client.Database{
-			MySQL: &client.MySQL{
+	Spec: v1alpha1.DatabaseEndpointSpec{
+		Database: v1alpha1.Database{
+			MySQL: &v1alpha1.MySQL{
 				Host:     "1.1.1.3",
 				Port:     3306,
 				User:     "root",
@@ -1295,8 +1295,8 @@ var expectedDaemonConfig = PisaDaemonConfig{
 }
 
 func Test_PisaDaemonConfigBuilder(t *testing.T) {
-	appbuilder1 := NewAppBuilder().SetVirtualDatabase(vdb1).SetTrafficStrategies([]client.TrafficStrategy{ts1, ts2}).SetDatabaseEndpoints([]client.DatabaseEndpoint{dbep1a, dbep1b, dbep2a, dbep2b}).SetQoSClaims([]client.QoSClaim{qc1, qc2})
-	appbuilder3 := NewAppBuilder().SetVirtualDatabase(vdb3).SetTrafficStrategies([]client.TrafficStrategy{ts3}).SetDatabaseEndpoints([]client.DatabaseEndpoint{dbep3}).SetQoSClaims([]client.QoSClaim{qc3})
+	appbuilder1 := NewAppBuilder().SetVirtualDatabase(vdb1).SetTrafficStrategies([]v1alpha1.TrafficStrategy{ts1, ts2}).SetDatabaseEndpoints([]v1alpha1.DatabaseEndpoint{dbep1a, dbep1b, dbep2a, dbep2b}).SetQoSClaims([]v1alpha1.QoSClaim{qc1, qc2})
+	appbuilder3 := NewAppBuilder().SetVirtualDatabase(vdb3).SetTrafficStrategies([]v1alpha1.TrafficStrategy{ts3}).SetDatabaseEndpoints([]v1alpha1.DatabaseEndpoint{dbep3}).SetQoSClaims([]v1alpha1.QoSClaim{qc3})
 	cases := []struct {
 		builder PisaDaemonConfigBuilder
 		exp     PisaDaemonConfig
@@ -1317,15 +1317,15 @@ func Test_PisaDaemonConfigBuilder(t *testing.T) {
 }
 
 func Test_daemonConfigBuild(t *testing.T) {
-	vdblist := client.VirtualDatabaseList{Items: []client.VirtualDatabase{vdb1, vdb2, vdb3}}
-	tslist := client.TrafficStrategyList{Items: []client.TrafficStrategy{ts1, ts2, ts3}}
-	dbeplist := client.DatabaseEndpointList{Items: []client.DatabaseEndpoint{dbep1a, dbep1b, dbep2a, dbep2b, dbep3}}
-	qclist := client.QoSClaimList{Items: []client.QoSClaim{qc1, qc2, qc3}}
+	vdblist := v1alpha1.VirtualDatabaseList{Items: []v1alpha1.VirtualDatabase{vdb1, vdb2, vdb3}}
+	tslist := v1alpha1.TrafficStrategyList{Items: []v1alpha1.TrafficStrategy{ts1, ts2, ts3}}
+	dbeplist := v1alpha1.DatabaseEndpointList{Items: []v1alpha1.DatabaseEndpoint{dbep1a, dbep1b, dbep2a, dbep2b, dbep3}}
+	qclist := v1alpha1.QoSClaimList{Items: []v1alpha1.QoSClaim{qc1, qc2, qc3}}
 	cases := []struct {
-		vdblist  client.VirtualDatabaseList
-		tslist   client.TrafficStrategyList
-		dbeplist client.DatabaseEndpointList
-		qclist   client.QoSClaimList
+		vdblist  v1alpha1.VirtualDatabaseList
+		tslist   v1alpha1.TrafficStrategyList
+		dbeplist v1alpha1.DatabaseEndpointList
+		qclist   v1alpha1.QoSClaimList
 		exp      PisaDaemonConfig
 		message  string
 	}{
