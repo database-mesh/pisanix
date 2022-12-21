@@ -38,7 +38,7 @@ use mysql_protocol::{
 use pisa_error::error::{Error, ErrorKind};
 use rayon::prelude::*;
 use strategy::sharding_rewrite::{
-    meta::FieldWrapFunc, ChangeTargetMeta, DataSource, ShardingColumn, ShardingRewriteOutput,
+    meta::FieldAggFunc, ChangeTargetMeta, DataSource, ShardingColumn, ShardingRewriteOutput, AvgChange,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
@@ -231,69 +231,7 @@ where
             let avg_change = get_avg_change(&ro.results[0].changes);
 
             if let Some(avg) = avg_change {
-                let (count_data, sum_data): (Vec<_>, Vec<_>) = chunk
-                    .par_iter()
-                    .map(|x| -> Result<(u64, u64), Error> {
-                        let mut row_data = row_data.clone();
-                        row_data.with_buf(&x[4..]);
-                        let count = decode_with_name::<&[u8], u64>(
-                            &mut row_data,
-                            &avg.count_field,
-                            is_binary,
-                        )
-                        .map_err(|e| ErrorKind::Runtime(e))?
-                        .unwrap_or_else(|| 0);
-                        // Sum type is `MYSQL_TYPE_NEWDECIMAL` in binary, so need to convet to `String` type.
-                        let sum = if is_binary {
-                            let sum = decode_with_name::<&[u8], String>(
-                                &mut row_data,
-                                &avg.sum_field,
-                                is_binary,
-                            )
-                            .map_err(|e| ErrorKind::from(e))?;
-                            if let Some(sum) = sum {
-                                sum.parse::<u64>().map_err(|e| ErrorKind::Runtime(e.into()))?
-                            } else {
-                                0
-                            }
-                        } else {
-                            decode_with_name::<&[u8], u64>(&mut row_data, &avg.sum_field, is_binary)
-                                .map_err(|e| ErrorKind::Runtime(e))?
-                                .unwrap_or_else(|| 0)
-                        };
-
-                        Ok((count, sum))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?
-                    .par_iter()
-                    .cloned()
-                    .unzip();
-
-                let count: u64 = count_data.par_iter().sum();
-                let sum: u64 = sum_data.par_iter().sum();
-                chunk.par_iter_mut().for_each(|x| {
-                    let mut row_data = row_data.clone();
-                    row_data.with_buf(&x[4..]);
-                    let count_data =
-                        row_data.get_row_data_with_name(&avg.count_field).unwrap().unwrap();
-                    let sum_data =
-                        row_data.get_row_data_with_name(&avg.sum_field).unwrap().unwrap();
-                    let part_data = RowPartData {
-                        data: vec![].into(),
-                        start_idx: count_data.start_idx,
-                        part_encode_length: count_data.part_encode_length
-                            + sum_data.part_encode_length,
-                        part_data_length: count_data.part_data_length + sum_data.part_data_length,
-                    };
-
-                    let avg = format!("{:.4}", (sum as f64 / count as f64));
-
-                    row_data_cut_merge(x, &part_data, |data: &mut BytesMut| {
-                        data.put_lenc_int(avg.len() as u64, false);
-                        data.extend_from_slice(avg.as_bytes());
-                    });
-                });
-
+                Self::handle_avg(&mut chunk, row_data.clone(), avg, is_binary)?;
                 // When columns has count and sum field only, return directly.
                 if column_update.ori_columns.len() == 2 {
                     let _ = req
@@ -303,18 +241,16 @@ where
                     return Ok(());
                 }
 
-                row_data = match is_binary {
-                    false => {
-                        let row_data_text =
-                            RowDataText::new(column_update.new_columns.clone(), &[][..]);
-                        RowDataTyp::Text(row_data_text)
-                    }
-                    true => {
-                        let row_data_binary =
-                            RowDataBinary::new(column_update.new_columns.clone(), &[][..]);
-                        RowDataTyp::Binary(row_data_binary)
-                    }
-                };
+                row_data.update_columns(column_update.new_columns.clone());
+            }
+
+            let agg_fields_length = ro.agg_fields.get(&1).map_or_else(|| 0, |x| x.len());
+            if agg_fields_length == column_update.new_columns.len() {
+                let _ = req
+                    .framed
+                    .codec_mut()
+                    .encode(PacketSend::EncodeOffset(chunk[0][4..].into(), buf.len()), buf);
+                return Ok(());
             }
 
 
@@ -336,14 +272,6 @@ where
                 }
             }
 
-            if chunk.par_iter().map(|x| &x[4..]).min() == chunk.par_iter().map(|x| &x[4..]).max() {
-                let _ = req
-                    .framed
-                    .codec_mut()
-                    .encode(PacketSend::EncodeOffset(chunk[0][4..].into(), buf.len()), buf);
-                return Ok(());
-            }
-
             for row in chunk.iter() {
                 let _ = req
                     .framed
@@ -351,6 +279,68 @@ where
                     .encode(PacketSend::EncodeOffset(row[4..].into(), buf.len()), buf);
             }
         }
+
+        Ok(())
+    }
+
+    fn handle_avg(chunk: &mut [BytesMut], row_data: RowDataTyp<&[u8]>, avg: &AvgChange, is_binary: bool) -> Result<(), Error>{
+        let (count_data, sum_data): (Vec<_>, Vec<_>) = chunk
+            .par_iter()
+            .map(|x| -> Result<(u64, f64), Error> {
+                let mut row_data = row_data.clone();
+                row_data.with_buf(&x[4..]);
+                let count = decode_with_name::<&[u8], u64>(
+                    &mut row_data,
+                    &avg.count_field,
+                    is_binary,
+                )
+                .map_err(|e| ErrorKind::Runtime(e))?
+                .unwrap_or_else(|| 0);
+                // Sum type is `MYSQL_TYPE_NEWDECIMAL` in binary, so need to convet to `String` type.
+                let part_data = row_data.get_row_data_with_name(&avg.sum_field).map_err(|e| ErrorKind::from(e))?;
+                let sum = if let Some(part_data) = part_data {
+                    lexical::parse::<f64, _>(&part_data.data).map_err(|e| ErrorKind::Runtime(e.into()))?
+                } else {
+                    0.0
+                };
+
+                Ok((count, sum))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .par_iter()
+            .cloned()
+            .unzip();
+
+        let count: u64 = count_data.par_iter().sum();
+        let sum: f64 = sum_data.par_iter().sum();
+
+        //let avg_format = format!("{:.4}", sum / count as f64);
+        let mut buffer = [0_u8; lexical_core::BUFFER_SIZE];                                                                                                 
+        let avg_format = unsafe {
+            //lexical_core::write_with_options_unchecked::<_>(11111.33533, &mut buffer, &options); 
+            lexical_core::write_unchecked(sum / count as f64, &mut buffer)
+        };           
+
+        chunk.par_iter_mut().for_each(|x| {
+            let mut row_data = row_data.clone();
+            row_data.with_buf(&x[4..]);
+            let count_data =
+                row_data.get_row_data_with_name(&avg.count_field).unwrap().unwrap();
+            let sum_data =
+                row_data.get_row_data_with_name(&avg.sum_field).unwrap().unwrap();
+            let part_data = RowPartData {
+                data: vec![].into(),
+                start_idx: count_data.start_idx,
+                part_encode_length: count_data.part_encode_length
+                    + sum_data.part_encode_length,
+                part_data_length: count_data.part_data_length + sum_data.part_data_length,
+            };
+
+            row_data_cut_merge(x, &part_data, |data: &mut BytesMut| {
+                data.put_lenc_int(avg_format.len() as u64, false);
+                data.extend_from_slice(avg_format);
+            });
+        });
 
         Ok(())
     }
@@ -364,9 +354,9 @@ where
         let default_agg_fields = vec![];
         let agg_fields = ro.agg_fields.get(&1).unwrap_or_else(|| &default_agg_fields);
         for agg in agg_fields.iter() {
-            match &agg.wrap_func {
-                x @FieldWrapFunc::Min | x @FieldWrapFunc::Max => {
-                    if let FieldWrapFunc::Max = x {
+            match &agg.agg_func {
+                x @FieldAggFunc::Min | x @FieldAggFunc::Max => {
+                    if let FieldAggFunc::Max = x {
                         chunk.par_sort_unstable_by(|a, b| {
                             let mut row_data = row_data.clone();
                             let (a, b) = get_min_max_value(&mut row_data, is_binary, &agg.name, a, b);
@@ -374,7 +364,7 @@ where
                         });
                     }
 
-                    if let FieldWrapFunc::Min = x {
+                    if let FieldAggFunc::Min = x {
                         chunk.par_sort_unstable_by(|a, b| {
                             let mut row_data = row_data.clone();
                             let (a, b) = get_min_max_value(&mut row_data, is_binary, &agg.name, a, b);
@@ -401,7 +391,7 @@ where
                         })
                     });
                 }
-                FieldWrapFunc::Count => {
+                FieldAggFunc::Count => {
                     let count_sum = chunk
                         .par_iter()
                         .map(|x| {
@@ -436,34 +426,26 @@ where
                         });
                     });
                 }
-                FieldWrapFunc::Sum => {
+                FieldAggFunc::Sum => {
                     let sum_data: Vec<_> = chunk
                     .par_iter()
-                    .map(|x| -> Result<u64, Error> {
+                    .map(|x| -> Result<f64, Error> {
                         let mut row_data = row_data.clone();
                         row_data.with_buf(&x[4..]);
-                        let sum = if is_binary {
-                            let sum = decode_with_name::<&[u8], String>(
-                                &mut row_data,
-                                &agg.name,
-                                is_binary,
-                            ).unwrap();
-                            if let Some(sum) = sum {
-                                sum.parse::<u64>().map_err(|e| ErrorKind::Runtime(e.into()))?
-                            } else {
-                                0
-                            }
+                        
+                        let part_data = row_data.get_row_data_with_name(&agg.name).map_err(|e| ErrorKind::from(e))?;
+                        let sum = if let Some(part_data) = part_data {
+                            lexical::parse::<f64, _>(&part_data.data).map_err(|e| ErrorKind::Runtime(e.into()))?
                         } else {
-                            decode_with_name::<&[u8], u64>(&mut row_data, &agg.name, is_binary)
-                                .map_err(|e| ErrorKind::Runtime(e))?
-                                .unwrap_or_else(|| 0)
+                            0.0
                         };
 
                         Ok(sum)
                     })
                     .collect::<Result<Vec<_>, _>>().unwrap();
                
-                    let sum: u64 = sum_data.par_iter().sum();
+                    let sum = sum_data.par_iter().sum::<f64>().to_string();
+                    
                     chunk.par_iter_mut().for_each(|x| {
                         let mut row_data = row_data.clone();
                         row_data.with_buf(&x[4..]);
@@ -475,8 +457,6 @@ where
                             part_encode_length: sum_data.part_encode_length,
                             part_data_length: sum_data.part_data_length,
                         };
-    
-                        let sum = format!("{:.4}", sum as u64);
     
                         row_data_cut_merge(x, &part_data, |data: &mut BytesMut| {
                             data.put_lenc_int(sum.len() as u64, false);

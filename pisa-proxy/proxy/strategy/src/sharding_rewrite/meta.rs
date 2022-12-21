@@ -25,17 +25,14 @@ enum ScanState {
     Order(OrderDirection),
     Group,
     OnCond(Vec<OnCond>),
-    // Option<String> means whethe has `alias_name`
-    Avg(mysql_parser::Span, Option<String>, bool),
-    // Option<String> means whethe has `alias_name`
-    FieldWrapFunc(mysql_parser::Span, FieldWrapFunc, Option<String>),
     InsertRowValue(Vec<InsertValue>),
 }
 
 type TableMeta = TableIdent;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FieldWrapFunc {
+pub enum FieldAggFunc {
+    Avg { avg_field_name: String, field_name: String, span: mysql_parser::Span },
     Min,
     Max,
     Count,
@@ -43,9 +40,10 @@ pub enum FieldWrapFunc {
     None,
 }
 
-impl AsRef<str> for FieldWrapFunc {
+impl AsRef<str> for FieldAggFunc {
     fn as_ref(&self) -> &str {
         match self {
+            Self::Avg { .. } => "avg",
             Self::Max => "max",
             Self::Min => "min",
             Self::Count => "count",
@@ -65,7 +63,7 @@ pub enum FieldMeta {
 pub struct FieldMetaIdent {
     pub span: mysql_parser::Span,
     pub name: String,
-    pub wrap_func: FieldWrapFunc,
+    pub agg_func: FieldAggFunc,
 }
 
 #[cfg(test)]
@@ -132,16 +130,6 @@ pub struct OnCond {
 }
 
 #[derive(Debug)]
-pub struct AvgMeta {
-    pub span: mysql_parser::Span,
-    // IS avg(t)
-    pub avg_field_name: String,
-    // IS `t` of avg(t)
-    pub field_name: String,
-    pub distinct: bool,
-}
-
-#[derive(Debug)]
 pub struct InsertValsMeta {
     pub values: Vec<InsertValue>,
     pub span: mysql_parser::Span,
@@ -182,7 +170,6 @@ pub struct RewriteMetaData {
     limits: IndexMap<u8, Vec<LimitMeta>>,
     wheres: IndexMap<u8, Vec<WhereMeta>>,
     on_conds: IndexMap<u8, Vec<JoinOnCond>>,
-    avgs: IndexMap<u8, Vec<AvgMeta>>,
     inserts: IndexMap<u8, Vec<InsertValsMeta>>,
     queries: IndexMap<u8, QueryMeta>,
     field_blocks: IndexMap<u8, FieldBlockMeta>,
@@ -208,7 +195,6 @@ impl RewriteMetaData {
             limits: IndexMap::new(),
             wheres: IndexMap::new(),
             on_conds: IndexMap::new(),
-            avgs: IndexMap::new(),
             inserts: IndexMap::new(),
             queries: IndexMap::new(),
             field_blocks: IndexMap::new(),
@@ -272,7 +258,6 @@ gen_push_func!(push_limit, get_limits, LimitMeta, limits);
 gen_push_func!(push_group, get_groups, GroupMeta, groups);
 gen_push_func!(push_order, get_orders, OrderMeta, orders);
 gen_push_func!(push_on_cond, get_on_conds, JoinOnCond, on_conds);
-gen_push_func!(push_avg, get_avgs, AvgMeta, avgs);
 gen_push_func!(push_insert_value, get_inserts, InsertValsMeta, inserts);
 
 impl Transformer for RewriteMetaData {
@@ -333,63 +318,39 @@ impl Transformer for RewriteMetaData {
             }
 
             Node::ItemExpr(item) => {
+                let name = Self::get_field_name(&self.input, &item.span, &item.alias_name);
                 match &item.expr {
                     Expr::SimpleIdentExpr(Value::Ident { .. }) => {
-                        let name = match &item.alias_name {
-                            Some(name) => name.clone(),
-                            None => self.input[item.span.start()..item.span.end()].to_string(),
-                        };
                         self.push_field(FieldMeta::Ident(FieldMetaIdent {
                             span: item.span.clone(),
                             name,
-                            wrap_func: FieldWrapFunc::None,
+                            agg_func: FieldAggFunc::None,
                         }))
                     }
                     Expr::SetFuncSpecExpr(e) => match e.as_ref() {
                         Expr::AggExpr(e) => {
-                            match e.name {
+                            let agg_func = match e.name {
                                 AggFuncName::Avg => {
-                                    self.state = ScanState::Avg(
-                                        item.span,
-                                        item.alias_name.clone(),
-                                        e.distinct,
-                                    );
+                                    if let Expr::InSumExpr { expr, ..} = &e.exprs[0] {
+                                        if let Expr::SimpleIdentExpr(Value::Ident { value, .. }) = &**expr {
+                                            FieldAggFunc::Avg { avg_field_name: name.clone(), field_name: value.to_string(), span: item.span }
+                                        } else {
+                                            FieldAggFunc::None
+                                        }
+                                    } else {
+                                        unreachable!()
+                                    }
                                 }
 
-                                AggFuncName::Max => {
-                                    self.state = ScanState::FieldWrapFunc(
-                                        item.span,
-                                        FieldWrapFunc::Max,
-                                        item.alias_name.clone(),
-                                    );
-                                }
+                                AggFuncName::Max => FieldAggFunc::Max,
+                                AggFuncName::Min => FieldAggFunc::Min,
+                                AggFuncName::Count => FieldAggFunc::Count,
+                                AggFuncName::Sum => FieldAggFunc::Sum,
 
-                                AggFuncName::Min => {
-                                    self.state = ScanState::FieldWrapFunc(
-                                        item.span,
-                                        FieldWrapFunc::Min,
-                                        item.alias_name.clone(),
-                                    );
-                                }
+                                _ => FieldAggFunc::None,
+                            };
 
-                                AggFuncName::Count => {
-                                    self.state = ScanState::FieldWrapFunc(
-                                        item.span,
-                                        FieldWrapFunc::Count,
-                                        item.alias_name.clone(),
-                                    );
-                                }
-
-                                AggFuncName::Sum => {
-                                    self.state = ScanState::FieldWrapFunc(
-                                        item.span,
-                                        FieldWrapFunc::Sum,
-                                        item.alias_name.clone(),
-                                    );
-                                }
-
-                                _ => {}
-                            }
+                            self.push_field(FieldMeta::Ident(FieldMetaIdent { span: item.span, name, agg_func }));
                             return false;
                         }
                         _ => {}
@@ -436,7 +397,7 @@ impl Transformer for RewriteMetaData {
                         self.push_field(FieldMeta::Ident(FieldMetaIdent {
                             span: *span,
                             name,
-                            wrap_func: FieldWrapFunc::None,
+                            agg_func: FieldAggFunc::None,
                         }))
                     }
                 }
@@ -444,36 +405,7 @@ impl Transformer for RewriteMetaData {
             },
 
             Node::Expr(e) => match e {
-                Expr::Ori(_val) => match &self.state {
-                    ScanState::FieldWrapFunc(span, wrap_func, alias_name) => {
-                        let wrap_func = wrap_func.clone();
-                        let span = span.clone();
-
-                        let name = Self::get_field_name(&self.input, &span, alias_name);
-                        self.push_field(FieldMeta::Ident(FieldMetaIdent { span, name, wrap_func }));
-                    }
-                    _ => {}
-                },
-
                 Expr::SimpleIdentExpr(Value::Ident { span, value, .. }) => match &mut self.state {
-                    ScanState::Field(alias_name) => {
-                        let name = match alias_name {
-                            Some(name) => name.clone(),
-                            None => value.to_string(),
-                        };
-                        self.push_field(FieldMeta::Ident(FieldMetaIdent {
-                            span: *span,
-                            name,
-                            wrap_func: FieldWrapFunc::None,
-                        }))
-                    }
-                    ScanState::FieldWrapFunc(span, wrap_func, alias_name) => {
-                        let wrap_func = wrap_func.clone();
-                        let span = span.clone();
-
-                        let name = Self::get_field_name(&self.input, &span, alias_name);
-                        self.push_field(FieldMeta::Ident(FieldMetaIdent { span, name, wrap_func }));
-                    }
                     ScanState::Order(direction) => {
                         let direction = direction.clone();
                         self.push_order(OrderMeta {
@@ -484,22 +416,6 @@ impl Transformer for RewriteMetaData {
                     }
                     ScanState::Group => {
                         self.push_group(GroupMeta { span: *span, name: value.to_string() })
-                    }
-                    ScanState::Avg(arg, alias_name, distinct) => {
-                        let avg_field_name = match alias_name {
-                            Some(name) => name.clone(),
-                            None => self.input.as_str()[arg.start()..arg.end()].to_string(),
-                        };
-                        let arg = arg.clone();
-                        let distinct = *distinct;
-                        let meta = AvgMeta {
-                            span: arg,
-                            avg_field_name,
-                            field_name: value.to_string(),
-                            distinct,
-                        };
-                        self.push_avg(meta);
-                        self.state = ScanState::Empty;
                     }
                     _ => {}
                 },
@@ -613,8 +529,7 @@ mod test {
 
     use mysql_parser::{ast::Visitor, parser::Parser};
 
-    use super::RewriteMetaData;
-    use crate::sharding_rewrite::meta::FieldMeta;
+    use super::*;
 
     #[test]
     fn test_count() {
@@ -625,7 +540,7 @@ mod test {
         let _ = ast[0].visit(&mut meta);
         let meta = meta.get_fields();
         if let FieldMeta::Ident(meta) = &meta[0][0] {
-            assert_eq!(meta.wrap_func.as_ref(), "count")
+            assert_eq!(meta.agg_func.as_ref(), "count")
         } else {
             assert!(false)
         }
@@ -636,17 +551,35 @@ mod test {
         let parser = Parser::new();
         let input = "select avg(ss) as tt from t";
         let mut ast = parser.parse(input).unwrap();
+        
         let mut meta = RewriteMetaData::new(input.to_string());
         let _ = ast[0].visit(&mut meta);
-        let avg_meta = meta.get_avgs();
-        assert_eq!(avg_meta[0][0].avg_field_name, "tt");
+        let fields = meta.get_fields();
+        
+        if let FieldMeta::Ident(meta) = &fields[0][0] {
+            if let FieldAggFunc::Avg { avg_field_name, ..} = &meta.agg_func {
+                assert_eq!(avg_field_name, "tt");
+            } else {
+                unreachable!()
+            }
+        } else {
+            unreachable!()
+        }
 
         let input = "select avg(ss) from t";
         let mut ast = parser.parse(input).unwrap();
         let mut meta = RewriteMetaData::new(input.to_string());
         let _ = ast[0].visit(&mut meta);
-        let avg_meta = meta.get_avgs();
-        assert_eq!(avg_meta[0][0].avg_field_name, "avg(ss)");
+        let fields = meta.get_fields();
+        if let FieldMeta::Ident(meta) = &fields[0][0] {
+            if let FieldAggFunc::Avg { avg_field_name, ..} = &meta.agg_func {
+                assert_eq!(avg_field_name, "avg(ss)");
+            } else {
+                unreachable!()
+            }
+        } else {
+            unreachable!()
+        }
     }
 
     #[test]
@@ -679,7 +612,7 @@ mod test {
             (
                 "SELECT AVG(price) FROM t_order WHERE order_id = 1 and order_id1 IN (SELECT AVG(distinct price), order_id1 from t_order1)",
                 vec!["t_order", "t_order1"],                            // table
-                vec!["order_id1"],                                      // field
+                vec!["AVG(price)", "AVG(distinct price)", "order_id1"], // field
                 vec![],                                                 // group
                 vec![],                                                 // order
                 2,                                                      // tables count

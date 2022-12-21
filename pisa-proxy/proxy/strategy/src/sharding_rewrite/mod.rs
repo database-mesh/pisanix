@@ -19,7 +19,7 @@ pub mod rewrite_const;
 
 use std::vec;
 
-use crc32fast::Hasher;
+use crc32fast::hash;
 use endpoint::endpoint::Endpoint;
 use indexmap::IndexMap;
 use mysql_parser::ast::{SqlStmt, TableIdent, Visitor};
@@ -34,7 +34,7 @@ use crate::{
     get_meta_detail,
     rewrite::{ShardingRewriteInput, ShardingRewriter},
     sharding_rewrite::{
-        meta::{AvgMeta, FieldWrapFunc, GroupMeta, OrderMeta},
+        meta::{FieldAggFunc, GroupMeta, OrderMeta},
         rewrite_const::*,
     },
 };
@@ -48,10 +48,8 @@ impl CalcShardingIdx<u64> for u64 {
         match algo {
             ShardingAlgorithmName::Mod => Some(self.wrapping_rem(sharding_count)),
             ShardingAlgorithmName::CRC32Mod => {
-                let mut hasher = Hasher::new();
-                hasher.update(&self.to_be_bytes());
-                let checksum = hasher.finalize();
-                Some(checksum.wrapping_rem(sharding_count.try_into().unwrap()).into())
+                let checksum = hash(&self.to_be_bytes()) as u64;
+                Some(checksum.wrapping_rem(sharding_count as u64))
             }
         }
     }
@@ -62,10 +60,8 @@ impl CalcShardingIdx<i64> for i64 {
         match algo {
             ShardingAlgorithmName::Mod => Some(self.wrapping_rem(sharding_count) as u64),
             ShardingAlgorithmName::CRC32Mod => {
-                let mut hasher = Hasher::new();
-                hasher.update(&self.to_be_bytes());
-                let checksum = hasher.finalize();
-                Some(checksum.wrapping_rem(sharding_count.try_into().unwrap()).into())
+                let checksum = hash(&self.to_be_bytes()) as i64;
+                Some(checksum.wrapping_rem(sharding_count) as u64)
             }
         }
     }
@@ -76,10 +72,8 @@ impl CalcShardingIdx<f64> for f64 {
         match algo {
             ShardingAlgorithmName::Mod => Some((self % sharding_count).round() as u64),
             ShardingAlgorithmName::CRC32Mod => {
-                let mut hasher = Hasher::new();
-                hasher.update(&self.to_be_bytes());
-                let checksum = hasher.finalize();
-                Some(((checksum as f64) % sharding_count).round() as u64)
+                let checksum = hash(&self.to_be_bytes()) as u64;
+                Some(checksum.wrapping_rem(sharding_count.round() as u64))
             }
         }
     }
@@ -281,7 +275,7 @@ impl ShardingRewrite {
         meta: RewriteMetaData,
         try_tables: Vec<(u8, Sharding, &TableIdent)>,
     ) -> Result<ShardingRewriteOutput, ShardingRewriteError> {
-        get_meta_detail!(meta, wheres, inserts, fields, avgs, orders, groups);
+        get_meta_detail!(meta, wheres, inserts, fields, orders, groups);
         if !inserts.is_empty() {
             if fields.is_empty() {
                 return Err(ShardingRewriteError::FieldsIsEmpty);
@@ -294,7 +288,6 @@ impl ShardingRewrite {
             return Ok(self.database_table_strategy_iproduct(
                 DatabaseTableStrategyPart::All,
                 try_tables,
-                avgs,
                 fields,
                 orders,
                 groups,
@@ -310,7 +303,6 @@ impl ShardingRewrite {
             return Ok(self.database_table_strategy_iproduct(
                 DatabaseTableStrategyPart::All,
                 try_tables,
-                avgs,
                 fields,
                 orders,
                 groups,
@@ -324,7 +316,6 @@ impl ShardingRewrite {
             return Ok(self.database_table_strategy_iproduct(
                 DatabaseTableStrategyPart::Table(table_idx),
                 try_tables,
-                avgs,
                 fields,
                 orders,
                 groups,
@@ -337,14 +328,13 @@ impl ShardingRewrite {
             return Ok(self.database_table_strategy_iproduct(
                 DatabaseTableStrategyPart::Database(db_idx),
                 try_tables,
-                avgs,
                 fields,
                 orders,
                 groups,
             ));
         }
 
-        Ok(self.database_table_strategy_iproduct(DatabaseTableStrategyPart::DatabaseTable(wheres[0].1[0].unwrap() as usize, wheres[0].1[1].unwrap() as usize), try_tables, avgs, fields, orders, groups))
+        Ok(self.database_table_strategy_iproduct(DatabaseTableStrategyPart::DatabaseTable(wheres[0].1[0].unwrap() as usize, wheres[0].1[1].unwrap() as usize), try_tables,fields, orders, groups))
     }
 
     fn database_strategy(
@@ -352,7 +342,7 @@ impl ShardingRewrite {
         meta: RewriteMetaData,
         try_tables: Vec<(u8, Sharding, &TableIdent)>,
     ) -> Result<ShardingRewriteOutput, ShardingRewriteError> {
-        get_meta_detail!(meta, wheres, inserts, fields, avgs, orders, groups);
+        get_meta_detail!(meta, wheres, inserts, fields, orders, groups);
         if !inserts.is_empty() {
             if fields.is_empty() {
                 return Err(ShardingRewriteError::FieldsIsEmpty);
@@ -362,22 +352,22 @@ impl ShardingRewrite {
         }
 
         if wheres.is_empty() {
-            return Ok(self.database_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, avgs, fields, orders, groups));
+            return Ok(self.database_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, fields, orders, groups));
         }
 
         let wheres = Self::find_try_where(StrategyTyp::Database, &try_tables, wheres)?;
         if wheres.is_empty() {
-            return Ok(self.database_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, avgs, fields, orders, groups));
+            return Ok(self.database_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, fields, orders, groups));
         }
 
         let expect_sum = wheres[0].1[0].unwrap() as usize * wheres.len();
         let sum: usize = wheres.iter().map(|x| x.1[0].unwrap()).sum::<u64>() as usize;
 
         if expect_sum != sum {
-            return Ok(self.database_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, avgs, fields, orders, groups));
+            return Ok(self.database_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, fields, orders, groups));
         }
 
-        let output = self.database_strategy_iproduct(DatabaseTableStrategyPart::Database(wheres[0].1[0].unwrap() as usize), try_tables, avgs, fields, orders, groups);
+        let output = self.database_strategy_iproduct(DatabaseTableStrategyPart::Database(wheres[0].1[0].unwrap() as usize), try_tables, fields, orders, groups);
         Ok(output)
     }
 
@@ -386,7 +376,7 @@ impl ShardingRewrite {
         meta: RewriteMetaData,
         try_tables: Vec<(u8, Sharding, &TableIdent)>,
     ) -> Result<ShardingRewriteOutput, ShardingRewriteError> {
-        get_meta_detail!(meta, wheres, inserts, fields, avgs, orders, groups);
+        get_meta_detail!(meta, wheres, inserts, fields, orders, groups);
 
         if !inserts.is_empty() {
             if fields.is_empty() {
@@ -397,22 +387,22 @@ impl ShardingRewrite {
         }
 
         if wheres.is_empty() {
-            return Ok(self.table_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, avgs, fields, orders, groups));
+            return Ok(self.table_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, fields, orders, groups));
         }
 
         let wheres = Self::find_try_where(StrategyTyp::Table, &try_tables, wheres)?;
         if wheres.is_empty() {
-            return Ok(self.table_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, avgs, fields, orders, groups));
+            return Ok(self.table_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, fields, orders, groups));
         }
 
         let expect_sum = wheres[0].1[0].unwrap() as usize * wheres.len();
         let sum: usize = wheres.iter().map(|x| x.1[0].unwrap()).sum::<u64>() as usize;
 
         if expect_sum != sum {
-            return Ok(self.table_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, avgs, fields, orders, groups));
+            return Ok(self.table_strategy_iproduct(DatabaseTableStrategyPart::All, try_tables, fields, orders, groups));
         }
 
-        let output = self.table_strategy_iproduct(DatabaseTableStrategyPart::Table(wheres[0].1[0].unwrap() as usize), try_tables, avgs, fields, orders, groups);
+        let output = self.table_strategy_iproduct(DatabaseTableStrategyPart::Table(wheres[0].1[0].unwrap() as usize), try_tables, fields, orders, groups);
         Ok(output)
     }
 
@@ -613,7 +603,7 @@ impl ShardingRewrite {
         Ok(None)
     }
 
-    fn change_order_group1(
+    fn change_order_group(
         &mut self,
         query_id: u8,
         orders: Option<&Vec<OrderMeta>>,
@@ -725,10 +715,10 @@ impl ShardingRewrite {
         return Ok(length);
     }
 
-    fn change_avg1(
+    fn change_avg(
         &mut self,
         query_id: u8,
-        avgs: Option<&Vec<AvgMeta>>,
+        avgs: Option<&Vec<FieldMeta>>,
         ds_sharding_idx: &DataSourceShardingIdx,
     ) {
         if avgs.is_none() {
@@ -739,43 +729,47 @@ impl ShardingRewrite {
 
         let mut res = IndexMap::new();
 
-        for avg_meta in avgs {
-            res.insert(AVG_FIELD.to_string(), avg_meta.avg_field_name.clone());
-            let target_count = format!("{}({}) {} ", COUNT, avg_meta.field_name, AS);
-            let target_count_as = format!(
-                "{}_{}_{:05}",
-                avg_meta.field_name.to_ascii_uppercase(),
-                AVG_DERIVED_COUNT,
-                ds_sharding_idx.idx.table.as_ref().unwrap(),
-            );
-            res.insert(AVG_COUNT.to_string(), target_count_as.to_string());
+        for meta in avgs {
+            if let FieldMeta::Ident(meta) = meta {
+                if let FieldAggFunc::Avg { avg_field_name, field_name, span } = &meta.agg_func {
+                    res.insert(AVG_FIELD.to_string(), avg_field_name.clone());
+                    let target_count = format!("{}({}) {} ", COUNT, field_name, AS);
+                    let target_count_as = format!(
+                        "{}_{}_{:05}",
+                        field_name.to_ascii_uppercase(),
+                        AVG_DERIVED_COUNT,
+                        ds_sharding_idx.idx.table.as_ref().unwrap(),
+                    );
+                    res.insert(AVG_COUNT.to_string(), target_count_as.to_string());
 
-            let target_sum = format!("{}({}) {} ", SUM, avg_meta.field_name, AS);
-            let target_sum_as = format!(
-                "{}_{}_{:05}",
-                avg_meta.field_name.to_ascii_uppercase(),
-                AVG_DERIVED_SUM,
-                ds_sharding_idx.idx.table.as_ref().unwrap(),
-            );
-            res.insert(AVG_SUM.to_string(), target_sum_as.to_string());
+                    let target_sum = format!("{}({}) {} ", SUM, field_name, AS);
+                    let target_sum_as = format!(
+                        "{}_{}_{:05}",
+                        field_name.to_ascii_uppercase(),
+                        AVG_DERIVED_SUM,
+                        ds_sharding_idx.idx.table.as_ref().unwrap(),
+                    );
+                    res.insert(AVG_SUM.to_string(), target_sum_as.to_string());
 
-            let target =
-                format!("{}{}, {}{}", target_count, &target_count_as, target_sum, &target_sum_as);
+                    let target =
+                        format!("{}{}, {}{}", target_count, &target_count_as, target_sum, &target_sum_as);
 
-            let change_plan = ChangePlan {
-                query_id,
-                target,
-                span: avg_meta.span,
-                action: ChangePlanAction::Replace,
-                typ: ChangePlanTyp::Field,
-                target_meta: ChangeTargetMeta::Avg( AvgChange {
-                    count_field: target_count_as,
-                    sum_field: target_sum_as,
-                    ori_field: avg_meta.avg_field_name.clone(),
-                }),
-            };
+                    let change_plan = ChangePlan {
+                        query_id,
+                        target,
+                        span: *span,
+                        action: ChangePlanAction::Replace,
+                        typ: ChangePlanTyp::Field,
+                        target_meta: ChangeTargetMeta::Avg( AvgChange {
+                            count_field: target_count_as,
+                            sum_field: target_sum_as,
+                            ori_field: avg_field_name.clone(),
+                        }),
+                    };
 
-            self.change_plans.entry(ds_sharding_idx.clone()).or_insert(vec![]).push(change_plan);
+                    self.change_plans.entry(ds_sharding_idx.clone()).or_insert(vec![]).push(change_plan);
+                }
+            }
         }
     }
 
@@ -1141,7 +1135,6 @@ impl ShardingRewrite {
         &mut self,
         part: DatabaseTableStrategyPart,
         tables: Vec<(u8, Sharding, &TableIdent)>,
-        avgs: &IndexMap<u8, Vec<AvgMeta>>,
         fields: &IndexMap<u8, Vec<FieldMeta>>,
         orders: &IndexMap<u8, Vec<OrderMeta>>,
         groups: &IndexMap<u8, Vec<GroupMeta>>,
@@ -1195,7 +1188,7 @@ impl ShardingRewrite {
                         .entry(ds_sharding_idx.clone())
                         .or_insert(vec![])
                         .push(change_plan);
-                    let _ = self.change_order_group1(
+                    let _ = self.change_order_group(
                         t.0,
                         orders.get(&t.0),
                         groups.get(&t.0),
@@ -1203,7 +1196,7 @@ impl ShardingRewrite {
                         &ds_sharding_idx,
                     );
 
-                    self.change_avg1(t.0, avgs.get(&t.0), &ds_sharding_idx);
+                    self.change_avg(t.0, fields.get(&t.0), &ds_sharding_idx);
                 }
             }
         }
@@ -1214,7 +1207,6 @@ impl ShardingRewrite {
         &mut self,
         part: DatabaseTableStrategyPart,
         tables: Vec<(u8, Sharding, &TableIdent)>,
-        avgs: &IndexMap<u8, Vec<AvgMeta>>,
         fields: &IndexMap<u8, Vec<FieldMeta>>,
         orders: &IndexMap<u8, Vec<OrderMeta>>,
         groups: &IndexMap<u8, Vec<GroupMeta>>,
@@ -1253,7 +1245,7 @@ impl ShardingRewrite {
                     .entry(ds_sharding_idx.clone())
                     .or_insert(vec![])
                     .push(change_plan);
-                let _ = self.change_order_group1(
+                let _ = self.change_order_group(
                     t.0,
                     orders.get(&t.0),
                     groups.get(&t.0),
@@ -1261,7 +1253,7 @@ impl ShardingRewrite {
                     &ds_sharding_idx,
                 );
 
-                self.change_avg1(t.0, avgs.get(&t.0), &ds_sharding_idx);
+                self.change_avg(t.0, fields.get(&t.0), &ds_sharding_idx);
             }
         }
 
@@ -1272,7 +1264,6 @@ impl ShardingRewrite {
         &mut self,
         part: DatabaseTableStrategyPart,
         tables: Vec<(u8, Sharding, &TableIdent)>,
-        avgs: &IndexMap<u8, Vec<AvgMeta>>,
         fields: &IndexMap<u8, Vec<FieldMeta>>,
         orders: &IndexMap<u8, Vec<OrderMeta>>,
         groups: &IndexMap<u8, Vec<GroupMeta>>,
@@ -1310,7 +1301,7 @@ impl ShardingRewrite {
                     .entry(ds_sharding_idx.clone())
                     .or_insert(vec![])
                     .push(change_plan);
-                let _ = self.change_order_group1(
+                let _ = self.change_order_group(
                     t.0,
                     orders.get(&t.0),
                     groups.get(&t.0),
@@ -1318,7 +1309,7 @@ impl ShardingRewrite {
                     &ds_sharding_idx,
                 );
 
-                self.change_avg1(t.0, avgs.get(&t.0), &ds_sharding_idx);
+                self.change_avg(t.0, fields.get(&t.0), &ds_sharding_idx);
             }
         }
 
@@ -1378,8 +1369,8 @@ impl ShardingRewrite {
                 .iter()
                 .filter_map(|f| {
                     if let FieldMeta::Ident(meta) = f {
-                        let is_match = matches!(meta.wrap_func,  FieldWrapFunc::Max| FieldWrapFunc::Min |FieldWrapFunc::Count| FieldWrapFunc::Sum);
-                        return is_match.then(|| meta.clone())
+                        let is_match = matches!(meta.agg_func,  FieldAggFunc::None);
+                        return (!is_match).then(|| meta.clone())
                     } else {
                         None
                     }
