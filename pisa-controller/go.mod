@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/database-mesh/golang-sdk v0.0.0-20221218140131-6e1df3391311
 	github.com/gin-gonic/gin v1.7.7
+	github.com/mlycore/log v0.2.16
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/zap v1.24.0
