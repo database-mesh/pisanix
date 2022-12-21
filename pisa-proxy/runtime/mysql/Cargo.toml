@@ -36,3 +36,5 @@ tower = { version = "0.4.13" }
 indexmap = "1.9.1"
 lazy_static = "1.4.0"
 rayon = "1.5"
+lexical = "6"
+lexical-core = "0.8.5"

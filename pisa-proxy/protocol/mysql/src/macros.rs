@@ -16,6 +16,12 @@
 macro_rules! gen_row_data {
     ($name:ident, $($var:ident($ty:ty)),*) => {
         impl<T: AsRef<[u8]> + Default> RowData<T> for RowDataTyp<T> {
+            fn update_columns(&mut self, columns: Arc<[ColumnInfo]>) {
+                match self {
+                    $($name::$var(x) => x.update_columns(columns),)*
+                }
+            }
+
             fn with_buf(&mut self, buf: T)  {
                 match self {
                     $($name::$var(x) => x.with_buf(buf),)*

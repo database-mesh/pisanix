@@ -23,6 +23,7 @@ use crate::{
 };
 
 pub trait RowData<T: AsRef<[u8]>> {
+    fn update_columns(&mut self, columns: Arc<[ColumnInfo]>);
     fn with_buf(&mut self, buf: T);
     fn decode_with_name<V: Value>(&mut self, name: &str) -> value::Result<V>;
     fn get_row_data_with_name(&mut self, name: &str) -> value::Result<RowPartData>;
@@ -86,6 +87,10 @@ impl<T: AsRef<[u8]>> RowDataText<T> {
 }
 
 impl<T: AsRef<[u8]>> RowData<T> for RowDataText<T> {
+    fn update_columns(&mut self, columns: Arc<[ColumnInfo]>) {
+        self.common = RowDataCommon::new(columns)
+    }
+
     fn with_buf(&mut self, buf: T) {
         self.buf = buf;
     }
@@ -165,6 +170,10 @@ impl<T: BufExt + AsRef<[u8]>> RowDataBinary<T> {
 }
 
 impl<T: AsRef<[u8]>> RowData<T> for RowDataBinary<T> {
+    fn update_columns(&mut self, columns: Arc<[ColumnInfo]>) {
+        self.common = RowDataCommon::new(columns)
+    }
+
     fn with_buf(&mut self, buf: T) {
         let column_length = self.common.columns.len();
         // See https://dev.mysql.com/doc/internals/en/binary-protocol-resultset-row.html
