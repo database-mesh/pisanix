@@ -3,7 +3,7 @@ module github.com/database-mesh/pisanix/pisa-controller
 go 1.18
 
 require (
-	github.com/database-mesh/golang-sdk v0.0.0-20221218140131-6e1df3391311
+	github.com/database-mesh/golang-sdk v0.0.0-20221222095604-226ffbf7c06f
 	github.com/gin-gonic/gin v1.7.7
 	github.com/mlycore/log v0.2.16
 	github.com/sirupsen/logrus v1.8.1
@@ -13,7 +13,7 @@ require (
 	k8s.io/api v0.26.0
 	k8s.io/apimachinery v0.26.0
 	k8s.io/client-go v0.26.0
-	sigs.k8s.io/controller-runtime v0.14.0
+	sigs.k8s.io/controller-runtime v0.14.1
 )
 
 require (
