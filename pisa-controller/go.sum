@@ -80,8 +80,8 @@ github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1/go.mod h1:Q3SI9o4m/ZMn
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
-github.com/database-mesh/golang-sdk v0.0.0-20221222095604-226ffbf7c06f h1:gdDv77eFpaVPE/wNHHI7mP407MCHiRXj9TCa64JZI6I=
-github.com/database-mesh/golang-sdk v0.0.0-20221222095604-226ffbf7c06f/go.mod h1:Dy2D64yAvfj3zzUa9rES5yex4ltB0xEY4RzUbBkZY+4=
+github.com/database-mesh/golang-sdk v0.0.0-20221222102357-9c64a23ded15 h1:I58cfU5cZ0k7EZHyadn0FAQ2QdvFEKmbk2m1sw+XGVM=
+github.com/database-mesh/golang-sdk v0.0.0-20221222102357-9c64a23ded15/go.mod h1:Dy2D64yAvfj3zzUa9rES5yex4ltB0xEY4RzUbBkZY+4=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
