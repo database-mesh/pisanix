@@ -5,14 +5,14 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.9.0
   creationTimestamp: null
-  name: databaseendpoints.core.database-mesh.io
+  name: qosclaims.core.database-mesh.io
 spec:
   group: core.database-mesh.io
   names:
-    kind: DatabaseEndpoint
-    listKind: DatabaseEndpointList
-    plural: databaseendpoints
-    singular: databaseendpoint
+    kind: QoSClaim
+    listKind: QoSClaimList
+    plural: qosclaims
+    singular: qosclaim
   scope: Namespaced
   versions:
   - name: v1alpha1
@@ -32,37 +32,23 @@ spec:
           metadata:
             type: object
           spec:
-            description: DatabaseEndpointSpec defines the desired state of DatabaseEndpoint
             properties:
-              database:
-                description: Database Backend data source type
+              trafficQoS:
                 properties:
-                  MySQL:
-                    description: MySQL Configuration Definition
+                  name:
+                    type: string
+                  qos_group:
                     properties:
-                      db:
+                      ceil:
                         type: string
-                      host:
+                      rate:
                         type: string
-                      password:
-                        type: string
-                      port:
-                        format: int32
-                        type: integer
-                      user:
-                        type: string
-                    required:
-                    - db
-                    - host
-                    - password
-                    - port
-                    - user
                     type: object
                 required:
-                - MySQL
+                - name
                 type: object
             required:
-            - database
+            - trafficQoS
             type: object
           status:
             type: object
