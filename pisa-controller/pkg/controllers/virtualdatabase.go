@@ -18,10 +18,12 @@ import (
 	"context"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/database-mesh/golang-sdk/aws"
 	"github.com/database-mesh/golang-sdk/aws/client/rds"
 	v1alpha1 "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/utils"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +40,8 @@ type VirtualDatabaseReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
+
+const ReconcileTime = 30 * time.Second
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -73,54 +77,91 @@ func (r *VirtualDatabaseReconciler) reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, err
 		}
 
-		subnetGroupName := class.Annotations[v1alpha1.AnnotationsSubnetGroupName]
-		vpcSecurityGroupIds := class.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
-
 		if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
-			//TODO: first check AWS RDS Instance
-			region := os.Getenv("AWS_REGION")
-			accessKey := os.Getenv("AWS_ACCESS_KEY")
-			secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-			sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
-			if err := rds.NewService(sess[region]).Instance().
-				SetEngine(class.Spec.Engine.Name).
-				SetEngineVersion(class.Spec.Engine.Version).
-				//FIXME: should be random name
-				SetDBInstanceIdentifier(class.Name).
-				//NOTE: if DefaultMasterUsername
-				//FIXME: should be a default value or a specific one
-				SetMasterUsername(class.Spec.DefaultMasterUsername).
-				//FIXME: should be a randompass
-				SetMasterUserPassword("randompass").
-				SetDBInstanceClass(class.Spec.Instance.Class).
-				SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
-				//FIXME: checkout different service
-				SetDBName(rt.Spec.Services[0].DatabaseMySQL.DB).
-				SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
-				SetDBSubnetGroup(subnetGroupName).
-				Create(context.TODO()); err != nil {
-				return ctrl.Result{}, err
+			return r.reconcileAWSRds(ctx, req, rt, class)
+		}
+	}
+
+	return ctrl.Result{RequeueAfter: ReconcileTime}, nil
+}
+
+// func (r *VirtualDatabaseReconciler) reconcileVirtualDatabase(ctx context.Context, namespacedName types.NamespacedName, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+// 	return ctrl.Result{}, nil
+// }
+
+func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+	subnetGroupName := class.Annotations[v1alpha1.AnnotationsSubnetGroupName]
+	vpcSecurityGroupIds := class.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
+	randompass := utils.RandomString()
+
+	//TODO: first check AWS RDS Instance
+	region := os.Getenv("AWS_REGION")
+	accessKey := os.Getenv("AWS_ACCESS_KEY")
+	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
+
+	for _, svc := range vdb.Spec.Services {
+		if svc.DatabaseMySQL != nil {
+			rdsDesc, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(vdb.Name).Describe(ctx)
+			if err != nil {
+				if strings.Contains(err.Error(), "DBInstanceNotFound") {
+					if err := rds.NewService(sess[region]).Instance().
+						SetEngine(class.Spec.Engine.Name).
+						SetEngineVersion(class.Spec.Engine.Version).
+						//FIXME: should add this DatabaseClass name to tags
+						SetDBInstanceIdentifier(vdb.Name).
+						SetMasterUsername(class.Spec.DefaultMasterUsername).
+						SetMasterUserPassword(randompass).
+						SetDBInstanceClass(class.Spec.Instance.Class).
+						SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
+						//NOTE: It will be invalid if this is a auto sharding
+						SetDBName(svc.DatabaseMySQL.DB).
+						SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
+						SetDBSubnetGroup(subnetGroupName).
+						Create(ctx); err != nil {
+						return ctrl.Result{}, err
+					}
+				}
 			}
 
-			dbep := &v1alpha1.DatabaseEndpoint{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      class.Name,
-					Namespace: rt.Namespace,
-				},
-				Spec: v1alpha1.DatabaseEndpointSpec{
-					Database: v1alpha1.Database{
-						MySQL: &v1alpha1.MySQL{
-							Host:     "thisshouldbe",
-							Port:     3306,
-							User:     class.Spec.DefaultMasterUsername,
-							Password: "randompass",
-							DB:       rt.Spec.Services[0].DatabaseMySQL.DB,
+			// Update or Delete
+			dbep := &v1alpha1.DatabaseEndpoint{}
+			err = r.Get(ctx, types.NamespacedName{
+				Namespace: vdb.Namespace,
+				Name:      vdb.Name,
+			}, dbep)
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					dbep := &v1alpha1.DatabaseEndpoint{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      vdb.Name,
+							Namespace: vdb.Namespace,
 						},
-					},
-				},
-			}
-			if err := r.Create(ctx, dbep); err != nil {
+						Spec: v1alpha1.DatabaseEndpointSpec{
+							Database: v1alpha1.Database{
+								MySQL: &v1alpha1.MySQL{
+									Host:     "",
+									Port:     0,
+									User:     class.Spec.DefaultMasterUsername,
+									Password: randompass,
+									DB:       svc.DatabaseMySQL.DB,
+								},
+							},
+						},
+					}
+					if err := r.Create(ctx, dbep); err != nil {
+						return ctrl.Result{}, err
+					}
+				}
 				return ctrl.Result{}, err
+			} else {
+				if rdsDesc != nil {
+					dbep.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
+					dbep.Spec.Database.MySQL.Port = uint32(rdsDesc.Endpoint.Port)
+					if err := r.Update(ctx, dbep); err != nil {
+						return ctrl.Result{Requeue: true}, err
+					}
+				}
 			}
 		}
 	}
@@ -128,13 +169,10 @@ func (r *VirtualDatabaseReconciler) reconcile(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualDatabaseReconciler) reconcileVirtualDatabase(ctx context.Context, namespacedName types.NamespacedName, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
-	return ctrl.Result{}, nil
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *VirtualDatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.VirtualDatabase{}).
+		Owns(&v1alpha1.DatabaseEndpoint{}).
 		Complete(r)
 }

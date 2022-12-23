@@ -18,6 +18,7 @@ import (
 	"flag"
 	"os"
 
+	dbmeshapi "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 	"github.com/database-mesh/golang-sdk/kubernetes/client"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/controllers"
@@ -40,6 +41,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(dbmeshapi.AddToScheme(scheme))
 
 	flag.Parse()
 	client.GetClient()
