@@ -16,10 +16,12 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	v1alpha1 "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -51,12 +53,24 @@ func (r *DatabaseChaosReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *DatabaseChaosReconciler) reconcile(ctx context.Context, req ctrl.Request, rt *v1alpha1.DatabaseChaos) (ctrl.Result, error) {
+	log := logger.FromContext(ctx)
 	if !rt.Spec.Suspend {
 		vdblist := &v1alpha1.VirtualDatabaseList{}
-		if err := r.List(ctx, vdblist, &client.ListOptions{
-			LabelSelector: rt.Spec.Selector,
-		}); err != nil {
+		lbs := labels.Set{}
+		lbs = rt.Spec.Selector.MatchLabels
+		opts := &client.ListOptions{
+			LabelSelector: lbs.AsSelector(),
+		}
+		if err := r.List(ctx, vdblist, opts); err != nil {
 			return ctrl.Result{Requeue: true}, err
+		}
+
+		for _, vdb := range vdblist.Items {
+			dbep := &v1alpha1.DatabaseEndpoint{}
+			if err := r.Get(ctx, dbep); err != nil {
+				log.Error(err, "get DatabaseEndpoint error")
+				continue
+			}
 		}
 
 		nxt := cronexpr.MustParse(rt.Spec.Schedule).Next(time.Now())
