@@ -18,9 +18,15 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.schedule
-      name: Schedule
+    - jsonPath: .status.protocol
+      name: Protocol
       type: string
+    - jsonPath: .status.endpoint
+      name: Endpoint
+      type: string
+    - jsonPath: .status.port
+      name: Port
+      type: integer
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -71,6 +77,18 @@ spec:
             - database
             type: object
           status:
+            properties:
+              endpoint:
+                type: string
+              port:
+                format: int32
+                type: integer
+              protocol:
+                type: string
+            required:
+            - endpoint
+            - port
+            - protocol
             type: object
         type: object
     served: true
