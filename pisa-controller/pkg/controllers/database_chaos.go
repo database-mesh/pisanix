@@ -71,9 +71,13 @@ func (r *DatabaseChaosReconciler) reconcile(ctx context.Context, req ctrl.Reques
 				log.Error(err, "get DatabaseEndpoint error")
 				continue
 			}
+
+			// TODO: add instance info to dbep status
+			// dbep.Status.
 		}
 
 		nxt := cronexpr.MustParse(rt.Spec.Schedule).Next(time.Now())
+		scheduledResult := ctrl.Result{RequeueAfter: nextRun.Sub(r.Now())}
 
 	} else {
 
