@@ -97,7 +97,14 @@ func NewTask() task.Task {
 		setupLog.Error(err, "unable to create controller", "controller", "VirtualDatabase")
 		os.Exit(1)
 	}
-	//TODO: Add other workload reconciler
+
+	if err = (&controllers.DatabaseChaosReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DatabaseChaos")
+		os.Exit(1)
+	}
 
 	//TODO: Add SetupWebhookWithManager
 
