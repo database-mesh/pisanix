@@ -28,10 +28,16 @@ spec:
     kind: DatabaseChaos
     listKind: DatabaseChaosList
     plural: databasechaos
+    shortNames:
+    - dbchaos
     singular: databasechaos
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.schedule
+      name: Schedule
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:
@@ -106,7 +112,6 @@ spec:
             - action
             - schedule
             - selector
-            - suspend
             type: object
           status:
             properties:
@@ -120,7 +125,6 @@ spec:
                     type:
                       type: string
                   required:
-                  - reason
                   - status
                   - type
                   type: object
@@ -153,3 +157,5 @@ spec:
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
