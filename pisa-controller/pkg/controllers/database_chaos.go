@@ -16,8 +16,12 @@ package controllers
 
 import (
 	"context"
+	"os"
+	"strings"
 	"time"
 
+	"github.com/database-mesh/golang-sdk/aws"
+	"github.com/database-mesh/golang-sdk/aws/client/rds"
 	v1alpha1 "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -65,22 +69,63 @@ func (r *DatabaseChaosReconciler) reconcile(ctx context.Context, req ctrl.Reques
 			return ctrl.Result{Requeue: true}, err
 		}
 
+		nxt := cronexpr.MustParse(rt.Spec.Schedule).Next(time.Now())
 		for _, vdb := range vdblist.Items {
 			dbep := &v1alpha1.DatabaseEndpoint{}
-			if err := r.Get(ctx, dbep); err != nil {
-				log.Error(err, "get DatabaseEndpoint error")
+			if err := r.Get(ctx, types.NamespacedName{
+				Namespace: vdb.Namespace,
+				Name:      vdb.Name,
+			}, dbep); err != nil {
+				log.Error(err, "Getting DatabaseEndpoint error")
 				continue
 			}
 
-			// TODO: add instance info to dbep status
-			// dbep.Status.
-		}
+			if dbep.Annotations == nil {
+				dbep.Annotations = map[string]string{}
+			}
 
-		nxt := cronexpr.MustParse(rt.Spec.Schedule).Next(time.Now())
-		scheduledResult := ctrl.Result{RequeueAfter: nextRun.Sub(r.Now())}
+			if len(dbep.Annotations[v1alpha1.AnnotationsNextScheduledChaosTimestamp]) != 0 && len(dbep.Status.Arn) != 0 {
+				expectedSchedule, err := time.Parse(time.RFC3339, dbep.Annotations[v1alpha1.AnnotationsNextScheduledChaosTimestamp])
+				if err != nil {
+					log.Error(err, "Schedule parse error")
+					continue
+				}
+
+				if time.Duration(time.Now().Sub(expectedSchedule).Seconds()) < 30*time.Second {
+					region := os.Getenv("AWS_REGION")
+					accessKey := os.Getenv("AWS_ACCESS_KEY")
+					secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+					sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
+					names := strings.Split(dbep.Status.Arn, ":")
+					name := names[len(names)-1]
+					// TODO: try using ARN
+					rdsDesc, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(name).Describe(ctx)
+					if err != nil {
+						log.Error(err, "Desc RDS error")
+						continue
+					}
+
+					if rdsDesc.DBInstanceStatus == "available" || rdsDesc.DBInstanceStatus == "Available" {
+						err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(name).Reboot(context.TODO())
+						if err != nil {
+							log.Error(err, "Reboot RDS error")
+							continue
+						}
+					}
+
+				}
+			}
+
+			dbep.Annotations[v1alpha1.AnnotationsNextScheduledChaosTimestamp] = nxt.Format(time.RFC3339)
+			if err := r.Update(ctx, dbep); err != nil {
+				return ctrl.Result{Requeue: true}, err
+			}
+		}
+		// TODO: add DatabaseChaos status handle
+		return ctrl.Result{RequeueAfter: nxt.Sub(time.Now())}, nil
 
 	} else {
-
+		return ctrl.Result{RequeueAfter: ReconcileTime}, nil
 	}
 }
 
@@ -88,4 +133,11 @@ func (r *DatabaseChaosReconciler) getRuntimeDatabaseChaos(ctx context.Context, n
 	rt := &v1alpha1.DatabaseChaos{}
 	err := r.Get(ctx, namespacedName, rt)
 	return rt, err
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *DatabaseChaosReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&v1alpha1.DatabaseChaos{}).
+		Complete(r)
 }
