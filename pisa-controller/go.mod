@@ -3,8 +3,9 @@ module github.com/database-mesh/pisanix/pisa-controller
 go 1.18
 
 require (
-	github.com/database-mesh/golang-sdk v0.0.0-20221227115030-d1835517630e
+	github.com/database-mesh/golang-sdk v0.0.0-20221229111147-b10bca6cc0ab
 	github.com/gin-gonic/gin v1.7.7
+	github.com/gorhill/cronexpr v0.0.0-20180427100037-88b0669f7d75
 	github.com/mlycore/log v0.2.16
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.8.0

@@ -256,6 +256,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 					dbep.Status.Protocol = "MySQL"
 					dbep.Status.Endpoint = rdsDesc.Endpoint.Address
 					dbep.Status.Port = rdsDesc.Endpoint.Port
+					dbep.Status.Arn = rdsDesc.DBInstanceArn
 					if err := r.Status().Update(ctx, dbep); err != nil {
 						return ctrl.Result{Requeue: true}, err
 					}

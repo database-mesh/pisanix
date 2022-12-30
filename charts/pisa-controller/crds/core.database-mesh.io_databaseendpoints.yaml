@@ -94,6 +94,8 @@ spec:
             type: object
           status:
             properties:
+              arn:
+                type: string
               endpoint:
                 type: string
               port:
