@@ -149,7 +149,7 @@ func (r *VirtualDatabaseReconciler) reconcileFinalizers(ctx context.Context, req
 							return ctrl.Result{}, err
 						}
 					} else {
-						if _, err := r.deleteAWSRds(ctx, req, dbep); err != nil {
+						if _, err := r.deleteAWSRds(ctx, req, dbep, class.Spec.Provisioner); err != nil {
 							return ctrl.Result{RequeueAfter: ReconcileTime}, err
 						}
 						// FIXME:
@@ -158,6 +158,27 @@ func (r *VirtualDatabaseReconciler) reconcileFinalizers(ctx context.Context, req
 						}
 					}
 				}
+
+				if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsCluster {
+					dbep := &v1alpha1.DatabaseEndpoint{}
+					if err := r.Get(ctx, types.NamespacedName{
+						Namespace: rt.Namespace,
+						Name:      rt.Name,
+					}, dbep); err != nil {
+						if apierrors.IsNotFound(err) {
+							return ctrl.Result{}, err
+						}
+					} else {
+						if _, err := r.deleteAWSRds(ctx, req, dbep, class.Spec.Provisioner); err != nil {
+							return ctrl.Result{RequeueAfter: ReconcileTime}, err
+						}
+						// FIXME:
+						if err := r.Delete(ctx, dbep); err != nil {
+							return ctrl.Result{RequeueAfter: ReconcileTime}, err
+						}
+					}
+				}
+
 				rt.ObjectMeta.Finalizers = RemoveString(rt.ObjectMeta.Finalizers, AWSRdsFinalizer)
 				if err := r.Update(ctx, rt); err != nil {
 					return ctrl.Result{Requeue: true}, nil
@@ -169,21 +190,40 @@ func (r *VirtualDatabaseReconciler) reconcileFinalizers(ctx context.Context, req
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint) (ctrl.Result, error) {
+// TODO: turn provisioner into some object
+func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
 	region := os.Getenv("AWS_REGION")
 	accessKey := os.Getenv("AWS_ACCESS_KEY")
 	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
 
-	_, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(dbep.Name).Describe(ctx)
-	if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
-		return ctrl.Result{}, nil
+	switch provisioner {
+	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+		{
+			_, err := rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(dbep.Name).Describe(ctx)
+			if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
+				return ctrl.Result{}, nil
+			}
+
+			err = rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(dbep.Name).SetSkipFinalSnapshot(true).Delete(ctx)
+			if err != nil && !strings.Contains(err.Error(), "is already being deleted") {
+				return ctrl.Result{Requeue: true}, err
+			}
+		}
+	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+		{
+			_, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(dbep.Name).Describe(ctx)
+			if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
+				return ctrl.Result{}, nil
+			}
+
+			err = rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(dbep.Name).SetSkipFinalSnapshot(true).Delete(ctx)
+			if err != nil && !strings.Contains(err.Error(), "is already being deleted") {
+				return ctrl.Result{Requeue: true}, err
+			}
+		}
 	}
 
-	err = rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(dbep.Name).SetSkipFinalSnapshot(true).Delete(ctx)
-	if err != nil && !strings.Contains(err.Error(), "is already being deleted") {
-		return ctrl.Result{Requeue: true}, err
-	}
 	return ctrl.Result{}, nil
 }
 
