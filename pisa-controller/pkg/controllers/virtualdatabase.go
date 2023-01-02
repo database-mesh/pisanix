@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -82,8 +83,13 @@ func (r *VirtualDatabaseReconciler) update(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, err
 		}
 
-		if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
+		switch class.Spec.Provisioner {
+		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
 			return r.reconcileAWSRds(ctx, req, rt, class)
+		case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+			return r.reconcileAWSRds(ctx, req, rt, class)
+		default:
+			return ctrl.Result{RequeueAfter: ReconcileTime}, errors.New("unknown DatabaseClass provisioner")
 		}
 	}
 
@@ -182,8 +188,9 @@ func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.R
 }
 
 func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
-	subnetGroupName := class.Annotations[v1alpha1.AnnotationsSubnetGroupName]
-	vpcSecurityGroupIds := class.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
+	subnetGroupName := vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName]
+	vpcSecurityGroupIds := vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
+	availabilityZones := vdb.Annotations[v1alpha1.AnnotationsAvailabilityZones]
 	randompass := utils.RandomString()
 
 	//TODO: first check AWS RDS Instance
@@ -194,71 +201,148 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 
 	for _, svc := range vdb.Spec.Services {
 		if svc.DatabaseMySQL != nil {
-			rdsDesc, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(vdb.Name).Describe(ctx)
-			if err != nil {
-				if strings.Contains(err.Error(), "DBInstanceNotFound") {
-					if err := rds.NewService(sess[region]).Instance().
-						SetEngine(class.Spec.Engine.Name).
-						SetEngineVersion(class.Spec.Engine.Version).
-						//FIXME: should add this DatabaseClass name to tags
-						SetDBInstanceIdentifier(vdb.Name).
-						SetMasterUsername(class.Spec.DefaultMasterUsername).
-						SetMasterUserPassword(randompass).
-						SetDBInstanceClass(class.Spec.Instance.Class).
-						SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
-						//NOTE: It will be invalid if this is a auto sharding
-						SetDBName(svc.DatabaseMySQL.DB).
-						SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
-						SetDBSubnetGroup(subnetGroupName).
-						Create(ctx); err != nil {
-						return ctrl.Result{}, err
+			if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
+				rdsDesc, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(vdb.Name).Describe(ctx)
+				if err != nil {
+					if strings.Contains(err.Error(), "DBInstanceNotFound") {
+						if err := rds.NewService(sess[region]).Instance().
+							SetEngine(class.Spec.Engine.Name).
+							SetEngineVersion(class.Spec.Engine.Version).
+							//FIXME: should add this DatabaseClass name to tags
+							SetDBInstanceIdentifier(vdb.Name).
+							SetMasterUsername(class.Spec.DefaultMasterUsername).
+							SetMasterUserPassword(randompass).
+							SetDBInstanceClass(class.Spec.Instance.Class).
+							SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
+							//NOTE: It will be invalid if this is a auto sharding
+							SetDBName(svc.DatabaseMySQL.DB).
+							SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
+							SetDBSubnetGroup(subnetGroupName).
+							Create(ctx); err != nil {
+							return ctrl.Result{}, err
+						}
+					}
+				}
+
+				// Update or Delete
+				dbep := &v1alpha1.DatabaseEndpoint{}
+				err = r.Get(ctx, types.NamespacedName{
+					Namespace: vdb.Namespace,
+					Name:      vdb.Name,
+				}, dbep)
+				if err != nil {
+					if vdb.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
+						dbep := &v1alpha1.DatabaseEndpoint{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      vdb.Name,
+								Namespace: vdb.Namespace,
+							},
+							Spec: v1alpha1.DatabaseEndpointSpec{
+								Database: v1alpha1.Database{
+									MySQL: &v1alpha1.MySQL{
+										Host:     "",
+										Port:     0,
+										User:     class.Spec.DefaultMasterUsername,
+										Password: randompass,
+										DB:       svc.DatabaseMySQL.DB,
+									},
+								},
+							},
+						}
+						if err := r.Create(ctx, dbep); err != nil {
+							return ctrl.Result{}, err
+						}
+					}
+					return ctrl.Result{}, err
+				} else {
+					if rdsDesc != nil {
+						dbep.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
+						dbep.Spec.Database.MySQL.Port = uint32(rdsDesc.Endpoint.Port)
+						if err := r.Update(ctx, dbep); err != nil {
+							return ctrl.Result{Requeue: true}, err
+						}
+						dbep.Status.Protocol = "MySQL"
+						dbep.Status.Endpoint = rdsDesc.Endpoint.Address
+						dbep.Status.Port = uint32(rdsDesc.Endpoint.Port)
+						dbep.Status.Arn = rdsDesc.DBInstanceArn
+						if err := r.Status().Update(ctx, dbep); err != nil {
+							return ctrl.Result{Requeue: true}, err
+						}
 					}
 				}
 			}
 
-			// Update or Delete
-			dbep := &v1alpha1.DatabaseEndpoint{}
-			err = r.Get(ctx, types.NamespacedName{
-				Namespace: vdb.Namespace,
-				Name:      vdb.Name,
-			}, dbep)
-			if err != nil {
-				if vdb.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
-					dbep := &v1alpha1.DatabaseEndpoint{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      vdb.Name,
-							Namespace: vdb.Namespace,
-						},
-						Spec: v1alpha1.DatabaseEndpointSpec{
-							Database: v1alpha1.Database{
-								MySQL: &v1alpha1.MySQL{
-									Host:     "",
-									Port:     0,
-									User:     class.Spec.DefaultMasterUsername,
-									Password: randompass,
-									DB:       svc.DatabaseMySQL.DB,
-								},
-							},
-						},
-					}
-					if err := r.Create(ctx, dbep); err != nil {
-						return ctrl.Result{}, err
+			if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsCluster {
+				rdsDesc, err := rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
+				if err != nil {
+					if strings.Contains(err.Error(), "DBClusterNotFound") {
+						if err := rds.NewService(sess[region]).Cluster().
+							SetEngine(class.Spec.Engine.Name).
+							SetEngineVersion(class.Spec.Engine.Version).
+							SetDBClusterIdentifier(vdb.Name).
+							SetMasterUsername(class.Spec.DefaultMasterUsername).
+							SetMasterUserPassword(randompass).
+							SetDBClusterInstanceClass(class.Spec.Instance.Class).
+							SetDatabaseName(svc.DatabaseMySQL.DB).
+							SetAllocatedStorage(100).
+							SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
+							SetStorageType("io1").
+							SetIOPS(1000).
+							SetDBSubnetGroupName(subnetGroupName).
+							// SetAvailabilityZones([]string{"ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"}).
+							SetAvailabilityZones(strings.Split(availabilityZones, ",")).
+							// SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
+							Create(ctx); err != nil {
+							return ctrl.Result{}, err
+						}
 					}
 				}
-				return ctrl.Result{}, err
-			} else {
-				if rdsDesc != nil {
-					dbep.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
-					dbep.Spec.Database.MySQL.Port = uint32(rdsDesc.Endpoint.Port)
-					if err := r.Update(ctx, dbep); err != nil {
-						return ctrl.Result{Requeue: true}, err
+
+				// Update or Delete
+				dbep := &v1alpha1.DatabaseEndpoint{}
+				err = r.Get(ctx, types.NamespacedName{
+					Namespace: vdb.Namespace,
+					Name:      vdb.Name,
+				}, dbep)
+				if err != nil {
+					if vdb.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
+						dbep := &v1alpha1.DatabaseEndpoint{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      vdb.Name,
+								Namespace: vdb.Namespace,
+							},
+							Spec: v1alpha1.DatabaseEndpointSpec{
+								Database: v1alpha1.Database{
+									MySQL: &v1alpha1.MySQL{
+										Host:     "",
+										Port:     0,
+										User:     class.Spec.DefaultMasterUsername,
+										Password: randompass,
+										DB:       svc.DatabaseMySQL.DB,
+									},
+								},
+							},
+						}
+						if err := r.Create(ctx, dbep); err != nil {
+							return ctrl.Result{}, err
+						}
 					}
-					dbep.Status.Protocol = "MySQL"
-					dbep.Status.Endpoint = rdsDesc.Endpoint.Address
-					dbep.Status.Port = rdsDesc.Endpoint.Port
-					dbep.Status.Arn = rdsDesc.DBInstanceArn
-					if err := r.Status().Update(ctx, dbep); err != nil {
-						return ctrl.Result{Requeue: true}, err
+					return ctrl.Result{}, err
+				} else {
+					if rdsDesc != nil {
+						//TODO: how to handle this PrimaryEndpoint and reader endpoint ?
+						dbep.Spec.Database.MySQL.Host = rdsDesc.PrimaryEndpoint
+						dbep.Spec.Database.MySQL.Port = uint32(rdsDesc.Port)
+						if err := r.Update(ctx, dbep); err != nil {
+							return ctrl.Result{Requeue: true}, err
+						}
+						dbep.Status.Protocol = "MySQL"
+						dbep.Status.Endpoint = rdsDesc.PrimaryEndpoint
+						dbep.Status.Port = uint32(rdsDesc.Port)
+						dbep.Status.Arn = rdsDesc.DBClusterArn
+						if err := r.Status().Update(ctx, dbep); err != nil {
+							return ctrl.Result{Requeue: true}, err
+						}
 					}
 				}
 			}
