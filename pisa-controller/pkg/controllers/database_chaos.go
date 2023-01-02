@@ -62,6 +62,7 @@ func (r *DatabaseChaosReconciler) reconcile(ctx context.Context, req ctrl.Reques
 		vdblist := &v1alpha1.VirtualDatabaseList{}
 		lbs := labels.Set{}
 		lbs = rt.Spec.Selector.MatchLabels
+
 		opts := &client.ListOptions{
 			LabelSelector: lbs.AsSelector(),
 		}
@@ -71,6 +72,15 @@ func (r *DatabaseChaosReconciler) reconcile(ctx context.Context, req ctrl.Reques
 
 		nxt := cronexpr.MustParse(rt.Spec.Schedule).Next(time.Now())
 		for _, vdb := range vdblist.Items {
+			class := &v1alpha1.DatabaseClass{}
+			if err := r.Get(ctx, types.NamespacedName{
+				Namespace: "",
+				Name:      vdb.Spec.DatabaseClassName,
+			}, class); err != nil {
+				log.Error(err, "Getting DatabaseClass error")
+				continue
+			}
+
 			dbep := &v1alpha1.DatabaseEndpoint{}
 			if err := r.Get(ctx, types.NamespacedName{
 				Namespace: vdb.Namespace,
@@ -98,18 +108,38 @@ func (r *DatabaseChaosReconciler) reconcile(ctx context.Context, req ctrl.Reques
 					sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
 					names := strings.Split(dbep.Status.Arn, ":")
 					name := names[len(names)-1]
-					// TODO: try using ARN
-					rdsDesc, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(name).Describe(ctx)
-					if err != nil {
-						log.Error(err, "Desc RDS error")
-						continue
+
+					if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
+						// TODO: try using ARN
+						rdsDesc, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(name).Describe(ctx)
+						if err != nil {
+							log.Error(err, "Desc RDS error")
+							continue
+						}
+
+						if rdsDesc.DBInstanceStatus == "available" || rdsDesc.DBInstanceStatus == "Available" {
+							err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(name).Reboot(context.TODO())
+							if err != nil {
+								log.Error(err, "Reboot RDS error")
+								continue
+							}
+						}
 					}
 
-					if rdsDesc.DBInstanceStatus == "available" || rdsDesc.DBInstanceStatus == "Available" {
-						err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(name).Reboot(context.TODO())
+					if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsCluster {
+						// TODO: try using ARN
+						rdsDesc, err := rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(name).Describe(ctx)
 						if err != nil {
-							log.Error(err, "Reboot RDS error")
+							log.Error(err, "Desc RDS error")
 							continue
+						}
+
+						if rdsDesc.Status == "available" || rdsDesc.Status == "Available" {
+							err := rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(name).Failover(context.TODO())
+							if err != nil {
+								log.Error(err, "Failover RDS error")
+								continue
+							}
 						}
 					}
 
