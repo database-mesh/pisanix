@@ -16,11 +16,9 @@ package controllers
 
 import (
 	"context"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/database-mesh/golang-sdk/aws"
 	"github.com/database-mesh/golang-sdk/aws/client/rds"
 	v1alpha1 "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 
@@ -39,6 +37,7 @@ import (
 type DatabaseChaosReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	AWSRds rds.RDS
 }
 
 func (r *DatabaseChaosReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -102,23 +101,19 @@ func (r *DatabaseChaosReconciler) reconcile(ctx context.Context, req ctrl.Reques
 				}
 
 				if time.Duration(time.Now().Sub(expectedSchedule).Seconds()) < 30*time.Second {
-					region := os.Getenv("AWS_REGION")
-					accessKey := os.Getenv("AWS_ACCESS_KEY")
-					secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-					sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
 					names := strings.Split(dbep.Status.Arn, ":")
 					name := names[len(names)-1]
 
 					if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
 						// TODO: try using ARN
-						rdsDesc, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(name).Describe(ctx)
+						rdsDesc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(name).Describe(ctx)
 						if err != nil {
 							log.Error(err, "Desc RDS error")
 							continue
 						}
 
 						if rdsDesc.DBInstanceStatus == "available" || rdsDesc.DBInstanceStatus == "Available" {
-							err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(name).Reboot(context.TODO())
+							err := r.AWSRds.Instance().SetDBInstanceIdentifier(name).Reboot(context.TODO())
 							if err != nil {
 								log.Error(err, "Reboot RDS error")
 								continue
@@ -128,14 +123,14 @@ func (r *DatabaseChaosReconciler) reconcile(ctx context.Context, req ctrl.Reques
 
 					if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsCluster {
 						// TODO: try using ARN
-						rdsDesc, err := rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(name).Describe(ctx)
+						rdsDesc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(name).Describe(ctx)
 						if err != nil {
 							log.Error(err, "Desc RDS error")
 							continue
 						}
 
 						if rdsDesc.Status == "available" || rdsDesc.Status == "Available" {
-							err := rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(name).Failover(context.TODO())
+							err := r.AWSRds.Cluster().SetDBClusterIdentifier(name).Failover(context.TODO())
 							if err != nil {
 								log.Error(err, "Failover RDS error")
 								continue

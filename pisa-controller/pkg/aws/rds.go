@@ -13,3 +13,18 @@
 // limitations under the License.
 
 package aws
+
+import (
+	"os"
+
+	"github.com/database-mesh/golang-sdk/aws"
+	"github.com/database-mesh/golang-sdk/aws/client/rds"
+)
+
+func NewRdsClient() rds.RDS {
+	region := os.Getenv("AWS_REGION")
+	accessKey := os.Getenv("AWS_ACCESS_KEY")
+	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
+	return rds.NewService(sess[region])
+}
