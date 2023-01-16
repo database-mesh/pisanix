@@ -18,7 +18,6 @@ import (
 	"flag"
 	"os"
 
-	// "github.com/aws/aws-sdk-go-v2/service/rds"
 	dbmeshapi "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 	"github.com/database-mesh/golang-sdk/kubernetes/client"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
