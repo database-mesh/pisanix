@@ -17,11 +17,9 @@ package controllers
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/database-mesh/golang-sdk/aws"
 	"github.com/database-mesh/golang-sdk/aws/client/rds"
 	v1alpha1 "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/utils"
@@ -40,6 +38,7 @@ import (
 type VirtualDatabaseReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	AWSRds rds.RDS
 }
 
 const ReconcileTime = 30 * time.Second
@@ -192,32 +191,27 @@ func (r *VirtualDatabaseReconciler) reconcileFinalizers(ctx context.Context, req
 
 // TODO: turn provisioner into some object
 func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
-	region := os.Getenv("AWS_REGION")
-	accessKey := os.Getenv("AWS_ACCESS_KEY")
-	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-	sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
-
 	switch provisioner {
 	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
 		{
-			_, err := rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(dbep.Name).Describe(ctx)
+			_, err := r.AWSRds.Cluster().SetDBClusterIdentifier(dbep.Name).Describe(ctx)
 			if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
 				return ctrl.Result{}, nil
 			}
 
-			err = rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(dbep.Name).SetSkipFinalSnapshot(true).Delete(ctx)
+			err = r.AWSRds.Cluster().SetDBClusterIdentifier(dbep.Name).SetSkipFinalSnapshot(true).Delete(ctx)
 			if err != nil && !strings.Contains(err.Error(), "is already being deleted") {
 				return ctrl.Result{Requeue: true}, err
 			}
 		}
 	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
 		{
-			_, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(dbep.Name).Describe(ctx)
+			_, err := r.AWSRds.Instance().SetDBInstanceIdentifier(dbep.Name).Describe(ctx)
 			if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
 				return ctrl.Result{}, nil
 			}
 
-			err = rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(dbep.Name).SetSkipFinalSnapshot(true).Delete(ctx)
+			err = r.AWSRds.Instance().SetDBInstanceIdentifier(dbep.Name).SetSkipFinalSnapshot(true).Delete(ctx)
 			if err != nil && !strings.Contains(err.Error(), "is already being deleted") {
 				return ctrl.Result{Requeue: true}, err
 			}
@@ -234,18 +228,14 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 	randompass := utils.RandomString()
 
 	//TODO: first check AWS RDS Instance
-	region := os.Getenv("AWS_REGION")
-	accessKey := os.Getenv("AWS_ACCESS_KEY")
-	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-	sess := aws.NewSessions().SetCredential(region, accessKey, secretAccessKey).Build()
 
 	for _, svc := range vdb.Spec.Services {
 		if svc.DatabaseMySQL != nil {
 			if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
-				rdsDesc, err := rds.NewService(sess[region]).Instance().SetDBInstanceIdentifier(vdb.Name).Describe(ctx)
+				rdsDesc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(vdb.Name).Describe(ctx)
 				if err != nil {
 					if strings.Contains(err.Error(), "DBInstanceNotFound") {
-						if err := rds.NewService(sess[region]).Instance().
+						if err := r.AWSRds.Instance().
 							SetEngine(class.Spec.Engine.Name).
 							SetEngineVersion(class.Spec.Engine.Version).
 							//FIXME: should add this DatabaseClass name to tags
@@ -313,10 +303,10 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 			}
 
 			if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsCluster {
-				rdsDesc, err := rds.NewService(sess[region]).Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
+				rdsDesc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
 				if err != nil {
 					if strings.Contains(err.Error(), "DBClusterNotFound") {
-						if err := rds.NewService(sess[region]).Cluster().
+						if err := r.AWSRds.Cluster().
 							SetEngine(class.Spec.Engine.Name).
 							SetEngineVersion(class.Spec.Engine.Version).
 							SetDBClusterIdentifier(vdb.Name).

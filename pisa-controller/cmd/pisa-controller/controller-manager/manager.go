@@ -18,9 +18,11 @@ import (
 	"flag"
 	"os"
 
+	// "github.com/aws/aws-sdk-go-v2/service/rds"
 	dbmeshapi "github.com/database-mesh/golang-sdk/kubernetes/api/v1alpha1"
 	"github.com/database-mesh/golang-sdk/kubernetes/client"
 	"github.com/database-mesh/pisanix/pisa-controller/cmd/pisa-controller/task"
+	"github.com/database-mesh/pisanix/pisa-controller/pkg/aws"
 	"github.com/database-mesh/pisanix/pisa-controller/pkg/controllers"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/api/node/v1alpha1"
@@ -93,6 +95,7 @@ func NewTask() task.Task {
 	if err = (&controllers.VirtualDatabaseReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		AWSRds: aws.NewRdsClient(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "VirtualDatabase")
 		os.Exit(1)
@@ -101,6 +104,7 @@ func NewTask() task.Task {
 	if err = (&controllers.DatabaseChaosReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		AWSRds: aws.NewRdsClient(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "DatabaseChaos")
 		os.Exit(1)
