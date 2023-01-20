@@ -20,7 +20,6 @@ parking_lot = "0.12.0"
 pisa_error = { path = "../../error", package = "error" }
 plugin = { path = "../../plugin" }
 proxy = { path = "../../proxy" }
-rocket_prometheus = "0.10.0-rc.1"
 serde = { version = "1.0.133", default-features = false, features = ["derive"] }
 serde_derive = "1.0"
 strategy = { path = "../../proxy/strategy" }
@@ -38,3 +37,4 @@ lazy_static = "1.4.0"
 rayon = "1.5"
 lexical = "6"
 lexical-core = "0.8.5"
+prometheus = "0.13.3"

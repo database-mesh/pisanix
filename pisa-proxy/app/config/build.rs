@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::Result;
-use vergen::{vergen, Config};
+use std::error::Error;
+use vergen::EmitBuilder;
 
-fn main() -> Result<()> {
-    // Generate the default 'cargo:' instruction output
-    vergen(Config::default())
+fn main() -> Result<(), Box<dyn Error>> {
+    EmitBuilder::builder()
+        .idempotent()
+        .git_branch()
+        .git_sha(false)
+        .git_describe(false, true)
+        .all_rustc()
+        .emit()?;
+    Ok(())
 }

@@ -37,12 +37,14 @@ fn main() {
         .init();
 
     info!("Pisa-Proxy {}", config.get_version());
+    
+    let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
+        .build_http_server(HttpServerKind::Axum);
 
     match config.proxy.clone() {
         Some(_) => {
             let mut servers = Vec::with_capacity(config.get_proxy().len());
-            let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
-                .build_http_server(HttpServerKind::Rocket);
+            
 
             build_runtime().block_on(async move {
                 for proxy_config in config.get_proxy() {
@@ -69,8 +71,6 @@ fn main() {
             });
         }
         None => {
-            let http_server = PisaHttpServerFactory::new(config.clone(), MetricsManager::new())
-                .build_http_server(HttpServerKind::Rocket);
             build_runtime().block_on(async move {
                 if let Err(e) = tokio::spawn(new_http_server(http_server)).await {
                         error!("{:?}", e)

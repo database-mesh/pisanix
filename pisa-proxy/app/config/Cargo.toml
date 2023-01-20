@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
+
 [build-dependencies]
 anyhow = { version = "1.0", default-features = false }
-vergen = { version = "7.0.0", default-features = false, features = ["build", "rustc"] }
+vergen = { version = "8.0.0-beta.3", features =  ["build", "git", "gitcl", "rustc"] }
+
 
 [dependencies]
 api = { path = "../api" }

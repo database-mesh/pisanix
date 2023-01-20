@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate rocket;
+#![allow(incomplete_features)]
+#![feature(return_position_impl_trait_in_trait)]
 
-pub mod controllers;
 pub mod http;

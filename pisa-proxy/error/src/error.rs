@@ -16,7 +16,6 @@ use std::{error::Error as StdError, io::Error as IoError};
 
 use mysql_parser::parser::ParseError;
 use mysql_protocol::err::ProtocolError;
-use rocket::Error as RocketError;
 use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
@@ -26,9 +25,6 @@ pub enum ErrorKind {
 
     #[error("stdio error: {0:?}")]
     Io(#[from] IoError),
-
-    #[error("rocket error: {0:?}")]
-    Rocket(#[from] Box<RocketError>),
 
     #[error("parser error: {0:?}")]
     Parser(#[from] ParseError),

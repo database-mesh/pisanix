@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{net::{Ipv4Addr, SocketAddr, IpAddr}};
+
 use config::config::PisaProxyConfig;
 use pisa_error::error::*;
 use pisa_metrics::metrics::MetricsManager;
-
-use crate::controllers::{healthz::healthz, version::version};
+use axum::{
+    routing::get,
+    Router, http::{StatusCode, header}, body::Body, extract::State, response::Response,
+};
+use tracing::info;
 
 #[async_trait::async_trait]
 pub trait HttpServer {
@@ -24,11 +29,11 @@ pub trait HttpServer {
 }
 
 pub trait HttpFactory {
-    fn build_http_server(&self, kind: HttpServerKind) -> Box<dyn HttpServer + Send>;
+    fn build_http_server(&self, kind: HttpServerKind) -> impl HttpServer;
 }
 
 pub enum HttpServerKind {
-    Rocket,
+    Axum,
 }
 
 pub struct PisaHttpServerFactory {
@@ -42,42 +47,65 @@ impl PisaHttpServerFactory {
 }
 
 impl HttpFactory for PisaHttpServerFactory {
-    fn build_http_server(&self, kind: HttpServerKind) -> Box<dyn HttpServer + Send> {
+    fn build_http_server(&self, kind: HttpServerKind) -> impl HttpServer {
         match kind {
-            HttpServerKind::Rocket => Box::new(RocketServer {
+            HttpServerKind::Axum => AxumServer {
                 pisa_config: self.pisa_config.clone(),
                 metrics_manager: self.metrics_manager.clone(),
-            }),
+            },
         }
     }
 }
 
-#[derive(Default)]
-pub struct RocketServer {
+pub async fn new_http_server(mut s: impl HttpServer) {
+    s.start().await.unwrap();
+}
+
+#[derive(Clone, Debug)]
+pub struct AxumServer {
     pisa_config: PisaProxyConfig,
     metrics_manager: MetricsManager,
 }
 
-#[async_trait::async_trait]
-impl HttpServer for RocketServer {
-    async fn start(&mut self) -> Result<(), Error> {
-        self.metrics_manager.register();
-        let figment = rocket::Config::figment()
-            .merge(("address", &self.pisa_config.get_admin().host))
-            .merge(("port", &self.pisa_config.get_admin().port))
-            .merge(("cli_colors", false))
-            .merge(("shutdown.ctrlc", false));
+impl AxumServer {
+    fn routes(&self) -> Router<(), Body> {
+        let state = self.clone();
 
-        return rocket::Rocket::custom(figment)
-            .attach(self.metrics_manager.get_server())
-            .mount("/", routes![healthz, version])
-            .mount("/metrics", self.metrics_manager.get_server())
-            .launch()
-            .await
-            .map_err(|e| Error::new(ErrorKind::Rocket(Box::new(e))));
+        Router::new()
+            .route("/healthz", get(Self::healthz))
+            .route("/version", get(Self::version))
+            .route("/metrics", get(Self::metrics))
+            .with_state(state)
+    }
+
+    async fn healthz(_state: State<Self>) -> StatusCode {
+        // TODO: add checking logic
+        StatusCode::OK
+    }
+
+    async fn version(State(state): State<Self>) -> String {
+        state.pisa_config.get_version().to_string()
+    }
+
+    async fn metrics(State(state): State<Self>) -> Response<Body> {
+        let buf = state.metrics_manager.gather();
+
+        Response::builder().header(header::CONTENT_TYPE, "text/plain; version=0.0.4")
+            .body(Body::from(buf))
+            .unwrap()
     }
 }
 
-pub async fn new_http_server(mut s: Box<dyn HttpServer + Send>) {
-    s.start().await.unwrap();
+#[async_trait::async_trait]
+impl HttpServer for AxumServer {
+    async fn start(&mut self) -> Result<(), Error> {
+        // If `host` converting to `Ipv4Addr` faild, then panic directly.
+        let addr: Ipv4Addr = self.pisa_config.get_admin().host.parse().unwrap();
+        let port = self.pisa_config.get_admin().port;
+        let socket_addr = SocketAddr::new(IpAddr::V4(addr), port);
+        info!("http server start binding port: {}", port);
+        axum::Server::bind(&socket_addr).serve(self.routes().into_make_service()).await.map_err(|e| ErrorKind::Runtime(e.into()))?;
+        Ok(())
+    }
 }
+

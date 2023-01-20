@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use once_cell::sync::Lazy;
-use rocket_prometheus::prometheus::{opts, GaugeVec, HistogramOpts, HistogramVec, IntCounterVec};
+use prometheus::{opts, IntCounterVec, GaugeVec, HistogramOpts, HistogramVec};
 
 // LABEL_NAME_DOMAIN refers to the name of current working proxy runtime
 const LABEL_NAME_DOMAIN: &'static str = "domain";
