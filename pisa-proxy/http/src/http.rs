@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::{Ipv4Addr, SocketAddr, IpAddr}};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+use axum::{
+    body::Body,
+    extract::State,
+    http::{header, StatusCode},
+    response::Response,
+    routing::get,
+    Router,
+};
 use config::config::PisaProxyConfig;
 use pisa_error::error::*;
 use pisa_metrics::metrics::MetricsManager;
-use axum::{
-    routing::get,
-    Router, http::{StatusCode, header}, body::Body, extract::State, response::Response,
-};
 use tracing::info;
 
 #[async_trait::async_trait]
@@ -90,7 +94,8 @@ impl AxumServer {
     async fn metrics(State(state): State<Self>) -> Response<Body> {
         let buf = state.metrics_manager.gather();
 
-        Response::builder().header(header::CONTENT_TYPE, "text/plain; version=0.0.4")
+        Response::builder()
+            .header(header::CONTENT_TYPE, "text/plain; version=0.0.4")
             .body(Body::from(buf))
             .unwrap()
     }
@@ -104,8 +109,10 @@ impl HttpServer for AxumServer {
         let port = self.pisa_config.get_admin().port;
         let socket_addr = SocketAddr::new(IpAddr::V4(addr), port);
         info!("http server start binding port: {}", port);
-        axum::Server::bind(&socket_addr).serve(self.routes().into_make_service()).await.map_err(|e| ErrorKind::Runtime(e.into()))?;
+        axum::Server::bind(&socket_addr)
+            .serve(self.routes().into_make_service())
+            .await
+            .map_err(|e| ErrorKind::Runtime(e.into()))?;
         Ok(())
     }
 }
-
