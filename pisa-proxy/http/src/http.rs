@@ -108,7 +108,7 @@ impl HttpServer for AxumServer {
         let addr: Ipv4Addr = self.pisa_config.get_admin().host.parse().unwrap();
         let port = self.pisa_config.get_admin().port;
         let socket_addr = SocketAddr::new(IpAddr::V4(addr), port);
-        info!("http server start binding port: {}", port);
+        info!("http server is binding port: {}", port);
         axum::Server::bind(&socket_addr)
             .serve(self.routes().into_make_service())
             .await
