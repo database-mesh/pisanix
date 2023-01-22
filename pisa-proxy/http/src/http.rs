@@ -26,6 +26,7 @@ use config::config::PisaProxyConfig;
 use pisa_error::error::*;
 use pisa_metrics::metrics::MetricsManager;
 use tracing::info;
+use ver::version::get_version;
 
 #[async_trait::async_trait]
 pub trait HttpServer {
@@ -87,8 +88,8 @@ impl AxumServer {
         StatusCode::OK
     }
 
-    async fn version(State(state): State<Self>) -> String {
-        state.pisa_config.get_version().to_string()
+    async fn version(State(_state): State<Self>) -> String {
+        get_version()
     }
 
     async fn metrics(State(state): State<Self>) -> Response<Body> {

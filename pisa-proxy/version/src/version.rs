@@ -15,11 +15,13 @@
 pub fn get_version() -> String {
     let errmgs = "Can not get build informations";
     format!(
-        "Pisa-Proxy Release: {}, Pisa Edition: {}, Rust Version: {}, Git Commit: {}, Git Branch: {}",
+        "Pisa-Proxy Release: {}, Pisa Edition: {}, Rustc Version: {}, Rustc CommitDate: {}, Rustc CommitHash: {}, Git Commit: {}, Git Branch: {}",
         env!("CARGO_PKG_VERSION"),
         option_env!("EDITION").unwrap_or("Community"),
-        option_env!("RUST_VERSION").unwrap_or(errmgs),
-        option_env!("GIT_COMMIT").unwrap_or(errmgs),
-        option_env!("GIT_BRANCH").unwrap_or(errmgs),
+        env!("VERGEN_RUSTC_SEMVER"),
+        env!("VERGEN_RUSTC_COMMIT_DATE"),
+        env!("VERGEN_RUSTC_COMMIT_HASH"),
+        option_env!("VERGEN_GIT_SHA").unwrap_or(errmgs),
+        option_env!("VERGEN_GIT_BRANCH").unwrap_or(errmgs),
     )
 }
