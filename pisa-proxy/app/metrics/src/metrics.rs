@@ -12,26 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rocket_prometheus::PrometheusMetrics;
+use prometheus::{Registry, Encoder};
 use runtime_mysql::server::metrics::*;
 
-#[derive(Clone, Default)]
+const METRICS_NAMESPACE: &str = "pisa_proxy";
+
+#[derive(Clone, Default, Debug)]
 pub struct MetricsManager {
-    server: PrometheusMetrics,
+    registry: Registry,
 }
 
 impl MetricsManager {
     pub fn new() -> Self {
-        MetricsManager { server: PrometheusMetrics::new() }
+        let registry = Registry::new_custom(Some(METRICS_NAMESPACE.to_string()), None).unwrap();
+        Self::register_metrics(&registry);
+
+        MetricsManager { 
+            registry 
+        }
     }
 
-    pub fn get_server(&self) -> PrometheusMetrics {
-        self.server.clone()
+    pub fn get_server(&self) -> Registry {
+        self.registry.clone()
     }
 
-    pub fn register(&self) {
-        self.server.registry().register(Box::new(SQL_PROCESSED_TOTAL.clone())).unwrap();
-        self.server.registry().register(Box::new(SQL_PROCESSED_DURATION.clone())).unwrap();
-        self.server.registry().register(Box::new(SQL_UNDER_PROCESSING.clone())).unwrap();
+    pub fn register_metrics(registry: &Registry) {
+        registry.register(Box::new(SQL_PROCESSED_TOTAL.clone())).unwrap();
+        registry.register(Box::new(SQL_PROCESSED_DURATION.clone())).unwrap();
+        registry.register(Box::new(SQL_UNDER_PROCESSING.clone())).unwrap();
+    }
+
+    pub fn gather(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = vec![];
+        let encoder = prometheus::TextEncoder::new();
+        encoder.encode(&self.registry.gather(), &mut buf).unwrap();
+
+        buf
     }
 }

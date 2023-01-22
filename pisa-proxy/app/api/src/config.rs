@@ -20,7 +20,7 @@ pub struct Admin {
     pub host: String,
 
     #[serde(default = "default_admin_port")]
-    pub port: u32,
+    pub port: u16,
 
     #[serde(default = "default_log_level")]
     pub log_level: String,
@@ -30,7 +30,7 @@ fn default_admin_host() -> String {
     "0.0.0.0".into()
 }
 
-fn default_admin_port() -> u32 {
+fn default_admin_port() -> u16 {
     5591
 }
 

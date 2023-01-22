@@ -132,7 +132,7 @@ impl PisaProxyConfigBuilder {
                         .takes_value(true),
                 ),
             )
-            .version(PisaProxyConfigBuilder::default().build_version()._version.as_str())
+            .version(PisaProxyConfigBuilder::new().build_version()._version.as_str())
             .arg(
                 Arg::new("host")
                     .short('h')
@@ -200,13 +200,12 @@ impl PisaProxyConfigBuilder {
 
     pub fn build_version(mut self) -> Self {
         self._git_tag = env::var(ENV_GIT_TAG).unwrap_or("".to_string());
-        self._git_commit = env::var(ENV_GIT_COMMIT).unwrap_or("".to_string());
-        self._git_branch = env::var(ENV_GIT_BRANCH).unwrap_or("".to_string());
-
+        self._git_commit = env::var(ENV_GIT_COMMIT).unwrap_or(env!("VERGEN_GIT_SHA").to_string());
+        self._git_branch = env::var(ENV_GIT_BRANCH).unwrap_or(env!("VERGEN_GIT_BRANCH").to_string());
         if !self._git_tag.is_empty() {
             self._version = format!("{}", self._git_tag);
         } else {
-            self._version = format!("{}-{}", self._git_branch, self._git_commit);
+            self._version = format!("{}/{}", self._git_branch, self._git_commit);
         }
         self
     }
@@ -227,13 +226,13 @@ impl PisaProxyConfigBuilder {
             config.admin.log_level = self._log_level;
         }
         if !self._port.is_empty() {
-            config.admin.port = self._port.parse::<u32>().unwrap();
+            config.admin.port = self._port.parse::<u16>().unwrap();
         }
         if !self._host.is_empty() {
             config.admin.host = self._host;
         }
 
-        config.version = Some(self._version);
+        config.version = Some(PisaProxyConfigBuilder::new().build_version()._version);
 
         trace!("configs: {:#?}", config);
         config
@@ -282,12 +281,12 @@ mod test {
     #[test]
     fn test_build_from_http() {
         let mut builder = PisaProxyConfigBuilder::new();
-        builder._pisa_host = "localhost:8080".to_string();
+        builder._host = "localhost:8080".to_string();
         builder._deployed_ns = "demotest".to_string();
         builder._deployed_name = "catalogue".to_string();
         let http_path = format!(
             "http://{}/apis/configs.database-mesh.io/v1alpha1/namespaces/{}/proxyconfigs/{}",
-            builder._pisa_host, builder._deployed_ns, builder._deployed_name
+            builder._host, builder._deployed_ns, builder._deployed_name
         );
         let config: PisaProxyConfig = builder.build_from_http(http_path).unwrap();
         assert_eq!(config.admin.host, "0.0.0.0");

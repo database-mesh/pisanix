@@ -34,3 +34,5 @@ pub const ENV_PISA_DEPLOYED_NAME: &str = "PISA_DEPLOYED_NAME";
 pub const ENV_GIT_TAG: &str = "GIT_TAG";
 pub const ENV_GIT_BRANCH: &str = "GIT_BRANCH";
 pub const ENV_GIT_COMMIT: &str = "GIT_COMMIT";
+pub const ENV_VERGEN_GIT_COMMIT: &str = "VERGEN_GIT_COMMIT";
+pub const ENV_VERGEN_GIT_BRANCH: &str = "VERGEN_GIT_BRANCH";

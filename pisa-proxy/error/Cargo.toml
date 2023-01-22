@@ -8,5 +8,4 @@ edition = "2021"
 [dependencies]
 mysql_parser = { path = "../parser/mysql" }
 mysql_protocol = { path = "../protocol/mysql", package = "mysql_protocol" }
-rocket = "0.5.0-rc.1"
 thiserror = "1.0"
