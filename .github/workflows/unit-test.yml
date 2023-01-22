@@ -44,9 +44,7 @@ jobs:
       - name: "checkout codes"
         uses: actions/checkout@v2
       - name: "prepare rs toolchain" 
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
+        uses: dtolnay/rust-toolchain@nightly-2022-12-15
       - uses: actions-rs/cargo@v1
         with:
           command: test 
