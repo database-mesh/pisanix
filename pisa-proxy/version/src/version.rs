@@ -18,9 +18,9 @@ pub fn get_version() -> String {
         "Pisa-Proxy Release: {}, Pisa Edition: {}, Rustc Version: {}, Rustc CommitDate: {}, Rustc CommitHash: {}, Git Commit: {}, Git Branch: {}",
         env!("CARGO_PKG_VERSION"),
         option_env!("EDITION").unwrap_or("Community"),
-        env!("VERGEN_RUSTC_SEMVER"),
-        env!("VERGEN_RUSTC_COMMIT_DATE"),
-        env!("VERGEN_RUSTC_COMMIT_HASH"),
+        option_env!("VERGEN_RUSTC_SEMVER").unwrap_or(errmgs),
+        option_env!("VERGEN_RUSTC_COMMIT_DATE").unwrap_or(errmgs),
+        option_env!("VERGEN_RUSTC_COMMIT_HASH").unwrap_or(errmgs),
         option_env!("VERGEN_GIT_SHA").unwrap_or(errmgs),
         option_env!("VERGEN_GIT_BRANCH").unwrap_or(errmgs),
     )
