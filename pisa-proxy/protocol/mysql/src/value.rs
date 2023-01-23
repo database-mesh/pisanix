@@ -129,9 +129,9 @@ impl Convert<NaiveDateTime> for NaiveDateTime  {
                 let year = val.get_uint_le(2) as i32;
                 let month = val.get_u8();
                 let day = val.get_u8();
-                let d = NaiveDate::from_ymd(year, month.into(), day.into());
-                let dt = d.and_hms(0, 0, 0);
-                Ok(Some(dt))
+                let d = NaiveDate::from_ymd_opt(year, month.into(), day.into()).unwrap();
+                let dt = d.and_hms_opt(0, 0, 0);
+                Ok(dt)
             }
 
             7 | 11 => {
@@ -142,16 +142,16 @@ impl Convert<NaiveDateTime> for NaiveDateTime  {
                 let minute = val.get_u8();
                 let second = val.get_u8(); 
 
-                let d = NaiveDate::from_ymd(year, month.into(), day.into());
+                let d = NaiveDate::from_ymd_opt(year, month.into(), day.into()).unwrap();
 
                 let dt = if val.has_remaining() {
                     let micro_second = val.get_u32_le();
-                    d.and_hms_micro(hour.into(), minute.into(), second.into(), micro_second)
+                    d.and_hms_micro_opt(hour.into(), minute.into(), second.into(), micro_second)
                 } else {
-                    d.and_hms(hour.into(), minute.into(), second.into())
+                    d.and_hms_opt(hour.into(), minute.into(), second.into())
                 };
 
-                Ok(Some(dt))
+                Ok(dt)
             }
 
             x => Err(DecodeRowError::ColumnDateTimeLengthInvalid(x).into())
@@ -171,8 +171,8 @@ impl Convert<NaiveDate> for NaiveDate  {
                 let year = val.get_uint_le(2) as i32;
                 let month = val.get_u8();
                 let day = val.get_u8();
-                let d = NaiveDate::from_ymd(year, month.into(), day.into());
-                Ok(Some(d))
+                let d = NaiveDate::from_ymd_opt(year, month.into(), day.into());
+                Ok(d)
             }
 
             x => Err(DecodeRowError::ColumnDateTimeLengthInvalid(x).into())
@@ -197,12 +197,12 @@ impl Convert<NaiveTime> for NaiveTime  {
 
                 let t = if val.has_remaining() {
                     let micro_second = val.get_u32_le();
-                    NaiveTime::from_hms_micro(hour.into(), minute.into(), second.into(), micro_second)
+                    NaiveTime::from_hms_micro_opt(hour.into(), minute.into(), second.into(), micro_second)
                 } else {
-                    NaiveTime::from_hms(hour.into(), minute.into(), second.into())
+                    NaiveTime::from_hms_opt(hour.into(), minute.into(), second.into())
                 };
 
-                Ok(Some(t))
+                Ok(t)
             }
 
             x => Err(DecodeRowError::ColumnDateTimeLengthInvalid(x).into())

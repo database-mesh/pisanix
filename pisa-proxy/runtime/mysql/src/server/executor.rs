@@ -584,7 +584,7 @@ where
                 let res = conn.send_query_without_stream(sql.as_bytes()).await;
                 (conn, res)
             });
-            send_futs.push(f);
+            send_futs.push_back(f);
         }
 
         while let Some(conn) = send_futs.next().await {
@@ -624,7 +624,7 @@ where
                 pool.set_factory(factory);
                 check_get_conn(pool, &addr, &attrs).await
             });
-            conn_futs.push(f);
+            conn_futs.push_back(f);
         }
 
         let mut conns = Vec::with_capacity(conn_futs.len());
@@ -651,7 +651,7 @@ where
                 let res = conn.send_prepare(sql.as_bytes()).await;
                 (conn, res)
             });
-            send_futs.push(f);
+            send_futs.push_back(f);
         }
 
         let mut stmts = Vec::with_capacity(send_futs.len());
@@ -707,7 +707,7 @@ where
                 let res = conn.send_execute_without_stream(&payload).await;
                 (conn, id, res)
             });
-            send_futs.push(f);
+            send_futs.push_back(f);
         }
 
         while let Some(res) = send_futs.next().await {
