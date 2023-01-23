@@ -16,8 +16,7 @@ iota = "0.2"
 lazy_static = "1.4.0"
 num-derive = "0.3"
 num-traits = "0.2"
-openssl = "0.10"
-openssl-sys = "0.9"
+openssl = { version = "0.10", features = ["vendored"] }
 pin-project = "1.0.10"
 protocol_codegen = { path = "../codegen" }
 rand = "0.8"

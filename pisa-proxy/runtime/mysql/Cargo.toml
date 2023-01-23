@@ -10,7 +10,7 @@ bytes = "1"
 common = { path = "../common" }
 conn_pool = { path = "../../proxy/pool" }
 endpoint = { path = "../../proxy/endpoint" }
-futures = "0.3.5"
+futures = "0.3.25"
 iota = "0.2"
 loadbalance = { path = "../../proxy/loadbalance" }
 mysql_parser = { path = "../../parser/mysql" }
