@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::BytesMut;
 use conn_pool::{ConnAttr, ConnAttrMut, ConnLike};
 use futures::SinkExt;
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, time::timeout};
 use tokio_stream::StreamExt;
 use tokio_util::codec::Framed;
 
@@ -77,7 +77,11 @@ impl ClientConn {
             16384,
         ))));
 
-        let res = handshake(*(framed.take().unwrap())).await?;
+        // Handshake timeout is 10 seconds.
+        let res = timeout(Duration::from_secs(10), handshake(*(framed.take().unwrap())))
+            .await
+            .map_err(|_| ProtocolError::Default)??;
+
         let framed = Some(Box::new(ClientCodec::ClientAuth(res.0)));
 
         Ok(ClientConn {
@@ -245,7 +249,7 @@ impl ClientConn {
             return Ok(None);
         }
 
-        let  _ = header.split_to(4);
+        let _ = header.split_to(4);
         let (cols, ..) = header.get_lenc_int();
 
         let mut col_buf = vec![];
@@ -352,6 +356,11 @@ impl ConnLike for ClientConn {
 
     async fn build_conn(&self) -> Result<Self, Self::Error> {
         Ok(self.connect().await?)
+    }
+
+    async fn ping(&mut self) -> Result<(), Self::Error> {
+        self.send_ping().await?;
+        Ok(())
     }
 }
 
