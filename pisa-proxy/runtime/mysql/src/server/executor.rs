@@ -621,7 +621,7 @@ where
             
             let f = tokio::spawn(async move {
                 let factory = ClientConn::with_opts(user, password, addr.clone());
-                pool.set_factory(factory);
+                pool.set_factory(&addr, factory);
                 check_get_conn(pool, &addr, &attrs).await
             });
             conn_futs.push_back(f);

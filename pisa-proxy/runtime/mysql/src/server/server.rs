@@ -95,7 +95,7 @@ where
         let endpoint = route(input_typ, raw_sql, req.route_strategy.clone());
         let factory =
             ClientConn::with_opts(endpoint.user, endpoint.password, endpoint.addr.clone());
-        req.pool.set_factory(factory);
+        req.pool.set_factory(&endpoint.addr, factory);
         check_get_conn(req.pool.clone(), &endpoint.addr, attrs).await
     }
 
@@ -327,7 +327,7 @@ where
             let endpoint = route(input_typ, sql, req.route_strategy.clone());
             let factory =
                 ClientConn::with_opts(endpoint.user, endpoint.password, endpoint.addr.clone());
-            req.pool.set_factory(factory);
+            req.pool.set_factory(&endpoint.addr, factory);
             return check_get_conn(req.pool.clone(), &endpoint.addr, &attrs).await;
         }
 

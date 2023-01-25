@@ -68,16 +68,16 @@ impl Default for TransEventName {
     }
 }
 
-pub async fn check_get_conn(pool: Pool<ClientConn>, endpoint: &str, attrs: &[SessionAttr]) -> Result<PoolConn<ClientConn>, Error>{
+pub async fn check_get_conn(pool: Pool<ClientConn>, endpoint: &str, attrs: &[SessionAttr]) -> Result<PoolConn<ClientConn>, Error> {
     match pool.get_conn_with_endpoint_session(endpoint, attrs).await {
         Ok(client_conn) => {
             if !client_conn.is_ready().await {
-                return pool.rebuild_conn_with_session(attrs).await.map_err(|e| Error::new(ErrorKind::Protocol(e)))
+                return pool.rebuild_conn_with_session(endpoint, attrs).await.map_err(|e| Error::new(ErrorKind::Protocol(e)))
             }
             Ok(client_conn)
         }
         Err(err) => {
-            debug!("check_get_conn errr {:?}", err);
+            debug!("check_get_conn err {:?}", err);
             Err(Error::new(ErrorKind::Protocol(err)))
         }
     }
@@ -416,7 +416,7 @@ impl TransFsm {
                     endpoint.password,
                     endpoint.addr.clone(),
                 );
-                self.pool.set_factory(factory);
+                self.pool.set_factory(&endpoint.addr, factory);
                 match self.pool.get_conn_with_endpoint_session(&endpoint.addr, attrs).await {
                     Ok(client_conn) => Ok(client_conn),
                     Err(err) => Err(Error::new(ErrorKind::Protocol(err))),

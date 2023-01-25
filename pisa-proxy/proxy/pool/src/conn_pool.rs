@@ -20,7 +20,8 @@ use std::{
 use async_trait::async_trait;
 use crossbeam_queue::ArrayQueue;
 use dashmap::DashMap;
-use tracing::debug;
+use tokio::time::{sleep, Duration};
+use tracing::{debug, info};
 
 /// In order to be managed by the connection pool, Both the `ConnLike` and `ConnAttr` trait
 /// needs to be implemented.
@@ -28,8 +29,11 @@ use tracing::debug;
 pub trait ConnLike: Sized + Send + Sync + std::fmt::Debug + 'static {
     type Error: Send + std::fmt::Debug + 'static;
 
-    // Method for create connection
+    // Method for create connection.
     async fn build_conn(&self) -> Result<Self, Self::Error>;
+
+    // Method for connection health check.
+    async fn ping(&mut self) -> Result<(), Self::Error>;
 }
 
 /// `ConnAttr` traits is used to get attribute of current connection  
@@ -87,7 +91,7 @@ pub struct Pool<T>
 where
     T: ConnLike + ConnAttr + ConnAttrMut,
 {
-    factory: Option<T>,
+    factory: Arc<DashMap<String, T>>,
     size: usize,
     pool: Arc<DashMap<String, PoolInner<T>>>,
 }
@@ -97,27 +101,39 @@ where
     T: ConnLike + ConnAttr + ConnAttrMut + std::default::Default,
 {
     pub fn new(size: usize) -> Pool<T> {
-        //let pool_inner = PoolInner::new(size);
-
-        Pool { factory: None, size, pool: Arc::new(DashMap::<String, PoolInner<T>>::new()) }
+        Pool {
+            factory: Arc::new(DashMap::new()),
+            size,
+            pool: Arc::new(DashMap::<String, PoolInner<T>>::new()),
+        }
     }
 
-    pub fn set_factory(&mut self, factory: T) {
-        self.factory = Some(factory)
+    pub fn set_factory(&mut self, endpoint: &str, factory: T) {
+        if self.factory.get(endpoint).is_none() {
+            self.factory.insert(endpoint.to_string(), factory);
+        }
     }
 
-    pub async fn rebuild_conn(&self) -> Result<PoolConn<T>, T::Error> {
-        let conn = self.factory.as_ref().unwrap().build_conn().await?;
+    pub async fn rebuild_conn(&self, endpoint: &str) -> Result<PoolConn<T>, T::Error> {
+        let conn = self.factory.get(endpoint).as_ref().unwrap().build_conn().await?;
         Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
     }
-    
-    pub async fn rebuild_conn_with_session(&self, attrs: &[<T as ConnAttrMut>::Item]) -> Result<PoolConn<T>, T::Error> {
-        let mut conn = self.factory.as_ref().unwrap().build_conn().await?;
+
+    pub async fn rebuild_conn_with_session(
+        &self,
+        endpoint: &str,
+        attrs: &[<T as ConnAttrMut>::Item],
+    ) -> Result<PoolConn<T>, T::Error> {
+        let mut conn = self.factory.get(endpoint).as_ref().unwrap().build_conn().await?;
         self.reinit_session(&mut conn, attrs).await;
         Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
     }
 
-    pub async fn get_conn_with_endpoint_session(&self, endpoint: &str, attrs: &[<T as ConnAttrMut>::Item]) -> Result<PoolConn<T>, T::Error> {
+    pub async fn get_conn_with_endpoint_session(
+        &self,
+        endpoint: &str,
+        attrs: &[<T as ConnAttrMut>::Item],
+    ) -> Result<PoolConn<T>, T::Error> {
         let mut conn = self.get_conn_with_endpoint(endpoint).await?;
         self.reinit_session(&mut conn, attrs).await;
 
@@ -133,17 +149,51 @@ where
         };
 
         let conn = match conn {
-            Some(conn) => conn,
+            Some(conn) => Some(conn),
             None => {
                 if !self.pool.contains_key(endpoint) {
                     self.pool.insert(endpoint.to_string(), PoolInner::new(self.size));
                 }
-                self.factory.as_ref().unwrap().build_conn().await?
+
+                let try_conn = self.factory.get(endpoint).as_ref().unwrap().build_conn().await;
+                match try_conn {
+                    Ok(conn) => return Ok(conn),
+                    Err(_) => None,
+                }
             }
         };
 
-        Ok(conn)
-        //Ok(PoolConn { pool: Arc::clone(&self.pool), conn: Some(conn) })
+        if let Some(mut conn) = conn {
+            if let Ok(_) = conn.ping().await {
+                return Ok(conn);
+            }
+        }
+
+        // TODO: interval as a parameter, the default is 3 seconds.
+        let mut interval = 3;
+        // TODO: The count of retries as a parameter, the default is 10.
+        for i in 0..10 {
+            let try_conn = self.factory.get(endpoint).as_ref().unwrap().build_conn().await;
+            match try_conn {
+                Ok(conn) => {
+                    info!("Retry successful");
+                    return Ok(conn);
+                }
+                Err(err) => {
+                    if i == 9 {
+                        info!("Exceeded retry count of {}", 10);
+                        return Err(err);
+                    }
+                }
+            }
+
+            info!("The {} retry build conn", i + 1);
+
+            sleep(Duration::from_secs(interval)).await;
+            interval *= 2;
+        }
+
+        unreachable!()
     }
 
     async fn reinit_session(&self, conn: &mut T, attrs: &[<T as ConnAttrMut>::Item]) {
