@@ -65,9 +65,10 @@ impl ResultsetCodec {
     }
 
     pub fn renew(&mut self) {
-        let auth_info = self.auth_info.take();
-        *self = ResultsetCodec::default();
-        self.auth_info = auth_info;
+        self.next_state = DecodeResultsetState::ColumnCount;
+        self.col = 0;
+        self.is_binary = false;
+        self.seq = 0;
     }
 
     pub fn with_auth_info(auth_info: Option<ClientAuth>) -> ResultsetCodec {
