@@ -58,11 +58,6 @@ pub trait Transformer {
 ///Used to visit the structure, so that the visit ast tree can be traversed.
 ///Every struct should implement `Visitor` trait.
 pub trait Visitor {
-    fn visit<V>(&mut self, _tf: &mut V) -> Self
-    where
-        Self: Sized + Clone,
-        V: Transformer,
-    {
-        self.clone()
-    }
+    fn visit<V>(&mut self, _tf: &mut V) 
+        where Self: Sized + Clone, V: Transformer { }
 }
