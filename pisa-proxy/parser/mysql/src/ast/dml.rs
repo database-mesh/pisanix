@@ -73,15 +73,12 @@ impl Visitor for SelectStmt {
 
                 let new_node = node.into_query().unwrap(); 
                 if is_skip {
-                    //*self = Self::Query(Box::new(new_node.clone()));
                     tf.complete(&mut Node::Query(new_node));
                     return;
                 }
 
                 new_node.visit(tf);
-                //*self = Self::Query(Box::new(new_node));
                 tf.complete(&mut Node::Query(new_node));
-                //self.clone()
             }
 
             Self::SubQuery(query) => {
@@ -90,44 +87,31 @@ impl Visitor for SelectStmt {
 
                 let new_node = node.into_sub_query().unwrap(); 
                 if is_skip {
-                    //*self = Self::SubQuery(Box::new(new_node.clone()));
                     tf.complete(&mut Node::SubQuery(new_node));
                     return;
                 }
 
                 new_node.visit(tf);
-                //*self = Self::SubQuery(Box::new(new_node));
                 tf.complete(&mut Node::SubQuery(new_node));
-                //self.clone()
             }
 
             Self::With(query) => {
                 let mut node = Node::WithQuery(query);
                 tf.trans(&mut node);
 
-                //let new_node = node.into_with_query().unwrap().visit(tf);
                 node.into_with_query().unwrap().visit(tf);
-                //Self::With(Box::new(new_node))
             }
 
             Self::ValueConstructor(exprs) => {
-                //let mut new_exprs = Vec::with_capacity(exprs.len());
-
                 for v in exprs {
-                    //let mut sub_new_exprs = Vec::with_capacity(v.len());
                     for vv in v {
                         let mut node = Node::Expr(vv);
                         tf.trans(&mut node);
 
-                        //let new_node = node.into_expr().unwrap().visit(tf);
                         node.into_expr().unwrap().visit(tf);
-                        //sub_new_exprs.push(new_node);
                     }
 
-                    //new_exprs.push(sub_new_exprs);
                 }
-
-                //Self::ValueConstructor(new_exprs)
             }
 
             Self::ExplicitTable(_) => {},
@@ -225,92 +209,69 @@ impl Visitor for Query {
         let new_items = items.into_items().unwrap();
         if is_skip {
             tf.complete(&mut Node::Items(new_items));
-            //self.items = new_items.clone();
         } else {
-            //let new_items = new_items.visit(tf);
             new_items.visit(tf);
-            //self.items = new_items;
         }
 
         if let Some(v) = &mut self.into_clause {
             let mut node = Node::IntoClause(v);
             tf.trans(&mut node);
             node.into_into_clause().unwrap().visit(tf);
-            //self.into_clause = Some(node.into_into_clause().unwrap().visit(tf));
         }
 
         if let Some(v) = &mut self.from_clause {
             let mut node = Node::FromClause(v);
             tf.trans(&mut node);
-            //self.from_clause = Some(node.into_from_clause().unwrap().visit(tf));
             node.into_from_clause().unwrap().visit(tf);
         }
 
         if let Some(v) = &mut self.where_clause {
             let mut node = Node::WhereClause(v);
             tf.trans(&mut node);
-            //self.where_clause = Some(node.into_where_clause().unwrap().visit(tf));
             node.into_where_clause().unwrap().visit(tf);
         }
 
         if let Some(v) = &mut self.group_clause {
             let mut node = Node::GroupClause(v);
             tf.trans(&mut node);
-            //self.group_clause = Some(node.into_group_clause().unwrap().visit(tf));
             node.into_group_clause().unwrap().visit(tf);
         }
 
         if let Some(v) = &mut self.having_clause {
             let mut node = Node::HavingClause(v);
             tf.trans(&mut node);
-            //self.having_clause = Some(node.into_having_clause().unwrap().visit(tf));
             node.into_having_clause().unwrap().visit(tf);
         }
 
         if let Some(v) = &mut self.window_clause {
             let mut node = Node::WindowClause(v);
             tf.trans(&mut node);
-            //self.window_clause = Some(node.into_window_clause().unwrap().visit(tf));
             node.into_window_clause().unwrap().visit(tf);
         }
 
         if let Some(v) = &mut self.order_clause {
             let mut node = Node::OrderClause(v);
             tf.trans(&mut node);
-            //self.order_clause = Some(node.into_order_clause().unwrap().visit(tf));
             node.into_order_clause().unwrap().visit(tf);
         }
 
         if let Some(v) = &mut self.limit_clause {
             let mut node = Node::LimitClause(v);
             tf.trans(&mut node);
-            //self.limit_clause = Some(node.into_limit_clause().unwrap().visit(tf));
             node.into_limit_clause().unwrap().visit(tf);
         }
-
-        //let mut new_locks = Vec::with_capacity(self.lock_clauses.len());
 
         for v in self.lock_clauses.iter_mut() {
             let mut node = Node::LockClause(v);
             tf.trans(&mut node);
-            //let new_node = node.into_lock_clause().unwrap();
             node.into_lock_clause().unwrap().visit(tf);
-            //new_locks.push(new_node.visit(tf))
         }
-
-        //if !new_locks.is_empty() {
-        //    self.lock_clauses = new_locks
-        //}
 
         if let Some(union) = &mut self.union_query {
             let mut node = Node::SelectStmt(union);
             tf.trans(&mut node);
-            //let new_node = node.into_select_stmt().unwrap().visit(tf);
             node.into_select_stmt().unwrap().visit(tf);
-            //self.union_query = Some(Box::new(new_node));
         }
-
-        //self.clone()
     }
 }
 
@@ -382,8 +343,6 @@ impl Items {
 
 impl Visitor for Items {
     fn visit<T: Transformer>(&mut self, tf: &mut T) {
-        //let mut new_items = Vec::with_capacity(self.items.len());
-
         for v in self.items.iter_mut() {
             let mut node = Node::Item(v);
             let is_skip = tf.trans(&mut node);
@@ -391,17 +350,11 @@ impl Visitor for Items {
 
             if is_skip {
                 tf.complete(&mut Node::Item(new_node));
-                //new_items.push(new_node.clone());
                 continue;
             }
             
-            //new_items.push(new_node.visit(tf));
             new_node.visit(tf);
         }
-
-        //self.items = new_items;
-
-        //self.clone()
     }
 }
 
@@ -432,9 +385,8 @@ impl Visitor for Item {
             Self::TableWild(wild) => {
                 let mut node = Node::TableWild(wild);
                 tf.trans(&mut node);
-                //let new_node = node.into_table_wild().unwrap();
+                
                 node.into_table_wild().unwrap().visit(tf);
-                //Item::TableWild(new_node.visit(tf))
             }
             Self::ItemExpr(item) => {
                 let mut node = Node::ItemExpr(item);
@@ -442,10 +394,8 @@ impl Visitor for Item {
                 let new_node = node.into_item_expr().unwrap();
                 if is_skip {
                     tf.complete(&mut Node::ItemExpr(new_node));
-                    //return Item::ItemExpr(Box::new(new_node.clone()));
                     return
                 }
-                //Item::ItemExpr(Box::new(new_node.visit(tf)))
                 new_node.visit(tf);
             }
         }
@@ -503,12 +453,8 @@ impl Visitor for ItemExpr {
     fn visit<T: Transformer>(&mut self, tf: &mut T) {
         let mut node = Node::Expr(&mut self.expr);
         tf.trans(&mut node);
-
-        //let new_node = node.into_expr().unwrap().visit(tf);
+        
         node.into_expr().unwrap().visit(tf);
-        //self.expr = new_node;
-
-        //self.clone()
     }
 }
 
@@ -1955,10 +1901,7 @@ impl Visitor for FieldCharType {
         let mut node = Node::CharsetOrBinary(&mut self.opt);
         tf.trans(&mut node);
 
-        //self.opt = node.into_charset_or_binary().unwrap().visit(tf);
         node.into_charset_or_binary().unwrap().visit(tf);
-
-        //self.clone()
     }
 }
 
