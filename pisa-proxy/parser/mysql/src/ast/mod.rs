@@ -101,52 +101,44 @@ impl SqlStmt {
 }
 
 impl Visitor for SqlStmt {
-    fn visit<T>(&mut self, tf: &mut T) -> Self
-    where
-        T: Transformer,
-    {
+    fn visit<T: Transformer>(&mut self, tf: &mut T) {
         match self {
             Self::SelectStmt(stmt) => {
                 let mut node = Node::SelectStmt(stmt);
                 tf.trans(&mut node);
 
-                let new_node = node.into_select_stmt().unwrap().visit(tf);
-                Self::SelectStmt(new_node)
+                node.into_select_stmt().unwrap().visit(tf);
             }
 
             Self::InsertStmt(stmt) => {
                 let mut node = Node::InsertStmt(stmt);
                 tf.trans(&mut node);
 
-                let new_node = node.into_insert_stmt().unwrap().visit(tf);
-                Self::InsertStmt(Box::new(new_node))
+                node.into_insert_stmt().unwrap().visit(tf);
             }
 
             Self::UpdateStmt(stmt) => {
                 let mut node = Node::UpdateStmt(stmt);
                 tf.trans(&mut node);
-
-                let new_node = node.into_update_stmt().unwrap().visit(tf);
-                Self::UpdateStmt(Box::new(new_node))
+                
+                node.into_update_stmt().unwrap().visit(tf);
             }
 
             Self::DeleteStmt(stmt) => {
                 let mut node = Node::DeleteStmt(stmt);
                 tf.trans(&mut node);
 
-                let new_node = node.into_delete_stmt().unwrap().visit(tf);
-                Self::DeleteStmt(Box::new(new_node))
+                node.into_delete_stmt().unwrap().visit(tf);
             }
 
             Self::Set(stmt) => {
                 let mut node = Node::SetOptValues(stmt);
                 tf.trans(&mut node);
 
-                let new_node = node.into_set_opt_values().unwrap().visit(tf);
-                Self::Set(Box::new(new_node))
+                node.into_set_opt_values().unwrap().visit(tf);
             }
 
-            x => x.clone(),
+            _ => {}
         }
     }
 }
@@ -155,7 +147,7 @@ impl Visitor for SqlStmt {
 mod test {
     use lrpar::Span;
 
-    use crate::ast::{api::*, base::*};
+    use crate::ast::*;
 
     #[test]
     fn test_visit() {
@@ -173,7 +165,7 @@ mod test {
                     }
 
                     Node::Value(Value::Num { span: _, value, signed: _ }) => {
-                        *value = "2".to_string();
+                        *value = "2233".to_string();
                     }
 
                     _ => {}
@@ -189,12 +181,19 @@ mod test {
         let input = "SELECT 1+1";
         let p = Parser::new();
         let mut res = p.parse(input).unwrap();
-        //let v = Value::Text{ span: Span::new(0, 0), value: "test"};
 
         let mut s = S { a: "a".to_string() };
-        let new_v = res[0].visit(&mut s);
-        println!("new value {:?}", new_v.clone());
-        assert_eq!(s.a, "11111")
-        //println!("new s value {:?}", s);
+        res[0].visit(&mut s);
+        assert_eq!(s.a, "11111");
+
+        if let SqlStmt::SelectStmt(SelectStmt::Query(q)) = &res[0] {
+            if let Item::ItemExpr(item) = &q.items.items[0] {
+                if let Expr::BinaryOperationExpr { left, ..} = &item.expr {
+                    if let Expr::LiteralExpr(Value::Num { value, .. }) =  &**left {
+                       assert_eq!("2233", value);
+                    }
+                }
+            }
+        }
     }
 }

@@ -64,12 +64,7 @@ impl Start {
 }
 
 impl Visitor for Start {
-    fn visit<T>(&mut self, _tf: &mut T) -> Self
-    where
-        T: Transformer,
-    {
-        self.clone()
-    }
+    fn visit<T: Transformer>(&mut self, _tf: &mut T) {}
 }
 
 #[derive(Debug, Clone)]
@@ -94,12 +89,7 @@ impl Commit {
 }
 
 impl Visitor for Commit {
-    fn visit<T>(&mut self, _tf: &mut T) -> Self
-    where
-        T: Transformer,
-    {
-        self.clone()
-    }
+    fn visit<T>(&mut self, _tf: &mut T) {}
 }
 
 #[derive(Debug, Clone)]
@@ -136,12 +126,7 @@ impl Rollback {
 }
 
 impl Visitor for Rollback {
-    fn visit<T>(&mut self, _tf: &mut T) -> Self
-    where
-        T: Transformer,
-    {
-        self.clone()
-    }
+    fn visit<T: Transformer>(&mut self, _tf: &mut T) {}
 }
 
 #[derive(Debug, Clone)]
