@@ -142,7 +142,7 @@ func (r *VirtualDatabaseReconciler) finalizeDbep(ctx context.Context, req ctrl.R
 	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
 		return r.finalizeAWSRdsInstance(ctx, vdb)
 	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
-		return r.finalizeAWSRdsCluster(ctx, req, vdb, class)
+		return r.finalizeAWSRdsCluster(ctx, vdb)
 	case v1alpha1.DatabaseProvisionerAWSRdsAurora:
 		return ctrl.Result{}, nil
 	}
@@ -167,7 +167,36 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsInstance(ctx context.Context, 
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	desc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
+	if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
+		return ctrl.Result{}, nil
+	}
+
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	for _, ins := range desc.DBClusterMembers {
+		dbep := &v1alpha1.DatabaseEndpoint{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: vdb.Namespace,
+			Name:      ins.DBInstanceIdentifier,
+		}, dbep); err != nil {
+			if apierrors.IsNotFound(err) {
+				return ctrl.Result{}, err
+			}
+		} else {
+			if err := r.Delete(ctx, dbep); err != nil {
+				return ctrl.Result{RequeueAfter: ReconcileTime}, err
+			}
+		}
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) finalizeAWSRdsClusterDEPRECATED(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
 	dbep := &v1alpha1.DatabaseEndpoint{}
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: vdb.Namespace,
@@ -260,7 +289,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 			case v1alpha1.DatabaseProvisionerAWSRdsInstance:
 				return r.reconcileAWSRdsInstance(ctx, req, vdb, class, svc)
 			case v1alpha1.DatabaseProvisionerAWSRdsCluster:
-				return r.reconcileAWSRdsCluster(ctx, req, vdb, class, svc)
+				return r.reconcileAWSRdsCluster(ctx, vdb, class, svc)
 			case v1alpha1.DatabaseProvisionerAWSRdsAurora:
 				return ctrl.Result{}, nil
 			}
@@ -312,7 +341,102 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstance(ctx context.Context,
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualDatabaseReconciler) reconcileAWSRdsCluster(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass, svc v1alpha1.VirtualDatabaseService) (ctrl.Result, error) {
+func (r *VirtualDatabaseReconciler) getDatabaseEndpoint(ctx context.Context, namespacedName types.NamespacedName) (*v1alpha1.DatabaseEndpoint, error) {
+	dbep := &v1alpha1.DatabaseEndpoint{}
+	err := r.Get(ctx, namespacedName, dbep)
+	return dbep, err
+}
+
+func (r *VirtualDatabaseReconciler) reconcileAWSRdsCluster(ctx context.Context, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass, svc v1alpha1.VirtualDatabaseService) (ctrl.Result, error) {
+	subnetGroupName := vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName]
+	vpcSecurityGroupIds := vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
+	availabilityZones := vdb.Annotations[v1alpha1.AnnotationsAvailabilityZones]
+	randompass := utils.RandomString()
+	rdsDesc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
+	if err != nil {
+		if strings.Contains(err.Error(), "DBClusterNotFound") {
+			if err := r.AWSRds.Cluster().
+				SetEngine(class.Spec.Engine.Name).
+				SetEngineVersion(class.Spec.Engine.Version).
+				SetDBClusterIdentifier(vdb.Name).
+				SetMasterUsername(class.Spec.DefaultMasterUsername).
+				SetMasterUserPassword(randompass).
+				SetDBClusterInstanceClass(class.Spec.Instance.Class).
+				SetDatabaseName(svc.DatabaseMySQL.DB).
+				SetAllocatedStorage(100).
+				SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
+				SetStorageType("io1").
+				SetIOPS(1000).
+				SetDBSubnetGroupName(subnetGroupName).
+				SetAvailabilityZones(strings.Split(availabilityZones, ",")).
+				// SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
+				Create(ctx); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	if rdsDesc != nil {
+		for _, ins := range rdsDesc.DBClusterMembers {
+			dbep := &v1alpha1.DatabaseEndpoint{}
+			if err := r.Get(ctx, types.NamespacedName{
+				Namespace: vdb.Namespace,
+				Name:      ins.DBInstanceIdentifier,
+			}, dbep); err != nil {
+				if vdb.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
+					dbep := &v1alpha1.DatabaseEndpoint{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      ins.DBInstanceIdentifier,
+							Namespace: vdb.Namespace,
+							Annotations: map[string]string{
+								v1alpha1.AnnotationsSubnetGroupName:     vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName],
+								v1alpha1.AnnotationsVPCSecurityGroupIds: vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds],
+								AnnotationsDatabaseClassName:            class.Name,
+							},
+						},
+						Spec: v1alpha1.DatabaseEndpointSpec{
+							Database: v1alpha1.Database{
+								MySQL: &v1alpha1.MySQL{
+									Host:     "",
+									Port:     0,
+									User:     class.Spec.DefaultMasterUsername,
+									Password: randompass,
+									DB:       svc.DatabaseMySQL.DB,
+								},
+							},
+						},
+					}
+					if err := r.Create(ctx, dbep); err != nil {
+						return ctrl.Result{}, err
+					}
+				}
+			} else {
+				act, err := r.getDatabaseEndpoint(ctx, types.NamespacedName{
+					Namespace: vdb.Namespace,
+					Name:      ins.DBInstanceIdentifier,
+				})
+				if err != nil {
+					return ctrl.Result{Requeue: true}, err
+				}
+
+				act.Annotations = map[string]string{
+					v1alpha1.AnnotationsSubnetGroupName:     vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName],
+					v1alpha1.AnnotationsVPCSecurityGroupIds: vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds],
+					AnnotationsDatabaseClassName:            class.Name,
+				}
+
+				if err := r.Update(ctx, act); err != nil {
+					return ctrl.Result{Requeue: true}, err
+				}
+			}
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) reconcileAWSRdsClusterDEPRECATED(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass, svc v1alpha1.VirtualDatabaseService) (ctrl.Result, error) {
 	subnetGroupName := vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName]
 	vpcSecurityGroupIds := vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
 	availabilityZones := vdb.Annotations[v1alpha1.AnnotationsAvailabilityZones]

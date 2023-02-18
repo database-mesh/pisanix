@@ -166,6 +166,8 @@ func (r *DatabaseEndpointReconciler) reconcile(ctx context.Context, req ctrl.Req
 		switch class.Spec.Provisioner {
 		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
 			return r.reconcileAWSRdsInstance(ctx, req, dbep, class)
+		case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+			return r.reconcileAWSRdsCluster(ctx, req, dbep, class)
 		default:
 			return ctrl.Result{RequeueAfter: ReconcileTime}, errors.New("unknown DatabaseClass provisioner")
 		}
@@ -198,6 +200,34 @@ func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context
 			}
 			return ctrl.Result{}, nil
 		}
+		return ctrl.Result{}, err
+	}
+
+	// Update or Delete
+	if rdsDesc != nil {
+		act, err := r.getDatabaseEndpoint(ctx, req.NamespacedName)
+		if err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+		act.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
+		act.Spec.Database.MySQL.Port = uint32(rdsDesc.Endpoint.Port)
+		if err := r.Update(ctx, act); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+		act.Status.Protocol = "MySQL"
+		act.Status.Endpoint = rdsDesc.Endpoint.Address
+		act.Status.Port = uint32(rdsDesc.Endpoint.Port)
+		act.Status.Arn = rdsDesc.DBInstanceArn
+		if err := r.Status().Update(ctx, act); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *DatabaseEndpointReconciler) reconcileAWSRdsCluster(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+	rdsDesc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(dbep.Name).Describe(ctx)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
