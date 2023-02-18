@@ -86,67 +86,27 @@ func (r *VirtualDatabaseReconciler) reconcileFinalizers(ctx context.Context, req
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualDatabaseReconciler) finalizeWithDatabaseClass(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
-	if rt.DeletionTimestamp.IsZero() {
-		if !utils.ContainsString(rt.ObjectMeta.Finalizers, AWSRdsFinalizer) {
-			rt.ObjectMeta.Finalizers = append(rt.ObjectMeta.Finalizers, AWSRdsFinalizer)
-			if err := r.Update(ctx, rt); err != nil {
-				return ctrl.Result{Requeue: true}, nil
-			}
-		}
+func (r *VirtualDatabaseReconciler) finalizeWithDatabaseClass(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	if vdb.DeletionTimestamp.IsZero() {
+		return r.appendFinalizers(ctx, vdb)
 	} else {
-		if utils.ContainsString(rt.ObjectMeta.Finalizers, AWSRdsFinalizer) {
+		if utils.ContainsString(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer) {
 			class := &v1alpha1.DatabaseClass{}
 			err := r.Get(ctx, types.NamespacedName{
-				Name: rt.Spec.DatabaseClassName,
+				Name: vdb.Spec.DatabaseClassName,
 			}, class)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
-			if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
-				dbep := &v1alpha1.DatabaseEndpoint{}
-				if err := r.Get(ctx, types.NamespacedName{
-					Namespace: rt.Namespace,
-					Name:      rt.Name,
-				}, dbep); err != nil {
-					if apierrors.IsNotFound(err) {
-						return ctrl.Result{}, err
-					}
-				} else {
-					if _, err := r.deleteAWSRds(ctx, req, dbep, class.Spec.Provisioner); err != nil {
-						return ctrl.Result{RequeueAfter: ReconcileTime}, err
-					}
-					// FIXME:
-					if err := r.Delete(ctx, dbep); err != nil {
-						return ctrl.Result{RequeueAfter: ReconcileTime}, err
-					}
-				}
+			res, err := r.finalizeDbep(ctx, req, vdb, class)
+			if err != nil {
+				return res, err
 			}
 
-			if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsCluster {
-				dbep := &v1alpha1.DatabaseEndpoint{}
-				if err := r.Get(ctx, types.NamespacedName{
-					Namespace: rt.Namespace,
-					Name:      rt.Name,
-				}, dbep); err != nil {
-					if apierrors.IsNotFound(err) {
-						return ctrl.Result{}, err
-					}
-				} else {
-					if _, err := r.deleteAWSRds(ctx, req, dbep, class.Spec.Provisioner); err != nil {
-						return ctrl.Result{RequeueAfter: ReconcileTime}, err
-					}
-					// FIXME:
-					if err := r.Delete(ctx, dbep); err != nil {
-						return ctrl.Result{RequeueAfter: ReconcileTime}, err
-					}
-				}
-			}
-
-			rt.ObjectMeta.Finalizers = utils.RemoveString(rt.ObjectMeta.Finalizers, AWSRdsFinalizer)
-			if err := r.Update(ctx, rt); err != nil {
-				return ctrl.Result{Requeue: true}, nil
+			res, err = r.removeFinalizers(ctx, vdb)
+			if err != nil {
+				return res, err
 			}
 		}
 	}
@@ -156,6 +116,81 @@ func (r *VirtualDatabaseReconciler) finalizeWithDatabaseClass(ctx context.Contex
 const (
 	AWSRdsFinalizer = "cleanupAWSRds"
 )
+
+func (r *VirtualDatabaseReconciler) appendFinalizers(ctx context.Context, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	if !utils.ContainsString(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer) {
+		vdb.ObjectMeta.Finalizers = append(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer)
+		if err := r.Update(ctx, vdb); err != nil {
+			return ctrl.Result{Requeue: true}, nil
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) removeFinalizers(ctx context.Context, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	if utils.ContainsString(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer) {
+		vdb.ObjectMeta.Finalizers = utils.RemoveString(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer)
+		if err := r.Update(ctx, vdb); err != nil {
+			return ctrl.Result{Requeue: true}, nil
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) finalizeDbep(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+	switch class.Spec.Provisioner {
+	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+		return r.finalizeAWSRdsInstance(ctx, req, vdb, class)
+	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+		return r.finalizeAWSRdsCluster(ctx, req, vdb, class)
+	case v1alpha1.DatabaseProvisionerAWSRdsAurora:
+		return ctrl.Result{}, nil
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) finalizeAWSRdsInstance(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+	dbep := &v1alpha1.DatabaseEndpoint{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: vdb.Namespace,
+		Name:      vdb.Name,
+	}, dbep); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+	} else {
+		if _, err := r.deleteAWSRds(ctx, req, dbep, class.Spec.Provisioner); err != nil {
+			return ctrl.Result{RequeueAfter: ReconcileTime}, err
+		}
+		// FIXME:
+		if err := r.Delete(ctx, dbep); err != nil {
+			return ctrl.Result{RequeueAfter: ReconcileTime}, err
+		}
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+	dbep := &v1alpha1.DatabaseEndpoint{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: vdb.Namespace,
+		Name:      vdb.Name,
+	}, dbep); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+	} else {
+		if _, err := r.deleteAWSRds(ctx, req, dbep, class.Spec.Provisioner); err != nil {
+			return ctrl.Result{RequeueAfter: ReconcileTime}, err
+		}
+		// FIXME:
+		if err := r.Delete(ctx, dbep); err != nil {
+			return ctrl.Result{RequeueAfter: ReconcileTime}, err
+		}
+	}
+	return ctrl.Result{}, nil
+}
 
 // TODO: turn provisioner into some object
 func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
