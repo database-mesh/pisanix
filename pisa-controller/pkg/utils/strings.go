@@ -70,3 +70,22 @@ func newLenChars(length int, chars []byte) string {
 		}
 	}
 }
+
+func ContainsString(slice []string, str string) bool {
+	for _, item := range slice {
+		if item == str {
+			return true
+		}
+	}
+	return false
+}
+
+func RemoveString(slice []string, str string) (result []string) {
+	for _, item := range slice {
+		if item == str {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
