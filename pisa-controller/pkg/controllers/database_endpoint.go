@@ -40,8 +40,7 @@ type DatabaseEndpointReconciler struct {
 // SetupWithManager sets up the controller with the Manager.
 func (r *DatabaseEndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.VirtualDatabase{}).
-		Owns(&v1alpha1.DatabaseEndpoint{}).
+		For(&v1alpha1.DatabaseEndpoint{}).
 		Complete(r)
 }
 
@@ -204,15 +203,20 @@ func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context
 
 	// Update or Delete
 	if rdsDesc != nil {
-		dbep.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
-		if err := r.Update(ctx, dbep); err != nil {
+		act, err := r.getDatabaseEndpoint(ctx, req.NamespacedName)
+		if err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
-		dbep.Status.Protocol = "MySQL"
-		dbep.Status.Endpoint = rdsDesc.Endpoint.Address
-		dbep.Status.Port = uint32(rdsDesc.Endpoint.Port)
-		dbep.Status.Arn = rdsDesc.DBInstanceArn
-		if err := r.Status().Update(ctx, dbep); err != nil {
+		act.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
+		act.Spec.Database.MySQL.Port = uint32(rdsDesc.Endpoint.Port)
+		if err := r.Update(ctx, act); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+		act.Status.Protocol = "MySQL"
+		act.Status.Endpoint = rdsDesc.Endpoint.Address
+		act.Status.Port = uint32(rdsDesc.Endpoint.Port)
+		act.Status.Arn = rdsDesc.DBInstanceArn
+		if err := r.Status().Update(ctx, act); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
 	}

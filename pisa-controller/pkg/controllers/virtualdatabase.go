@@ -285,7 +285,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstance(ctx context.Context,
 			Database: v1alpha1.Database{
 				MySQL: &v1alpha1.MySQL{
 					Host:     "",
-					Port:     svc.DatabaseMySQL.Port,
+					Port:     0,
 					User:     class.Spec.DefaultMasterUsername,
 					Password: utils.RandomString(),
 					DB:       svc.DatabaseMySQL.DB,
