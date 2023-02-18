@@ -238,7 +238,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 		if svc.DatabaseMySQL != nil {
 			switch class.Spec.Provisioner {
 			case v1alpha1.DatabaseProvisionerAWSRdsInstance:
-				return r.reconcileAWSRdsInstanceV2(ctx, req, vdb, class, svc)
+				return r.reconcileAWSRdsInstance(ctx, req, vdb, class, svc)
 			case v1alpha1.DatabaseProvisionerAWSRdsCluster:
 				return r.reconcileAWSRdsCluster(ctx, req, vdb, class, svc)
 			case v1alpha1.DatabaseProvisionerAWSRdsAurora:
@@ -249,7 +249,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 	return ctrl.Result{RequeueAfter: ReconcileTime}, nil
 }
 
-func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstanceV2(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass, svc v1alpha1.VirtualDatabaseService) (ctrl.Result, error) {
+func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstance(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass, svc v1alpha1.VirtualDatabaseService) (ctrl.Result, error) {
 	act := &v1alpha1.DatabaseEndpoint{}
 	exp := &v1alpha1.DatabaseEndpoint{
 		ObjectMeta: metav1.ObjectMeta{
@@ -287,81 +287,6 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstanceV2(ctx context.Contex
 		act.Spec.Database.MySQL.Password = exp.Spec.Database.MySQL.Password
 		if err := r.Update(ctx, exp); err != nil {
 			return ctrl.Result{}, err
-		}
-	}
-	return ctrl.Result{}, nil
-}
-
-func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstance(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass, svc v1alpha1.VirtualDatabaseService) (ctrl.Result, error) {
-	subnetGroupName := vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName]
-	vpcSecurityGroupIds := vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
-	randompass := utils.RandomString()
-	rdsDesc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(vdb.Name).Describe(ctx)
-	if err != nil {
-		if strings.Contains(err.Error(), "DBInstanceNotFound") {
-			if err := r.AWSRds.Instance().
-				SetEngine(class.Spec.Engine.Name).
-				SetEngineVersion(class.Spec.Engine.Version).
-				//FIXME: should add this DatabaseClass name to tags
-				SetDBInstanceIdentifier(vdb.Name).
-				SetMasterUsername(class.Spec.DefaultMasterUsername).
-				SetMasterUserPassword(randompass).
-				SetDBInstanceClass(class.Spec.Instance.Class).
-				SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
-				//NOTE: It will be invalid if this is a auto sharding
-				SetDBName(svc.DatabaseMySQL.DB).
-				SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
-				SetDBSubnetGroup(subnetGroupName).
-				Create(ctx); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	}
-
-	// Update or Delete
-	dbep := &v1alpha1.DatabaseEndpoint{}
-	err = r.Get(ctx, types.NamespacedName{
-		Namespace: vdb.Namespace,
-		Name:      vdb.Name,
-	}, dbep)
-	if err != nil {
-		if vdb.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
-			dbep := &v1alpha1.DatabaseEndpoint{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      vdb.Name,
-					Namespace: vdb.Namespace,
-				},
-				Spec: v1alpha1.DatabaseEndpointSpec{
-					Database: v1alpha1.Database{
-						MySQL: &v1alpha1.MySQL{
-							Host:     "",
-							Port:     0,
-							User:     class.Spec.DefaultMasterUsername,
-							Password: randompass,
-							DB:       svc.DatabaseMySQL.DB,
-						},
-					},
-				},
-			}
-			if err := r.Create(ctx, dbep); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-		return ctrl.Result{}, err
-	} else {
-		if rdsDesc != nil {
-			dbep.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
-			dbep.Spec.Database.MySQL.Port = uint32(rdsDesc.Endpoint.Port)
-			if err := r.Update(ctx, dbep); err != nil {
-				return ctrl.Result{Requeue: true}, err
-			}
-			dbep.Status.Protocol = "MySQL"
-			dbep.Status.Endpoint = rdsDesc.Endpoint.Address
-			dbep.Status.Port = uint32(rdsDesc.Endpoint.Port)
-			dbep.Status.Arn = rdsDesc.DBInstanceArn
-			if err := r.Status().Update(ctx, dbep); err != nil {
-				return ctrl.Result{Requeue: true}, err
-			}
 		}
 	}
 	return ctrl.Result{}, nil
