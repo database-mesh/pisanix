@@ -305,7 +305,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstance(ctx context.Context,
 	} else {
 		act.Spec.Database.MySQL.User = exp.Spec.Database.MySQL.User
 		act.Spec.Database.MySQL.Password = exp.Spec.Database.MySQL.Password
-		if err := r.Update(ctx, exp); err != nil {
+		if err := r.Update(ctx, act); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
