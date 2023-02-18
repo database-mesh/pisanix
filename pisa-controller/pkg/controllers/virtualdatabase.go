@@ -56,7 +56,7 @@ const ReconcileTime = 30 * time.Second
 func (r *VirtualDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logger.FromContext(ctx)
 
-	rt, err := r.getRuntimeVirtualDatabase(ctx, req.NamespacedName)
+	vdb, err := r.getVirtualDatabase(ctx, req.NamespacedName)
 	if apierrors.IsNotFound(err) {
 		log.Info("Resource in work queue no longer exists!")
 		//NOTE: how to know this is a DatabaseClass provisioned VirtualDatabase ?
@@ -66,48 +66,25 @@ func (r *VirtualDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	if _, err := r.reconcileFinalizers(ctx, req, rt); err != nil {
+	if _, err := r.reconcileFinalizers(ctx, req, vdb); err != nil {
 		return ctrl.Result{RequeueAfter: ReconcileTime}, err
 	}
 
-	return r.update(ctx, req, rt)
+	return r.updateVirtualDatabase(ctx, req, vdb)
 }
 
-func (r *VirtualDatabaseReconciler) getRuntimeVirtualDatabase(ctx context.Context, namespacedName types.NamespacedName) (*v1alpha1.VirtualDatabase, error) {
-	rt := &v1alpha1.VirtualDatabase{}
-	err := r.Get(ctx, namespacedName, rt)
-	return rt, err
+func (r *VirtualDatabaseReconciler) getVirtualDatabase(ctx context.Context, namespacedName types.NamespacedName) (*v1alpha1.VirtualDatabase, error) {
+	vdb := &v1alpha1.VirtualDatabase{}
+	err := r.Get(ctx, namespacedName, vdb)
+	return vdb, err
 }
 
-func (r *VirtualDatabaseReconciler) update(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+func (r *VirtualDatabaseReconciler) reconcileFinalizers(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
 	if rt.Spec.DatabaseClassName != "" {
-		class := &v1alpha1.DatabaseClass{}
-		err := r.Get(ctx, types.NamespacedName{
-			Namespace: rt.Namespace,
-			Name:      rt.Spec.DatabaseClassName,
-		}, class)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		switch class.Spec.Provisioner {
-		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
-			return r.reconcileAWSRds(ctx, req, rt, class)
-		case v1alpha1.DatabaseProvisionerAWSRdsCluster:
-			return r.reconcileAWSRds(ctx, req, rt, class)
-		case v1alpha1.DatabaseProvisionerAWSRdsAurora:
-			return r.reconcileAWSRds(ctx, req, rt, class)
-		default:
-			return ctrl.Result{RequeueAfter: ReconcileTime}, errors.New("unknown DatabaseClass provisioner")
-		}
+		return r.finalizeWithDatabaseClass(ctx, req, rt)
 	}
-
-	return ctrl.Result{RequeueAfter: ReconcileTime}, nil
+	return ctrl.Result{}, nil
 }
-
-const (
-	AWSRdsFinalizer = "cleanupAWSRds"
-)
 
 func (r *VirtualDatabaseReconciler) finalizeWithDatabaseClass(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
 	if rt.DeletionTimestamp.IsZero() {
@@ -176,9 +153,17 @@ func (r *VirtualDatabaseReconciler) finalizeWithDatabaseClass(ctx context.Contex
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualDatabaseReconciler) reconcileFinalizers(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
-	if rt.Spec.DatabaseClassName != "" {
-		return r.finalizeWithDatabaseClass(ctx, req, rt)
+const (
+	AWSRdsFinalizer = "cleanupAWSRds"
+)
+
+// TODO: turn provisioner into some object
+func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
+	switch provisioner {
+	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+		return r.deleteAWSRdsCluster(ctx, dbep.Name)
+	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+		return r.deleteAWSRdsInstance(ctx, dbep.Name)
 	}
 
 	return ctrl.Result{}, nil
@@ -211,16 +196,30 @@ func (r *VirtualDatabaseReconciler) deleteAWSRdsInstance(ctx context.Context, na
 	return ctrl.Result{}, nil
 }
 
-// TODO: turn provisioner into some object
-func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
-	switch provisioner {
-	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
-		return r.deleteAWSRdsCluster(ctx, dbep.Name)
-	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
-		return r.deleteAWSRdsInstance(ctx, dbep.Name)
+func (r *VirtualDatabaseReconciler) updateVirtualDatabase(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	if rt.Spec.DatabaseClassName != "" {
+		class := &v1alpha1.DatabaseClass{}
+		err := r.Get(ctx, types.NamespacedName{
+			Namespace: rt.Namespace,
+			Name:      rt.Spec.DatabaseClassName,
+		}, class)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		switch class.Spec.Provisioner {
+		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+			return r.reconcileAWSRds(ctx, req, rt, class)
+		case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+			return r.reconcileAWSRds(ctx, req, rt, class)
+		case v1alpha1.DatabaseProvisionerAWSRdsAurora:
+			return r.reconcileAWSRds(ctx, req, rt, class)
+		default:
+			return ctrl.Result{RequeueAfter: ReconcileTime}, errors.New("unknown DatabaseClass provisioner")
+		}
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: ReconcileTime}, nil
 }
 
 func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
