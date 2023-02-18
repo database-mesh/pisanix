@@ -174,20 +174,6 @@ func (r *DatabaseEndpointReconciler) reconcile(ctx context.Context, req ctrl.Req
 	return ctrl.Result{}, nil
 }
 
-// func (r *DatabaseEndpointReconciler) deleteAWSRdsInstance(ctx context.Context, name string) (ctrl.Result, error) {
-// 	_, err := r.AWSRds.Instance().SetDBInstanceIdentifier(name).Describe(ctx)
-// 	if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
-// 		return ctrl.Result{}, nil
-// 	}
-
-// 	err = r.AWSRds.Instance().SetDBInstanceIdentifier(name).SetSkipFinalSnapshot(true).Delete(ctx)
-// 	if err != nil && !strings.Contains(err.Error(), "is already being deleted") {
-// 		return ctrl.Result{Requeue: true}, err
-// 	}
-
-// 	return ctrl.Result{}, nil
-// }
-
 func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
 	subnetGroupName := dbep.Annotations[v1alpha1.AnnotationsSubnetGroupName]
 	vpcSecurityGroupIds := dbep.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]

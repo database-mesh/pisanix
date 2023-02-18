@@ -139,11 +139,31 @@ func (r *VirtualDatabaseReconciler) removeFinalizers(ctx context.Context, vdb *v
 
 func (r *VirtualDatabaseReconciler) finalizeDbep(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
 	switch class.Spec.Provisioner {
+	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+		return r.finalizeAWSRdsInstance(ctx, vdb)
 	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
 		return r.finalizeAWSRdsCluster(ctx, req, vdb, class)
 	case v1alpha1.DatabaseProvisionerAWSRdsAurora:
 		return ctrl.Result{}, nil
 	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) finalizeAWSRdsInstance(ctx context.Context, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	dbep := &v1alpha1.DatabaseEndpoint{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: vdb.Namespace,
+		Name:      vdb.Name,
+	}, dbep); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+	} else {
+		if err := r.Delete(ctx, dbep); err != nil {
+			return ctrl.Result{RequeueAfter: ReconcileTime}, err
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -265,7 +285,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstance(ctx context.Context,
 			Database: v1alpha1.Database{
 				MySQL: &v1alpha1.MySQL{
 					Host:     "",
-					Port:     0,
+					Port:     svc.DatabaseMySQL.Port,
 					User:     class.Spec.DefaultMasterUsername,
 					Password: utils.RandomString(),
 					DB:       svc.DatabaseMySQL.DB,
