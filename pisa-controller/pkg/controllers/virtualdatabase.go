@@ -56,7 +56,7 @@ const ReconcileTime = 30 * time.Second
 func (r *VirtualDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logger.FromContext(ctx)
 
-	rt, err := r.getRuntimeVirtualDatabase(ctx, req.NamespacedName)
+	vdb, err := r.getVirtualDatabase(ctx, req.NamespacedName)
 	if apierrors.IsNotFound(err) {
 		log.Info("Resource in work queue no longer exists!")
 		//NOTE: how to know this is a DatabaseClass provisioned VirtualDatabase ?
@@ -66,119 +66,135 @@ func (r *VirtualDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	if _, err := r.reconcileFinalizers(ctx, req, rt); err != nil {
+	if _, err := r.reconcileFinalizers(ctx, req, vdb); err != nil {
 		return ctrl.Result{RequeueAfter: ReconcileTime}, err
 	}
 
-	return r.update(ctx, req, rt)
+	return r.updateVirtualDatabase(ctx, req, vdb)
 }
 
-func (r *VirtualDatabaseReconciler) getRuntimeVirtualDatabase(ctx context.Context, namespacedName types.NamespacedName) (*v1alpha1.VirtualDatabase, error) {
-	rt := &v1alpha1.VirtualDatabase{}
-	err := r.Get(ctx, namespacedName, rt)
-	return rt, err
+func (r *VirtualDatabaseReconciler) getVirtualDatabase(ctx context.Context, namespacedName types.NamespacedName) (*v1alpha1.VirtualDatabase, error) {
+	vdb := &v1alpha1.VirtualDatabase{}
+	err := r.Get(ctx, namespacedName, vdb)
+	return vdb, err
 }
 
-func (r *VirtualDatabaseReconciler) update(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+func (r *VirtualDatabaseReconciler) reconcileFinalizers(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
 	if rt.Spec.DatabaseClassName != "" {
-		class := &v1alpha1.DatabaseClass{}
-		err := r.Get(ctx, types.NamespacedName{
-			Namespace: rt.Namespace,
-			Name:      rt.Spec.DatabaseClassName,
-		}, class)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		switch class.Spec.Provisioner {
-		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
-			return r.reconcileAWSRds(ctx, req, rt, class)
-		case v1alpha1.DatabaseProvisionerAWSRdsCluster:
-			return r.reconcileAWSRds(ctx, req, rt, class)
-		case v1alpha1.DatabaseProvisionerAWSRdsAurora:
-			return r.reconcileAWSRds(ctx, req, rt, class)
-		default:
-			return ctrl.Result{RequeueAfter: ReconcileTime}, errors.New("unknown DatabaseClass provisioner")
-		}
+		return r.finalizeWithDatabaseClass(ctx, req, rt)
 	}
-
-	return ctrl.Result{RequeueAfter: ReconcileTime}, nil
+	return ctrl.Result{}, nil
 }
 
-const (
-	AWSRdsFinalizer = "cleanupAWSRds"
-)
-
-func (r *VirtualDatabaseReconciler) finalizeWithDatabaseClass(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
-	if rt.DeletionTimestamp.IsZero() {
-		if !utils.ContainsString(rt.ObjectMeta.Finalizers, AWSRdsFinalizer) {
-			rt.ObjectMeta.Finalizers = append(rt.ObjectMeta.Finalizers, AWSRdsFinalizer)
-			if err := r.Update(ctx, rt); err != nil {
-				return ctrl.Result{Requeue: true}, nil
-			}
-		}
+func (r *VirtualDatabaseReconciler) finalizeWithDatabaseClass(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	if vdb.DeletionTimestamp.IsZero() {
+		return r.appendFinalizers(ctx, vdb)
 	} else {
-		if utils.ContainsString(rt.ObjectMeta.Finalizers, AWSRdsFinalizer) {
+		if utils.ContainsString(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer) {
 			class := &v1alpha1.DatabaseClass{}
 			err := r.Get(ctx, types.NamespacedName{
-				Name: rt.Spec.DatabaseClassName,
+				Name: vdb.Spec.DatabaseClassName,
 			}, class)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
-			if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
-				dbep := &v1alpha1.DatabaseEndpoint{}
-				if err := r.Get(ctx, types.NamespacedName{
-					Namespace: rt.Namespace,
-					Name:      rt.Name,
-				}, dbep); err != nil {
-					if apierrors.IsNotFound(err) {
-						return ctrl.Result{}, err
-					}
-				} else {
-					if _, err := r.deleteAWSRds(ctx, req, dbep, class.Spec.Provisioner); err != nil {
-						return ctrl.Result{RequeueAfter: ReconcileTime}, err
-					}
-					// FIXME:
-					if err := r.Delete(ctx, dbep); err != nil {
-						return ctrl.Result{RequeueAfter: ReconcileTime}, err
-					}
-				}
+			res, err := r.finalizeDbep(ctx, req, vdb, class)
+			if err != nil {
+				return res, err
 			}
 
-			if class.Spec.Provisioner == v1alpha1.DatabaseProvisionerAWSRdsCluster {
-				dbep := &v1alpha1.DatabaseEndpoint{}
-				if err := r.Get(ctx, types.NamespacedName{
-					Namespace: rt.Namespace,
-					Name:      rt.Name,
-				}, dbep); err != nil {
-					if apierrors.IsNotFound(err) {
-						return ctrl.Result{}, err
-					}
-				} else {
-					if _, err := r.deleteAWSRds(ctx, req, dbep, class.Spec.Provisioner); err != nil {
-						return ctrl.Result{RequeueAfter: ReconcileTime}, err
-					}
-					// FIXME:
-					if err := r.Delete(ctx, dbep); err != nil {
-						return ctrl.Result{RequeueAfter: ReconcileTime}, err
-					}
-				}
-			}
-
-			rt.ObjectMeta.Finalizers = utils.RemoveString(rt.ObjectMeta.Finalizers, AWSRdsFinalizer)
-			if err := r.Update(ctx, rt); err != nil {
-				return ctrl.Result{Requeue: true}, nil
+			res, err = r.removeFinalizers(ctx, vdb)
+			if err != nil {
+				return res, err
 			}
 		}
 	}
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualDatabaseReconciler) reconcileFinalizers(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
-	if rt.Spec.DatabaseClassName != "" {
-		return r.finalizeWithDatabaseClass(ctx, req, rt)
+const (
+	AWSRdsFinalizer = "cleanupAWSRds"
+)
+
+func (r *VirtualDatabaseReconciler) appendFinalizers(ctx context.Context, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	if !utils.ContainsString(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer) {
+		vdb.ObjectMeta.Finalizers = append(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer)
+		if err := r.Update(ctx, vdb); err != nil {
+			return ctrl.Result{Requeue: true}, nil
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) removeFinalizers(ctx context.Context, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	if utils.ContainsString(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer) {
+		vdb.ObjectMeta.Finalizers = utils.RemoveString(vdb.ObjectMeta.Finalizers, AWSRdsFinalizer)
+		if err := r.Update(ctx, vdb); err != nil {
+			return ctrl.Result{Requeue: true}, nil
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) finalizeDbep(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+	switch class.Spec.Provisioner {
+	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+		return r.finalizeAWSRdsInstance(ctx, vdb)
+	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+		return r.finalizeAWSRdsCluster(ctx, req, vdb, class)
+	case v1alpha1.DatabaseProvisionerAWSRdsAurora:
+		return ctrl.Result{}, nil
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) finalizeAWSRdsInstance(ctx context.Context, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	dbep := &v1alpha1.DatabaseEndpoint{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: vdb.Namespace,
+		Name:      vdb.Name,
+	}, dbep); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+	} else {
+		if err := r.Delete(ctx, dbep); err != nil {
+			return ctrl.Result{RequeueAfter: ReconcileTime}, err
+		}
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+	dbep := &v1alpha1.DatabaseEndpoint{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: vdb.Namespace,
+		Name:      vdb.Name,
+	}, dbep); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+	} else {
+		if _, err := r.deleteAWSRds(ctx, req, dbep, class.Spec.Provisioner); err != nil {
+			return ctrl.Result{RequeueAfter: ReconcileTime}, err
+		}
+		// FIXME:
+		if err := r.Delete(ctx, dbep); err != nil {
+			return ctrl.Result{RequeueAfter: ReconcileTime}, err
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+// TODO: turn provisioner into some object
+func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
+	switch provisioner {
+	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+		return r.deleteAWSRdsCluster(ctx, dbep.Name)
+	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+		return r.deleteAWSRdsInstance(ctx, dbep.Name)
 	}
 
 	return ctrl.Result{}, nil
@@ -211,16 +227,30 @@ func (r *VirtualDatabaseReconciler) deleteAWSRdsInstance(ctx context.Context, na
 	return ctrl.Result{}, nil
 }
 
-// TODO: turn provisioner into some object
-func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
-	switch provisioner {
-	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
-		return r.deleteAWSRdsCluster(ctx, dbep.Name)
-	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
-		return r.deleteAWSRdsInstance(ctx, dbep.Name)
+func (r *VirtualDatabaseReconciler) updateVirtualDatabase(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	if rt.Spec.DatabaseClassName != "" {
+		class := &v1alpha1.DatabaseClass{}
+		err := r.Get(ctx, types.NamespacedName{
+			Namespace: rt.Namespace,
+			Name:      rt.Spec.DatabaseClassName,
+		}, class)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		switch class.Spec.Provisioner {
+		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+			return r.reconcileAWSRds(ctx, req, rt, class)
+		case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+			return r.reconcileAWSRds(ctx, req, rt, class)
+		case v1alpha1.DatabaseProvisionerAWSRdsAurora:
+			return r.reconcileAWSRds(ctx, req, rt, class)
+		default:
+			return ctrl.Result{RequeueAfter: ReconcileTime}, errors.New("unknown DatabaseClass provisioner")
+		}
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: ReconcileTime}, nil
 }
 
 func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
@@ -231,6 +261,8 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 				return r.reconcileAWSRdsInstance(ctx, req, vdb, class, svc)
 			case v1alpha1.DatabaseProvisionerAWSRdsCluster:
 				return r.reconcileAWSRdsCluster(ctx, req, vdb, class, svc)
+			case v1alpha1.DatabaseProvisionerAWSRdsAurora:
+				return ctrl.Result{}, nil
 			}
 		}
 	}
@@ -238,75 +270,43 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 }
 
 func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstance(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass, svc v1alpha1.VirtualDatabaseService) (ctrl.Result, error) {
-	subnetGroupName := vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName]
-	vpcSecurityGroupIds := vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
-	randompass := utils.RandomString()
-	rdsDesc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(vdb.Name).Describe(ctx)
-	if err != nil {
-		if strings.Contains(err.Error(), "DBInstanceNotFound") {
-			if err := r.AWSRds.Instance().
-				SetEngine(class.Spec.Engine.Name).
-				SetEngineVersion(class.Spec.Engine.Version).
-				//FIXME: should add this DatabaseClass name to tags
-				SetDBInstanceIdentifier(vdb.Name).
-				SetMasterUsername(class.Spec.DefaultMasterUsername).
-				SetMasterUserPassword(randompass).
-				SetDBInstanceClass(class.Spec.Instance.Class).
-				SetAllocatedStorage(class.Spec.Storage.AllocatedStorage).
-				//NOTE: It will be invalid if this is a auto sharding
-				SetDBName(svc.DatabaseMySQL.DB).
-				SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
-				SetDBSubnetGroup(subnetGroupName).
-				Create(ctx); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
+	act := &v1alpha1.DatabaseEndpoint{}
+	exp := &v1alpha1.DatabaseEndpoint{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      vdb.Name,
+			Namespace: vdb.Namespace,
+			Annotations: map[string]string{
+				v1alpha1.AnnotationsSubnetGroupName:     vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName],
+				v1alpha1.AnnotationsVPCSecurityGroupIds: vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds],
+				AnnotationsDatabaseClassName:            class.Name,
+			},
+		},
+		Spec: v1alpha1.DatabaseEndpointSpec{
+			Database: v1alpha1.Database{
+				MySQL: &v1alpha1.MySQL{
+					Host:     "",
+					Port:     0,
+					User:     class.Spec.DefaultMasterUsername,
+					Password: utils.RandomString(),
+					DB:       svc.DatabaseMySQL.DB,
+				},
+			},
+		},
 	}
 
-	// Update or Delete
-	dbep := &v1alpha1.DatabaseEndpoint{}
-	err = r.Get(ctx, types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Namespace: vdb.Namespace,
 		Name:      vdb.Name,
-	}, dbep)
+	}, act)
 	if err != nil {
-		if vdb.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
-			dbep := &v1alpha1.DatabaseEndpoint{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      vdb.Name,
-					Namespace: vdb.Namespace,
-				},
-				Spec: v1alpha1.DatabaseEndpointSpec{
-					Database: v1alpha1.Database{
-						MySQL: &v1alpha1.MySQL{
-							Host:     "",
-							Port:     0,
-							User:     class.Spec.DefaultMasterUsername,
-							Password: randompass,
-							DB:       svc.DatabaseMySQL.DB,
-						},
-					},
-				},
-			}
-			if err := r.Create(ctx, dbep); err != nil {
-				return ctrl.Result{}, err
-			}
+		if err := r.Create(ctx, exp); err != nil {
+			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, err
 	} else {
-		if rdsDesc != nil {
-			dbep.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
-			dbep.Spec.Database.MySQL.Port = uint32(rdsDesc.Endpoint.Port)
-			if err := r.Update(ctx, dbep); err != nil {
-				return ctrl.Result{Requeue: true}, err
-			}
-			dbep.Status.Protocol = "MySQL"
-			dbep.Status.Endpoint = rdsDesc.Endpoint.Address
-			dbep.Status.Port = uint32(rdsDesc.Endpoint.Port)
-			dbep.Status.Arn = rdsDesc.DBInstanceArn
-			if err := r.Status().Update(ctx, dbep); err != nil {
-				return ctrl.Result{Requeue: true}, err
-			}
+		act.Spec.Database.MySQL.User = exp.Spec.Database.MySQL.User
+		act.Spec.Database.MySQL.Password = exp.Spec.Database.MySQL.Password
+		if err := r.Update(ctx, exp); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 	return ctrl.Result{}, nil

@@ -100,6 +100,15 @@ func NewTask() task.Task {
 		os.Exit(1)
 	}
 
+	if err = (&controllers.DatabaseEndpointReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		AWSRds: aws.NewRdsClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DatabaseEndpoint")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.DatabaseChaosReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
