@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/database-mesh/golang-sdk/aws/client/rds"
@@ -109,7 +110,16 @@ func (r *DatabaseEndpointReconciler) finalizeAWS(ctx context.Context, dbep *v1al
 	// 	return r.finalizeAWSRdsInstance(ctx, dbep)
 	// }
 	// return ctrl.Result{}, nil
-	return r.finalizeAWSRdsInstance(ctx, dbep)
+	switch provisioner {
+	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+		fallthrough
+	case v1alpha1.DatabaseProvisionerAWSRdsAurora:
+		return r.finalizeAWSRdsInstance(ctx, dbep)
+	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+		fallthrough
+	default:
+		return ctrl.Result{}, nil
+	}
 }
 
 func (r *DatabaseEndpointReconciler) finalizeAWSRdsInstance(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint) (ctrl.Result, error) {
@@ -164,6 +174,8 @@ func (r *DatabaseEndpointReconciler) reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, err
 		}
 
+		fmt.Printf("---- reconcile ----")
+
 		switch class.Spec.Provisioner {
 		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
 			return r.reconcileAWSRdsInstance(ctx, req, dbep, class)
@@ -175,7 +187,7 @@ func (r *DatabaseEndpointReconciler) reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{RequeueAfter: ReconcileTime}, errors.New("unknown DatabaseClass provisioner")
 		}
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: ReconcileTime}, nil
 }
 
 func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
@@ -233,6 +245,9 @@ func (r *DatabaseEndpointReconciler) reconcileAWSRdsCluster(ctx context.Context,
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	fmt.Printf("---- reconcile cluster ----")
+	fmt.Printf("---- rdsDesc: %+v\n----", rdsDesc)
 
 	// Update or Delete
 	if rdsDesc != nil {
