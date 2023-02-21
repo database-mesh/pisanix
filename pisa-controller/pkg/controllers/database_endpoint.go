@@ -75,7 +75,7 @@ func (r *DatabaseEndpointReconciler) getDatabaseEndpoint(ctx context.Context, na
 
 func (r *DatabaseEndpointReconciler) reconcileFinalizers(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint) error {
 	//TODO
-	if dbep.Annotations[AnnotationsDatabaseClassName] != "" {
+	if dbep.Annotations[v1alpha1.AnnotationsDatabaseClassName] != "" {
 		return r.finalizeWithDatabaseClass(ctx, req, dbep)
 	}
 	return nil
@@ -88,7 +88,7 @@ func (r *DatabaseEndpointReconciler) finalizeWithDatabaseClass(ctx context.Conte
 		if utils.ContainsString(dbep.ObjectMeta.Finalizers, AWSRdsFinalizer) {
 			class := &v1alpha1.DatabaseClass{}
 			err := r.Get(ctx, types.NamespacedName{
-				Name: dbep.Annotations[AnnotationsDatabaseClassName],
+				Name: dbep.Annotations[v1alpha1.AnnotationsDatabaseClassName],
 			}, class)
 			if err != nil {
 				return err
@@ -159,10 +159,8 @@ func (r *DatabaseEndpointReconciler) removeFinalizers(ctx context.Context, dbep 
 	return nil
 }
 
-const AnnotationsDatabaseClassName = "databaseendpoint.database-mesh.io/databaseclass"
-
 func (r *DatabaseEndpointReconciler) reconcile(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint) error {
-	classname := dbep.Annotations[AnnotationsDatabaseClassName]
+	classname := dbep.Annotations[v1alpha1.AnnotationsDatabaseClassName]
 	if classname != "" {
 		class := &v1alpha1.DatabaseClass{}
 		err := r.Get(ctx, types.NamespacedName{
@@ -241,7 +239,8 @@ func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context
 func (r *DatabaseEndpointReconciler) reconcileAWSRdsCluster(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, class *v1alpha1.DatabaseClass) error {
 	rdsDesc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(dbep.Name).Describe(ctx)
 	if err != nil {
-		return err
+		//FIXME: if the Rds instance is deleted which can not be described, will return as normal
+		return nil
 	}
 
 	// Update or Delete

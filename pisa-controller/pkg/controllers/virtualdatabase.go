@@ -154,17 +154,27 @@ func (r *VirtualDatabaseReconciler) finalizeDbep(ctx context.Context, req ctrl.R
 }
 
 func (r *VirtualDatabaseReconciler) finalizeAWSRdsInstance(ctx context.Context, vdb *v1alpha1.VirtualDatabase) error {
-	dbep := &v1alpha1.DatabaseEndpoint{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: vdb.Namespace,
-		Name:      vdb.Name,
-	}, dbep); err != nil {
-		if apierrors.IsNotFound(err) {
-			return err
-		}
-	} else {
-		if err := r.Delete(ctx, dbep); err != nil {
-			return err
+	desc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(vdb.Name).Describe(ctx)
+	if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if desc != nil {
+		dbep := &v1alpha1.DatabaseEndpoint{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: vdb.Namespace,
+			Name:      vdb.Name,
+		}, dbep); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+		} else {
+			if err := r.Delete(ctx, dbep); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -175,7 +185,7 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, v
 	desc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
 	if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
 		//TODO:
-		return err
+		return nil
 	}
 
 	if err != nil {
@@ -183,13 +193,18 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, v
 	}
 
 	for _, ins := range desc.DBClusterMembers {
+		_, err := r.AWSRds.Instance().SetDBInstanceIdentifier(ins.DBInstanceIdentifier).Describe(ctx)
+
+		if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
+			continue
+		}
 		dbep := &v1alpha1.DatabaseEndpoint{}
 		if err := r.Get(ctx, types.NamespacedName{
 			Namespace: vdb.Namespace,
 			Name:      ins.DBInstanceIdentifier,
 		}, dbep); err != nil {
 			if apierrors.IsNotFound(err) {
-				return err
+				continue
 			}
 		} else {
 			if err := r.Delete(ctx, dbep); err != nil {
@@ -208,7 +223,7 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, v
 func (r *VirtualDatabaseReconciler) finalizeAWSRdsAurora(ctx context.Context, vdb *v1alpha1.VirtualDatabase) error {
 	desc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
 	if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
-		return err
+		return nil
 	}
 
 	if err != nil {
@@ -216,13 +231,18 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsAurora(ctx context.Context, vd
 	}
 
 	for _, ins := range desc.DBClusterMembers {
+		_, err := r.AWSRds.Instance().SetDBInstanceIdentifier(ins.DBInstanceIdentifier).Describe(ctx)
+		if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
+			continue
+		}
+
 		dbep := &v1alpha1.DatabaseEndpoint{}
 		if err := r.Get(ctx, types.NamespacedName{
 			Namespace: vdb.Namespace,
 			Name:      ins.DBInstanceIdentifier,
 		}, dbep); err != nil {
 			if apierrors.IsNotFound(err) {
-				return err
+				continue
 			}
 		} else {
 			if err := r.Delete(ctx, dbep); err != nil {
@@ -299,7 +319,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstance(ctx context.Context,
 			Annotations: map[string]string{
 				v1alpha1.AnnotationsSubnetGroupName:     vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName],
 				v1alpha1.AnnotationsVPCSecurityGroupIds: vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds],
-				AnnotationsDatabaseClassName:            class.Name,
+				v1alpha1.AnnotationsDatabaseClassName:   class.Name,
 			},
 		},
 		Spec: v1alpha1.DatabaseEndpointSpec{
@@ -375,7 +395,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsCluster(ctx context.Context, 
 					Annotations: map[string]string{
 						v1alpha1.AnnotationsSubnetGroupName:     vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName],
 						v1alpha1.AnnotationsVPCSecurityGroupIds: vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds],
-						AnnotationsDatabaseClassName:            class.Name,
+						v1alpha1.AnnotationsDatabaseClassName:   class.Name,
 					},
 				},
 				Spec: v1alpha1.DatabaseEndpointSpec{
@@ -446,7 +466,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsAurora(ctx context.Context, v
 						Annotations: map[string]string{
 							v1alpha1.AnnotationsSubnetGroupName:     vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName],
 							v1alpha1.AnnotationsVPCSecurityGroupIds: vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds],
-							AnnotationsDatabaseClassName:            class.Name,
+							v1alpha1.AnnotationsDatabaseClassName:   class.Name,
 						},
 					},
 					Spec: v1alpha1.DatabaseEndpointSpec{
