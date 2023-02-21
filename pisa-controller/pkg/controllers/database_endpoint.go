@@ -17,7 +17,6 @@ package controllers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/database-mesh/golang-sdk/aws/client/rds"
@@ -57,11 +56,15 @@ func (r *DatabaseEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, err
 	}
 
-	if _, err := r.reconcileFinalizers(ctx, req, dbep); err != nil {
-		return ctrl.Result{RequeueAfter: ReconcileTime}, err
+	if err := r.reconcileFinalizers(ctx, req, dbep); err != nil {
+		return ctrl.Result{Requeue: true}, err
 	}
 
-	return r.reconcile(ctx, req, dbep)
+	if err := r.reconcile(ctx, req, dbep); err != nil {
+		return ctrl.Result{Requeue: true}, err
+	}
+
+	return ctrl.Result{RequeueAfter: ReconcileTime}, nil
 }
 
 func (r *DatabaseEndpointReconciler) getDatabaseEndpoint(ctx context.Context, namespacedName types.NamespacedName) (*v1alpha1.DatabaseEndpoint, error) {
@@ -70,15 +73,15 @@ func (r *DatabaseEndpointReconciler) getDatabaseEndpoint(ctx context.Context, na
 	return dbep, err
 }
 
-func (r *DatabaseEndpointReconciler) reconcileFinalizers(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint) (ctrl.Result, error) {
+func (r *DatabaseEndpointReconciler) reconcileFinalizers(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint) error {
 	//TODO
 	if dbep.Annotations[AnnotationsDatabaseClassName] != "" {
 		return r.finalizeWithDatabaseClass(ctx, req, dbep)
 	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
-func (r *DatabaseEndpointReconciler) finalizeWithDatabaseClass(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint) (ctrl.Result, error) {
+func (r *DatabaseEndpointReconciler) finalizeWithDatabaseClass(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint) error {
 	if dbep.DeletionTimestamp.IsZero() {
 		return r.appendFinalizers(ctx, dbep)
 	} else {
@@ -88,28 +91,24 @@ func (r *DatabaseEndpointReconciler) finalizeWithDatabaseClass(ctx context.Conte
 				Name: dbep.Annotations[AnnotationsDatabaseClassName],
 			}, class)
 			if err != nil {
-				return ctrl.Result{}, err
+				return err
 			}
 
-			res, err := r.finalizeAWS(ctx, dbep, class.Spec.Provisioner)
+			err = r.finalizeAWS(ctx, dbep, class.Spec.Provisioner)
 			if err != nil {
-				return res, err
+				return err
 			}
 
-			res, err = r.removeFinalizers(ctx, dbep)
+			err = r.removeFinalizers(ctx, dbep)
 			if err != nil {
-				return res, err
+				return err
 			}
 		}
 	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
-func (r *DatabaseEndpointReconciler) finalizeAWS(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
-	// if provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance || provisioner == v1{
-	// 	return r.finalizeAWSRdsInstance(ctx, dbep)
-	// }
-	// return ctrl.Result{}, nil
+func (r *DatabaseEndpointReconciler) finalizeAWS(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) error {
 	switch provisioner {
 	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
 		fallthrough
@@ -118,51 +117,51 @@ func (r *DatabaseEndpointReconciler) finalizeAWS(ctx context.Context, dbep *v1al
 	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
 		fallthrough
 	default:
-		return ctrl.Result{}, nil
+		return nil
 	}
 }
 
-func (r *DatabaseEndpointReconciler) finalizeAWSRdsInstance(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint) (ctrl.Result, error) {
+func (r *DatabaseEndpointReconciler) finalizeAWSRdsInstance(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint) error {
 	return r.deleteAWSRdsInstance(ctx, dbep.Name)
 }
 
-func (r *DatabaseEndpointReconciler) deleteAWSRdsInstance(ctx context.Context, name string) (ctrl.Result, error) {
+func (r *DatabaseEndpointReconciler) deleteAWSRdsInstance(ctx context.Context, name string) error {
 	_, err := r.AWSRds.Instance().SetDBInstanceIdentifier(name).Describe(ctx)
 	if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
-		return ctrl.Result{}, nil
+		return nil
 	}
 
 	err = r.AWSRds.Instance().SetDBInstanceIdentifier(name).SetSkipFinalSnapshot(true).Delete(ctx)
 	if err != nil && !strings.Contains(err.Error(), "is already being deleted") {
-		return ctrl.Result{Requeue: true}, err
+		return err
 	}
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
-func (r *DatabaseEndpointReconciler) appendFinalizers(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint) (ctrl.Result, error) {
+func (r *DatabaseEndpointReconciler) appendFinalizers(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint) error {
 	if !utils.ContainsString(dbep.ObjectMeta.Finalizers, AWSRdsFinalizer) {
 		dbep.ObjectMeta.Finalizers = append(dbep.ObjectMeta.Finalizers, AWSRdsFinalizer)
 		if err := r.Update(ctx, dbep); err != nil {
-			return ctrl.Result{Requeue: true}, nil
+			return err
 		}
 	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
-func (r *DatabaseEndpointReconciler) removeFinalizers(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint) (ctrl.Result, error) {
+func (r *DatabaseEndpointReconciler) removeFinalizers(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint) error {
 	if utils.ContainsString(dbep.ObjectMeta.Finalizers, AWSRdsFinalizer) {
 		dbep.ObjectMeta.Finalizers = utils.RemoveString(dbep.ObjectMeta.Finalizers, AWSRdsFinalizer)
 		if err := r.Update(ctx, dbep); err != nil {
-			return ctrl.Result{Requeue: true}, nil
+			return err
 		}
 	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
-const AnnotationsDatabaseClassName = "databaseendpointdatabase-mesh.io/databaseclass"
+const AnnotationsDatabaseClassName = "databaseendpoint.database-mesh.io/databaseclass"
 
-func (r *DatabaseEndpointReconciler) reconcile(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint) (ctrl.Result, error) {
+func (r *DatabaseEndpointReconciler) reconcile(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint) error {
 	classname := dbep.Annotations[AnnotationsDatabaseClassName]
 	if classname != "" {
 		class := &v1alpha1.DatabaseClass{}
@@ -171,26 +170,25 @@ func (r *DatabaseEndpointReconciler) reconcile(ctx context.Context, req ctrl.Req
 			Name:      classname,
 		}, class)
 		if err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
-
-		fmt.Printf("---- reconcile ----")
 
 		switch class.Spec.Provisioner {
 		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
-			return r.reconcileAWSRdsInstance(ctx, req, dbep, class)
+			err = r.reconcileAWSRdsInstance(ctx, req, dbep, class)
 		case v1alpha1.DatabaseProvisionerAWSRdsCluster:
-			return r.reconcileAWSRdsCluster(ctx, req, dbep, class)
+			err = r.reconcileAWSRdsCluster(ctx, req, dbep, class)
 		case v1alpha1.DatabaseProvisionerAWSRdsAurora:
-			return r.reconcileAWSRdsCluster(ctx, req, dbep, class)
+			err = r.reconcileAWSRdsCluster(ctx, req, dbep, class)
 		default:
-			return ctrl.Result{RequeueAfter: ReconcileTime}, errors.New("unknown DatabaseClass provisioner")
+			return errors.New("unknown DatabaseClass provisioner")
 		}
+		return err
 	}
-	return ctrl.Result{RequeueAfter: ReconcileTime}, nil
+	return nil
 }
 
-func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, class *v1alpha1.DatabaseClass) error {
 	subnetGroupName := dbep.Annotations[v1alpha1.AnnotationsSubnetGroupName]
 	vpcSecurityGroupIds := dbep.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
 
@@ -211,62 +209,59 @@ func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context
 				SetMasterUserPassword(dbep.Spec.Database.MySQL.Password).
 				SetDBName(dbep.Spec.Database.MySQL.DB).
 				Create(ctx); err != nil {
-				return ctrl.Result{}, err
+				return err
 			}
-			return ctrl.Result{}, nil
+			return nil
 		}
-		return ctrl.Result{}, err
+		return err
 	}
 
 	// Update or Delete
 	if rdsDesc != nil {
 		act, err := r.getDatabaseEndpoint(ctx, req.NamespacedName)
 		if err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return err
 		}
 		act.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
 		act.Spec.Database.MySQL.Port = uint32(rdsDesc.Endpoint.Port)
 		if err := r.Update(ctx, act); err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return err
 		}
 		act.Status.Protocol = "MySQL"
 		act.Status.Endpoint = rdsDesc.Endpoint.Address
 		act.Status.Port = uint32(rdsDesc.Endpoint.Port)
 		act.Status.Arn = rdsDesc.DBInstanceArn
 		if err := r.Status().Update(ctx, act); err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return err
 		}
 	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
-func (r *DatabaseEndpointReconciler) reconcileAWSRdsCluster(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
+func (r *DatabaseEndpointReconciler) reconcileAWSRdsCluster(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, class *v1alpha1.DatabaseClass) error {
 	rdsDesc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(dbep.Name).Describe(ctx)
 	if err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
-
-	fmt.Printf("---- reconcile cluster ----")
-	fmt.Printf("---- rdsDesc: %+v\n----", rdsDesc)
 
 	// Update or Delete
 	if rdsDesc != nil {
 		act, err := r.getDatabaseEndpoint(ctx, req.NamespacedName)
 		if err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return err
 		}
 		act.Spec.Database.MySQL.Host = rdsDesc.Endpoint.Address
 		act.Spec.Database.MySQL.Port = uint32(rdsDesc.Endpoint.Port)
 		if err := r.Update(ctx, act); err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return err
 		}
 		act.Status.Protocol = "MySQL"
 		act.Status.Endpoint = rdsDesc.Endpoint.Address
 		act.Status.Port = uint32(rdsDesc.Endpoint.Port)
 		act.Status.Arn = rdsDesc.DBInstanceArn
 		if err := r.Status().Update(ctx, act); err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return err
 		}
 	}
-	return ctrl.Result{}, nil
+	return nil
 }
