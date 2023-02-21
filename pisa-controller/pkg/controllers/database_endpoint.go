@@ -105,10 +105,11 @@ func (r *DatabaseEndpointReconciler) finalizeWithDatabaseClass(ctx context.Conte
 }
 
 func (r *DatabaseEndpointReconciler) finalizeAWS(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
-	if provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance {
-		return r.finalizeAWSRdsInstance(ctx, dbep)
-	}
-	return ctrl.Result{}, nil
+	// if provisioner == v1alpha1.DatabaseProvisionerAWSRdsInstance || provisioner == v1{
+	// 	return r.finalizeAWSRdsInstance(ctx, dbep)
+	// }
+	// return ctrl.Result{}, nil
+	return r.finalizeAWSRdsInstance(ctx, dbep)
 }
 
 func (r *DatabaseEndpointReconciler) finalizeAWSRdsInstance(ctx context.Context, dbep *v1alpha1.DatabaseEndpoint) (ctrl.Result, error) {
@@ -167,6 +168,8 @@ func (r *DatabaseEndpointReconciler) reconcile(ctx context.Context, req ctrl.Req
 		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
 			return r.reconcileAWSRdsInstance(ctx, req, dbep, class)
 		case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+			return r.reconcileAWSRdsCluster(ctx, req, dbep, class)
+		case v1alpha1.DatabaseProvisionerAWSRdsAurora:
 			return r.reconcileAWSRdsCluster(ctx, req, dbep, class)
 		default:
 			return ctrl.Result{RequeueAfter: ReconcileTime}, errors.New("unknown DatabaseClass provisioner")

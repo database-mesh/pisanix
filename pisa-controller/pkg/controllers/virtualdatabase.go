@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -144,7 +145,7 @@ func (r *VirtualDatabaseReconciler) finalizeDbep(ctx context.Context, req ctrl.R
 	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
 		return r.finalizeAWSRdsCluster(ctx, vdb)
 	case v1alpha1.DatabaseProvisionerAWSRdsAurora:
-		return ctrl.Result{}, nil
+		return r.finalizeAWSRdsAurora(ctx, vdb)
 	}
 	return ctrl.Result{}, nil
 }
@@ -193,9 +194,39 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, v
 		}
 	}
 
-	return ctrl.Result{}, nil
+	return r.deleteAWSRdsCluster(ctx, vdb.Name)
 }
 
+func (r *VirtualDatabaseReconciler) finalizeAWSRdsAurora(ctx context.Context, vdb *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
+	desc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
+	if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
+		return ctrl.Result{}, nil
+	}
+
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	for _, ins := range desc.DBClusterMembers {
+		dbep := &v1alpha1.DatabaseEndpoint{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: vdb.Namespace,
+			Name:      ins.DBInstanceIdentifier,
+		}, dbep); err != nil {
+			if apierrors.IsNotFound(err) {
+				return ctrl.Result{}, err
+			}
+		} else {
+			if err := r.Delete(ctx, dbep); err != nil {
+				return ctrl.Result{RequeueAfter: ReconcileTime}, err
+			}
+		}
+	}
+
+	return r.deleteAWSRdsCluster(ctx, vdb.Name)
+}
+
+/*
 func (r *VirtualDatabaseReconciler) finalizeAWSRdsClusterDEPRECATED(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass) (ctrl.Result, error) {
 	dbep := &v1alpha1.DatabaseEndpoint{}
 	if err := r.Get(ctx, types.NamespacedName{
@@ -216,18 +247,32 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsClusterDEPRECATED(ctx context.
 	}
 	return ctrl.Result{}, nil
 }
+*/
 
 // TODO: turn provisioner into some object
-func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
-	switch provisioner {
-	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
-		return r.deleteAWSRdsCluster(ctx, dbep.Name)
-	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
-		return r.deleteAWSRdsInstance(ctx, dbep.Name)
-	}
+// func (r *VirtualDatabaseReconciler) deleteAWSRds(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, provisioner v1alpha1.DatabaseProvisioner) (ctrl.Result, error) {
+// 	switch provisioner {
+// 	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
+// 		return r.deleteAWSRdsCluster(ctx, dbep.Name)
+// 	case v1alpha1.DatabaseProvisionerAWSRdsInstance:
+// 		return r.deleteAWSRdsInstance(ctx, dbep.Name)
+// 	}
 
-	return ctrl.Result{}, nil
-}
+// 	return ctrl.Result{}, nil
+// }
+
+// func (r *VirtualDatabaseReconciler) deleteAWSRdsAurora(ctx context.Context, name string) (ctrl.Result, error) {
+// 	_, err := r.AWSRds.Cluster().SetDBClusterIdentifier(name).Describe(ctx)
+// 	if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
+// 		return ctrl.Result{}, nil
+// 	}
+
+// 	err = r.AWSRds.Aurora().SetDBClusterIdentifier(name).SetSkipFinalSnapshot(true).SetDeleteAutomateBackups(false).Delete(ctx)
+// 	if err != nil && !strings.Contains(err.Error(), "is already being deleted") {
+// 		return ctrl.Result{Requeue: true}, err
+// 	}
+// 	return ctrl.Result{}, nil
+// }
 
 func (r *VirtualDatabaseReconciler) deleteAWSRdsCluster(ctx context.Context, name string) (ctrl.Result, error) {
 	_, err := r.AWSRds.Cluster().SetDBClusterIdentifier(name).Describe(ctx)
@@ -242,19 +287,21 @@ func (r *VirtualDatabaseReconciler) deleteAWSRdsCluster(ctx context.Context, nam
 	return ctrl.Result{}, nil
 }
 
+/*
 func (r *VirtualDatabaseReconciler) deleteAWSRdsInstance(ctx context.Context, name string) (ctrl.Result, error) {
 	_, err := r.AWSRds.Instance().SetDBInstanceIdentifier(name).Describe(ctx)
 	if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
 		return ctrl.Result{}, nil
 	}
 
-	err = r.AWSRds.Instance().SetDBInstanceIdentifier(name).SetSkipFinalSnapshot(true).Delete(ctx)
+	err = r.AWSRds.Instance().SetDBInstanceIdentifier(name).SetSkipFinalSnapshot(true).SetDeleteAutomateBackups(false).Delete(ctx)
 	if err != nil && !strings.Contains(err.Error(), "is already being deleted") {
 		return ctrl.Result{Requeue: true}, err
 	}
 
 	return ctrl.Result{}, nil
 }
+*/
 
 func (r *VirtualDatabaseReconciler) updateVirtualDatabase(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) (ctrl.Result, error) {
 	if rt.Spec.DatabaseClassName != "" {
@@ -291,7 +338,7 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRds(ctx context.Context, req ctr
 			case v1alpha1.DatabaseProvisionerAWSRdsCluster:
 				return r.reconcileAWSRdsCluster(ctx, vdb, class, svc)
 			case v1alpha1.DatabaseProvisionerAWSRdsAurora:
-				return ctrl.Result{}, nil
+				return r.reconcileAWSRdsAurora(ctx, vdb, class, svc)
 			}
 		}
 	}
@@ -331,13 +378,13 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsInstance(ctx context.Context,
 		if err := r.Create(ctx, exp); err != nil {
 			return ctrl.Result{}, err
 		}
-	} else {
+	} /* else {
 		act.Spec.Database.MySQL.User = exp.Spec.Database.MySQL.User
 		act.Spec.Database.MySQL.Password = exp.Spec.Database.MySQL.Password
 		if err := r.Update(ctx, act); err != nil {
 			return ctrl.Result{}, err
 		}
-	}
+	}*/
 	return ctrl.Result{}, nil
 }
 
@@ -380,12 +427,52 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsCluster(ctx context.Context, 
 
 	if rdsDesc != nil {
 		for _, ins := range rdsDesc.DBClusterMembers {
-			dbep := &v1alpha1.DatabaseEndpoint{}
-			if err := r.Get(ctx, types.NamespacedName{
+			act := &v1alpha1.DatabaseEndpoint{}
+			exp := &v1alpha1.DatabaseEndpoint{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ins.DBInstanceIdentifier,
+					Namespace: vdb.Namespace,
+					Annotations: map[string]string{
+						v1alpha1.AnnotationsSubnetGroupName:     vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName],
+						v1alpha1.AnnotationsVPCSecurityGroupIds: vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds],
+						AnnotationsDatabaseClassName:            class.Name,
+					},
+				},
+				Spec: v1alpha1.DatabaseEndpointSpec{
+					Database: v1alpha1.Database{
+						MySQL: &v1alpha1.MySQL{
+							Host:     "",
+							Port:     0,
+							User:     class.Spec.DefaultMasterUsername,
+							Password: utils.RandomString(),
+							DB:       svc.DatabaseMySQL.DB,
+						},
+					},
+				},
+			}
+
+			err := r.Get(ctx, types.NamespacedName{
 				Namespace: vdb.Namespace,
 				Name:      ins.DBInstanceIdentifier,
-			}, dbep); err != nil {
-				if vdb.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
+			}, act)
+			if err != nil {
+				if err := r.Create(ctx, exp); err != nil {
+					return ctrl.Result{}, err
+				}
+			} /*else {
+				act.Spec.Database.MySQL.User = exp.Spec.Database.MySQL.User
+				act.Spec.Database.MySQL.Password = exp.Spec.Database.MySQL.Password
+				if err := r.Update(ctx, act); err != nil {
+					return ctrl.Result{}, err
+				}
+			}*/
+
+			/*
+				dbep := &v1alpha1.DatabaseEndpoint{}
+				if err := r.Get(ctx, types.NamespacedName{
+					Namespace: vdb.Namespace,
+					Name:      ins.DBInstanceIdentifier,
+				}, dbep); err != nil {
 					dbep := &v1alpha1.DatabaseEndpoint{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      ins.DBInstanceIdentifier,
@@ -411,8 +498,92 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsCluster(ctx context.Context, 
 					if err := r.Create(ctx, dbep); err != nil {
 						return ctrl.Result{}, err
 					}
+				} else {
+					act, err := r.getDatabaseEndpoint(ctx, types.NamespacedName{
+						Namespace: vdb.Namespace,
+						Name:      ins.DBInstanceIdentifier,
+					})
+					if err != nil {
+						return ctrl.Result{Requeue: true}, err
+					}
+
+					act.Annotations = map[string]string{
+						v1alpha1.AnnotationsSubnetGroupName:     vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName],
+						v1alpha1.AnnotationsVPCSecurityGroupIds: vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds],
+						AnnotationsDatabaseClassName:            class.Name,
+					}
+
+					if err := r.Update(ctx, act); err != nil {
+						return ctrl.Result{Requeue: true}, err
+					}
 				}
-			} else {
+			*/
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualDatabaseReconciler) reconcileAWSRdsAurora(ctx context.Context, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass, svc v1alpha1.VirtualDatabaseService) (ctrl.Result, error) {
+	subnetGroupName := vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName]
+	vpcSecurityGroupIds := vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
+	// availabilityZones := vdb.Annotations[v1alpha1.AnnotationsAvailabilityZones]
+	randompass := utils.RandomString()
+
+	//NOTE: Aurora Describe currently duplicated with Cluster Describe
+	rdsDesc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
+	if err != nil {
+		if strings.Contains(err.Error(), "DBClusterNotFound") {
+			if err := r.AWSRds.Aurora().
+				SetEngine(class.Spec.Engine.Name).
+				SetEngineVersion(class.Spec.Engine.Version).
+				SetDBClusterIdentifier(vdb.Name).
+				SetVpcSecurityGroupIds(strings.Split(vpcSecurityGroupIds, ",")).
+				SetDBSubnetGroup(subnetGroupName).
+				SetDBInstanceIdentifier(fmt.Sprintf("%s-instance-1", vdb.Name)).
+				SetDBInstanceClass(class.Spec.Instance.Class).
+				SetMasterUsername(class.Spec.DefaultMasterUsername).
+				SetMasterUserPassword(randompass).
+				CreateWithPrimary(ctx); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
+
+	if rdsDesc != nil {
+		for _, ins := range rdsDesc.DBClusterMembers {
+			act := &v1alpha1.DatabaseEndpoint{}
+			if err := r.Get(ctx, types.NamespacedName{
+				Namespace: vdb.Namespace,
+				Name:      ins.DBInstanceIdentifier,
+			}, act); err != nil {
+				// if vdb.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
+				exp := &v1alpha1.DatabaseEndpoint{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ins.DBInstanceIdentifier,
+						Namespace: vdb.Namespace,
+						Annotations: map[string]string{
+							v1alpha1.AnnotationsSubnetGroupName:     vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName],
+							v1alpha1.AnnotationsVPCSecurityGroupIds: vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds],
+							AnnotationsDatabaseClassName:            class.Name,
+						},
+					},
+					Spec: v1alpha1.DatabaseEndpointSpec{
+						Database: v1alpha1.Database{
+							MySQL: &v1alpha1.MySQL{
+								Host:     "",
+								Port:     0,
+								User:     class.Spec.DefaultMasterUsername,
+								Password: randompass,
+								DB:       svc.DatabaseMySQL.DB,
+							},
+						},
+					},
+				}
+				if err := r.Create(ctx, exp); err != nil {
+					return ctrl.Result{}, err
+				}
+				// }
+			} /*else {
 				act, err := r.getDatabaseEndpoint(ctx, types.NamespacedName{
 					Namespace: vdb.Namespace,
 					Name:      ins.DBInstanceIdentifier,
@@ -430,12 +601,14 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsCluster(ctx context.Context, 
 				if err := r.Update(ctx, act); err != nil {
 					return ctrl.Result{Requeue: true}, err
 				}
-			}
+			}*/
 		}
 	}
+
 	return ctrl.Result{}, nil
 }
 
+/*
 func (r *VirtualDatabaseReconciler) reconcileAWSRdsClusterDEPRECATED(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase, class *v1alpha1.DatabaseClass, svc v1alpha1.VirtualDatabaseService) (ctrl.Result, error) {
 	subnetGroupName := vdb.Annotations[v1alpha1.AnnotationsSubnetGroupName]
 	vpcSecurityGroupIds := vdb.Annotations[v1alpha1.AnnotationsVPCSecurityGroupIds]
@@ -514,3 +687,4 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsClusterDEPRECATED(ctx context
 	}
 	return ctrl.Result{}, nil
 }
+*/
