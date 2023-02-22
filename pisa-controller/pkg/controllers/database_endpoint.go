@@ -214,6 +214,10 @@ func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context
 		return err
 	}
 
+	if rdsDesc.DBInstanceStatus == "Deleting" {
+		return nil
+	}
+
 	// Update or Delete
 	if rdsDesc != nil {
 		act, err := r.getDatabaseEndpoint(ctx, req.NamespacedName)
@@ -238,8 +242,15 @@ func (r *DatabaseEndpointReconciler) reconcileAWSRdsInstance(ctx context.Context
 
 func (r *DatabaseEndpointReconciler) reconcileAWSRdsCluster(ctx context.Context, req ctrl.Request, dbep *v1alpha1.DatabaseEndpoint, class *v1alpha1.DatabaseClass) error {
 	rdsDesc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(dbep.Name).Describe(ctx)
-	if err != nil {
+	if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
 		//FIXME: if the Rds instance is deleted which can not be described, will return as normal
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if rdsDesc.DBInstanceStatus == "Deleting" {
 		return nil
 	}
 
