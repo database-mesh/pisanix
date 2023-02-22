@@ -50,7 +50,7 @@ func (r *VirtualDatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-const ReconcileTime = 30 * time.Second
+const ReconcileTime = 10 * time.Second
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -68,7 +68,7 @@ func (r *VirtualDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	if err := r.reconcileFinalizers(ctx, req, vdb); err != nil {
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{RequeueAfter: ReconcileTime}, err
 	}
 	if err := r.updateVirtualDatabase(ctx, req, vdb); err != nil {
 		return ctrl.Result{Requeue: true}, err
@@ -148,17 +148,15 @@ func (r *VirtualDatabaseReconciler) finalizeDbep(ctx context.Context, req ctrl.R
 	case v1alpha1.DatabaseProvisionerAWSRdsCluster:
 		return r.finalizeAWSRdsCluster(ctx, vdb)
 	case v1alpha1.DatabaseProvisionerAWSRdsAurora:
-		return r.finalizeAWSRdsAurora(ctx, vdb)
+		// return r.finalizeAWSRdsAurora(ctx, vdb)
+		return r.finalizeAWSRdsCluster(ctx, vdb)
 	}
 	return nil
 }
 
 func (r *VirtualDatabaseReconciler) finalizeAWSRdsInstance(ctx context.Context, vdb *v1alpha1.VirtualDatabase) error {
 	desc, err := r.AWSRds.Instance().SetDBInstanceIdentifier(vdb.Name).Describe(ctx)
-	if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
-		return nil
-	}
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "DBInstanceNotFound") {
 		return err
 	}
 
@@ -171,6 +169,7 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsInstance(ctx context.Context, 
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
+			return err
 		} else {
 			if err := r.Delete(ctx, dbep); err != nil {
 				return err
@@ -183,21 +182,17 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsInstance(ctx context.Context, 
 
 func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, vdb *v1alpha1.VirtualDatabase) error {
 	desc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
-	if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
-		//TODO:
-		return nil
-	}
-
-	if err != nil {
+	//NOTE: this is the only chance
+	if err != nil && !strings.Contains(err.Error(), "DBClusterNotFoundFault") {
 		return err
 	}
 
 	for _, ins := range desc.DBClusterMembers {
 		_, err := r.AWSRds.Instance().SetDBInstanceIdentifier(ins.DBInstanceIdentifier).Describe(ctx)
-
-		if err != nil && strings.Contains(err.Error(), "DBInstanceNotFound") {
-			continue
+		if err != nil && !strings.Contains(err.Error(), "DBInstanceNotFound") {
+			return err
 		}
+
 		dbep := &v1alpha1.DatabaseEndpoint{}
 		if err := r.Get(ctx, types.NamespacedName{
 			Namespace: vdb.Namespace,
@@ -206,6 +201,7 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, v
 			if apierrors.IsNotFound(err) {
 				continue
 			}
+			return err
 		} else {
 			if err := r.Delete(ctx, dbep); err != nil {
 				return err
@@ -222,11 +218,7 @@ func (r *VirtualDatabaseReconciler) finalizeAWSRdsCluster(ctx context.Context, v
 
 func (r *VirtualDatabaseReconciler) finalizeAWSRdsAurora(ctx context.Context, vdb *v1alpha1.VirtualDatabase) error {
 	desc, err := r.AWSRds.Cluster().SetDBClusterIdentifier(vdb.Name).Describe(ctx)
-	if err != nil && strings.Contains(err.Error(), "DBClusterNotFoundFault") {
-		return nil
-	}
-
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "DBClusterNotFoundFault") {
 		return err
 	}
 
@@ -267,12 +259,12 @@ func (r *VirtualDatabaseReconciler) deleteAWSRdsCluster(ctx context.Context, nam
 	return nil
 }
 
-func (r *VirtualDatabaseReconciler) updateVirtualDatabase(ctx context.Context, req ctrl.Request, rt *v1alpha1.VirtualDatabase) error {
-	if rt.Spec.DatabaseClassName != "" {
+func (r *VirtualDatabaseReconciler) updateVirtualDatabase(ctx context.Context, req ctrl.Request, vdb *v1alpha1.VirtualDatabase) error {
+	if vdb.Spec.DatabaseClassName != "" && vdb.DeletionTimestamp.IsZero() {
 		class := &v1alpha1.DatabaseClass{}
 		err := r.Get(ctx, types.NamespacedName{
-			Namespace: rt.Namespace,
-			Name:      rt.Spec.DatabaseClassName,
+			Namespace: vdb.Namespace,
+			Name:      vdb.Spec.DatabaseClassName,
 		}, class)
 		if err != nil {
 			return err
@@ -280,11 +272,11 @@ func (r *VirtualDatabaseReconciler) updateVirtualDatabase(ctx context.Context, r
 
 		switch class.Spec.Provisioner {
 		case v1alpha1.DatabaseProvisionerAWSRdsInstance:
-			err = r.reconcileAWSRds(ctx, req, rt, class)
+			err = r.reconcileAWSRds(ctx, req, vdb, class)
 		case v1alpha1.DatabaseProvisionerAWSRdsCluster:
-			err = r.reconcileAWSRds(ctx, req, rt, class)
+			err = r.reconcileAWSRds(ctx, req, vdb, class)
 		case v1alpha1.DatabaseProvisionerAWSRdsAurora:
-			err = r.reconcileAWSRds(ctx, req, rt, class)
+			err = r.reconcileAWSRds(ctx, req, vdb, class)
 		default:
 			err = errors.New("unknown DatabaseClass provisioner")
 		}
@@ -458,7 +450,6 @@ func (r *VirtualDatabaseReconciler) reconcileAWSRdsAurora(ctx context.Context, v
 				Namespace: vdb.Namespace,
 				Name:      ins.DBInstanceIdentifier,
 			}, act); err != nil {
-				// if vdb.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
 				exp := &v1alpha1.DatabaseEndpoint{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      ins.DBInstanceIdentifier,
