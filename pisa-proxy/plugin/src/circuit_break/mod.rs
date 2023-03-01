@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 
 use crate::{
     config,
@@ -48,7 +48,11 @@ impl CircuitBreakLayer {
         if let Some(config) = &self.config {
             let mut instances = Vec::with_capacity(config.len());
             for c in config {
-                let regex = c.regex.iter().map(|r| Regex::new(r).unwrap()).collect::<Vec<Regex>>();
+                let regex = c.regex
+                    .iter()
+                    .map(|r| RegexBuilder::new(r)
+                        .case_insensitive(c.case_insensitive).build().unwrap())
+                    .collect::<Vec<Regex>>();
                 instances.push(CircuitBreakInstance { regex })
             }
             return Some(instances);
@@ -123,13 +127,27 @@ mod test {
 
     #[test]
     fn test_circuit_break() {
-        let config = vec![config::CircuitBreak { regex: vec![String::from(r"[A-Za-z]+")] }];
+        let config = vec![config::CircuitBreak { regex: vec![String::from(r"[A-Za-z]+")], case_insensitive: false }];
 
         let mut wrap_svc = ServiceBuilder::new()
             .with_layer(CircuitBreakLayer::new(config))
             .build(service_fn(test_service));
 
         let res = wrap_svc.handle("abc");
-        assert_eq!(res.is_err(), true)
+        assert_eq!(res.is_err(), true);
+
+        let config = vec![config::CircuitBreak { regex: vec![String::from(r"^SELECT .* FOR UPDATE")], case_insensitive: true }];
+        let mut wrap_svc = ServiceBuilder::new()
+            .with_layer(CircuitBreakLayer::new(config))
+            .build(service_fn(test_service));
+        let res = wrap_svc.handle("select * from foo where id = 1 for update");
+        assert_eq!(res.is_err(), true);
+
+        let config = vec![config::CircuitBreak { regex: vec![String::from(r"^SELECT .* FOR UPDATE")], case_insensitive: false }];
+        let mut wrap_svc = ServiceBuilder::new()
+            .with_layer(CircuitBreakLayer::new(config))
+            .build(service_fn(test_service));
+        let res = wrap_svc.handle("select * from foo where id = 1 for update");
+        assert_eq!(res.is_err(), false);
     }
 }
