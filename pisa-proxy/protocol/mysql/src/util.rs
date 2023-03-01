@@ -69,7 +69,7 @@ pub fn calc_password(scramble: &[u8], password: &[u8]) -> Vec<u8> {
 // calc_caching_sha2password: Hash password using MySQL 8+ method (SHA256)
 pub fn calc_caching_sha2password(scramble: &[u8], password: &[u8]) -> Vec<u8> {
     if password.is_empty() {
-        return vec![];
+        return vec![0];
     }
 
     let mut crypt = crypto::sha2::Sha256::new();
