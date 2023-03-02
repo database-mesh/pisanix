@@ -64,9 +64,11 @@ duration = 333
 
 [[proxy.config.plugin.circuit_break]]
 regex = ["111"]
+case_insensitive = false
 
 [[proxy.config.plugin.circuit_break]]
 regex = ["222"]
+case_insensitive = false
 
 # 后端数据源配置
 [mysql]

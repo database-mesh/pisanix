@@ -34,4 +34,10 @@ pub struct ConcurrencyControl {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CircuitBreak {
     pub regex: Vec<String>,
+    #[serde(default = "default_as_false")]
+    pub case_insensitive: bool,
+}
+
+fn default_as_false() -> bool {
+    false
 }

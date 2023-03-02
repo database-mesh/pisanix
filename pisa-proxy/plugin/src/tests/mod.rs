@@ -35,7 +35,7 @@ fn test_chain_concurrency_control_and_circuit_break() {
     }];
 
     let circuit_break_config =
-        vec![config::CircuitBreak { regex: vec![String::from(r"[A-Za-z]+")] }];
+        vec![config::CircuitBreak { regex: vec![String::from(r"[A-Za-z]+")], case_insensitive: false }];
 
     let mut wrap_svc = ServiceBuilder::new()
         .with_layer(ConcurrencyControlLayer::new(concurrency_control_config))
