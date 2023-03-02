@@ -1328,23 +1328,19 @@ pub struct LimitClause {
 
 impl LimitClause {
     pub fn format(&self) -> String {
-        let mut clause = Vec::with_capacity(self.opts.len() + 1);
+        let mut clause = Vec::with_capacity(self.opts.len() + 2);
         clause.push("LIMIT".to_string());
         clause.push(self.opts[0].opt.clone());
 
         if self.offset {
             clause.push("OFFSET".to_string());
             clause.push(self.opts[1].opt.clone());
-
-            return clause.join(" ");
-        }
-
-        if let Some(opt) = self.opts.get(1) {
+        } else if let Some(opt) = self.opts.get(1) {
+            clause.push(",".to_string());
             clause.push(opt.opt.clone());
-            return clause.join(", ");
         }
 
-        clause.join("")
+        clause.join(" ")
     }
 }
 
@@ -3053,4 +3049,40 @@ pub struct ShowEnginesStmt {
 pub struct ShowProcessListStmt {
     pub span: Span,
     pub is_full: bool,
+}
+
+#[cfg(test)]
+mod test {
+    use lrpar::Span;
+    use crate::ast::{LimitClause, LimitOption};
+
+    #[test]
+    fn test_limit_clause() {
+        let fake_span = Span::new(0, 0);
+        let clause = LimitClause {
+            span: fake_span.clone(),
+            opts: vec![LimitOption { span: fake_span.clone(), opt: "100".to_string() }],
+            offset: false,
+        };
+        assert_eq!("LIMIT 100", clause.format());
+        let clause = LimitClause {
+            span: fake_span.clone(),
+            opts: vec![
+                LimitOption { span: fake_span.clone(), opt: "100".to_string() },
+                LimitOption { span: fake_span.clone(), opt: "200".to_string() },
+            ],
+            offset: true,
+        };
+        assert_eq!("LIMIT 100 OFFSET 200", clause.format());
+
+        let clause = LimitClause {
+            span: fake_span.clone(),
+            opts: vec![
+                LimitOption { span: fake_span.clone(), opt: "100".to_string() },
+                LimitOption { span: fake_span.clone(), opt: "200".to_string() },
+            ],
+            offset: false,
+        };
+        assert_eq!("LIMIT 100 , 200", clause.format());
+    }
 }
